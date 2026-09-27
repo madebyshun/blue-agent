@@ -12,14 +12,16 @@ Last updated: 2026-05-12
 
 ## Phase 2 — Core workflow ✅
 - `blue idea` → `blue build` → `blue audit` → `blue ship` → `blue raise`
-- Bankr LLM with skill-grounded context
+- Virtuals inference with skill-grounded context
 - Command contract docs
 
-## Phase 3 — Setup, identity, discovery ✅
+## Phase 3 — Setup, identity, discovery ✅ (partly rolled back)
 - `blue new / init / doctor` — setup and health
 - `blue score / agent-score / compare` — identity and scoring
-- `blue search / trending / watch / alert / history` — discovery layer
-- `blue launch / market` — launch wizard and marketplace browse
+- ~~`blue search / trending / watch / history`~~ — **removed**; only `blue alert` survives
+- ~~`blue launch / market`~~ — **removed** as top-level commands; `market` / `watch` /
+  `launch` now exist only as `blue tui` subcommands that spawn the TUI. The Bankr
+  launchpad and marketplace they fronted were removed with Bankr (2026-09-06 / 09-07).
 
 ## Phase 4 — Task/workflow ops ✅ (scaffold)
 - `blue tasks / post-task / accept / submit`
@@ -47,7 +49,11 @@ Last updated: 2026-05-12
 - Score attestations as onchain records
 - Decentralized task escrow
 
-## Phase 9 — Community kit
+## Phase 9 — Community kit (NOT SHIPPED — plan only)
 - Team/org accounts
 - Invite flows and builder collabs
-- Recurring SaaS revenue via Bankr subscriptions
+- Recurring revenue model: undecided. The original plan routed it through Bankr
+  subscriptions, which died with Bankr (account 403-banned 2026-07-20).
+- ⚠️ Do not list "Community Kit" as a shipped product. `docs-truth-check.ts` fails if it
+  appears in the agent identity file's ecosystem table, because ~40 call sites inject that
+  file as prompt text and a "Product | Details" row reads as shipped.

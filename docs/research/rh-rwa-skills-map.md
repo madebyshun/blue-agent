@@ -71,7 +71,7 @@ Robinhood Chain (chainId 4663, Arbitrum Orbit L2) has **~26 tokenized US equitie
 
 | # | id | Input | Output | Data source | Cost |
 |---|---|---|---|---|---|
-| B1 | `hub_rh_bridge_route` | asset, from, to | best bridge path Base ↔ RH | orbit-bridge + Bankr | $0.05 |
+| B1 | `hub_rh_bridge_route` | asset, from, to | best bridge path Base ↔ RH | orbit-bridge + Virtuals | $0.05 |
 | B2 | `hub_rh_usdg_route` (#103) | amount | cheapest USDG acquisition | quoter | $0.05 |
 
 ### 8 · Builder / embed (the *pitch* to Vlad)
@@ -79,7 +79,7 @@ Robinhood Chain (chainId 4663, Arbitrum Orbit L2) has **~26 tokenized US equitie
 | # | id | Input | Output | Data source | Cost |
 |---|---|---|---|---|---|
 | E1 | `hub_rh_rwa_embed_kit` | ticker | JSX + wagmi snippet builder can paste | template | $0.05 |
-| E2 | `hub_rh_rwa_readme` | ticker | auto README section for integrator docs | template + Bankr LLM | $0.05 |
+| E2 | `hub_rh_rwa_readme` | ticker | auto README section for integrator docs | template + Virtuals | $0.05 |
 | E3 | `hub_rh_rwa_pricing_kit` | ticker | Chainlink-feed React hook code | template | $0.05 |
 
 ---

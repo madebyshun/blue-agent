@@ -1370,6 +1370,92 @@ for (const rel of MANIFEST_FILES) {
   );
 }
 
+// ── 13. docs/ — the internal plans, which are read to decide what to BUILD ──
+/* MEASURED 2026-09-27. Groups 10-12 cover what a human browses, what an agent
+   fetches, and what gets injected as a prompt. `docs/` is the fourth audience and
+   was outside all of them: it is what a contributor (or an agent given this repo)
+   reads to decide what to do next. On the day this group was written it still
+   described Bankr as the live inference provider and the live marketplace, 66 days
+   after Bankr 403-banned this project and 2 days after the repo declared it "fully
+   removed". What that looked like:
+     • `next-steps.md` → "Set BANKR_API_KEY in .env … All commands that call Bankr
+       LLM require this env var." Not a stale description — an INSTRUCTION to wire
+       up a dependency that cannot authenticate.
+     • `status.md` → "All backed by Bankr LLM", under a heading marked ✅, in a file
+       that already carried a "packages/bankr DELETED 2026-09-18" row nine lines
+       later. Half-updated is worse than untouched: the deletion note is exactly
+       what makes a reader trust the rest of the file.
+     • `quickstart.md` → `BANKR_API_KEY` listed as a required env var, and
+       `npm run build` as the happy path, which is the command CLAUDE.md bans for
+       corrupting a running dev server's `.next/` (seen four times).
+     • two `template-specs/*.md` → "Bankr LLM optional" / "optional Bankr/x402".
+       `blue new` scaffolds from these, so the reach is generated projects.
+
+   This is the retiring law's real gap restated: the payment path and the prose died
+   on schedule, and the PLANS kept pointing at the corpse. Nothing here throws, so
+   only a reader catches it — which is why it ran for two months.
+
+   A WORD ban is wrong for this directory, unlike group 12's manifests. These files
+   must be able to say "Bankr was removed, do not re-add it" — that sentence is the
+   whole point of the record CLAUDE.md keeps. So this bans the LIVE-CLAIM shapes and
+   requires a removal marker nearby, which is the same assertion-plus-context
+   pattern as the $BLUEAGENT token check in group 11. */
+const DOC_FILES = readdirSync(join(REPO, "docs"), { recursive: true })
+  .map(String)
+  .filter((f) => f.endsWith(".md"))
+  .sort();
+console.log(`\n13. docs/ — ${DOC_FILES.length} internal plan files scanned for live Bankr claims`);
+
+check(
+  "the docs list was discovered, not typed",
+  DOC_FILES.length >= 20,
+  `${DOC_FILES.length} enumerated from docs/ — a floor of 20, because if discovery collapses the ban below passes by scanning nothing`,
+);
+
+/** Shapes that can only be a live claim. `BANKR_API_KEY` is included because the
+ *  var has zero readers: naming it at all is either an instruction or a warning,
+ *  and the marker below is what separates the two. */
+const BANKR_LIVE_RE =
+  /BANKR_API_KEY|Bankr[- ]native|Bankr LLM|\bon Bankr\b|Bankr marketplace|Bankr subscriptions|Bankr\/x402/i;
+/** The block must carry one of these, or the claim reads as current. Deliberately
+ *  broad: the cost of a false PASS here is a contributor wiring a banned vendor,
+ *  the cost of a false FAIL is rewording one sentence. */
+const REMOVED_RE =
+  /remov|delet|retir|dead|gone|banned|403|no longer|died|~~|must not|do not|legacy|GONE/i;
+
+/* The unit is the enclosing BLOCK, not the line. MEASURED: the first run of this
+   group failed on two lines that were already correct — markdown hard-wraps at ~80
+   cols, so "`BANKR_API_KEY` used to be" ended a line and "gone and must not return"
+   began two lines later. A per-line window reports honest prose as a live claim,
+   and the next reader to hit that loosens the regex rather than the window.
+   A block is still only a few lines: a blank line, heading, bullet or table row
+   opens a new one, so adding "- `BANKR_API_KEY` — the LLM gateway" to an env list
+   still fails even when a sibling bullet says "removed". The residual hole is a
+   prose paragraph that mixes a live instruction with an unrelated removal note;
+   that is the price of any window wider than zero, and it is the right trade
+   against a check nobody trusts. */
+const opensBlock = (line: string) =>
+  line.trim() === "" || /^\s*(#|[-*+]\s|\d+\.\s|\|)/.test(line);
+
+for (const rel of DOC_FILES) {
+  const blocks: { start: number; text: string }[] = [];
+  readRepo(`docs/${rel}`)
+    .split("\n")
+    .forEach((line, i) => {
+      if (opensBlock(line) || blocks.length === 0) blocks.push({ start: i, text: line });
+      else blocks[blocks.length - 1].text += ` ${line}`;
+    });
+  const bad = blocks
+    .filter((b) => BANKR_LIVE_RE.test(b.text) && !REMOVED_RE.test(b.text))
+    .map((b) => `L${b.start + 1}: ${b.text.trim().slice(0, 78)}`);
+  check(
+    `docs/${rel} — Bankr named only as removed`,
+    bad.length === 0,
+    bad.join(" | ") ||
+      "no live Bankr claim; historical mentions carry a removal marker",
+  );
+}
+
 console.log(
   failures === 0
     ? `\nALL ${checks} CHECKS PASSED\n`

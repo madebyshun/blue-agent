@@ -17,7 +17,7 @@ Starter template for a Base-native Telegram bot with wallet-aware features, grou
 - Node.js + TypeScript
 - Telegram bot SDK
 - JSON or lightweight storage
-- Bankr LLM optional
+- Virtuals inference optional (`compute.virtuals.io/v1`)
 - Base-first content and utilities
 
 ## Build goals

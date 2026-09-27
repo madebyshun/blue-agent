@@ -1,6 +1,11 @@
 # Blue Agent — Next Steps
 
-Last updated: 2026-05-12
+Last updated: 2026-09-27
+
+> ⚠️ **This file is a 2026-05 plan, refreshed only where it had gone factually wrong.**
+> The dated items below were written before Bankr was removed, before the microtask
+> server half was retired, and before `/market` was culled. Read it as a historical
+> backlog, not as today's priorities — several entries are dead and are marked so.
 
 ---
 
@@ -15,8 +20,10 @@ npm install -g @blueagent/cli
 
 Keep `packages/builder` as the internal command engine behind the CLI.
 
-### 2. Set BANKR_API_KEY in .env
-All commands that call Bankr LLM require this env var. Catch missing key in `blue doctor`.
+### 2. ~~Set BANKR_API_KEY in .env~~ — DEAD, do not do this
+Bankr is fully removed (account 403-banned 2026-07-20, last code removed 2026-09-25) and
+`BANKR_API_KEY` has zero readers. Inference is **Virtuals**: set `VIRTUALS_API_KEY` and call
+`callLLM` from `apps/web/src/app/api/_lib/llm.ts`. `blue doctor` should check that var.
 
 ---
 
@@ -34,10 +41,12 @@ All commands that call Bankr LLM require this env var. Catch missing key in `blu
 - Replace in-memory task store with file-based persistence (`~/.blue-agent/tasks.json`)
 - Consider Supabase or onchain attestations for v2
 
-### Web app
-- `/console` page: wire up `blue idea/build/audit/ship/raise` with streaming
-- `/launch` page: connect to `blue launch` wizard flow
-- `/market` page: connect to real Bankr marketplace API when available
+### Web app — ⚠️ all three targets are gone
+- ~~`/console` page~~ — the route no longer exists.
+- ~~`/launch` page: connect to `blue launch` wizard~~ — the top-level `blue launch` command
+  is gone and the Bankr deploy path behind it returned 403 before removal.
+- ~~`/market` page: connect to real Bankr marketplace API~~ — `/market` was culled and now
+  301s; it 404'd in production for a while, which is why `link-liveness-check.ts` exists.
 
 ---
 
@@ -62,14 +71,16 @@ All commands that call Bankr LLM require this env var. Catch missing key in `blu
 
 ## Risks / watch items
 
-- **BANKR_API_KEY required** — setup.sh and `blue doctor` must catch missing key early
-- **Task Hub is in-memory** — data lost on restart; add file persistence before real usage
+- **`VIRTUALS_API_KEY` required** — `blue doctor` already checks it (env, then
+  `~/.blue-agent/config.toml`). `BANKR_API_KEY` is dead and must not come back.
+- **Task Hub is in-memory** — a process-lifetime `Map`, so `blue tasks` always prints nothing.
+  `blue micro` already solved this with JSON files under `~/.blue-agent/`; copy that shape.
 - **Score estimates are LLM-based** — not live onchain data; caveat in output and docs
 - **Watch/alert config is saved but not executed** — monitoring is not live until connected to listener
 - **`blue tui` requires separate install** — will fail gracefully with install instructions if missing
 
 ## Product direction to preserve
 - Blue Agent = founder console, not generic chatbot
-- Base-first, Bankr-native, artifact-first, workflow-first
+- Base-first, x402-native, artifact-first, workflow-first
 - Business logic in packages; web/UI stays thin
 - Never invent contract addresses; never suggest Ethereum mainnet

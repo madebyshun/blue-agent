@@ -1,7 +1,7 @@
 # Blue Agent — Product Brief
 
 ## One-liner
-Blue Agent is the Base-native founder console for builders on Bankr.
+Blue Agent is the Base-native founder console for builders on Base.
 
 ## For whom
 - Base builders shipping apps, contracts, or agent products
@@ -34,7 +34,7 @@ Later layers:
 
 ## What makes it different
 - Base-first, not generic
-- Bankr-native execution layer
+- Self-hosted x402 execution layer: USDC on Base, settled through the Coinbase CDP facilitator
 - Verified / grounded outputs only
 - Workflow-first, not chat-first
 - Artifact-first: every command produces something usable
@@ -95,4 +95,4 @@ Output artifacts:
 
 ## Positioning
 Blue Agent is not a chatbot.
-It is the operating system for Base builders to think, build, launch, and monetize with Bankr.
+It is the operating system for Base builders to think, build, launch, and monetize on Base.

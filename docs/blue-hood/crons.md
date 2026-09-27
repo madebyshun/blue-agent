@@ -75,9 +75,10 @@ header rather than inferred from the cadence above:
   project env (same value that gates every other cron here).
 - `INTERNAL_SERVICE_KEY` — required for the internal-bypass path the
   poller uses to call M5 / M2 / M3 / D1 / A4 tools. Set in Vercel prod.
-- `VIRTUALS_API_KEY` (primary), `VENICE_INFERENCE_KEY`, `BANKR_API_KEY`
-  — LLM chain for A4 brief attachment. `smoke` warns locally when
-  these fail; STRICT mode (CI) hard-fails.
+- `VIRTUALS_API_KEY` — the LLM gateway for A4 brief attachment. `smoke` warns
+  locally when it fails; STRICT mode (CI) hard-fails. `BANKR_API_KEY` used to be
+  listed here as a third fallback; Bankr is 403-banned at the account level and has
+  zero readers, so it is gone and must not return.
 - `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` — Web Push
   fan-out (T-D D3). Generated once with
   `npx web-push generate-vapid-keys` (both keys are base64-url strings;

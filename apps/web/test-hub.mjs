@@ -6,7 +6,10 @@ const AGENT_TOOLS = A.AGENT_TOOLS ?? A.default?.AGENT_TOOLS ?? A.default ?? A;
 const RUNS = Number(process.env.RUNS || 3);
 const ONLY = process.env.ONLY;
 const SCORE_TOL = Number(process.env.SCORE_TOL || 10);
-const GRADER_KEY = process.env.BANKR_API_KEY ?? process.env.LLM_API_KEY;
+// Was `BANKR_API_KEY ?? LLM_API_KEY` until 2026-09-27. Bankr 403-banned this project at the
+// account level, so the first branch could only ever fail — and it was the repo's last
+// BANKR_API_KEY reader, which made the "zero readers" claim in CLAUDE.md false.
+const GRADER_KEY = process.env.VIRTUALS_API_KEY ?? process.env.LLM_API_KEY;
 
 const FIX = {
   // on-chain / địa chỉ

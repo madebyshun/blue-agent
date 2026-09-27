@@ -20,7 +20,7 @@ Starter template for a Base-native agent project with contracts, scripts, tests,
 - Hardhat
 - viem or ethers
 - Base network config
-- optional Bankr/x402 integration
+- optional x402 integration (self-hosted, USDC on Base via the Coinbase CDP facilitator)
 
 ## Build goals
 - easy to clone

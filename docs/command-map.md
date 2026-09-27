@@ -18,7 +18,7 @@ Last updated: 2026-05-12
 |---|---|
 | `blue new <name>` | Scaffold a Base project from template (base-agent \| base-x402 \| base-token) |
 | `blue init` | Install skill files to `~/.blue-agent/skills/` for local grounding |
-| `blue doctor` | Health check — node version, skills, BANKR_API_KEY, config |
+| `blue doctor` | Health check — node version, skills, `VIRTUALS_API_KEY`, config |
 
 ## Identity / score
 
@@ -32,25 +32,21 @@ Last updated: 2026-05-12
 
 | Command | Description |
 |---|---|
-| `blue search "<query>"` | Search builders, agents, projects, tokens on Base |
-| `blue trending [filter]` | Trending on Base — optional filter: builders \| agents \| tokens |
-| `blue watch <target>` | Watch a wallet, handle, or token for activity |
-| `blue watch --list` | List all configured watches |
 | `blue alert` | List configured alerts |
 | `blue alert add` | Interactive alert setup (Telegram / webhook / log) |
 | `blue alert remove <id>` | Remove an alert |
-| `blue history <input>` | Activity timeline for a builder or agent |
 
-## Launch / market
+**Removed — `blue search`, `blue trending`, `blue watch`, `blue history`.** No command file,
+no registration. `watch` survives only as `blue tui watch`, which spawns the TUI.
 
-| Command | Description |
-|---|---|
-| `blue launch [token\|agent]` | Launch wizard — token on Base (Clanker) or agent on Bankr |
-| `blue market` | Browse top marketplace listings |
-| `blue market agents\|skills\|prompts` | Filter marketplace by type |
-| `blue market publish "<item>"` | Step-by-step publish guidance |
+## Launch / market — REMOVED
 
-## Work Hub / tasks
+`blue launch` and `blue market` no longer exist as top-level commands. `market` / `watch` /
+`launch` are now `blue tui` subcommands that each just spawn the TUI. The Bankr token-launch
+and marketplace paths they fronted were removed with Bankr itself (2026-09-06 / 09-07); the
+deploy endpoint had been 403-ing at the account level before that.
+
+## Work Hub / tasks — ⚠️ state does not survive the process
 
 | Command | Description |
 |---|---|
@@ -59,6 +55,27 @@ Last updated: 2026-05-12
 | `blue post-task @handle` | Post a new task (interactive) |
 | `blue accept <taskId> @handle` | Accept a task |
 | `blue submit <taskId> @handle <proof>` | Submit completed work with proof |
+
+These four share one `Map` in `packages/reputation/src/taskHub.ts` and nothing else. Each CLI
+invocation is a fresh process, so the Map starts empty and is discarded on exit: `blue tasks`
+can only ever print nothing, and a task posted by one command is gone by the next. Use
+`blue micro` if you want state that persists.
+
+## Microtasks — local ledger, settles nothing
+
+| Command | Description |
+|---|---|
+| `blue micro post [description]` | Post a microtask |
+| `blue micro list [id]` | List, or show one by id |
+| `blue micro tasks` | Browse open microtasks |
+| `blue micro accept <taskId> [handle]` | Accept one |
+| `blue micro submit <taskId> <proof>` | Submit proof |
+| `blue micro approve <taskId>` | Approve — **updates the local ledger only** |
+| `blue micro profile [handle]` | Reputation view |
+
+Persists to `~/.blue-agent/microtasks.json`, `microclaims.json`, `microreputation.json`. No
+server, no RPC, no chain call: the amounts are bookkeeping and settling them is the operator's
+job, which `approve` says out loud. The server half of this marketplace was retired 2026-09-02.
 
 ## Terminal UI
 
