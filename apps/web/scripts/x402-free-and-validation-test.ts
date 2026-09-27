@@ -60,6 +60,7 @@
  *   f. restore `!meta.priceUSDC` in the ai-tool 404 guard ............... case 6b
  *   g. emit a $0 x402 pricing entry for a free tool ..................... case 6b
  *   h. put the word "paid" back in description_for_model ................ case 6c
+ *   i. emit a $0 `accepts` entry for a free tool in the Bazaar doc ...... case 6d
  *
  * Hermetic: `globalThis.fetch` is stubbed, so a free tool that reaches its
  * handler fails there rather than calling out. That failure is still a pass —
@@ -259,7 +260,10 @@ async function call(tool: string, body: unknown) {
      discovery could not see, or described as wanting money.
 
      So: enumerated from the catalog, never named — same reason as case 2b. */
-  console.log("\n6. the three published manifests agree with the price");
+  // Deliberately uncounted. This label read "the three published manifests"
+  // and there were four (see 6d) — a frozen count in a label is the same rot
+  // the suite spends case 2b avoiding in its assertions.
+  console.log("\n6. every published manifest agrees with the price");
   {
     const { GET: openapiGET }  = await import("../src/app/.well-known/openapi.json/route");
     const { GET: aiPluginGET } = await import("../src/app/.well-known/ai-plugin.json/route");
@@ -391,6 +395,53 @@ async function call(tool: string, body: unknown) {
           Array.isArray(plugin["x-x402"].freeTools) &&
             free.every((t) => plugin["x-x402"].freeTools!.includes(t.id)),
           JSON.stringify(plugin["x-x402"].freeTools));
+
+    // ── 6d. the Bazaar doc — a FOURTH manifest, under a second well-known ──
+    /* 6a–6c were written on 2026-09-27 and called "the three published
+       manifests". There were four. MEASURED in prod the same day, three commits
+       later: every free id in this doc still carried
+       `accepts:[{scheme:"exact", amount:"0", payTo:"0x0295…"}]` — the exact
+       contradiction 6b exists to forbid, published to the doc the agentic.market
+       validator crawls, i.e. the layer BEFORE the layer 6a–6c cover.
+
+       It was missed because the sweep was scoped to a DIRECTORY. Three manifests
+       live under `/.well-known/`; this one lives under `/api/x402/.well-known/`,
+       so reading the first directory felt exhaustive and the header froze the
+       count at three. The generalisation is not "check four files" — a fifth can
+       be added tomorrow. It is: enumerate by the FIELD that carries a price
+       (`priceUSDC`/`amount`/`pricing`), never by where the file sits. */
+    {
+      const { GET: bazaarGET } = await import("../src/app/api/x402/.well-known/bazaar/route");
+      const doc = (await (await bazaarGET()).json()) as {
+        total: number;
+        resources: { resource: string; accepts: { amount?: string }[]; x402Free?: boolean }[];
+      };
+      const byId = new Map(doc.resources.map((r) => [r.resource.split("/").pop()!, r]));
+
+      // Presence first. Every absence assertion below passes vacuously on a
+      // missing entry, and "absent from discovery" was half of the original bug.
+      const missing = [...free, ...paid].filter((t) => !byId.has(t.id)).map((t) => t.id);
+      check("the Bazaar doc lists every catalog tool, free included",
+            missing.length === 0 && doc.total === AGENT_TOOLS.length,
+            missing.join(", ") || `${doc.total} resources`);
+
+      const quoted = free.filter((t) => (byId.get(t.id)?.accepts?.length ?? 0) > 0).map((t) => t.id);
+      check("…and offers no payment scheme to accept for a free tool",
+            quoted.length === 0, quoted.join(", ") || "all accepts: []");
+      const unmarked = free.filter((t) => byId.get(t.id)?.x402Free !== true).map((t) => t.id);
+      check("…marking them x402Free so [] cannot read as \"price unknown\"",
+            unmarked.length === 0, unmarked.join(", ") || "all marked");
+
+      // Paid regression: emptying `accepts` for everything would pass the two
+      // above, and would silently stop the whole catalog from being payable.
+      const sample = paid[0];
+      const entry = byId.get(sample.id)?.accepts?.[0];
+      check(`the Bazaar doc still quotes ${sample.id} (${sample.price})`,
+            entry?.amount === String(sample.priceUSDC), String(entry?.amount));
+      check("…and no paid tool is left with an empty accepts",
+            paid.every((t) => (byId.get(t.id)?.accepts?.length ?? 0) === 1),
+            paid.filter((t) => (byId.get(t.id)?.accepts?.length ?? 0) !== 1).map((t) => t.id).join(", ") || `${paid.length} priced`);
+    }
   }
 
   console.log(failures === 0 ? "\nPASS — free means free, and a quote implies a runnable request" : `\nFAIL — ${failures} assertion(s)`);

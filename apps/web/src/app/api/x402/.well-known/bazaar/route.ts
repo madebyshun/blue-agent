@@ -21,33 +21,50 @@ function toAtomic(price?: string): number {
 }
 
 export async function GET() {
-  const resources = AGENT_TOOLS.map((t) => ({
-    resource: `${BASE}/api/x402/${t.id}`,
-    type: "http",
-    x402Version: 2,
-    accepts: [
-      {
-        scheme: "exact",
-        network: "eip155:8453",
-        asset: USDC_BASE,
-        payTo: t.builderAddress ?? BLUE_TREASURY,
-        amount: String(t.priceUSDC ?? toAtomic(t.price)),
-        maxTimeoutSeconds: 60,
-      },
-    ],
-    extensions: {
-      bazaar: {
-        info: {
-          input: { type: "http", method: "POST" },
-          output: { type: "json" },
+  const resources = AGENT_TOOLS.map((t) => {
+    const amount = t.priceUSDC ?? toAtomic(t.price);
+    return {
+      resource: `${BASE}/api/x402/${t.id}`,
+      type: "http",
+      x402Version: 2,
+      // A $0.00 tool gets an EMPTY `accepts`, not a $0 entry — the same rule as
+      // `pricing: []` in the ERC-8257 manifest: an entry naming a scheme, an
+      // asset and a payTo is an instruction to pay, and one saying to pay ZERO
+      // to the live treasury is a contradiction an agent resolves by signing
+      // anyway. `x402Free` states it positively for a reader that treats `[]` as
+      // "pricing unknown" rather than "pricing none". The tool stays listed
+      // either way — hiding it was the other half of the same 2026-09-27 bug.
+      //
+      // MEASURED in prod that day: all six free ids quoted amount "0" to
+      // 0x0295… here, three commits AFTER the identical defect was swept out of
+      // the three manifests under `/.well-known/`. This is the file nobody
+      // re-read, because it lives under `/api/x402/.well-known/` — a second
+      // well-known prefix. Grep for the field carrying the price, not the dir.
+      accepts: amount === 0 ? [] : [
+        {
+          scheme: "exact",
+          network: "eip155:8453",
+          asset: USDC_BASE,
+          payTo: t.builderAddress ?? BLUE_TREASURY,
+          amount: String(amount),
+          maxTimeoutSeconds: 60,
+        },
+      ],
+      ...(amount === 0 ? { x402Free: true } : {}),
+      extensions: {
+        bazaar: {
+          info: {
+            input: { type: "http", method: "POST" },
+            output: { type: "json" },
+          },
         },
       },
-    },
-    serviceName: "BlueAgent",
-    description: t.description,
-    tags: [t.category, "base", "ai", "x402"],
-    iconUrl: ICON,
-  }));
+      serviceName: "BlueAgent",
+      description: t.description,
+      tags: [t.category, "base", "ai", "x402"],
+      iconUrl: ICON,
+    };
+  });
 
   return NextResponse.json(
     {
