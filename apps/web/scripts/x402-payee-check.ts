@@ -231,6 +231,21 @@ for (const f of ["../../CLAUDE.md", "../../AGENTS.md"]) {
    with zero importers, last touched 2026-07-15, and its git timestamp read
    "today" because the #479 payee sweep had walked through it hours earlier.
 
+   Its revenue footprint, measured before deletion, because an auditor
+   reconciling x402 income will eventually need it: the door wrote NO ledger
+   entry of any kind — no `recordSettlement`, no `recordToolPayment`, no
+   `recordCall` — so nothing it collected could ever appear in
+   `lib/x402-settlements.ts` or on /stats. That ledger does not overclaim (it
+   says "via the Coinbase CDP facilitator" and "lower-bound", and this door used
+   facilitator.x402.org), but it does mean a payment to 0x0295… from this era
+   that reconciles against nothing has this route as its explanation. Exposure
+   was bounded by discovery: checked in prod that day, all seven published
+   discovery docs — bazaar, /.well-known/{pricing,openapi.json,ai-plugin.json},
+   /api/catalog, agent.json, plugin.md — contained ZERO occurrences of
+   `/api/tool/`. No agent could find it and no UI drove it, so "probably never
+   paid" rests on there being no path to it, not on a ledger that was never
+   written.
+
    🔴 The obvious assertion — "there is exactly ONE door" — is WRONG, and writing
    it is how this group first failed. `hub/community/[slug]/invoke` is a second,
    legitimate door: it charges for community-hosted tools and splits 90% to the
