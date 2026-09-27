@@ -106,13 +106,14 @@ how good the prompt is. **Prompts do not prevent hallucination; data sources do.
 
 ## Retiring a surface (luật chống-bỏ-rơi)
 
-Five surfaces were built, quietly abandoned, and left live: `apps/api` (61 days between
-last maintenance and deletion), `apps/portal` (46), Blue Sentinel (~100), Blue Feed, and the
-microtask marketplace. **Not one was caught by a mechanism** — every one was caught by a
-human eventually noticing. While abandoned, Sentinel leaked `CRON_SECRET` from an
-unauthenticated route and a paid Hub tool was still selling it; the CLI still sold a
-microtask ledger backed by a `Map` that never persisted; Blue Feed's published links had to
-be 301'd after the fact.
+Six surfaces were built, quietly abandoned, and left live: `apps/api` (61 days between
+last maintenance and deletion), `apps/portal` (46), Blue Sentinel (~100), Blue Feed, the
+microtask marketplace, and `/api/tool-runner` (123). **Not one was caught by a mechanism** —
+every one was caught by a human eventually noticing. While abandoned, Sentinel leaked
+`CRON_SECRET` from an unauthenticated route and a paid Hub tool was still selling it; the CLI
+still sold a microtask ledger backed by a `Map` that never persisted; Blue Feed's published
+links had to be 301'd after the fact; tool-runner answered for every catalog id with
+improvised text under the real product's name.
 
 The damage is never "dead code exists" — that is normal. It is the gap between **stopping
 maintenance** and **stopping exposure**. Everything below exists to close that gap.
@@ -123,6 +124,24 @@ maintenance** and **stopping exposure**. Everything below exists to close that g
   day it was deleted, git said "touched 4 days ago". **A staleness timer would have protected
   it through the entire ~100-day window it was leaking a secret.** Sweeps camouflage
   abandonment; never argue "it's still maintained" from `git log` alone.
+  Second instance, MEASURED 2026-09-27: `/api/tool-runner`'s last feature commit was
+  2026-05-27, but three sweeps (`maxDuration` 2026-06-09, the `callLLM` migration 2026-07-20,
+  and the Aeon/MiroShark retirement *hours* earlier) left git reading "touched today" on a
+  route no one had called in 123 days. Twice now the sweep that refreshed the timestamp was
+  itself a piece of good hygiene — that is the trap, not an accident.
+- **An unmetered surface is not a harmless one — audit what it SAYS, not just what it
+  charges.** MEASURED 2026-09-27: `/api/tool-runner` was unauthenticated, unpriced and
+  uncalled, which is what made it read like a spare part worth leaving alone. It also
+  answered for every id in `AGENT_TOOLS` by prompting the LLM with that entry's own `name`
+  and `description` and nothing else, while `/api/x402/<id>` served the same ids from real
+  sources at $0.05–$1.00. Free was the *lesser* defect: from the response a caller could not
+  tell an improvised answer from a paid one. Note how it hid — `runSingleTool` opened with
+  `if (tool.agentType === "blue" && tool.skillFiles)`, which reads as "most are grounded, a
+  few improvise", and that branch was DEAD: `skillFiles` occurs in `agent-tools.ts` only in
+  two type declarations and no entry sets it. **Retired rather than gated, because gating it
+  would have started charging for the fabrication.** Locked by
+  `apps/web/scripts/catalog-compute-check.ts`, which asserts a property and not a path:
+  catalog + LLM + no delegation trips it anywhere under `src/app/api/`.
 - **Retiring is ONE commit, not a cleanup backlog.** The same commit removes the route, its
   `AGENT_TOOLS`/`HANDLERS` entry and price, every link that advertises it, and its `vercel.json`
   cron — and names the env vars that just became dead. Whatever is left behind is the part

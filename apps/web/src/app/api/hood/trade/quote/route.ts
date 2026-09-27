@@ -3,7 +3,7 @@
  *
  * Thin server-side proxy over `rh-stock-swap-quote` (X1) so the Review
  * & Sign panel can hit ONE public endpoint on our own domain instead
- * of dealing with x402 402/tool-runner routing on the client. Uses the
+ * of running the x402 402 payment handshake on the client. Uses the
  * shared `callTool` (internal-bypass in prod, HANDLERS import in dev).
  *
  * Contract: whatever X1 returns, we return verbatim — including its
