@@ -18,8 +18,16 @@
  *   - Launches:  KV `bluechat:launches` (real on-chain deploys — see lib/launches.ts
  *                for who writes it; the Bankr-era writer was deleted 2026-09-06,
  *                the ROWS it wrote are deliberately kept).
- *   - Usage:     KV `usage:<toolId>` counters — lifetime paid tool runs (aggregate
- *                sum; no wallet is ever part of the key).
+ *   - Usage:     KV `usage:<toolId>` counters — lifetime tool runs of EVERY kind
+ *                (aggregate sum; no wallet is ever part of the key). These counters
+ *                are incremented by the x402 route, the free MCP bypass AND the Hub
+ *                runner alike, so they CANNOT say which runs were paid — see the
+ *                comment beside `kv.incr(\`usage:${tool}\`)` in api/x402/[tool]/route.ts.
+ *                That is why `revenueEst` is labelled an estimate and why the actual
+ *                settled figure comes from lib/x402-settlements.ts instead. This line
+ *                used to read "lifetime PAID tool runs", which made the file that
+ *                computes the public revenue number contradict the two files it
+ *                depends on.
  *   - Users:     KV `claim:count` — # wallets that claimed the free-credit airdrop
  *                (a count only; capped at 300). The closest honest "onboarded" number.
  *   - Activity:  Derived live from every `ledger:<addr>` row via getLedgerActivity()
