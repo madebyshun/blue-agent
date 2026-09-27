@@ -225,6 +225,15 @@ const INIT_KEY = (day: string) => `usage:mcpinit:${day}`;
  * `cursor` and `vscode`, so `cursor` has to come first or every Cursor session
  * is filed as VS Code. Add new families ABOVE any shorter string they contain.
  *
+ * That rule was broken by the first version of this list and nothing caught it:
+ * `cline` sat above `roo_cline`, so every Roo session filed as Cline and the
+ * `roo_cline` bucket was unreachable — a dead entry that still read as coverage.
+ * The fix is not vigilance. `scripts/usage-meter-check.ts` now asserts
+ * `normalizeMcpClient(f) === f` for every family, which is exactly the property
+ * "this entry can be reached", and it needs no exemption list to say so. A family
+ * that cannot bucket its own name is a bug in every case, so the check has no
+ * legitimate counterexample to carve out.
+ *
  * ⚠️ UNDERSCORES, NOT HYPHENS, and that is not cosmetic. `claude-code` beside
  * `claude-sonnet-5` is indistinguishable from a model id, and
  * scripts/model-id-check.ts correctly flagged all three `claude-*` entries when
@@ -235,21 +244,34 @@ const INIT_KEY = (day: string) => `usage:mcpinit:${day}`;
  * argued for once per entry. `normalizeMcpClient` folds the wire name to `_` for
  * the same reason. Do not "tidy" these back to hyphens.
  */
-const MCP_CLIENT_FAMILIES = [
+export const MCP_CLIENT_FAMILIES = [
   "claude_code",
   "claude_desktop",
   "claude_ai",
+  "claude_agent_sdk",
+  // Bare brand name, LAST of the `claude_*` group: anything containing "claude" is
+  // a Claude client, so this is a safe catch-all, but only after the specific ones.
+  "claude",
   "cursor",
-  "cline",
+  // `roo_cline` before `cline`, per the ordering rule above — it contains it.
   "roo_cline",
+  "cline",
   "windsurf",
   "continue",
   "librechat",
   "goose",
   "mcp_inspector",
+  // The stdio↔HTTP bridge named in our own install instructions, so it is the
+  // likeliest name on the wire for a desktop client reaching a remote server.
+  "mcp_remote",
   "langchain",
+  "langgraph",
   "openai",
+  "chatgpt",
   "n8n",
+  "jetbrains",
+  "intellij",
+  "postman",
   "zed",
   "vscode",
   "visual_studio_code",

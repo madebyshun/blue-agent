@@ -74,7 +74,7 @@ async function main() {
 
   const {
     recordCall, readDays, utcDay, RETENTION_DAYS,
-    recordMcpHandshake, readHandshakeDays, normalizeMcpClient,
+    recordMcpHandshake, readHandshakeDays, normalizeMcpClient, MCP_CLIENT_FAMILIES,
   } = await import("../src/lib/usage-daily");
   const { kv } = await import("../src/lib/kv");
 
@@ -227,6 +227,28 @@ async function main() {
   check('"Visual Studio Code" still reaches its own bucket',
     normalizeMcpClient("Visual Studio Code") === "visual_studio_code",
     `got ${normalizeMcpClient("Visual Studio Code")}`);
+
+  // THE ordering check, stated as a property instead of a list of cases. A family
+  // that cannot bucket its own name is unreachable — some earlier entry is a
+  // substring of it — so it is a dead bucket that still reads as coverage. This
+  // caught `cline` sitting above `roo_cline`, which the per-case checks above did
+  // not, because nobody thinks to write the case for the pair they got wrong.
+  const unreachable = MCP_CLIENT_FAMILIES.filter((f) => normalizeMcpClient(f) !== f);
+  check(
+    `every one of the ${MCP_CLIENT_FAMILIES.length} families can bucket its own name`,
+    unreachable.length === 0,
+    unreachable.map((f) => `${f} → ${normalizeMcpClient(f)}`).join(", ") ||
+      "reordering a family above a string it contains makes the longer one dead",
+  );
+  check("Roo Cline is NOT filed as Cline", normalizeMcpClient("Roo Cline") === "roo_cline",
+    `got ${normalizeMcpClient("Roo Cline")}`);
+  // The bare `claude` catch-all must sit below the specific ones or it eats them.
+  check("bare Claude reaches the brand bucket", normalizeMcpClient("Claude") === "claude");
+  check("the bare catch-all does NOT swallow Claude Code",
+    normalizeMcpClient("Claude Code") === "claude_code");
+  check("the Agent SDK is its own bucket, not other",
+    normalizeMcpClient("@anthropic-ai/claude-agent-sdk") === "claude_agent_sdk",
+    `got ${normalizeMcpClient("@anthropic-ai/claude-agent-sdk")} — the programmatic caller is the cohort worth naming`);
   // Every bucket must stay out of the model-id namespace, or model-id-check.ts
   // has to grow a value allowlist — the artifact it exists to avoid.
   check("no bucket is hyphenated, so none can read as a model id",
