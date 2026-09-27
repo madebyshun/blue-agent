@@ -5,8 +5,9 @@
 
 115 AI tools for onchain builders and autonomous agents — audits, token signals,
 market-fit analysis, deep due diligence, launch readiness, ecosystem intel and
-more. Every tool is a paid HTTP endpoint that speaks **x402 v2** natively, so
-Base MCP can call any tool and settle the USDC payment without extra wiring.
+more. 109 are paid HTTP endpoints that speak **x402 v2** natively, so Base MCP
+can call any of them and settle the USDC payment without extra wiring. The
+other 6 are priced $0.00, never answer 402 and never ask for a signature.
 
 - **Reads:** Base mainnet (8453) and Robinhood Chain (4663) — the `rh-*`
   tokenized-stock tools are the Robinhood Chain desk, and `rh-bridge-route`
@@ -24,14 +25,27 @@ Base MCP can call any tool and settle the USDC payment without extra wiring.
 ## 1. STOP — COMPLETE ONBOARDING FIRST
 
 > [!IMPORTANT]
-> Before invoking any Blue Hub tool:
+> Before invoking a **paid** Blue Hub tool:
 >
 > 1. Call `get_wallets` and confirm a Base mainnet wallet is connected.
 > 2. Confirm USDC balance ≥ the tool's price (most are $0.05–$1.00).
 > 3. Surface the tool's description and price to the user; obtain explicit
 >    approval for the spend before paying.
 >
-> Every Blue Hub call charges USDC on-chain. Never auto-pay without consent.
+> A paid Blue Hub call charges USDC on-chain. Never auto-pay without consent.
+
+> [!NOTE]
+> **Six tools are free and this gate does not apply to them.** They are priced
+> `$0.00` in the catalog, never answer 402 and never ask for a signature:
+> `blue-doctor` · `hood-live` · `hood-track-record` · `picks-check` ·
+> `rh-rwa-verify` · `rh-token-scan`. POST them directly. Do not build an
+> authorization — there is nothing to sign and no transfer to make.
+>
+> This paragraph is load-bearing, not a footnote. The gate above used to read
+> "before invoking **any** Blue Hub tool", which made a connected wallet and a
+> spend approval a precondition for running a diagnostic and four safety checks
+> that cost nothing. An agent with no wallet would correctly conclude it could
+> not verify a contract before trading it.
 
 ---
 

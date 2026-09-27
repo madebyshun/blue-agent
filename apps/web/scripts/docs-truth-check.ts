@@ -780,6 +780,73 @@ check(
   `expected "${TOOL_COUNT} tools on Blue Hub" in agent.description`,
 );
 
+// ── 9b. …and neither file says the paid tools are ALL of them ──────────────
+/* MEASURED 2026-09-27. Six of the 115 are priced $0.00 — blue-doctor,
+   hood-live, hood-track-record, picks-check, rh-rwa-verify, rh-token-scan — and
+   both of these agent-facing files asserted the opposite in prose while their
+   COUNTS were correct. That combination is the hard one to spot: a number that
+   checks out makes the sentence around it look checked too.
+
+     plugin.md   "Every tool is a paid HTTP endpoint", and worse, §1 was a
+                 blocking gate reading "Before invoking ANY Blue Hub tool: call
+                 get_wallets … confirm USDC balance ≥ the tool's price … obtain
+                 explicit approval for the spend". Five of the six free tools
+                 are safety checks and a diagnostic. An MCP client following
+                 that instruction literally cannot verify a contract before
+                 trading it unless a wallet is already connected and funded.
+     agent.json  `x402.tools: 115` beside a top-level `payTo` and a note
+                 beginning "Any x402-capable agent can call a tool endpoint and
+                 pay per call" — 115 tools, one payee, no exceptions stated.
+
+   So the counts here are DERIVED and the prose is pinned by its absence. The
+   free ids are enumerated from the catalog, never typed, so a seventh free tool
+   fails these until the published files name it. */
+const FREE_TOOLS  = AGENT_TOOLS.filter((t) => (t.priceUSDC ?? -1) === 0);
+const PAID_TOOLS  = TOOL_COUNT - FREE_TOOLS.length;
+check(
+  "the free set is non-empty, so the pins below are not vacuous",
+  FREE_TOOLS.length > 0,
+  `${FREE_TOOLS.length} free / ${PAID_TOOLS} paid`,
+);
+check(
+  "plugin.md no longer claims every tool is paid",
+  !/Every tool is a paid/i.test(PLUGIN) && !/invoking any Blue Hub tool/i.test(PLUGIN),
+  "both the blurb and the §1 spend gate must scope themselves to paid tools",
+);
+check(
+  "plugin.md counts the paid and free split",
+  PLUGIN.includes(`${PAID_TOOLS} are paid`) && PLUGIN.includes(`other ${FREE_TOOLS.length} are priced $0.00`),
+  `expected "${PAID_TOOLS} are paid" and "other ${FREE_TOOLS.length} are priced $0.00"`,
+);
+{
+  const unnamed = FREE_TOOLS.filter((t) => !PLUGIN.includes(t.id));
+  check(
+    "plugin.md names every free tool id",
+    unnamed.length === 0,
+    unnamed.map((t) => t.id).join(", ") || `${FREE_TOOLS.length} named`,
+  );
+}
+check(
+  "agent.json — x402.paid_tools equals the catalog's paid count",
+  AGENT_JSON.x402?.paid_tools === PAID_TOOLS,
+  `${AGENT_JSON.x402?.paid_tools} vs ${PAID_TOOLS}`,
+);
+{
+  const declared = AGENT_JSON.x402?.free_tools;
+  const missing  = FREE_TOOLS.filter((t) => !(declared ?? []).includes(t.id));
+  const extra    = (declared ?? []).filter(
+    (id: string) => !FREE_TOOLS.some((t) => t.id === id),
+  );
+  check(
+    "agent.json — x402.free_tools is exactly the $0.00 set",
+    Array.isArray(declared) && missing.length === 0 && extra.length === 0,
+    [
+      missing.length ? `missing ${missing.map((t) => t.id).join(", ")}` : "",
+      extra.length ? `stale ${extra.join(", ")}` : "",
+    ].filter(Boolean).join(" | ") || `${(declared ?? []).length} ids match`,
+  );
+}
+
 // Every advertised skill must name a tool that exists AND quote its real price.
 // `blue_score` advertised `price_usdc: "0.00"` / `payment: "free"` for an id in
 // neither map — the worst shape available, because an agent reads "free", skips
