@@ -48,12 +48,18 @@
  *        `chain` a default value to make a schema tidier. A default is how a Base
  *        read silently answers an RH question.
  *
- * PAYMENT: MCP calls to the 15 preloaded hub_/blue_ tools skip x402 settlement via
- *        INTERNAL_KEY below — they are free on this surface. `blue_call` is the
- *        deliberate exception and the ONLY one: it omits the bypass headers so the
- *        x402 route answers 402 with real payment requirements, which the calling
- *        agent settles from its own wallet. That asymmetry is the point — a curated
- *        free set to make the agent useful, and a paid door to the other 95.
+ * PAYMENT: every tool advertised here is free on this surface EXCEPT `blue_call`.
+ *        "Free" is not one mechanism, which is why it is not one number: HUB_MAP
+ *        goes through callHubTool and the INTERNAL_KEY bypass below; CONSOLE_MAP
+ *        hits /api/console; the three *_tx primitives and hub_hood_arrow hit
+ *        ordinary routes that never charged; b20_encode_payment never leaves the
+ *        process. `blue_call` is the deliberate exception and the ONLY one: it omits
+ *        the bypass headers so the x402 route answers 402 with real payment
+ *        requirements, which the calling agent settles from its own wallet. That
+ *        asymmetry is the point — a curated free set to make the agent useful, and a
+ *        paid door to every catalog id HUB_MAP does not preload. The full reasoning,
+ *        and why the counts that used to sit in this paragraph are gone, is in the
+ *        block above `callPaidTool`.
  * Docs: https://blueagent.dev/.well-known/openapi.json
  */
 import { NextRequest, NextResponse } from "next/server";
@@ -128,8 +134,8 @@ const HUB_MAP: Record<string, string> = {
   hub_wallet_holdings:  "wallet-holdings",
   hub_pool_scan:        "pool-scan",
   hub_gas_tracker:      "gas-tracker",
-  // The door. `blue_call` reaches the other ~95 catalog tools over x402 and is
-  // deliberately NOT in this map — it must not take the internal bypass.
+  // The door. `blue_call` reaches every catalog id this map does not preload, over
+  // x402, and is deliberately NOT in this map — it must not take the internal bypass.
   blue_registry:        "blue-registry",
   // The 19th slot, and the only one added since the cut. It earns preloading by
   // the same rule as the safety five, in reverse: those are reached before money
@@ -389,19 +395,47 @@ async function callB20Native(name: string, args: Record<string, unknown>): Promi
 //
 // THE ONE PLACE ON THIS SURFACE THAT DOES NOT TAKE THE INTERNAL BYPASS.
 //
-// `callHubTool` above attaches `internalX402Headers()`, which is why the 15
-// preloaded tools are free over MCP. `blue_call` deliberately does not, so the
-// x402 route answers a real 402 carrying real `paymentRequirements` (USDC on
-// Base 8453, EIP-3009 transferWithAuthorization, payTo + exact amount + nonce).
-// The agent signs that authorization with ITS OWN wallet and calls again with
-// the resulting header in `payment`.
+// `callHubTool` above attaches `internalX402Headers()`, and it is the only call
+// site in this file. Every OTHER dispatch branch is free for a different reason —
+// CONSOLE_MAP hits /api/console, the three *_tx primitives and hub_hood_arrow hit
+// routes that never charged, b20_encode_payment never leaves the process — so the
+// free set is four mechanisms, not one list, and `blue_call` is the only advertised
+// name outside all four. It deliberately omits the bypass, so the x402 route
+// answers a real 402 carrying real `paymentRequirements` (USDC on Base 8453,
+// EIP-3009 transferWithAuthorization, payTo + exact amount + nonce). The agent
+// signs that authorization with ITS OWN wallet and calls again with the resulting
+// header in `payment`.
+//
+// One exception to "answers 402", and it is the caller's problem not ours:
+// `api/x402/[tool]/route.ts` handles `priceUnits === 0` BEFORE its `!xPayment`
+// branch, so the $0.00 catalog ids return 200 with no payment at all. `blue_call`'s
+// published description says so explicitly; this comment asserted an unconditional
+// 402 until 2026-09-27, and an agent that waits for requirements which never
+// arrive fails exactly like one that cannot pay.
 //
 // Why this asymmetry is deliberate and must not be "tidied up" into one path:
 //   • The free set exists so an agent is useful on connect and can run safety
-//     checks without a wallet. It is 15 tools, curated, and bounded.
-//   • The paid door is the other ~95. Making THOSE free would hand the whole
-//     catalog away on a surface with no metering; making the free 15 paid would
-//     mean an agent cannot run a honeypot check before its first transaction.
+//     checks without a wallet. It is curated and bounded, and the HUB_MAP block
+//     above IS the list — its comments say what earns a permanent slot.
+//   • The paid door is every catalog id HUB_MAP does not preload. Making THOSE
+//     free would hand the whole catalog away on a surface with no metering; making
+//     the preloaded set paid would mean an agent cannot run a honeypot check
+//     before its first transaction.
+//
+// 🔴 NO COUNTS IN THE SENTENCES ABOVE, ON PURPOSE. This block said "the 15
+// preloaded tools" and "the other ~95" from the 2026-09-26 manifest cut until
+// 2026-09-27, and 15 was never the size of anything: HUB_MAP held TEN entries in
+// the very commit that wrote it (`git show c2c0aae2`). The instructive part is why
+// that survived at the payment door — the two numbers AGREED (the catalog was 110
+// that day, and 110 − 15 = 95), so each made the other look derived, and a
+// self-consistent pair of wrong numbers reads as measured rather than typed.
+// Naming the maps instead costs a reader one grep and cannot go stale.
+// Dated snapshot, not a live claim: on 2026-09-27 the free paths measured 11 / 2 /
+// 1 / 4 names (HUB_MAP / CONSOLE_MAP / encoder / inline branches) = 18 of the 19
+// advertised, with `blue_call` the only one left over. Group 5 of
+// scripts/mcp-arg-contract-check.ts recomputes that on every `npm test` and
+// asserts the two things that must stay true — one `internalX402Headers` call
+// site, and `blue_call` as the only advertised name reaching `callPaidTool`.
 //
 // ⚠️ We relay the 402 body VERBATIM. Do not summarise, re-wrap, or "helpfully"
 // restate the payment requirements — an agent has to sign the exact struct the
@@ -888,7 +922,7 @@ export async function POST(req: NextRequest) {
         return ok(id, { content: [{ type: "text", text }] }, useSse);
       }
 
-      // blue_call — the paid door to the other 95 catalog tools.
+      // blue_call — the paid door to every catalog id HUB_MAP does not preload.
       // ⚠️ Deliberately NOT routed through HUB_MAP/callHubTool: that path attaches
       // `internalX402Headers()` and the tool runs free. This one attaches nothing
       // but what the CALLER handed us, so an unpaid call gets a real 402 back and
