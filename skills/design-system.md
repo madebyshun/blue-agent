@@ -201,17 +201,24 @@ Minimal bottom bar with logo, nav links, X icon, tagline.
 
 ---
 
-### `ToolRunner`
+### Tool-runner UI (there is no shared `ToolRunner` component)
 
-x402 pay-per-use tool runner. Handles 402 payment flow: call → sign → pay → result.
+This section documented `<ToolRunner toolId="risk-gate" price="0.05" />` until
+2026-09-27. That component was deleted together with the endpoint it posted to,
+`/api/tool/[toolId]` — a second x402 door that priced from its own hardcoded
+table and settled through `facilitator.x402.org`. A grounding file is a stronger
+advertisement than a link: left as written, it tells the next agent to build a
+payment UI against a route that now 404s.
 
-```tsx
-<ToolRunner toolId="risk-gate" price="0.05" />
-// toolId: key from TOOL_SCHEMAS in packages/core/src/tool-inputs.ts
-// price: display string in USDC
-```
+The Hub's runner still exists but is a **local, non-exported** function
+(`apps/web/src/app/hub/HubView.tsx`, props `{ tool, onBack, cached, onResult }`)
+because it is coupled to Hub state — not something to import. A new pay-per-use
+surface posts to `/api/x402/[tool]`, which prices from `AGENT_TOOLS` and settles
+via `api/_lib/x402-cdp`; read that route's header first.
 
-States: `idle | calling | signing | paying | done | error`
+The styling below is still the house style for any tool-running panel, and the
+step labels `idle → calling → signing → paying → done | error` are still the
+states to render.
 
 Input field:
 ```tsx

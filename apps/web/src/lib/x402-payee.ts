@@ -8,11 +8,19 @@
  * them publish the payee to external agents:
  *
  *   signs / settles   api/_lib/x402-cdp.ts (PAY_TO) · hub/HubView.tsx
- *   quotes a price    api/tool/[toolId] · api/tool/_debug
  *   catalog default   lib/agent-tools.ts (BLUE_TREASURY)
  *   published to      /.well-known/pricing · /.well-known/openapi.json
  *   foreign agents    /.well-known/ai-plugin.json · /api/catalog
  *                     public/.well-known/agent.json · public/plugin.md
+ *
+ * A "quotes a price" row sat here naming api/tool/[toolId] · api/tool/_debug
+ * until 2026-09-27, when both were deleted: a whole SECOND x402 door settling
+ * through facilitator.x402.org off its own hardcoded 37-tool price table. It
+ * agreed with this constant exactly, which is why it reads as reviewed here and
+ * why the payee check stayed green for months over a route quoting 25 wrong
+ * prices and charging for its own failures. Agreeing about the payee is the
+ * weakest thing a payment path can do right — group 6 of the check now asserts
+ * the strong version instead: every door settles through api/_lib/x402-cdp.
  *
  * Why that list matters more than the count: changing only the two that sign
  * is WORSE than changing none. An agent that read the published manifest signs

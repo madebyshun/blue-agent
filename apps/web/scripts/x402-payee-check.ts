@@ -40,8 +40,9 @@ const read = (p: string) => readFileSync(join(ROOT, p), "utf8");
 // ── 1. the constant itself ───────────────────────────────────────────────────
 check(`1.1 X402_PAY_TO is a 20-byte address (${X402_PAY_TO})`,
       /^0x[0-9a-fA-F]{40}$/.test(X402_PAY_TO));
-// Wire format + three `.toLowerCase()` comparisons downstream assume lowercase.
-check("1.2 …and is lowercase, which the wire format and the PAYMENT_WALLET compares assume",
+// Wire format, plus 3.1 below lowercases each haystack and compares raw — an
+// uppercased constant would make that absence sweep silently match nothing.
+check("1.2 …and is lowercase, which the wire format and the 3.1 sweep both assume",
       X402_PAY_TO === X402_PAY_TO.toLowerCase());
 
 // ── 2. every live consumer reads the constant, none re-types the literal ─────
@@ -52,12 +53,19 @@ const CONSUMERS: Record<string, string[]> = {
     "src/app/api/_lib/x402-cdp.ts",
     "src/app/hub/HubView.tsx",
   ],
-  // api/simulator/route.ts was a third entry here until 2026-09-27, when it was
-  // deleted for billing against a route that had not existed since 2026-05-29.
-  "quotes a price then verifies it": [
-    "src/app/api/tool/[toolId]/route.ts",
-    "src/app/api/tool/_debug/route.ts",
-  ],
+  // The "quotes a price then verifies it" group is GONE, and the emptiness is
+  // the finding. It held three files and all three were retired on 2026-09-27
+  // for billing against something that could not pay out: api/simulator (a
+  // route deleted 2026-05-29), then api/tool/[toolId] plus its api/tool/_debug
+  // inspector — an entire second x402 door, settling through
+  // facilitator.x402.org off its own hardcoded 37-tool price table. 25 of the 37
+  // prices disagreed with AGENT_TOOLS, two ids (allowance-audit, phishing-scan)
+  // were in neither the catalog nor HANDLERS yet quoted $0.10 in production, and
+  // no `.ok` check sat between runTool() and /settle, so it charged for failures
+  // too. Being LISTED in an allowlist reads as having been reviewed, which is
+  // how all three sat here while the group's own name described the defect.
+  // Group 6 replaces the list with the property: every door that charges must
+  // settle through _lib/x402-cdp, which no new file satisfies by accident.
   "catalog default payee": [
     "src/lib/agent-tools.ts",
   ],
@@ -204,6 +212,90 @@ for (const f of ["../../CLAUDE.md", "../../AGENTS.md"]) {
   check(`5.1 ${f.replace("../../", "")} names the current payee`,
         read(f).toLowerCase().includes(X402_PAY_TO));
 }
+
+// ── 6. every route that charges must settle through the ONE helper ───────────
+/* Groups 1–5 all assume there is a single payment path and only check that
+   everyone agrees on the payee. On 2026-09-27 there were two implementations,
+   and the second agreed about the payee perfectly — which is why nothing above
+   fired.
+
+   MEASURED that day, live in production: `/api/tool/[toolId]` built its own x402
+   requirements off a hardcoded 37-tool table and settled by POSTing
+   `facilitator.x402.org`, while `/api/x402/[tool]` quoted the catalog and
+   settled through the CDP facilitator. 25 of 37 prices disagreed with
+   AGENT_TOOLS; `phishing-scan` and `allowance-audit` were in neither the catalog
+   nor HANDLERS and still quoted $0.10; and nothing checked the handler result
+   between `runTool()` and `/settle`, so it charged for its own failures too —
+   the exact inverse of the invariant the live doors hold, where a throw means
+   the caller pays nothing. Its only in-repo caller was an orphaned component
+   with zero importers, last touched 2026-07-15, and its git timestamp read
+   "today" because the #479 payee sweep had walked through it hours earlier.
+
+   🔴 The obvious assertion — "there is exactly ONE door" — is WRONG, and writing
+   it is how this group first failed. `hub/community/[slug]/invoke` is a second,
+   legitimate door: it charges for community-hosted tools and splits 90% to the
+   creator. Pinning the count would have forced it into an allowlist, and this
+   file already has a monument to where that leads (see the emptied CONSUMERS
+   group above — being LISTED reads as having been reviewed, which is how the bad
+   door sat there for months under a heading that described its own defect).
+
+   So the invariant is not the number of doors, it is that there is ONE
+   settlement IMPLEMENTATION and every door goes through it. `_lib/x402-cdp.ts`
+   is the only place that holds the payee, the network, the CDP credentials and
+   the "settle only after success" contract — so a route that reaches a
+   facilitator itself is outside every check in this file by construction. That
+   is a property a new file cannot accidentally satisfy, and it is exactly what
+   the deleted door violated. */
+const SETTLES_RE = /\bcdpSettle\b|\/settle\b|facilitator\.x402\.org/;
+const QUOTES_RE  = /maxAmountRequired|buildRequirements\s*\(|x402Version:\s*2/;
+const THE_DOOR   = "src/app/api/x402/[tool]/route.ts";
+/** Neither quotes nor settles: the helper itself, and a route that forwards an
+ *  X-PAYMENT header its CALLER produced (blue_call — see mcp-tools.ts). */
+const NOT_A_DOOR = new Set([
+  "src/app/api/_lib/x402-cdp.ts",
+  "src/app/api/mcp/route.ts",
+]);
+const doors = walk(join(ROOT, "src/app"))
+  .map((p) => ({ f: relative(ROOT, p), body: readFileSync(p, "utf8") }))
+  .filter(({ f, body }) =>
+    f.endsWith("route.ts") && !NOT_A_DOOR.has(f) &&
+    SETTLES_RE.test(body) && QUOTES_RE.test(body));
+
+/* Presence first. Every assertion below is universally quantified over `doors`,
+   so all of them pass vacuously on an empty list — and the list goes empty the
+   moment a rename outruns these regexes, not just when the doors are gone. */
+check(`6.1 the sweep still finds the catalog door (${doors.map((d) => d.f).join(", ") || "NOTHING"})`,
+      doors.some((d) => d.f === THE_DOOR));
+
+const rollsOwn = doors
+  .filter((d) => !/from\s+"@\/app\/api\/_lib\/x402-cdp"/.test(d.body) ||
+                 !/\bcdpSettle\b/.test(d.body))
+  .map((d) => d.f);
+check(`6.2 …and every door settles through _lib/x402-cdp, not its own facilitator (${rollsOwn.join(", ") || "none do"})`,
+      rollsOwn.length === 0);
+
+/* Value-based, and it fires one step earlier than 6.2: a foreign facilitator URL
+   is a door being built, before the file looks like a door to the regexes above.
+   Prose says "the Coinbase CDP facilitator" in ~20 files, so this matches a URL
+   with a scheme, never the word. */
+const foreignFacilitators = walk(join(ROOT, "src"))
+  .map((p) => ({ f: relative(ROOT, p), hits: [...readFileSync(p, "utf8").matchAll(/https?:\/\/[^\s"'`)]*facilitator[^\s"'`)]*/g)].map((m) => m[0]) }))
+  .filter((r) => r.hits.length > 0)
+  .map((r) => `${r.f}: ${r.hits.join(" ")}`);
+check(`6.3 no file under src/ names a facilitator host we do not run (${foreignFacilitators.join(", ") || "none"})`,
+      foreignFacilitators.length === 0);
+check("6.4 …and the CDP host is still named in the helper, so 6.3 is not blind",
+      read("src/app/api/_lib/x402-cdp.ts").includes("api.cdp.coinbase.com"));
+
+// PAYMENT_WALLET's last two readers died with api/tool/*, so an override that
+// silently repoints a payee is now unreachable. Asserted so re-adding one is a
+// deliberate act: it bypasses this constant, which is the whole file's premise.
+const walletOverrides = walk(join(ROOT, "src"))
+  .map((p) => ({ f: relative(ROOT, p), body: readFileSync(p, "utf8") }))
+  .filter(({ body }) => body.includes("PAYMENT_WALLET"))
+  .map(({ f }) => f);
+check(`6.5 no route overrides the payee from env (${walletOverrides.join(", ") || "none"})`,
+      walletOverrides.length === 0);
 
 console.log(`\nx402-payee guard: ${pass} passed, ${failures.length} failed`);
 for (const f of failures) console.log(`  FAIL  ${f}`);
