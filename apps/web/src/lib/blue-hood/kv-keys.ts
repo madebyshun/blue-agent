@@ -423,6 +423,27 @@ export const TTL_SPARKLINE = 60 * 20; // 20 min — hourly candles don't need to
  * freshness does not depend on the TTL landing precisely.
  */
 export const TTL_BASE_ROWS = 60 * 15; // 15 min = 3 poll cycles
+
+/**
+ * Base P1 — the READ-SIDE freshness gate: a Base row set whose `started_at` is
+ * older than this is treated as ABSENT, whatever the TTL did.
+ *
+ * Belt to `TTL_BASE_ROWS`' braces. The TTL is what removes the key; this is what
+ * stops a row that is technically still inside TTL but clearly from a dead desk
+ * (the poll cron itself stalled) from rendering as a live stock price. 12 min ≈
+ * 2.4 cycles — long enough that one skipped cycle does not blank the desk, short
+ * enough that nobody sees a three-cycle-old price as "live".
+ *
+ * ⚠️ IT LIVES HERE BECAUSE THERE IS MORE THAN ONE READER. It was a `const` inside
+ * `/api/hood/snapshot/route.ts` while that route was the only one, and the x402
+ * `hood-live` handler is the second — two copies of a staleness threshold is how
+ * one surface starts calling a row fresh that the other already dropped, and the
+ * disagreement would show up as the board and the paid API quoting different
+ * prices for the same ticker. One definition, next to the TTL whose gap it covers
+ * (that doc block above already refers to this constant by name).
+ */
+export const BASE_ROWS_MAX_AGE_MS = 12 * 60 * 1000;
+
 export const TTL_PUSH_SUB = 60 * 60 * 24 * 90; // 90d — browser subs expire on their own well before this
 export const TTL_CHAT_CARD = 60 * 60 * 24 * 30; // 30d — matches TTL_ARROW_INDEX so cards don't outlive arrows
 /** 2.1 — an alert record self-expires so KV never accumulates unboundedly, even

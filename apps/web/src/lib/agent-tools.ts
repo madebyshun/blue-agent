@@ -110,6 +110,42 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     x402Body: () => ({}),
   },
   {
+    id: "hood-live",
+    name: "Blue Hood Live Board",
+    // Free: it reads a cron's stored output — one KV command, zero upstream
+    // calls — and the same rows are already public at /hood.
+    description:
+      "Every tokenized stock Blue Hood is watching right now, on both live venues: Chainlink oracle price, deepest-pool DEX spot, and the drift between them. Each row carries its own chain, chain_id and explorer link, because NVDA/META/GOOGL/AAPL exist on Base 8453 AND Robinhood Chain 4663 as different tokens in different pools. Rows come from the last completed 5-minute poll cycle, not a fresh quote — data_age_seconds and is_stale are part of the answer. Ungraded by construction; for the graded record use Blue Hood Track Record. Free.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "signal",
+    inputs: [
+      { key: "chain", label: "Chain (optional)", placeholder: "base | robinhood — omit for both" },
+    ],
+    isComposite: false,
+    price: "$0.00", priceUSDC: 0,
+    x402Url: `${X402_BASE}/hood-live`,
+    // Omitted, never defaulted. An absent filter means BOTH desks; defaulting it
+    // to robinhood here would silently answer a Base question with RH rows.
+    x402Body: (v) => (v.chain ? { chain: v.chain } : {}),
+  },
+  {
+    id: "hood-track-record",
+    name: "Blue Hood Track Record",
+    // Free for a sharper reason than the other free tools: a track record behind
+    // a paywall is a track record nobody can check.
+    description:
+      "Blue Hood's own scoreboard — every public arrow with its graded outcome (HIT / MISS / VOID, VOID included), the raw counts, and the hit-rate we are allowed to publish. The headline passes a sample gate: below the published threshold you get ready:false with graded + needed and no percentage at all, plus a Wilson 95% interval once it clears. Receipts are returned freely so you can recompute it yourself — the window block tells you whether you were handed the whole record or the newest N of a longer one. An unreadable feed answers 503, never an empty record. Free.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "signal",
+    inputs: [
+      { key: "limit", label: "Receipts limit (optional)", placeholder: "1–200 (default 100)" },
+    ],
+    isComposite: false,
+    price: "$0.00", priceUSDC: 0,
+    x402Url: `${X402_BASE}/hood-track-record`,
+    x402Body: (v) => (v.limit ? { limit: Number(v.limit) } : {}),
+  },
+  {
     id: "safe-trending",
     name: "Safe Trending",
     // SAFE means one specific thing and the description has to say which, or

@@ -35,10 +35,17 @@
  *     tightening from breaking that, and it is the assertion most likely to be
  *     "fixed" by someone who has not read this paragraph.
  *
+ *  - The FREE SET GROWS, and a suite that names its members stops covering the
+ *     newest one the moment it is added. Cases 1 and 2 name two tools because those
+ *     were the only free tools that existed; four more shipped afterwards. Case
+ *     2b enumerates `priceUSDC === 0` from the catalog instead, so a new free
+ *     tool is covered by being added, not by someone remembering this file.
+ *
  * NEGATIVE CONTROLS — revert the line, this suite must go red:
- *   a. delete the `if (priceUnits === 0)` block ......................... case 1, 2
+ *   a. delete the `if (priceUnits === 0)` block ......................... case 1, 2, 2b
  *   b. drop the `Object.keys(probeBody).length > 0` condition ........... case 3
  *   c. delete the MISSING_REQUIRED_INPUT block .......................... case 4
+ *   d. price any free tool above zero without meaning to ................ case 2b
  *
  * Hermetic: `globalThis.fetch` is stubbed, so a free tool that reaches its
  * handler fails there rather than calling out. That failure is still a pass —
@@ -46,6 +53,7 @@
  */
 import { NextRequest } from "next/server";
 import { POST } from "../src/app/api/x402/[tool]/route";
+import { AGENT_TOOLS } from "../src/lib/agent-tools";
 
 let failures = 0;
 function check(name: string, cond: boolean, detail = "") {
@@ -91,6 +99,50 @@ async function call(tool: string, body: unknown) {
     const { status, paymentHeader } = await call("rh-rwa-verify", { contract: ADDR });
     check("does not answer 402", status !== 402, `got ${status}`);
     check("does not ship a payment-required header", paymentHeader === null, String(paymentHeader));
+  }
+
+  // ── 2b. EVERY $0.00 tool, enumerated from the catalog ────────────────────
+  //
+  // Cases 1 and 2 name two tools. That was the whole free set when this suite
+  // was written and it is not any more — `blue-doctor`, `rh-token-scan`,
+  // `hood-live` and `hood-track-record` all shipped free afterwards, and not one
+  // of them would have been covered by a named case. A guard that has to be
+  // edited every time the thing it guards grows is a guard that silently stops
+  // covering the newest, least-reviewed member of the set.
+  //
+  // So the invariant is asserted over the catalog itself: whatever is priced
+  // zero today, and whatever is priced zero next month, must not answer 402.
+  // The two named cases above stay as readable documentation of the original
+  // finding — this one is the part that cannot fall behind.
+  console.log("\n2b. every $0.00 tool in the catalog refuses to demand payment");
+  {
+    const free = AGENT_TOOLS.filter((t) => (t.priceUSDC ?? -1) === 0);
+    // A zero-length sweep would pass vacuously, which is the one way this
+    // check could rot into decoration. If the free set ever empties, that is
+    // itself a finding worth failing on.
+    check("the catalog still has free tools to check", free.length > 0, `found ${free.length}`);
+    for (const t of free) {
+      // Empty body on purpose: no input a free tool needs is worth guessing
+      // here, and the assertion is about the PAYMENT branch, which is chosen
+      // before any handler reads a field. A handler that then fails on missing
+      // input (or on the stubbed network) is still a pass.
+      const { status, paymentHeader, body } = await call(t.id, {});
+      check(
+        `${t.id} (${t.price}) does not answer 402`,
+        status !== 402,
+        `got ${status}`,
+      );
+      check(
+        `${t.id} does not ship a payment-required header`,
+        paymentHeader === null,
+        String(paymentHeader),
+      );
+      check(
+        `${t.id} does not quote an amount`,
+        body.accepts === undefined,
+        JSON.stringify(body.accepts),
+      );
+    }
   }
 
   // ── 3. Price discovery on a paid tool must still work ────────────────────

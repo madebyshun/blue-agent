@@ -7,11 +7,13 @@
 //
 // Adding a tool means TWO registrations: the `HANDLERS` map below, and
 // `AGENT_TOOLS` in `@/lib/agent-tools`. A tool in only one is not live, and the
-// two counts must stay equal (113 == 113 today).
+// two counts must stay equal (115 == 115 today).
 import hTokenPrice from "./token-price";
 import hPoolScan from "./pool-scan";
 import hSafeTrending from "./safe-trending";
 import hBlueDoctor from "./blue-doctor";
+import hHoodLive from "./hood-live";
+import hHoodTrackRecord from "./hood-track-record";
 import hWalletHoldings from "./wallet-holdings";
 import hNewPools from "./new-pools";
 import hGasTracker from "./gas-tracker";
@@ -134,6 +136,8 @@ export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "pool-scan": hPoolScan,
   "safe-trending": hSafeTrending,
   "blue-doctor": hBlueDoctor,
+  "hood-live": hHoodLive,
+  "hood-track-record": hHoodTrackRecord,
   "wallet-holdings": hWalletHoldings,
   "new-pools": hNewPools,
   "gas-tracker": hGasTracker,

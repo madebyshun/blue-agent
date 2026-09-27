@@ -14,22 +14,19 @@
  */
 import { NextResponse } from "next/server";
 import { kvGet, kvGetProbe } from "@/lib/kv";
-import { KV_SNAPSHOT_LATEST, KV_BASE_ROWS_LATEST } from "@/lib/blue-hood/kv-keys";
+import {
+  KV_SNAPSHOT_LATEST,
+  KV_BASE_ROWS_LATEST,
+  BASE_ROWS_MAX_AGE_MS,
+} from "@/lib/blue-hood/kv-keys";
 import { partitionBaseRows } from "@/lib/blue-hood/types";
 import type { BaseDeskLatest, HoodSnapshot } from "@/lib/blue-hood/types";
 
 export const runtime = "nodejs";
 
-/**
- * Base P1 — a Base row set older than this is treated as absent.
- *
- * Belt to `TTL_BASE_ROWS`' braces: the TTL is what removes the key, this is
- * what stops us rendering a row that is technically still within TTL but
- * clearly from a dead desk (e.g. the poll cron itself stalled). 12 min ≈ 2.4
- * cycles — long enough that one skipped cycle doesn't blank the desk, short
- * enough that nobody sees a stock price from three cycles ago as "live".
- */
-const BASE_ROWS_MAX_AGE_MS = 12 * 60 * 1000;
+// `BASE_ROWS_MAX_AGE_MS` used to be declared here. It moved to kv-keys.ts when
+// the x402 `hood-live` handler became a second reader of the same blob — see the
+// doc block there for why a staleness threshold must have exactly one definition.
 
 export async function GET() {
   const probe = await kvGetProbe<HoodSnapshot>(KV_SNAPSHOT_LATEST);

@@ -83,9 +83,9 @@ JSON Schema per tool) · [`llms.txt`](https://blueagent.dev/llms.txt) (short bri
      Source of truth: apps/web/src/lib/agent-tools.ts (AGENT_TOOLS).
      Body fields are the WIRE shape (post-x402Body), not the Hub form. -->
 
-Blue Hub exposes **113 paid tools** across 11 categories.
+Blue Hub exposes **115 paid tools** across 11 categories.
 
-Categories: on-chain · security · intelligence · builder · trading · content · agent-economy · base-ecosystem · earn · signal · portfolio
+Categories: on-chain · signal · security · intelligence · builder · trading · content · agent-economy · base-ecosystem · earn · portfolio
 
 `POST https://blueagent.dev/api/x402/{id}` · x402 v2 · `eip155:8453` ·
 USDC `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`. Fields marked `*` are required;
@@ -125,6 +125,21 @@ full JSON Schema per tool: https://blueagent.dev/api/catalog
 | `token-price` | $0.01 | `token`* | Live price, mcap, volume and liquidity for any Base token (DexScreener). |
 | `wallet-holdings` | $0.02 | `address`* | Live ERC-20 + ETH holdings and USD value for a Base wallet (Moralis). |
 | `whale-tracker` | $0.10 | `address`* | Smart money and whale flow analysis — accumulation vs distribution signal for any token. |
+
+### signal (10)
+
+| id | price | body | what it does |
+|---|---|---|---|
+| `base-token-scan` | $0.05 | _(no body)_ | Hard-filter token scan on Base — 5 quality gates (vol, liquidity, depth ratio, momentum, scam filter). Returns ≤ 3 grounded signals only. No LLM. |
+| `hood-live` | $0.00 | `chain` | Every tokenized stock Blue Hood is watching right now, on both live venues: Chainlink oracle price, deepest-pool DEX spot, and the drift between them. Each row carries its own chain, chain_id and explorer link, because NVDA/META/GOOGL/AAPL exist on Base 8453 AND Robinhood Chain 4663 as different tokens in different pools. Rows come from the last completed 5-minute poll cycle, not a fresh quote — data_age_seconds and is_stale are part of the answer. Ungraded by construction; for the graded record use Blue Hood Track Record. Free. |
+| `hood-track-record` | $0.00 | `limit` | Blue Hood's own scoreboard — every public arrow with its graded outcome (HIT / MISS / VOID, VOID included), the raw counts, and the hit-rate we are allowed to publish. The headline passes a sample gate: below the published threshold you get ready:false with graded + needed and no percentage at all, plus a Wilson 95% interval once it clears. Receipts are returned freely so you can recompute it yourself — the window block tells you whether you were handed the whole record or the newest N of a longer one. An unreadable feed answers 503, never an empty record. Free. |
+| `narrative-scan` | $0.10 | _(no body)_ | Detects active Base narratives from real trending token data. Tracks Emerging → Rising → Peak → Fading lifecycle in KV. Venice LLM grounded by GeckoTerminal. |
+| `picks-check` | $0.00 | _(no body)_ | RETIRED — Blue Feed stopped writing the signal queue on 2026-06-27 and was retired on 2026-09-02, so this returns an EMPTY record, not a measured one, and will not resume. Free. When it ran it measured base-token-scan filter accuracy 22h after detection; WIN/LOSS = filter direction correct, not trading profit. Not financial advice. |
+| `rh-stock-agent-brief` | $0.20 | `ticker`* | Agent-consumable JSON brief for a Robinhood Chain RWA. Deterministic market-hours-aware verdict: WATCH / ARB_LONG_DEX / ARB_SHORT_DEX (market OPEN) · FROZEN_ALIGNED / PREMARKET_DRIFT / AFTERHOURS_DRIFT (CLOSED) · THIN_LIQUIDITY / NO_ORACLE / INSUFFICIENT_DATA. Uses shared resolvePrimaryPool for cross-tool consistency. Web-search-grounded context + risk flags. |
+| `rh-stock-alert` | $0.10 | `ticker`* `threshold_usd`* `direction` `recipient` `webhook_url` `persist` `ttl_hours` | Register a Chainlink-price threshold alert for a RH RWA. Polls Chainlink once at registration for immediate met/pending status; optionally persists to KV for a poller to watch. Above / below direction, USD threshold. |
+| `rh-stock-arb` | $0.05 | `ticker`* | Chainlink oracle vs deepest DEX pool spot for a Robinhood Chain tokenized stock. Market-hours-aware verdict: OPEN → ALIGNED / LONG_DEX / SHORT_DEX (real arb); CLOSED → FROZEN_ALIGNED / PREMARKET_DRIFT / AFTERHOURS_DRIFT (Chainlink is frozen, DEX drift ≠ arb). Warnings for feed-abnormally-stale + thin pool. |
+| `rh-stock-flow` | $0.10 | `ticker`* | Buy vs sell pressure over 24h from GeckoTerminal trades feed. Hard-mapped verdict (BUY_HEAVY / SELL_HEAVY / BALANCED) at 10% net-of-total threshold. Never fabricates flow. |
+| `rh-stock-movers` | $0.05 | `limit` `min_tvl_usd` `min_volume_24h_usd` | Top gainers / losers 24h among Robinhood Chain tokenized stocks & ETFs. Dust-pool filter (default min $5k TVL + $500 24h volume) drops noise pools that would otherwise quote AAPL at $868 via a $453-TVL pool. Sign-filtered so a token with -1.56% never lands in gainers. Filtered pools surface as filtered_out for transparency. |
 
 ### security (16)
 
@@ -237,19 +252,6 @@ full JSON Schema per tool: https://blueagent.dev/api/catalog
 | `defi-yield-scan` | $0.05 | _(no body)_ | Hard-filter DeFi yield scan on Base — deduped by protocol, APY ≥ 4%, TVL ≥ $500K. Returns top 5 live opportunities. No LLM. |
 | `lp-analyzer` | $0.25 | `token0`* `token1` `entryPrice` `investedAmount` | LP position analysis — impermanent loss, fee income, rebalance recommendation. |
 
-### signal (8)
-
-| id | price | body | what it does |
-|---|---|---|---|
-| `base-token-scan` | $0.05 | _(no body)_ | Hard-filter token scan on Base — 5 quality gates (vol, liquidity, depth ratio, momentum, scam filter). Returns ≤ 3 grounded signals only. No LLM. |
-| `narrative-scan` | $0.10 | _(no body)_ | Detects active Base narratives from real trending token data. Tracks Emerging → Rising → Peak → Fading lifecycle in KV. Venice LLM grounded by GeckoTerminal. |
-| `picks-check` | $0.00 | _(no body)_ | RETIRED — Blue Feed stopped writing the signal queue on 2026-06-27 and was retired on 2026-09-02, so this returns an EMPTY record, not a measured one, and will not resume. Free. When it ran it measured base-token-scan filter accuracy 22h after detection; WIN/LOSS = filter direction correct, not trading profit. Not financial advice. |
-| `rh-stock-agent-brief` | $0.20 | `ticker`* | Agent-consumable JSON brief for a Robinhood Chain RWA. Deterministic market-hours-aware verdict: WATCH / ARB_LONG_DEX / ARB_SHORT_DEX (market OPEN) · FROZEN_ALIGNED / PREMARKET_DRIFT / AFTERHOURS_DRIFT (CLOSED) · THIN_LIQUIDITY / NO_ORACLE / INSUFFICIENT_DATA. Uses shared resolvePrimaryPool for cross-tool consistency. Web-search-grounded context + risk flags. |
-| `rh-stock-alert` | $0.10 | `ticker`* `threshold_usd`* `direction` `recipient` `webhook_url` `persist` `ttl_hours` | Register a Chainlink-price threshold alert for a RH RWA. Polls Chainlink once at registration for immediate met/pending status; optionally persists to KV for a poller to watch. Above / below direction, USD threshold. |
-| `rh-stock-arb` | $0.05 | `ticker`* | Chainlink oracle vs deepest DEX pool spot for a Robinhood Chain tokenized stock. Market-hours-aware verdict: OPEN → ALIGNED / LONG_DEX / SHORT_DEX (real arb); CLOSED → FROZEN_ALIGNED / PREMARKET_DRIFT / AFTERHOURS_DRIFT (Chainlink is frozen, DEX drift ≠ arb). Warnings for feed-abnormally-stale + thin pool. |
-| `rh-stock-flow` | $0.10 | `ticker`* | Buy vs sell pressure over 24h from GeckoTerminal trades feed. Hard-mapped verdict (BUY_HEAVY / SELL_HEAVY / BALANCED) at 10% net-of-total threshold. Never fabricates flow. |
-| `rh-stock-movers` | $0.05 | `limit` `min_tvl_usd` `min_volume_24h_usd` | Top gainers / losers 24h among Robinhood Chain tokenized stocks & ETFs. Dust-pool filter (default min $5k TVL + $500 24h volume) drops noise pools that would otherwise quote AAPL at $868 via a $453-TVL pool. Sign-filtered so a token with -1.56% never lands in gainers. Filtered pools surface as filtered_out for transparency. |
-
 ### portfolio (5)
 
 | id | price | body | what it does |
@@ -282,7 +284,7 @@ The MCP surface is deliberately a **subset**, not a mirror.
 
 MCP serves 19 tools — 8 `blue_` + 10 `hub_` + 1 `b20_`.
 
-Only the 10 `hub_` tools and `blue_doctor` are drawn from the 113-tool catalog; `blue_` are the door
+Only the 10 `hub_` tools and `blue_doctor` are drawn from the 115-tool catalog; `blue_` are the door
 (`blue_registry`, `blue_call`), the execution primitives and two console commands, and `b20_`
 is an MCP-only calldata builder. So **none of these numbers is interchangeable with another** —
 a count always belongs to the one surface it was measured on. If you need a total, measure the
@@ -291,7 +293,7 @@ surface you are actually calling.
 **Cut from 85 to 18 on 2026-09-26, and the cut removed no capability.** The 85-tool manifest
 was 32,160 bytes — roughly 8,000 tokens spent before the agent read a single word of the user's
 question — and published MCP research finds tool-selection accuracy degrades sharply past
-~40 always-loaded entries. All 113 catalog tools remain live at `/api/x402/<id>`; `blue_registry`
+~40 always-loaded entries. All 115 catalog tools remain live at `/api/x402/<id>`; `blue_registry`
 lists them and `blue_call` runs any of them, so the rest moved from "always in context" to
 "one lookup away". A manifest is a context budget, not an inventory.
 
