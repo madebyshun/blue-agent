@@ -135,7 +135,12 @@ export default async function handler(req: Request): Promise<Response> {
       tools_truncated: matches.length > limited.length,
       how_to_call: {
         x402: "GET /api/x402/{id} for payment requirements, sign EIP-3009 USDC on Base (chain 8453), POST with X-Payment header.",
-        mcp:  "Connect the Blue Agent MCP server (https://blueagent.dev/api/mcp) in Claude Desktop / Cursor and call the tool by name.",
+        // Most ids listed here are NOT in the MCP manifest — that is 18 tools,
+        // not 110 — so "call it by name" is wrong for the great majority and
+        // sends an agent looking for a tool it cannot see. `blue_call` is how
+        // any id in this response is actually run.
+        mcp:  "Already connected: pass the `id` from this response to `blue_call`. Only 18 tools have their own MCP name; every other id here is reached through `blue_call`.",
+        mcp_install: "claude mcp add --transport http blue-agent https://blueagent.dev/api/mcp",
         docs: "https://blueagent.dev/.well-known/openapi.json",
       },
       submit_a_tool: "Builders: register your own x402 tool at https://blueagent.dev/hub/submit (80/20 revenue split, USDC on Base).",

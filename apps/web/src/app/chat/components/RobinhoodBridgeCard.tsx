@@ -92,6 +92,11 @@ type PrepareResponse = {
     /** Total cost of the trip per Relay, both sides priced. Null = unknown. */
     totalCostUsd:     number | null;
     totalCostPercent: number | null;
+    /**
+     * Present only when the trip is expensive enough to say out loud. Null is
+     * the normal case — see `bridgeCostWarning` in lib/wallet/bridge-pairs.
+     */
+    warning: { code: "HIGH_COST"; totalCostPercent: number; suggestedMinUsd: number | null; message: string } | null;
     estFillSeconds: number;
     trackerUrl: string;
     requestId:  string;
@@ -501,6 +506,18 @@ export function RobinhoodBridgeCard({ result }: { result: RobinhoodBridgeResult 
           {assetChanged && prep?.meta?.assetNote && (
             <div className="mb-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-2 py-1.5 text-[9px] text-amber-300">
               {prep.meta.assetNote}
+            </div>
+          )}
+
+          {/* The cost is high enough that the trip is probably not worth taking.
+              The percentage already appears in the meta line below, but at 9px
+              inside a parenthetical — which is where a number goes to be
+              ignored. This says it before the button, in the same place the
+              asset-changed notice sits, because both are "reconsider" facts and
+              neither is discoverable after signing. */}
+          {prep?.meta?.warning && (
+            <div className="mb-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-2 py-1.5 text-[9px] text-amber-300">
+              {prep.meta.warning.message}
             </div>
           )}
 

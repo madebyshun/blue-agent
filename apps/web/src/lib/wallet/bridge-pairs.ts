@@ -39,6 +39,61 @@
  * than a bridge that does not work.
  */
 
+/**
+ * Above this, a bridge is expensive enough that the caller should be told
+ * before signing. Percent of the amount sent, as Relay prices it.
+ */
+export const HIGH_COST_PERCENT = 5;
+
+export type BridgeCostWarning = {
+  code: "HIGH_COST";
+  totalCostPercent: number;
+  /** Null when there is no USD cost to divide — an unknown floor is not zero. */
+  suggestedMinUsd: number | null;
+  message: string;
+};
+
+/**
+ * Null on a normally-priced trip. A caller that has to interpret an
+ * "everything is fine" object is a caller that will forget to.
+ *
+ * MEASURED 2026-09-11, Base USDC → RH USDG: $1 cost 8.38%, $100 cost 0.14%,
+ * $1000 cost 0.07% — about $0.08-$0.14 of fee whichever size is sent. Cost on
+ * this route is dominated by a FLAT relayer fee, so a percentage warning is
+ * really a "your trip is too small" warning, and the smallest trip that clears
+ * the threshold is (this trip's USD cost) / HIGH_COST_PERCENT.
+ *
+ * Treating the WHOLE cost as fixed overstates that floor, which is the safe
+ * direction: it suggests a slightly larger minimum than strictly necessary
+ * rather than one that would still be flagged.
+ */
+export function bridgeCostWarning(
+  totalCostPercent: number | null,
+  totalCostUsd: number | null,
+): BridgeCostWarning | null {
+  if (totalCostPercent == null || !Number.isFinite(totalCostPercent)) return null;
+  if (!(totalCostPercent > HIGH_COST_PERCENT)) return null;
+
+  const suggestedMinUsd =
+    totalCostUsd != null && Number.isFinite(totalCostUsd) && totalCostUsd > 0
+      ? Math.ceil(totalCostUsd / (HIGH_COST_PERCENT / 100))
+      : null;
+
+  const size =
+    suggestedMinUsd != null
+      ? ` Sending about $${suggestedMinUsd} or more keeps the cost under ${HIGH_COST_PERCENT}%.`
+      : "";
+
+  return {
+    code: "HIGH_COST",
+    totalCostPercent,
+    suggestedMinUsd,
+    message:
+      `This bridge costs ${totalCostPercent}% of the amount sent, above the ${HIGH_COST_PERCENT}% threshold. ` +
+      `The relayer fee on this route is close to flat, so a small trip pays most of it.${size}`,
+  };
+}
+
 /** One currency Relay will bridge, as described by `/chains`. */
 export type BridgeCurrency = {
   /** Lowercase. The zero address means native ETH — Relay's own convention. */

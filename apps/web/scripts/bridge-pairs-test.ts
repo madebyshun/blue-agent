@@ -42,6 +42,7 @@ import {
   type BridgeCurrency, type ChainCurrencies,
   NATIVE_ADDRESS, bridgeableOf, isNativeAddress, isStableSymbol,
   parseChainCurrencies, resolveBridgePair,
+  HIGH_COST_PERCENT, bridgeCostWarning,
 } from "../src/lib/wallet/bridge-pairs";
 
 let failures = 0;
@@ -385,6 +386,63 @@ ok("nothing volatile is a dollar",
 ok("the zero address is native, and nothing else is",
    isNativeAddress(NATIVE_ADDRESS) && isNativeAddress(` ${NATIVE_ADDRESS.toUpperCase()} `)
    && !isNativeAddress(BASE_USDC) && !isNativeAddress("0x0"));
+
+// ── 9b. The cost warning ────────────────────────────────────────────────────
+//
+// A flat relayer fee means the percentage cost of a bridge is really a function
+// of how SMALL the trip is — MEASURED 2026-09-11 on Base USDC → RH USDG: 8.38%
+// on $1, 0.14% on $100, 0.07% on $1000. So the warning has to fire on the tiny
+// trip and stay silent on the ordinary one, and it must never invent a floor
+// out of an absent cost.
+//
+// ── NEGATIVE CONTROLS, PHYSICALLY PERFORMED 2026-09-27 ──────────────────────
+//   A. `>` loosened to `>=` in bridgeCostWarning → 93/94, red on "exactly at
+//      the threshold is not above it".
+//   B. the `totalCostUsd > 0` arm replaced with `Math.ceil((totalCostUsd ?? 0)
+//      / …)` → 91/94, red on all three absent-cost checks, printing "Sending
+//      about $0 or more keeps the cost under 5%" — the exact shape of
+//      fabricating a number out of missing data.
+// Both restored; 94/94 after.
+console.log("\nthe cost warning — fires on a trip too small to be worth taking");
+ok("a normal trip is not warned about", bridgeCostWarning(0.14, 0.14) === null);
+ok("an unpriced trip is not warned about — null cost is not a high cost",
+   bridgeCostWarning(null, null) === null && bridgeCostWarning(null, 5) === null);
+ok("NaN is not a percentage", bridgeCostWarning(NaN, 1) === null);
+ok("exactly at the threshold is not above it", bridgeCostWarning(HIGH_COST_PERCENT, 5) === null);
+
+const tiny = bridgeCostWarning(8.38, 0.0838);
+ok("the $1 trip measured at 8.38% IS warned about", tiny !== null);
+ok("…and says how much of it is cost", tiny?.totalCostPercent === 8.38);
+// $0.0838 of cost / 5% = $1.676 → $2. Ceil, because a suggestion that still
+// trips the threshold is worse than one a cent too cautious.
+ok("…and suggests a size whose cost would clear the threshold",
+   tiny?.suggestedMinUsd === 2, String(tiny?.suggestedMinUsd));
+ok("…which genuinely clears it",
+   tiny!.suggestedMinUsd !== null && (0.0838 / tiny!.suggestedMinUsd!) * 100 <= HIGH_COST_PERCENT);
+ok("…and the message carries both numbers a human needs",
+   !!tiny && tiny.message.includes("8.38%") && tiny.message.includes("$2"));
+
+// The percent can arrive without the USD figure — Relay quotes them separately.
+// An unknown floor is not a floor of zero, and it is not a floor at all.
+const noUsd = bridgeCostWarning(9, null);
+ok("no USD cost means no suggested minimum", noUsd !== null && noUsd.suggestedMinUsd === null);
+ok("…and the message does not then promise a size",
+   !!noUsd && !/\$/.test(noUsd.message), noUsd?.message);
+ok("a zero USD cost is treated as unknown, not as free",
+   bridgeCostWarning(9, 0)?.suggestedMinUsd === null);
+
+// The warning is worth nothing if the route computes it and drops it, or if the
+// card receives it and renders nothing. Both halves, because either alone
+// passes trivially.
+const BRIDGE_SRC = path.resolve(path.dirname(path.resolve(process.argv[1])), "../src");
+const prepRoute = readFileSync(path.join(BRIDGE_SRC, "app/api/robinhood/router/bridge-prepare/route.ts"), "utf8");
+ok("the route computes the warning", /bridgeCostWarning\(/.test(prepRoute));
+ok("…and puts it in the response, not just in a local", /^\s*warning,\s*$/m.test(prepRoute));
+const bridgeCard = readFileSync(path.join(BRIDGE_SRC, "app/chat/components/RobinhoodBridgeCard.tsx"), "utf8");
+ok("the card renders the server's sentence before the button",
+   /meta\?\.warning/.test(bridgeCard) && /warning\.message/.test(bridgeCard));
+ok("…and does not re-derive the threshold in the UI",
+   !/HIGH_COST_PERCENT|>\s*5\b/.test(bridgeCard));
 
 // ── 10. THE CALL SITE ───────────────────────────────────────────────────────
 //

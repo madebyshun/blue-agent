@@ -7,7 +7,7 @@ import { robinhoodMainnet } from "@/lib/robinhood/chains";
 import { MAINNET_RELAY_API } from "@reservoir0x/relay-sdk";
 import {
   type ChainCurrencies, isNativeAddress, parseChainCurrencies,
-  resolveBridgePair,
+  resolveBridgePair, bridgeCostWarning,
 } from "@/lib/wallet/bridge-pairs";
 import { WALLET_CHAINS } from "@/lib/wallet/chains";
 
@@ -606,6 +606,7 @@ export async function POST(req: NextRequest) {
     const impactPct = Math.abs(Number(details.totalImpact?.percent ?? ""));
     const totalCostUsd     = Number.isFinite(impactUsd) ? impactUsd : null;
     const totalCostPercent = Number.isFinite(impactPct) ? impactPct : null;
+    const warning = bridgeCostWarning(totalCostPercent, totalCostUsd);
 
     // The guaranteed floor, in base units of the OUTPUT token. `amountOut` is an
     // estimate with ~2% of destination slippage tolerance behind it; this is the
@@ -661,6 +662,9 @@ export async function POST(req: NextRequest) {
         amountOutMin,
         totalCostUsd,
         totalCostPercent,
+        // Null on a normally-priced trip — an absent warning is the quiet case,
+        // not a field the caller has to interpret. See bridgeCostWarning.
+        warning,
         estFillSeconds,
         trackerUrl,
         requestId,
