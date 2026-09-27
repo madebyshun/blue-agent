@@ -75,6 +75,7 @@ async function main() {
   const {
     recordCall, readDays, utcDay, RETENTION_DAYS,
     recordMcpHandshake, readHandshakeDays, normalizeMcpClient, MCP_CLIENT_FAMILIES,
+    readUnmatchedClientNames, foldClientName, RAW_NAME_CAP, RAW_NAME_MAXLEN,
   } = await import("../src/lib/usage-daily");
   const { kv } = await import("../src/lib/kv");
 
@@ -295,6 +296,107 @@ async function main() {
     sprayed.filter((f) => f.startsWith("spray")).length === 0 && sprayed.length <= 20,
     `${sprayed.length} field(s): ${sprayed.join(", ")}`,
   );
+
+  // ── 6b. The unmatched-name SAMPLE ───────────────────────────────────────────
+  // `other` was 10 of 19 handshakes on the meter's first full day — the biggest
+  // bucket — and the counter could not say what it was, because it stores the
+  // bucket and not the name. So unmatched names are now sampled. That makes a KV
+  // FIELD out of hostile input, which is the exact thing the closed bucket list
+  // above exists to prevent. It is safe only while the cap holds, so the cap —
+  // not the feature — is what the checks below are about.
+  const rawKey     = `usage:mcpraw:${utcDay()}`;
+  const rawFields  = Object.keys((await kv.hgetall(rawKey)) ?? {});
+  const rawSamples = rawFields.filter((f) => f !== "_overflow");
+  check(
+    `the 50 sprayed names fill the sample to its cap of ${RAW_NAME_CAP}, not past it`,
+    rawSamples.length <= RAW_NAME_CAP,
+    `${rawSamples.length} sampled — an uncapped raw hash is the #148 Upstash cost bug with an attacker holding the pen`,
+  );
+  check(
+    "the spray is VISIBLE as truncated, so a full sample cannot read as a complete one",
+    Number((await kv.hgetall(rawKey))?.["_overflow"] ?? 0) > 0,
+    `50 names minus a cap of ${RAW_NAME_CAP} must leave a countable remainder, or the operator over-trusts the list`,
+  );
+  // Structural, not a convention: the fold strips leading underscores, so the
+  // sentinel lives in a namespace no caller can reach. Negative control included,
+  // because "we named it something unlikely" is not the same claim.
+  check(
+    "no caller can forge the _overflow sentinel by naming itself that",
+    foldClientName("_overflow") !== "_overflow" && foldClientName("__overflow__") !== "_overflow",
+    `a client calling itself "_overflow" folds to "${foldClientName("_overflow")}"`,
+  );
+
+  // Truncation, on a cleared key so the cap above does not mask it. A 500-char
+  // name is a KV field an attacker chose the size of.
+  await kv.del(rawKey);
+  await recordMcpHandshake(`zzz${"q".repeat(500)}`);
+  const truncated = Object.keys((await kv.hgetall(rawKey)) ?? {});
+  check(
+    `a 503-char client name is stored truncated to ${RAW_NAME_MAXLEN}`,
+    truncated.length === 1 && truncated[0].length === RAW_NAME_MAXLEN,
+    `got ${truncated.map((f) => `${f.length} chars`).join(", ") || "nothing"}`,
+  );
+
+  // An already-seen name always increments; only NEW names are capped. That
+  // ordering is what makes the sample useful under spray — a genuinely repeated
+  // client out-counts noise instead of being crowded out by whoever sprayed first.
+  await kv.del(rawKey);
+  for (let i = 0; i < RAW_NAME_CAP; i++) await recordMcpHandshake(`filler-${i}`);
+  for (let i = 0; i < 4; i++) await recordMcpHandshake("filler-0");
+  await recordMcpHandshake("arrives-after-the-cap-is-full");
+  const afterCap = (await kv.hgetall(rawKey)) ?? {};
+  check(
+    "a name already in the sample keeps counting after the cap is full",
+    Number(afterCap["filler_0"] ?? 0) === 5,
+    `filler_0 = ${afterCap["filler_0"]} (expected 5: one admission + four repeats)`,
+  );
+  check(
+    "a NEW name after the cap is dropped to _overflow, not admitted",
+    afterCap["arrives_after_the_cap_is_full"] === undefined && Number(afterCap["_overflow"] ?? 0) === 1,
+    `overflow = ${afterCap["_overflow"]}`,
+  );
+
+  // `dropped` must not live inside `names`: `by_client.other` already counts those
+  // handshakes, so a caller summing `names` would double-count them.
+  const unmatchedToday = (await readUnmatchedClientNames(1))[0];
+  check(
+    "readUnmatchedClientNames splits `dropped` out of `names`",
+    unmatchedToday.dropped === 1 && unmatchedToday.names?.["_overflow"] === undefined,
+    `dropped=${unmatchedToday.dropped}, _overflow leaked into names: ${unmatchedToday.names?.["_overflow"] !== undefined}`,
+  );
+
+  // A RECOGNISED client must cost nothing extra — the sample is for unknowns only.
+  await kv.del(rawKey);
+  for (let i = 0; i < 6; i++) await recordMcpHandshake("Cursor");
+  check(
+    "a recognised client writes NOTHING to the sample key",
+    Object.keys((await kv.hgetall(rawKey)) ?? {}).length === 0,
+    "sampling a known name would pay two extra Upstash commands per handshake for a name we already have",
+  );
+
+  // #150 null-vs-empty, for the new reader too. `{}` here would mean "read fine,
+  // no unknown clients" — the most reassuring possible reading of a KV outage.
+  const realHgRaw = kv.hgetall.bind(kv);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (kv as any).hgetall = async () => { throw new Error("KV down"); };
+  const blindRaw = (await readUnmatchedClientNames(1))[0];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (kv as any).hgetall = realHgRaw;
+  check(
+    "an unreadable sample day is null, never an empty object",
+    blindRaw.names === null,
+    "{} would report 'no unknown clients' during an outage — the one answer that stops you looking",
+  );
+
+  // And the write side must survive the same outage: the sampler runs AFTER the
+  // bucket write, so a throw in it would lose the count too, not just the name.
+  let sampleThrew = false;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (kv as any).hgetall = async () => { throw new Error("KV down"); };
+  try { await recordMcpHandshake("some-brand-new-client"); } catch { sampleThrew = true; }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (kv as any).hgetall = realHgRaw;
+  check("a KV failure inside the sampler never breaks the handshake", !sampleThrew);
 
   // Read-side filter, same discipline as section 2.
   await kv.hincrby(initKey, "telepathy-client", 1);

@@ -38,7 +38,13 @@
  * not because nothing was called. Do not present early buckets as a baseline.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { readDays, readHandshakeDays, RETENTION_DAYS, type UsageSurface } from "@/lib/usage-daily";
+import {
+  readDays,
+  readHandshakeDays,
+  readUnmatchedClientNames,
+  RETENTION_DAYS,
+  type UsageSurface,
+} from "@/lib/usage-daily";
 
 export const runtime = "nodejs";
 export const maxDuration = 15;
@@ -61,7 +67,11 @@ export async function GET(req: NextRequest) {
   const raw  = Number(req.nextUrl.searchParams.get("days") ?? 14);
   const days = Number.isFinite(raw) ? Math.max(1, Math.min(Math.trunc(raw), RETENTION_DAYS)) : 14;
 
-  const [buckets, initBuckets] = await Promise.all([readDays(days), readHandshakeDays(days)]);
+  const [buckets, initBuckets, rawBuckets] = await Promise.all([
+    readDays(days),
+    readHandshakeDays(days),
+    readUnmatchedClientNames(days),
+  ]);
 
   // Roll the readable days up per (surface, tool).
   const totals: Record<string, { surface: UsageSurface; tool: string; ok: number; err: number }> = {};
@@ -96,6 +106,21 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // The sampled names behind `by_client.other`, busiest first. This exists because
+  // `other` led every bucket on day one and the counter could not say what it was.
+  const unmatched: Record<string, number> = {};
+  let droppedNames = 0;
+  for (const b of rawBuckets) {
+    if (b.names === null) continue;
+    droppedNames += b.dropped;
+    for (const [name, n] of Object.entries(b.names)) {
+      unmatched[name] = (unmatched[name] ?? 0) + n;
+    }
+  }
+  const unmatchedRanked = Object.fromEntries(
+    Object.entries(unmatched).sort((a, b) => b[1] - a[1]),
+  );
+
   return NextResponse.json(
     {
       window_days:     days,
@@ -126,6 +151,24 @@ export async function GET(req: NextRequest) {
           "a handshake already filed as `other` cannot be reclassified later.",
         unreadable_days: unreadableInitDays,
         by_client:       byClient,
+        /**
+         * The raw names behind `by_client.other` — a hard-capped daily sample, so
+         * `other` is actionable instead of just a signal that something is missing.
+         * Whatever leads here is the next entry for MCP_CLIENT_FAMILIES.
+         */
+        unmatched_names: {
+          note:
+            "Folded raw `clientInfo.name` values that matched no family, i.e. the " +
+            "contents of `by_client.other`. Sampled, not complete: at most a dozen " +
+            "distinct names per day are kept, and `dropped` counts handshakes whose " +
+            "name arrived after that day's sample was full. Do NOT add these to any " +
+            "handshake total — they are already counted in `by_client.other`. " +
+            "Forward-only: this sampling started after `other` had already led for " +
+            "a day, so the earliest unknowns have no name anywhere and never will.",
+          dropped:  droppedNames,
+          by_name:  unmatchedRanked,
+          days:     rawBuckets,
+        },
         days:            initBuckets,
       },
     },

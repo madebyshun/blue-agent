@@ -206,15 +206,61 @@ export async function readDays(days: number): Promise<DayUsage[]> {
  * can never exceed a couple of dozen fields no matter what arrives.
  *
  * The cost of that: a genuinely popular new client lands in `other` and its name
- * is nowhere. Accepted deliberately. If `other` starts to dominate, the fix is
- * to add a family here and wait a day, NOT to open the field up — this module is
- * forward-only anyway, so a late-added bucket loses nothing but backfill.
+ * is nowhere.
+ *
+ * 🔴 THAT COST CAME DUE WITHIN A DAY, and the rule written here to handle it was
+ * not executable. This paragraph used to end: "If `other` starts to dominate, the
+ * fix is to add a family here and wait a day, NOT to open the field up."
+ * MEASURED 2026-09-27, the first full day of data: `other` = 10 of 19 handshakes,
+ * the largest bucket, every other bucket in single digits. So `other` dominated —
+ * and "add a family" is an instruction that needs to know WHICH family, which is
+ * precisely the one thing a bucket-only counter cannot say. The rule assumed the
+ * dominant unknown would be guessable from the outside. It was not: three guesses
+ * that day (`claude`, `claude_ai`, `mcp_remote`) all drew real traffic and `other`
+ * still led. Because bucketing is forward-only, each day spent guessing destroys
+ * that day's identities permanently.
+ *
+ * The rule's error was conflating TWO things: "record raw names" and "unbounded
+ * cardinality". The safety argument above is only about the second one. So
+ * `usage:mcpraw:<day>` now keeps a HARD-CAPPED sample of the folded raw names that
+ * fell through to `other` — at most `RAW_NAME_CAP` distinct fields per day, each
+ * truncated, plus an `_overflow` counter so a full sample can never read as a
+ * complete one. The cardinality bound is the same order as the bucket hash itself,
+ * which is the property the closed list existed to guarantee. What stays true: the
+ * BUCKETS remain a closed set, and a spray attack can still cost you the sample —
+ * it cannot cost you the counts, and it cannot grow the key without bound.
  *
  * NOT RECORDED: `clientInfo.version`. It multiplies cardinality by every point
  * release and there is no decision anyone would make differently knowing it.
  */
 
 const INIT_KEY = (day: string) => `usage:mcpinit:${day}`;
+
+/**
+ * Bounded sample of RAW names that matched no family. Separate key from the bucket
+ * hash on purpose: a reader of `usage:mcpinit:<day>` keeps the closed-set guarantee
+ * it has always had, and this one can be dropped wholesale without touching a
+ * single count.
+ */
+const RAW_KEY = (day: string) => `usage:mcpraw:${day}`;
+
+/**
+ * Distinct unmatched names kept per day. Small because the job is "name the
+ * dominant unknown", not "enumerate the tail" — and because this is the number
+ * that bounds what a sprayer can write.
+ */
+export const RAW_NAME_CAP = 12;
+
+/** Truncation for one sampled name. A client name longer than this is not a client name. */
+export const RAW_NAME_MAXLEN = 40;
+
+/**
+ * Sentinel for "names were dropped because the cap was full". A leading `_` is
+ * UNREACHABLE by any folded real name — `foldClientName` strips leading
+ * underscores — so no caller can impersonate this field by naming itself
+ * `_overflow`. Structural, not a naming convention to remember.
+ */
+const RAW_OVERFLOW_FIELD = "_overflow";
 
 /**
  * Known MCP client families, matched as a SUBSTRING of the normalized name
@@ -287,9 +333,19 @@ const VALID_CLIENT = new Set<string>([...MCP_CLIENT_FAMILIES, "other", "unnamed"
  * real client we do not have a bucket for. Collapsing them would hide the only
  * signal that says "add a family to the list".
  */
+/**
+ * The ONE definition of "fold a wire name into our namespace". Both the bucketer
+ * and the unmatched-name sampler go through it, so the two can never disagree
+ * about what a name is — the sampler recording a charset the bucketer would have
+ * folded differently is exactly how you get a sample you cannot act on.
+ */
+export function foldClientName(raw: string): string {
+  return raw.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+}
+
 export function normalizeMcpClient(raw: unknown): string {
   if (typeof raw !== "string") return "unnamed";
-  const s = raw.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  const s = foldClientName(raw);
   if (!s) return "unnamed";
   for (const family of MCP_CLIENT_FAMILIES) {
     if (s.includes(family)) return family;
@@ -299,9 +355,10 @@ export function normalizeMcpClient(raw: unknown): string {
 
 /** Record one MCP `initialize`. Never throws — same contract as `recordCall`. */
 export async function recordMcpHandshake(clientName: unknown): Promise<void> {
+  const bucket = normalizeMcpClient(clientName);
   const key = INIT_KEY(utcDay());
   try {
-    await kv.hincrby(key, normalizeMcpClient(clientName), 1);
+    await kv.hincrby(key, bucket, 1);
     if (!expirySet.has(key)) {
       expirySet.add(key);
       await kv.expire(key, RETENTION_DAYS * 86_400);
@@ -309,6 +366,51 @@ export async function recordMcpHandshake(clientName: unknown): Promise<void> {
   } catch {
     // Best-effort by design. A metering failure must not break the handshake
     // that every MCP session depends on.
+  }
+  // Only the unknowns pay the extra commands, and they are the only ones whose
+  // name we do not already have. A recognised client costs exactly what it did
+  // before this feature existed.
+  if (bucket === "other" && typeof clientName === "string") {
+    await sampleUnmatchedName(clientName);
+  }
+}
+
+/**
+ * Record one folded unmatched name, under a hard cap on distinct names per day.
+ *
+ * Admission rule: an ALREADY-SEEN name always increments, a NEW name is admitted
+ * only while the day is under cap. That ordering is what makes the sample useful
+ * under spray — whoever got in first keeps climbing, so a genuinely repeated
+ * client out-counts noise instead of being crowded out by it.
+ *
+ * Costs 2 Upstash commands per unmatched handshake (one `HGETALL` of a ≤13-field
+ * hash, one `HINCRBY`). Bounded by the size of `other`, which is the population
+ * this exists to identify, and which shrinks as the guess list improves.
+ */
+async function sampleUnmatchedName(raw: string): Promise<void> {
+  const field = foldClientName(raw).slice(0, RAW_NAME_MAXLEN);
+  // An empty fold is `unnamed`, never `other`, so this cannot fire from the
+  // caller above — kept because it is the one input that would write a nameless
+  // field, and a guard is cheaper than the reasoning needed to prove it can't.
+  if (!field) return;
+
+  const key = RAW_KEY(utcDay());
+  try {
+    const existing = await kv.hgetall(key);
+    const fields = Object.keys(existing ?? {});
+    // The sentinel must not consume one of the sample slots.
+    const distinct = fields.filter((f) => f !== RAW_OVERFLOW_FIELD).length;
+    if (!fields.includes(field) && distinct >= RAW_NAME_CAP) {
+      await kv.hincrby(key, RAW_OVERFLOW_FIELD, 1);
+      return;
+    }
+    await kv.hincrby(key, field, 1);
+    if (!expirySet.has(key)) {
+      expirySet.add(key);
+      await kv.expire(key, RETENTION_DAYS * 86_400);
+    }
+  } catch {
+    // Same contract as above: a metering failure never breaks a handshake.
   }
 }
 
@@ -340,6 +442,46 @@ export async function readHandshakeDays(days: number): Promise<DayHandshakes[]> 
       clients = null;
     }
     out.push({ day, clients });
+  }
+  return out;
+}
+
+export interface DayUnmatched {
+  day: string;
+  /** null = the HGETALL threw. NOT the same as {}, which is "read fine, no unknowns". */
+  names: Record<string, number> | null;
+  /** Handshakes whose name was dropped because the day's sample was already full. */
+  dropped: number;
+}
+
+/**
+ * Read the sampled unmatched client names, newest day first.
+ *
+ * `dropped` is split out of `names` rather than left in it as a pseudo-name,
+ * because a caller summing `names` to "how many unknown handshakes were there"
+ * would otherwise double-count: the dropped ones are already in
+ * `by_client.other`. Same reason `unreadable_days` is not folded in as a zero.
+ */
+export async function readUnmatchedClientNames(days: number): Promise<DayUnmatched[]> {
+  const n = Math.max(1, Math.min(days, RETENTION_DAYS));
+  const out: DayUnmatched[] = [];
+  for (let i = 0; i < n; i++) {
+    const day = utcDay(new Date(Date.now() - i * 86_400_000));
+    let names: DayUnmatched["names"];
+    let dropped = 0;
+    try {
+      const h = await kv.hgetall(RAW_KEY(day));
+      names = {};
+      for (const [field, raw] of Object.entries(h ?? {})) {
+        const count = Number(raw);
+        if (!Number.isFinite(count)) continue;
+        if (field === RAW_OVERFLOW_FIELD) { dropped += count; continue; }
+        names[field] = (names[field] ?? 0) + count;
+      }
+    } catch {
+      names = null;
+    }
+    out.push({ day, names, dropped });
   }
   return out;
 }
