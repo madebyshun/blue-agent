@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
-import { TOOL_COUNT } from "@/lib/agent-tools";
+import { TOOL_COUNT, FREE_TOOL_COUNT } from "@/lib/agent-tools";
 
 /**
  * The MCP manifest size, PINNED — this page is "use client", and importing
@@ -64,6 +64,13 @@ const SURFACES = [
     stats: [{ label: "Tools", value: String(MCP_TOOL_COUNT) }, { label: "Clients", value: "Cursor · Claude" }],
   },
 ];
+
+/** The word the copy uses for `SURFACES.length`, so the label cannot disagree
+ *  with the grid under it. Only ever a handful of cards, so a small table beats
+ *  pulling in an int-to-words dependency; falls back to the digit rather than
+ *  silently printing "undefined" if the array ever grows past it. */
+const NUMBER_WORD = ["Zero", "One", "Two", "Three", "Four", "Five", "Six"] as const;
+const SURFACE_WORD: string = NUMBER_WORD[SURFACES.length] ?? String(SURFACES.length);
 
 const ROADMAP = [
   {
@@ -220,25 +227,36 @@ export default function AboutPage() {
             </p>
             <p>
               Blue Chat layers on top — a multi-model AI interface where your wallet is your identity.
-              Every tool call settles as an x402 micropayment: no subscription, no seats, pay only for
-              what you run. Value flows to the builders behind each tool, and the loop closes onchain.
+              A paid tool call settles as an x402 micropayment: no subscription, no seats, pay only for
+              what you run. {FREE_TOOL_COUNT} of the {TOOL_COUNT} cost nothing and settle nothing — the safety
+              checks and our own track record, so you can look before you spend.
+              Value flows to the builders behind each tool, and the loop closes onchain.
             </p>
             <p className="text-slate-300">
               MCP makes the whole stack agent-native: {MCP_TOOL_COUNT} tools plug directly into Claude Desktop and Cursor,
               no API key, no setup. The same tools that power Blue Chat run inside your IDE.
-              One platform. Three surfaces. Built on Base.
+              One platform. {SURFACE_WORD} surfaces. Built on Base.
             </p>
           </div>
         </section>
 
-        {/* ══ THREE SURFACES ═══════════════════════════════════════════════════ */}
+        {/* ══ SURFACES ═════════════════════════════════════════════════════════
+            Counted from SURFACES, never spelled. This section was headed "Three
+            Surfaces / One agent, three ways to access" while `SURFACES.map()`
+            below rendered FOUR cards — the MCP entry was added and the two
+            labels above it were not. In a `md:grid-cols-3` grid the fourth card
+            wraps onto a row of its own, so the page disagreed with itself in
+            the one place a visitor could see both at once. ═══════════════════ */}
         <section className="max-w-5xl mx-auto px-6 py-20 border-t border-[#1A1A2E]">
           <div className="text-center mb-14">
-            <SectionLabel>Three Surfaces</SectionLabel>
-            <h2 className="text-3xl font-bold">One agent, three ways to access</h2>
+            <SectionLabel>{SURFACE_WORD} Surfaces</SectionLabel>
+            <h2 className="text-3xl font-bold">One agent, {SURFACE_WORD.toLowerCase()} ways to access</h2>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* sm:2 / lg:4 — the site idiom for a four-card row (see page.tsx
+              L791, docs/_ui.tsx). Was md:grid-cols-3, which left the fourth
+              card orphaned on a row of its own. */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {SURFACES.map((s) => (
               <div key={s.name}
                 className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-6 flex flex-col"

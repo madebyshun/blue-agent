@@ -114,6 +114,29 @@ const CATEGORIES = [...new Set(AGENT_TOOLS.map((t) => t.category))];
 const FREE_COUNT = AGENT_TOOLS.filter((t) => (t.priceUSDC ?? -1) === 0).length;
 const PAID_COUNT = TOOL_COUNT - FREE_COUNT;
 
+// The price RANGE, derived for exactly the reason the counts above are. A first
+// draft of the group-11 pin below tested the literal `$0.005 to $5.00` — which
+// is the same defect as the old README pin it was written to replace: it freezes
+// the checker to today's prices, so the day someone reprices a tool the guard
+// keeps passing while the prompt it guards goes stale. Anything a sentence
+// claims must be computed, including the numbers inside a range.
+//
+// `priceUSDC` is USDC micro-units (6 dp) and a free tool holds `0`, so the free
+// six are filtered out FIRST — otherwise the floor of the "paid" range is $0.00,
+// which is not a price a caller can ever be charged.
+const PAID_MICROS = AGENT_TOOLS.map((t) => t.priceUSDC ?? 0)
+  .filter((p) => p > 0)
+  .sort((a, b) => a - b);
+/** Micro-units → the `$0.005` / `$0.10` / `$5.00` shape the prose actually uses. */
+const usd = (micros: number) => {
+  const n = micros / 1e6;
+  // Sub-cent prices need 3 dp ($0.005); everything else reads as plain money.
+  return `$${n.toFixed(Number.isInteger(n * 100) ? 2 : 3)}`;
+};
+const PRICE_LO = usd(PAID_MICROS[0]);
+const PRICE_HI = usd(PAID_MICROS[PAID_MICROS.length - 1]);
+const PRICE_MED = usd(PAID_MICROS[Math.floor(PAID_MICROS.length / 2)]);
+
 const README = readRepo("README.md");
 const LLMS = read("public/llms.txt");
 const PLUGIN = read("public/plugin.md");
@@ -154,7 +177,14 @@ const SKILL_FILES = readdirSync(join(REPO, "skills")).filter(
 console.log(`\n1. published counts equal TOOL_COUNT (${TOOL_COUNT})`);
 const pinned: [string, string, string][] = [
   ["README heading", README, `## Blue Hub — ${TOOL_COUNT} AI Tools on Base`],
-  ["README lead", README, `marketplace of ${TOOL_COUNT} pay-per-call AI tools`],
+  // This pin USED TO READ `marketplace of ${TOOL_COUNT} pay-per-call AI tools`,
+  // which is the checker enforcing the bug: it held the count to the catalog
+  // while holding "pay-per-call" over all 115, six of which are $0.00. A pin is
+  // an assertion about the whole sentence — pinning only the number inside it
+  // freezes the adjective beside it and makes the wrong claim harder to change
+  // than to keep. Interpolate every quantity the sentence makes a claim about.
+  ["README lead", README,
+   `marketplace of ${TOOL_COUNT} AI tools built on Base — ${PAID_COUNT} pay-per-call, ${FREE_COUNT} free`],
   [
     "README category line",
     README,
@@ -1053,6 +1083,173 @@ check(
   "the dead-provider scan is not vacuous",
   PUBLIC_PAGES.some(([, src]) => BANKR_RE.test(stripComments(src))),
   "no page mentions Bankr at all — if that is real the check is dead weight, not passing",
+);
+
+// ── 11. the grounding files, which are PROMPTS and not pages ───────────────
+/* MEASURED 2026-09-27. Everything above scans what a human browses or what an
+   agent fetches. `skills/*.md` is neither: `api/_lib/llm.ts` pulls these over
+   raw.githubusercontent.com and PREPENDS them to the system prompt, so they are
+   the most authoritative text in the system and they sat outside every scan in
+   this file. Count the callers, do not trust this number:
+     grep -rl 'You are Blue Agent' src/app/api/ | wc -l
+   It was 41 on the day this group was written — 40 handlers plus llm.ts itself.
+
+   What that cost, in `blue-agent-identity.md` specifically:
+     • a live `bankr.bot/agent/blue-agent` link, ~2 days after the repo declared
+       Bankr "fully removed". Group 10's sweep is scoped to PUBLIC_PAGES, so the
+       one file that feeds a dead storefront straight into a model's context was
+       the one file it could not see. A stricter consumer got the laxer scan.
+     • "31 pay-per-use tools ... Each tool costs fractions of a cent" against a
+       measured 115 / $0.005–$5.00, median $0.10. Exactly ONE of 109 paid tools
+       is under a cent. A pricing-adjacent prompt grounded on that is wrong by
+       three orders of magnitude at the top of the range.
+     • "Base-native. Everything is on Base." — flatly against hard rule 1, and
+       injected into `rh-stock-report` and `rh-stock-agent-brief`, which are RH
+       Chain 4663 tools. The grounding told them the wrong chain.
+     • the Telegram bot as "The public face of Blue Agent", retired 2026-06.
+
+   None of it threw, none of it changed a status code, and no error rate moved:
+   a stale prompt is a silent output regression, which is why it ran for months.
+
+   These files cannot carry their own warning comments — every byte becomes
+   prompt text — so the guard has to live out here. That asymmetry is the whole
+   reason this group exists. */
+const IDENTITY_REL = "skills/blue-agent-identity.md";
+const IDENTITY     = readRepo(IDENTITY_REL);
+const IDENTITY_PKG = readRepo(`packages/builder/${IDENTITY_REL}`);
+const SKILL_BODIES = SKILL_FILES.map(
+  (f) => [f, readRepo(`skills/${f}`)] as [string, string],
+);
+
+/* How many of these are genuinely injected, counted rather than asserted. Only
+   the handful named in llm.ts's SKILL_URLS reach a system prompt; the rest ship
+   in @blueagent/builder and are read to write code. Both matter and they are not
+   the same risk, so the header says which is which instead of implying all 36
+   are prompts — the first draft of this line did imply that, which is the same
+   overclaim the group exists to catch. */
+const LLM_SRC       = read("src/app/api/_lib/llm.ts");
+const INJECTED      = SKILL_FILES.filter((f) => LLM_SRC.includes(`/skills/${f}`));
+console.log(
+  `\n11. skills/*.md — ${SKILL_FILES.length} shipped in @blueagent/builder, ` +
+    `${INJECTED.length} injected into system prompts by api/_lib/llm.ts`,
+);
+check(
+  "at least one skill file is actually injected",
+  INJECTED.length > 0,
+  "SKILL_URLS in llm.ts no longer points at skills/ — the prompt-grounding claim above would be fiction",
+);
+
+check(
+  "the identity file is actually loaded by the LLM path",
+  read("src/app/api/_lib/llm.ts").includes(IDENTITY_REL),
+  `llm.ts no longer references ${IDENTITY_REL} — if the injection moved, this whole group is guarding a file nobody reads`,
+);
+check(
+  "the identity file is non-trivial, so the pins below are not vacuous",
+  IDENTITY.length > 500,
+  `${IDENTITY.length} bytes`,
+);
+check(
+  "@blueagent/builder ships the SAME identity, byte for byte",
+  IDENTITY === IDENTITY_PKG,
+  "packages/builder/skills/ is inside that package's `files` array, so a drift publishes a second, different Blue Agent to npm",
+);
+
+/* Bankr in a skill file: forbid the LINK, allow the warning.
+
+   This check first shipped as a flat "no Bankr reference" and immediately failed
+   on `llm-and-x402.md` and `reputation-engine.md` — both of which name Bankr for
+   the sole purpose of telling a reader not to call it, one of them opening with
+   the reason it was renamed from `bankr-tools.md`. Those are the guard working,
+   not the bug: per the /docs/blue-chat precedent, deleting the word removes the
+   warning and not the dependency. A skill file is read to WRITE CODE, so "do not
+   use callBankrLLM" is the single most load-bearing sentence in it.
+
+   The identity file's actual defect was different in kind and the distinction is
+   the whole check: it carried
+     Bankr profile: [bankr.bot/agent/blue-agent](https://bankr.bot/agent/blue-agent)
+   — a markdown link, under "Who is Blue Agent", offered as a way to REACH us. A
+   link is an invitation to a destination; a code span inside "this endpoint
+   403s" is a citation. So the URL form is banned with no allowance, and a plain
+   mention inherits group 10's disavowal rule. */
+const BANKR_LINK_RE = /\]\(\s*(?:https?:\/\/)?(?:[\w-]+\.)*bankr\.bot/i;
+for (const [f, body] of SKILL_BODIES) {
+  check(
+    `skills/${f} — no markdown link pointing at bankr.bot`,
+    !BANKR_LINK_RE.test(body),
+    "every Bankr verb 403s at the account level; a link is a destination, which no surrounding prose makes reachable",
+  );
+  if (!BANKR_RE.test(body)) continue;
+  check(
+    `skills/${f} — names Bankr only alongside the fact that it is dead`,
+    DISAVOWED.test(body),
+    "a skill file is read in order to write code, so an undisavowed provider name ships dead calls into whatever is scaffolded from it",
+  );
+}
+check(
+  "the bankr.bot link ban is not vacuous — some skill file still names Bankr",
+  SKILL_BODIES.some(([, b]) => BANKR_RE.test(b)),
+  "if no skill file mentions Bankr at all, the disavowal arm above never runs and is dead weight rather than passing",
+);
+
+check(
+  "the identity file counts the catalog, and splits paid from free",
+  IDENTITY.includes(`${TOOL_COUNT} tools`) &&
+    IDENTITY.includes(`${PAID_COUNT} are paid per call`) &&
+    IDENTITY.includes(`other ${FREE_COUNT}`),
+  `must state ${TOOL_COUNT} tools, ${PAID_COUNT} paid per call, ${FREE_COUNT} free — it said "31 pay-per-use tools" for long enough that nobody remembered writing it`,
+);
+check(
+  "the identity file quotes the REAL price range, not 'fractions of a cent'",
+  IDENTITY.includes(`${PRICE_LO} to ${PRICE_HI}`) &&
+    IDENTITY.includes(`median ${PRICE_MED}`) &&
+    !/fractions of a cent/i.test(IDENTITY),
+  `must say "${PRICE_LO} to ${PRICE_HI}, median ${PRICE_MED}" — all three derived from AGENT_TOOLS, ` +
+    `so a repricing fails this pin until the prompt agrees. Only ${
+      PAID_MICROS.filter((p) => p < 10_000).length
+    } of ${PAID_COUNT} paid tools is under $0.01, which is what made "fractions of a cent" false`,
+);
+check(
+  "the identity file names both live chains",
+  IDENTITY.includes("8453") && IDENTITY.includes("4663"),
+  "hard rule 1 — Base 8453 and Robinhood Chain 4663 share no state, and ~30 rh-* handlers read this file",
+);
+check(
+  "…and never claims there is only one",
+  !/Everything is on Base/i.test(IDENTITY),
+  "this exact sentence was injected into rh-stock-report and rh-stock-agent-brief, both RH Chain 4663",
+);
+check(
+  "the identity file does not present the old $BLUEAGENT as live",
+  !IDENTITY.includes("0xf895783b2931c919955e18b5e3343e7c7c456ba3") ||
+    /relaunch|not\*\* the live|pre-migration/i.test(IDENTITY),
+  "the token is mid-relaunch; the old contract may appear only with that stated beside it",
+);
+check(
+  "the identity file does not hand the model a treasury address",
+  !/^\s*[-|]\s*\**Treasury/im.test(IDENTITY),
+  "an address labelled Treasury in a prompt is one hop from output telling a user where to send funds",
+);
+
+// ── The README's free-call example names a tool id, and an id is a promise ───
+// The counts above are interpolated, but this one line spells a tool out:
+//
+//     # Call a free tool — no header, no signature, nothing to settle
+//     POST https://blueagent.dev/api/x402/blue-doctor
+//
+// It is true today and nothing made it stay true. Price that tool and the README
+// still reads fine to a human while teaching every caller to POST with no
+// X-Payment and collect a 402 — the failure lands on the reader, not on us, which
+// is why it would go unreported. Same shape as the counts: a literal that is
+// correct on the day it is written and unowned every day after.
+const README_FREE_EG = README.match(/api\/x402\/([a-z0-9-]+)\s*\n```/i)?.[1];
+const FREE_IDS = AGENT_TOOLS.filter((t) => (t.priceUSDC ?? -1) === 0).map((t) => t.id);
+check(
+  "README's free-tool example names a tool that is genuinely $0.00",
+  !!README_FREE_EG && FREE_IDS.includes(README_FREE_EG),
+  README_FREE_EG
+    ? `the demoed id ("${README_FREE_EG}") must be one of the ${FREE_COUNT} genuinely-free tools [${FREE_IDS.join(", ")}] — price a demoed tool and the docs start handing out 402s`
+    : "could not find the free-call example in README — the block moved, so this pin went vacuous rather than false",
 );
 
 console.log(

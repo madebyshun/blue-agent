@@ -2086,5 +2086,24 @@ export const AGENT_TOOLS: AgentTool[] = AGENT_TOOLS_RAW.map(withV2Defaults);
  *  across the site (i18n `{{TOOLS}}` sentinel, docs, OG cards, about, metadata).
  *  Never hardcode the number anywhere; import this so a catalog change can't
  *  leave a stale count behind. NOTE: this is the full Hub catalog only — the MCP
- *  surface (57) and the chat tool-calling set (HUB_TOOLS) are different counts. */
+ *  surface and the chat tool-calling set (HUB_TOOLS) are different counts, and
+ *  this total is NOT the paid count: see FREE_TOOL_COUNT below.
+ *  (This comment read "the MCP surface (57)" until 2026-09-27, by which point
+ *  that surface was 19. A parenthetical number inside the doc-comment of the
+ *  constant whose entire purpose is "never hardcode the number anywhere" is the
+ *  one spot nothing will ever check. MCP_TOOLS.length is the answer.) */
 export const TOOL_COUNT = AGENT_TOOLS.length;
+
+/** How many catalog tools are priced $0.00, and how many actually charge.
+ *
+ *  Split out because TOOL_COUNT kept being used AS the paid count. On
+ *  2026-09-27 the README, plugin.md, agent.json, openapi.json and
+ *  ai-plugin.json all described all TOOL_COUNT tools as pay-per-call while six
+ *  were free. Any sentence carrying "paid", "pay-per-call" or "micropayment"
+ *  wants one of these two numbers, never the total.
+ *
+ *  `priceUSDC` is USDC MICRO-units, so a free tool holds `0` — which is FALSY.
+ *  Hence `=== 0` against a nullish-coalesced -1, and never `!t.priceUSDC`:
+ *  three manifests shipped that truthy test and silently dropped the free six. */
+export const FREE_TOOL_COUNT = AGENT_TOOLS.filter((t) => (t.priceUSDC ?? -1) === 0).length;
+export const PAID_TOOL_COUNT = TOOL_COUNT - FREE_TOOL_COUNT;

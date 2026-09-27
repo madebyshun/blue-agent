@@ -22,7 +22,7 @@ Blue Agent is a full economic actor on Base: it holds a wallet, executes onchain
 
 ## Blue Hub — 115 AI Tools on Base
 
-Blue Hub is a curated marketplace of 115 pay-per-call AI tools built on Base. Any agent or developer can call tools via x402 micropayments in USDC — no API key, no account, no human in the loop.
+Blue Hub is a curated marketplace of 115 AI tools built on Base — 109 pay-per-call, 6 free. Any agent or developer can call tools via x402 micropayments in USDC — no API key, no account, no human in the loop.
 
 ```bash
 # Discover all tools + prices
@@ -31,9 +31,12 @@ GET https://blueagent.dev/api/catalog
 # Machine-readable x402 pricing
 GET https://blueagent.dev/.well-known/pricing
 
-# Call any tool
+# Call a paid tool
 POST https://blueagent.dev/api/x402/{tool-id}
 X-Payment: <EIP-3009 USDC on Base>
+
+# Call a free tool — no header, no signature, nothing to settle
+POST https://blueagent.dev/api/x402/blue-doctor
 ```
 
 **115 tools across 11 categories** — on-chain · signal · security · intelligence · builder · trading · content · agent-economy · base-ecosystem · earn · portfolio
