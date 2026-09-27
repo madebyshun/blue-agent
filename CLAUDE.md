@@ -232,6 +232,7 @@ Blue Agent is the flagship AI agent of the Base ecosystem. It is not just a chat
   > The published npm package `@blueagent/skill` is a **third, different set of 49** (15 `blue_` + 34 `hub_`, no `b20_`) — re-measured 2026-09-26. It **overlaps `/api/mcp` by only 6 names**; the other 12 MCP entries are absent from it (every execution/calldata builder and every live chain read) and 43 of its own are absent from MCP. Two separate products, not two copies of one. Its `toolId`s all resolve, `dist/` matches `src/`, and its npm description agrees at 49 — all four now pinned by `apps/web/scripts/dead-tool-check.ts` (checks F1/F2), so this paragraph can no longer rot silently.
   > 🔴 **This line claimed a 56-entry set with 7 dead ids and a description advertising 50 — every number was stale**, describing a package that had already been fixed. Nobody re-measured because the warning *read* like a live finding; a red flag with no check behind it ages into a false alarm and burns the next reader's time chasing a non-problem. If you write a 🔴 here, wire a check in the same commit or write it as a dated measurement.
   > ⚠️ **Genuinely still open on npm: versions `1.0.0`–`1.1.3` (April 2026) are stranded ABOVE `latest`.** The line was renumbered downward — `1.1.3` shipped 2026-04-25, then `0.1.0` on 2026-05-08, and `latest` correctly points at `0.4.1`. So `npm i @blueagent/skill` is fine, but `^1.0.0` in anyone's `package.json` resolves to a pre-cut build advertising a **31-name** surface. Un-publishing or deprecating those is a public-registry action and **ShunTr's call** — do not run `npm deprecate` off this note.
+  > ⚠️ **…and it is not only `skill`. MEASURED 2026-09-27 (`npm view <pkg> time --json`): the downward renumbering was one sweep across THREE packages, and two of them have since drifted back.** `@blueagent/agentkit` published `1.1.1` on 2026-04-24 then `0.1.0` on 2026-05-07; `@blueagent/sdk` reached `1.1.2` by 2026-05-01 then `0.1.0` on 2026-05-07. `latest` for both is therefore `0.1.0`, and `^1.0.0` resolves to the April build exactly as it does for `skill`. **The sharper half is local:** `skill` stayed on the 0.x line and its `package.json` agrees with `latest` (both `0.4.1`), but `agentkit` now declares **`1.3.0`** and `sdk` **`1.2.0`** — above even the stranded April maxima, on the line that was abandoned. A plain `npm publish` from either directory moves `latest` from `0.1.0` onto a 1.x and silently undoes the May renumbering, so a fresh `npm i @blueagent/sdk` would jump a major without anyone choosing that. **Which line those two live on is ShunTr's call, not a version bump — settle it before publishing either.** Left as a dated measurement rather than a guard on purpose: a check would have to encode an intent nobody has stated yet. Clean by the same measurement: `cli` (`1.3.14`), `builder` (`0.1.15`), `reputation` (`0.1.1`) — each one's `latest` is its highest published version.
   > The newer on-chain primitives (token-price, pool-scan, gas-tracker, etc.) are live on the Hub/x402 but not all wired into MCP. There are **no quantum tools** anywhere (the only "quantum" string in the codebase is prose in the `key-exposure` description).
   > The counts in `README.md`, `public/llms.txt`, `public/plugin.md`, the farcaster manifests, `SKILL.md` and this line are pinned by `apps/web/scripts/docs-truth-check.ts`, which runs in CI — edit a number and it fails unless the catalog agrees.
 
@@ -263,8 +264,9 @@ The `blue-agent` repo is the **AI-native founder console for Base builders**. It
 | `apps/web` | Next.js 15 frontend + **the entire live x402 surface** — founder console UI, `AGENT_TOOLS` catalog, all tool compute, self-hosted x402 via CDP |
 | ~~`apps/api`~~ ~~`apps/portal`~~ | 🗑️ **DELETED 2026-08-18.** The Bankr x402 storefront and the `api.blueagent.dev` portal. Both dead before removal — no Vercel project, no importers, `api.blueagent.dev` 404s. Do not recreate; see the rule above. |
 | ~~`packages/bankr`~~ | 🗑️ **DELETED 2026-09-18.** Was a `private: true` Bankr LLM client (`llm.bankr.bot`, `BANKR_API_KEY`) with zero importers. Bankr 403-banned 2026-07-20. Inference is Virtuals via `apps/web/src/app/api/_lib/llm.ts` — do not recreate. |
-| `packages/core` | Shared schemas, command pricing, and tool input definitions |
-| `packages/payments` | x402 payment helpers |
+| `packages/core` | Shared schemas, command pricing, and tool input definitions — the package hard rule #5 points at |
+| `packages/payments` | ⚠️ **An UNFINISHED STUB, not the payment layer.** This row read "x402 payment helpers" until 2026-09-27, which is what the name promises and the opposite of what it is: `private: true`, never published, and re-grepped that day at **zero importers** outside its own directory. The live payment path is `apps/web/src/app/api/_lib/x402-cdp.ts`. Two rows of the same file disagreed about it — the repo-structure block below had it right. |
+| the rest of `packages/*` | Not listed here, on purpose — see the repo-structure block below for why a typed list is the wrong shape for this directory. |
 | Chains | **Base (8453)** — primary tokenized-stock venue (Coinbase B20) + every non-RH tool. **Robinhood Chain (4663)** — second live venue; the ~30 `rh-*` tools and the RWA registry are RH-specific. Never assume which; state it. |
 
 ---
@@ -276,9 +278,15 @@ blue-agent/
 ├── apps/
 │   ├── web/              # Next.js app + ALL live x402 tool handlers + compute
 │   └── docs/             # Mintlify docs source (no package.json — not an npm workspace)
-├── packages/
+├── packages/             # NOT a full list, deliberately. Root `workspaces` is the glob
+│   │                     # `packages/*`, so `ls packages/` IS the list and re-typing it here
+│   │                     # only rots: this block named 2 of 13 until 2026-09-27 while the rest
+│   │                     # of this file referenced packages/skill, /cli and /claude-plugin.
+│   │                     # package-metadata-check.ts walks the same glob in CI.
 │   ├── core/             # Shared types, schemas, pricing, tool-input specs
-│   └── payments/         # UNFINISHED STUB — private, unpublished, zero call sites
+│   ├── payments/         # UNFINISHED STUB — private, unpublished, zero importers (2026-09-27)
+│   ├── langchain/        # Python (pyproject.toml) — inside the glob, NOT an npm workspace
+│   └── claude-plugin/    # Claude Code plugin manifest — no package.json, same exception
 ├── agents/
 │   └── blue-agent/       # Agent runtime config (agent.json, tasks.json)
 ├── commands/             # Command contract docs (idea.md, build.md, etc.)
