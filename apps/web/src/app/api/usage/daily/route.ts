@@ -119,7 +119,11 @@ export async function GET(req: NextRequest) {
       mcp_handshakes: {
         note:
           "Counts MCP `initialize` messages, not installs: one client restarting " +
-          "ten times is ten handshakes. Use it to tell 'nobody' from 'somebody'.",
+          "ten times is ten handshakes. Use it to tell 'nobody' from 'somebody'. " +
+          "`unnamed` sent no clientInfo at all (curl, smoke scripts, our own CI). " +
+          "`other` is a real client whose name matches no known family — a prompt " +
+          "to add one, not a synonym for `unnamed`. Bucketing is forward-only, so " +
+          "a handshake already filed as `other` cannot be reclassified later.",
         unreadable_days: unreadableInitDays,
         by_client:       byClient,
         days:            initBuckets,
