@@ -66,19 +66,29 @@
  *      is Hard Rule #1 violated 36 times in the one file an agent reads first.
  *
  * ── WHAT DID NOT HAPPEN: capability was not removed ────────────────────────
- * All 110 catalog tools remain live at `/api/x402/<id>`. They are now reached
+ * Every catalog tool remains live at `/api/x402/<id>`. They are now reached
  * by DISCOVERY rather than by preloading:
  *
- *      blue_registry  →  search/filter all 116 tools (110 first-party + 6
+ *      blue_registry  →  search/filter the whole catalog (first-party +
  *                        community), with category, price and input shape
- *      blue_call      →  actually invoke any id the registry returned, over
- *                        x402 (402 + payment requirements → agent pays → 200)
+ *      blue_call      →  actually invoke any id the registry returned; paid
+ *                        ids go 402 → agent signs → 200, the $0.00 ids go
+ *                        straight to 200
+ *
+ * Counts are deliberately absent from this comment. It carried "110 catalog
+ * tools" and "all 116 tools (110 first-party + 6 community)" until 2026-09-27,
+ * by which point the catalog was 115 and the community half was read live from
+ * a registry that can be unreachable — so one of those numbers was wrong and
+ * the other was never knowable at authoring time. The two counts that ARE
+ * load-bearing live in the tool descriptions below and are pinned against
+ * AGENT_TOOLS by docs-truth-check.ts. A number in a comment has no pin and no
+ * reader who would notice.
  *
  * `blue_registry` already existed and already returned everything needed. What
  * was missing was the second half: its own `how_to_call.mcp` field said
  * "Connect the Blue Agent MCP server" — advice you can only read if you are
  * already connected, and which still did not tell you how to RUN anything. You
- * could discover 116 tools and invoke none of them. `blue_call` is the one
+ * could discover the whole catalog and invoke none of it. `blue_call` is the one
  * genuinely new capability in this cut; everything else here is subtraction.
  *
  * ── WHAT STAYED, AND THE RULE FOR IT ───────────────────────────────────────
@@ -103,7 +113,7 @@ export const MCP_TOOLS = [
   {
     name: "blue_registry",
     description:
-      "Search the full Blue Hub catalog of 110+ callable x402 tools (on-chain data, security, DeFi, token intel, builder tooling) and get each one's id, price, category and input shape. Use when the user's request has no exact match among the tools loaded here, BEFORE telling them it cannot be done — most capabilities live in the catalog, not in this manifest. Pair it with blue_call: registry finds the id, blue_call runs it. Triggers — \"what tools do you have\", \"can you analyse X\", \"is there a tool for Y\", \"list your capabilities\", or any request you are about to decline. Covers Base 8453 and Robinhood Chain 4663; each result states its own chain. Free.",
+      "Search the full Blue Hub catalog of 115 callable tools — 109 x402-paid and 6 free — covering on-chain data, security, DeFi, token intel and builder tooling, and get each one's id, price, category and input shape. Use when the user's request has no exact match among the tools loaded here, BEFORE telling them it cannot be done — most capabilities live in the catalog, not in this manifest. Pair it with blue_call: registry finds the id, blue_call runs it. Triggers — \"what tools do you have\", \"can you analyse X\", \"is there a tool for Y\", \"list your capabilities\", or any request you are about to decline. Covers Base 8453 and Robinhood Chain 4663; each result states its own chain. Free.",
     inputSchema: {
       type: "object",
       properties: {
@@ -115,7 +125,7 @@ export const MCP_TOOLS = [
   {
     name: "blue_call",
     description:
-      "Execute ANY tool from the Blue Hub catalog by its id — the paid counterpart to blue_registry. Use after blue_registry returns an id you want to run. PAYMENT: this is an x402 endpoint. The first call returns HTTP 402 with a `paymentRequirements` object (USDC on Base 8453, EIP-3009 transferWithAuthorization, payTo and exact amount included); sign that authorization with your own wallet and call again with the resulting header in `payment` to get the result. You hold your own keys — Blue Agent never sees them and never pulls funds. Triggers — any time you have a catalog id and need its output. Report the 402 to the user verbatim rather than inventing the tool's output.",
+      "Execute ANY tool from the Blue Hub catalog by its id — the execution counterpart to blue_registry. Use after blue_registry returns an id you want to run. PAYMENT depends on the id, so read the price blue_registry gave you before deciding: 109 ids are x402-paid and the first call returns HTTP 402 with a `paymentRequirements` object (USDC on Base 8453, EIP-3009 transferWithAuthorization, payTo and exact amount included) — sign that authorization with your own wallet and call again with the resulting header in `payment` to get the result. The other 6 are priced $0.00 and NEVER answer 402: call them with no `payment`, no wallet and no signature, and do not wait for requirements that will not arrive. You hold your own keys — Blue Agent never sees them and never pulls funds. Triggers — any time you have a catalog id and need its output. Report a 402 to the user verbatim rather than inventing the tool's output.",
     inputSchema: {
       type: "object",
       properties: {

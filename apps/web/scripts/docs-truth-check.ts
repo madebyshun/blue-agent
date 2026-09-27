@@ -167,6 +167,10 @@ const OG_HUB_RESULT = read("src/app/api/og/hub-result/route.tsx");
 const mcpNames = [...new Set(MCP_TOOLS.map((t) => t.name))];
 const MCP_COUNT = mcpNames.length;
 const mcpPrefix = (p: string) => mcpNames.filter((n) => n.startsWith(`${p}_`)).length;
+/** A tool's own description string — prompt text, and pinnable like any file. */
+const mcpDesc = (name: string) =>
+  MCP_TOOLS.find((t) => t.name === name)?.description ??
+  `!! no MCP tool named ${name} — the pin below cannot go vacuous`;
 
 /** `skills/` ships grounding files; README.md there is an index, not a skill. */
 const SKILL_FILES = readdirSync(join(REPO, "skills")).filter(
@@ -249,6 +253,41 @@ const pinned: [string, string, string][] = [
     CLAUDE_MD,
     `\`/api/mcp\` serves **${MCP_COUNT}** (${mcpPrefix("blue")} \`blue_\` + ${mcpPrefix("hub")} \`hub_\` + ${mcpPrefix("b20")} \`b20_\`)`,
   ],
+  // The same paragraph states the CATALOG size twice, and both were 110 while
+  // AGENT_TOOLS held 115. They escaped the group-2 scanner because COUNT_RE
+  // only fires on a number adjacent to the word "tools", and neither sentence
+  // says it — "is **110**." and "All 110 stay live at". A scanner keyed on one
+  // noun cannot guard a claim that omits the noun, which is precisely why
+  // these need explicit pins rather than a wider regex.
+  ["CLAUDE.md catalog count", CLAUDE_MD, `in prod) is **${TOOL_COUNT}**`],
+  ["CLAUDE.md — the cut removed no capability", CLAUDE_MD,
+   `All ${TOOL_COUNT} stay live at \`/api/x402/<id>\``],
+
+  // ── The manifest's own DESCRIPTIONS — the strings an agent actually reads ──
+  // Every pin above guards a count in a file *about* the MCP surface. Nothing
+  // guarded the surface itself, and the two are not the same artefact: llms.txt
+  // is documentation, a description is prompt text that ships to the model.
+  //
+  // MEASURED 2026-09-27. `blue_registry` advertised "110+ callable x402 tools"
+  // when the catalog was 115 and six of them are not x402 at all. Worse,
+  // `blue_call` — the only tool that can reach those six — promised "this is an
+  // x402 endpoint. The first call returns HTTP 402", unconditionally, while
+  // `api/x402/[tool]/route.ts` handles `priceUnits === 0` BEFORE the `!xPayment`
+  // branch and answers 200. An agent following that description on a $0.00 id
+  // waits for requirements that never arrive, or refuses for want of a wallet.
+  // That is the plugin.md defect fixed in 8f5ecf20, surviving in the one surface
+  // that sweep never touched — and the 5-commit sweep that closed every other
+  // manifest did not touch a single MCP file.
+  //
+  // Three pins, not one: the paid and free halves of blue_call are separate
+  // assertions, because a single needle spanning both would let a future edit
+  // delete the free sentence and keep passing on the paid one.
+  ["blue_registry description", mcpDesc("blue_registry"),
+   `catalog of ${TOOL_COUNT} callable tools — ${PAID_COUNT} x402-paid and ${FREE_COUNT} free`],
+  ["blue_call description — the paid half", mcpDesc("blue_call"),
+   `${PAID_COUNT} ids are x402-paid`],
+  ["blue_call description — the free half", mcpDesc("blue_call"),
+   `The other ${FREE_COUNT} are priced $0.00 and NEVER answer 402`],
 ];
 for (const [name, haystack, needle] of pinned) {
   check(name, haystack.includes(needle), `expected "${needle}"`);
