@@ -20,9 +20,9 @@ Blue Agent is a full economic actor on Base: it holds a wallet, executes onchain
 
 ---
 
-## Blue Hub — 112 AI Tools on Base
+## Blue Hub — 113 AI Tools on Base
 
-Blue Hub is a curated marketplace of 112 pay-per-call AI tools built on Base. Any agent or developer can call tools via x402 micropayments in USDC — no API key, no account, no human in the loop.
+Blue Hub is a curated marketplace of 113 pay-per-call AI tools built on Base. Any agent or developer can call tools via x402 micropayments in USDC — no API key, no account, no human in the loop.
 
 ```bash
 # Discover all tools + prices
@@ -36,7 +36,7 @@ POST https://blueagent.dev/api/x402/{tool-id}
 X-Payment: <EIP-3009 USDC on Base>
 ```
 
-**112 tools across 11 categories** — on-chain · security · intelligence · builder · trading · content · agent-economy · base-ecosystem · earn · signal · portfolio
+**113 tools across 11 categories** — on-chain · security · intelligence · builder · trading · content · agent-economy · base-ecosystem · earn · signal · portfolio
 
 <!-- Both numbers above, and every other tool count in this file, are pinned to
      `TOOL_COUNT` by apps/web/scripts/docs-truth-check.ts, which runs in CI. -->
@@ -143,12 +143,12 @@ blue doctor
 ## Blue Chat
 
 The browser terminal folded into Blue Chat at
-[app.blueagent.dev/chat](https://app.blueagent.dev/chat) — all 112 Hub tools, the
+[app.blueagent.dev/chat](https://app.blueagent.dev/chat) — all 113 Hub tools, the
 5 core commands, and onchain queries, in the browser. No install required.
 (`/terminal` still 301s there, so old links keep working.)
 
 ```
-blue hub ls                    # list all 112 tools
+blue hub ls                    # list all 113 tools
 blue hub info token-pick-signal
 blue idea <prompt>             # $0.05, inference via Virtuals
 blue balance 0x...             # ETH + USDC on Base mainnet

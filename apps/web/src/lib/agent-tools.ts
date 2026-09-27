@@ -94,6 +94,22 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     x402Body: (v) => ({ limit: v.limit ? Number(v.limit) : 10 }),
   },
   {
+    id: "blue-doctor",
+    name: "Blue Doctor",
+    // Free on purpose. This is what a caller reaches for when a paid tool has
+    // just failed, and charging for "is it you or me" would be charging for an
+    // outage.
+    description:
+      "Upstream health for every data source the tools read from — Base 8453 and Robinhood Chain 4663 RPC, DexScreener, GeckoTerminal, DefiLlama, GitHub. Says down only when a probe actually failed; anything it could not reach is reported unknown with the reason.",
+    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
+    category: "on-chain",
+    inputs: [],
+    isComposite: true,
+    price: "$0.00", priceUSDC: 0,
+    x402Url: `${X402_BASE}/blue-doctor`,
+    x402Body: () => ({}),
+  },
+  {
     id: "safe-trending",
     name: "Safe Trending",
     // SAFE means one specific thing and the description has to say which, or

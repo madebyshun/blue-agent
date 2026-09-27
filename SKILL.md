@@ -83,7 +83,7 @@ JSON Schema per tool) · [`llms.txt`](https://blueagent.dev/llms.txt) (short bri
      Source of truth: apps/web/src/lib/agent-tools.ts (AGENT_TOOLS).
      Body fields are the WIRE shape (post-x402Body), not the Hub form. -->
 
-Blue Hub exposes **112 paid tools** across 11 categories.
+Blue Hub exposes **113 paid tools** across 11 categories.
 
 Categories: on-chain · security · intelligence · builder · trading · content · agent-economy · base-ecosystem · earn · signal · portfolio
 
@@ -92,7 +92,7 @@ USDC `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`. Fields marked `*` are require
 every other field has a server-side default. Machine-readable equivalent, with
 full JSON Schema per tool: https://blueagent.dev/api/catalog
 
-### on-chain (28)
+### on-chain (29)
 
 | id | price | body | what it does |
 |---|---|---|---|
@@ -101,6 +101,7 @@ full JSON Schema per tool: https://blueagent.dev/api/catalog
 | `aml-screen` | $0.25 | `address`* | AML compliance screening for any wallet — transaction patterns, risk flags, clean/suspicious verdict. |
 | `base-activity-score` | $0.05 | `address`* | Onchain activity score + tier for a Base wallet (Moralis). |
 | `base-pulse` | $0.05 | _(no body)_ | Base chain market pulse — TVL, DEX volume, sentiment, pulse score. |
+| `blue-doctor` | $0.00 | _(no body)_ | Upstream health for every data source the tools read from — Base 8453 and Robinhood Chain 4663 RPC, DexScreener, GeckoTerminal, DefiLlama, GitHub. Says down only when a probe actually failed; anything it could not reach is reported unknown with the reason. |
 | `blue-stream` | $0.05 | `feed` `chain` | Live snapshot feed of onchain activity on Base or Robinhood Chain — trending & new pools, TVL, real price/volume/liquidity. Pure real data, poll for a near-real-time feed. |
 | `cross-protocol-yield` | $0.15 | `token`* `risk_tolerance` | Best Base yield for a token across protocols (DefiLlama). |
 | `dex-flow` | $0.15 | `token`* | DEX volume, buy/sell pressure and liquidity flow for any Base token — live DexScreener data. |
@@ -281,7 +282,7 @@ The MCP surface is deliberately a **subset**, not a mirror.
 
 MCP serves 18 tools — 7 `blue_` + 10 `hub_` + 1 `b20_`.
 
-Only the 10 `hub_` tools are drawn from the 112-tool catalog; `blue_` are the door
+Only the 10 `hub_` tools are drawn from the 113-tool catalog; `blue_` are the door
 (`blue_registry`, `blue_call`), the execution primitives and two console commands, and `b20_`
 is an MCP-only calldata builder. So **none of these numbers is interchangeable with another** —
 a count always belongs to the one surface it was measured on. If you need a total, measure the
@@ -290,8 +291,8 @@ surface you are actually calling.
 **Cut from 85 to 18 on 2026-09-26, and the cut removed no capability.** The 85-tool manifest
 was 32,160 bytes — roughly 8,000 tokens spent before the agent read a single word of the user's
 question — and published MCP research finds tool-selection accuracy degrades sharply past
-~40 always-loaded entries. All 112 catalog tools remain live at `/api/x402/<id>`; `blue_registry`
-lists them and `blue_call` runs any of them, so the other 95 moved from "always in context" to
+~40 always-loaded entries. All 113 catalog tools remain live at `/api/x402/<id>`; `blue_registry`
+lists them and `blue_call` runs any of them, so the rest moved from "always in context" to
 "one lookup away". A manifest is a context budget, not an inventory.
 
 `blue_call` is the one tool here that **charges**. It forwards no internal bypass header, so an
