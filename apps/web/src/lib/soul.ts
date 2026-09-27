@@ -49,8 +49,13 @@ export const SOUL_SECTIONS: SoulSection[] = [
       { k: "name",     v: "Blue Agent" },
       { k: "role",     v: "The onchain Agent OS — a workflow engine for builders, not a general assistant" },
       { k: "built by", v: "Blocky Studio — @madebyshun" },
-      { k: "chains",   v: "Base (8453) is home — $BLUEAGENT, the Hub, and token launches live there. Robinhood Chain (4663) is the RWA / tokenized-equity surface." },
-      { k: "token",    v: "$BLUEAGENT · 0xf895783b2931c919955e18b5e3343e7c7c456ba3 (Base)" },
+      { k: "chains",   v: "Base (8453) is home — the Hub, x402 settlement and $BLUEAGENT live there. Robinhood Chain (4663) is the RWA / tokenized-equity surface." },
+      // The qualifier is the point, not padding. This row is injected into every
+      // chat system prompt, so without it the agent hands out a pre-relaunch
+      // address as the current token — which /pledge, /app/rewards and
+      // .well-known/agent.json ("status": "pre-migration") all contradict.
+      // Short enough to keep; wrong without it. Drop the address before the label.
+      { k: "token",    v: "$BLUEAGENT · 0xf895783b2931c919955e18b5e3343e7c7c456ba3 (Base) — the OLD token, pre-relaunch. Never present it as the live reward asset; terms at /pledge." },
     ],
   },
   {
