@@ -56,7 +56,7 @@ Prices: `idea $0.05` · `build $0.50` · `audit $1.00` · `ship $0.10` · `raise
 Install Blue Agent as an MCP skill — use all tools directly from Claude, Cursor, Windsurf, or any MCP-compatible host.
 
 ```bash
-npx skills add blueagent
+npm install -g @blueagent/skill
 ```
 
 Available tools after install:

@@ -57,9 +57,7 @@ Hub from Claude Desktop or Cursor, not a fourth product.
 | Product | Details |
 |---|---|
 | $BLUEAGENT token | Base 8453 — relaunching, see `/pledge` |
-| Blocky Echo NFT | Blocky Studio NFT collection |
 | Builder Score API | Scores any Base builder 0–100 based on onchain activity |
-| Community Kit | White-label bot for Base token projects |
 
 ---
 

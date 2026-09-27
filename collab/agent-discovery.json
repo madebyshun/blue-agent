@@ -57,7 +57,7 @@
   ],
   "mcp": {
     "package": "@blueagent/skill",
-    "install": "npx skills add blueagent",
+    "install": "npm install -g @blueagent/skill",
     "registry": "https://npmjs.com/package/@blueagent/skill"
   },
   "cli": {

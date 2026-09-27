@@ -33,7 +33,7 @@ Aeon skill runs (cron)
 
 ### Option 2 — Aeon invokes Blue Agent MCP tools
 
-Aeon has an MCP server. Blue Agent has MCP tools (`npx skills add blueagent`). Aeon can call `blue_audit` directly during a skill run.
+Aeon has an MCP server. Blue Agent has MCP tools (`npm install -g @blueagent/skill`). Aeon can call `blue_audit` directly during a skill run.
 
 ```
 Aeon detects code issue in blue-agent repo (github-monitor skill)

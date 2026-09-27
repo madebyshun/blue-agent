@@ -1231,6 +1231,26 @@ check(
   "an address labelled Treasury in a prompt is one hop from output telling a user where to send funds",
 );
 
+// ── The ecosystem table lists SHIPPED products, not roadmap phases ───────────
+// Removed 2026-09-27. Neither name appears anywhere else in this repo as a
+// built thing: "Blocky Echo NFT" is nowhere at all, and "Community kit" exists
+// only as roadmap Phase 9 (docs/roadmap.md), whose own bullets still bill it
+// through Bankr subscriptions. A table headed "Product | Details" states that
+// the row shipped — the model has no way to read it as a plan.
+//
+// This is the same failure as "31 pay-per-use tools" above, in the harder
+// direction: a wrong count is at least checkable against the catalog, whereas a
+// wholly invented product has nothing to reconcile against and so survives
+// every count-based pin. Delete a line here only when the product genuinely
+// ships, which makes that a deliberate act rather than a drift.
+for (const ghost of ["Blocky Echo", "Community Kit"]) {
+  check(
+    `the identity file does not advertise "${ghost}" as a shipped product`,
+    !new RegExp(ghost.replace(/ /g, "\\s+"), "i").test(IDENTITY),
+    "unshipped roadmap items may not sit in the ecosystem table; 40 call sites inject this file as prompt text",
+  );
+}
+
 // ── The README's free-call example names a tool id, and an id is a promise ───
 // The counts above are interpolated, but this one line spells a tool out:
 //
@@ -1251,6 +1271,65 @@ check(
     ? `the demoed id ("${README_FREE_EG}") must be one of the ${FREE_COUNT} genuinely-free tools [${FREE_IDS.join(", ")}] — price a demoed tool and the docs start handing out 402s`
     : "could not find the free-call example in README — the block moved, so this pin went vacuous rather than false",
 );
+
+// ══ 12. The published manifests — the third surface the Bankr sweep missed ═══
+//
+// Group 10 bans "Powered by Bankr" across PUBLIC_PAGES, and PUBLIC_PAGES is the
+// about page plus src/app/docs/. That is every surface a HUMAN reads and not one
+// surface an AGENT reads. Measured on 2026-09-27, the gap had caught two files:
+//
+//   • skills/blue-agent-identity.md    → a live bankr.bot markdown link, fixed in
+//                                        46b56360 and now pinned by group 11.
+//   • public/.well-known/agent.json    → `mcp.registry: "https://skills.bankr.bot"`
+//                                        and `registry.bankr_skills: ".../pull/432"`.
+//
+// Both survived ~2 days past "Bankr is fully removed" for the same reason: the
+// scan was scoped by who reads the file, and the machine-readable surfaces were
+// nobody's idea of a "page". An agent-facing manifest is the one place a dead
+// storefront does real damage, because nothing between it and a tool call reads
+// prose that says the account is 403-banned.
+//
+// Discovered, not typed — same discipline as group 10's docsPages. A hand-written
+// list is exactly how agent.json escaped in the first place.
+const WELL_KNOWN_SRC = join(WEB, "src/app/.well-known");
+const MANIFEST_FILES = [
+  ...readdirSync(join(WEB, "public/.well-known")).map((f) => `public/.well-known/${f}`),
+  ...readdirSync(join(WEB, "public"))
+    .filter((f) => /\.(md|txt|json)$/.test(f))
+    .map((f) => `public/${f}`),
+  // One level of nesting covers `ai-tool/[tool]/route.ts`; the dynamic segment is
+  // a directory, so a flat readdir would miss the only route that takes a param.
+  ...readdirSync(WELL_KNOWN_SRC, { withFileTypes: true })
+    .filter((d) => d.isDirectory())
+    .flatMap((d) =>
+      readdirSync(join(WELL_KNOWN_SRC, d.name), { withFileTypes: true }).flatMap((e) =>
+        e.isDirectory()
+          ? [`src/app/.well-known/${d.name}/${e.name}/route.ts`]
+          : e.name === "route.ts"
+            ? [`src/app/.well-known/${d.name}/route.ts`]
+            : [],
+      ),
+    ),
+];
+console.log(`\n12. published agent-facing manifests — ${MANIFEST_FILES.length} scanned for Bankr`);
+
+check(
+  "the manifest list was discovered, not typed",
+  MANIFEST_FILES.length >= 8,
+  `${MANIFEST_FILES.length} enumerated from public/ and src/app/.well-known/ — a floor of 8, because if discovery collapses the ban below passes by scanning nothing`,
+);
+
+// The LINK ban, not a word ban — identical reasoning to group 11. A manifest is
+// consumed by machines, so a bankr.bot URL in one is strictly a destination;
+// there is no "this endpoint 403s" context a parser could read.
+for (const rel of MANIFEST_FILES) {
+  const body = read(rel);
+  check(
+    `${rel} — no bankr.bot reference`,
+    !/bankr\.bot|BankrBot\/skills/i.test(body),
+    "every Bankr verb 403s at the account level; an agent reading this manifest has no prose telling it so",
+  );
+}
 
 console.log(
   failures === 0

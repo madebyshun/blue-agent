@@ -97,8 +97,8 @@
   },
   "mcp": {
     "package": "@blueagent/skill",
-    "install": "npx skills add blueagent",
-    "registry": "https://skills.bankr.bot",
+    "install": "npm install -g @blueagent/skill",
+    "registry": "https://npmjs.com/package/@blueagent/skill",
     "endpoint": "https://blueagent.dev/api/mcp"
   },
   "cli": {
@@ -109,8 +109,7 @@
   "registry": {
     "erc8257": "0x265BB2DBFC0A8165C9A1941Eb1372F349baD2cf1",
     "network": "eip155:8453",
-    "explorer": "https://basescan.org/address/0x265BB2DBFC0A8165C9A1941Eb1372F349baD2cf1",
-    "bankr_skills": "https://github.com/BankrBot/skills/pull/432"
+    "explorer": "https://basescan.org/address/0x265BB2DBFC0A8165C9A1941Eb1372F349baD2cf1"
   },
   "links": {
     "github": "https://github.com/madebyshun/blue-agent",
