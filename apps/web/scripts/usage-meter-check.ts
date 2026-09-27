@@ -30,6 +30,13 @@
  *    somewhere, and both outcomes are recorded on at least one path.
  * 4. Cost: exactly one KV write command per recorded call (plus the lazy TTL),
  *    because an Upstash budget overrun is what unscheduled the research cron.
+ * 5. `readDays` is clamped to retention in both directions.
+ * 6. The MCP handshake counter: its bucket list is CLOSED (the field is
+ *    caller-supplied on a public unauthenticated route, so an open one is an
+ *    unbounded KV write anyone can spray), the substring order that keeps
+ *    `cursor-vscode` out of the `vscode` bucket holds, and the `initialize`
+ *    branch still calls it — that one line is the only thing counting agents
+ *    that connect but never call a tool, and deleting it fails silently.
  *
  * Runs offline against the in-memory KV fallback — no network, no Upstash.
  *
@@ -65,7 +72,10 @@ async function main() {
     process.exit(1);
   }
 
-  const { recordCall, readDays, utcDay, RETENTION_DAYS } = await import("../src/lib/usage-daily");
+  const {
+    recordCall, readDays, utcDay, RETENTION_DAYS,
+    recordMcpHandshake, readHandshakeDays, normalizeMcpClient,
+  } = await import("../src/lib/usage-daily");
   const { kv } = await import("../src/lib/kv");
 
   // ── 1. Round-trip ──────────────────────────────────────────────────────────
@@ -199,6 +209,119 @@ async function main() {
   console.log("\n5. readDays cannot be pushed past retention");
   check("days is clamped to RETENTION_DAYS", (await readDays(9999)).length === RETENTION_DAYS);
   check("days below 1 is clamped up", (await readDays(0)).length === 1);
+
+  // ── 6. MCP handshakes ──────────────────────────────────────────────────────
+  console.log("\n6. the MCP handshake counter buckets clients and cannot be sprayed");
+
+  // Real clients send decorated names. Bucketing has to survive that, and the
+  // `cursor-vscode` case is the one that silently files every Cursor session as
+  // VS Code if the family list is ever reordered.
+  check("the wire name claude-code buckets to claude_code",
+    normalizeMcpClient("claude-code") === "claude_code",
+    `got ${normalizeMcpClient("claude-code")}`);
+  check('"Claude Code" normalizes before matching',
+    normalizeMcpClient("Claude Code") === "claude_code");
+  check("cursor-vscode buckets to cursor, NOT vscode",
+    normalizeMcpClient("cursor-vscode") === "cursor",
+    `got ${normalizeMcpClient("cursor-vscode")} — family order is load-bearing`);
+  check('"Visual Studio Code" still reaches its own bucket',
+    normalizeMcpClient("Visual Studio Code") === "visual_studio_code",
+    `got ${normalizeMcpClient("Visual Studio Code")}`);
+  // Every bucket must stay out of the model-id namespace, or model-id-check.ts
+  // has to grow a value allowlist — the artifact it exists to avoid.
+  check("no bucket is hyphenated, so none can read as a model id",
+    !["claude-code", "cursor-vscode", "Claude Desktop", "claude.ai", "roo cline", undefined, "x"]
+      .some((n) => normalizeMcpClient(n).includes("-")),
+    "model ids are lowercase-hyphenated; buckets use _ so the namespaces cannot collide");
+
+  // The negative controls. An open field on a public route is the bug.
+  check("an unknown client is bucketed to other", normalizeMcpClient("totally-new-agent-2031") === "other");
+  check("a missing name is unnamed, not other", normalizeMcpClient(undefined) === "unnamed");
+  check("an empty name is unnamed", normalizeMcpClient("   ") === "unnamed");
+  check("a non-string name is unnamed", normalizeMcpClient({ evil: true }) === "unnamed");
+  check(
+    "unnamed and other stay APART",
+    normalizeMcpClient(undefined) !== normalizeMcpClient("totally-new-agent-2031"),
+    "collapsing them would hide the signal that says 'add a family'",
+  );
+
+  await recordMcpHandshake("claude-code");
+  await recordMcpHandshake("claude-code");
+  await recordMcpHandshake("cursor-vscode");
+  await recordMcpHandshake(undefined);
+
+  const initToday = (await readHandshakeDays(1))[0];
+  check("readHandshakeDays returns today's bucket", initToday?.day === utcDay(), initToday?.day);
+  check("today's handshakes are readable (not null)", initToday?.clients !== null);
+  check("repeat handshakes from one client accumulate", initToday?.clients?.["claude_code"] === 2,
+    `claude_code=${initToday?.clients?.["claude_code"]}`);
+  check("a decorated name lands in its family bucket", initToday?.clients?.["cursor"] === 1);
+  check("a nameless caller is counted, not dropped", initToday?.clients?.["unnamed"] === 1);
+
+  // The key the module writes is the key a reader constructs. Asserted through
+  // behaviour, not a grep, so a rename fails here rather than going unnoticed.
+  const initKey = `usage:mcpinit:${utcDay()}`;
+  check("handshakes live under usage:mcpinit:<day>",
+    Object.keys((await kv.hgetall(initKey)) ?? {}).length > 0, initKey);
+
+  // Spray. This is the attack the closed list exists to stop: the route is
+  // public, unauthenticated and CORS-open, so `clientInfo.name` is hostile input.
+  for (let i = 0; i < 50; i++) await recordMcpHandshake(`spray-${i}-${Math.random()}`);
+  const sprayed = Object.keys((await kv.hgetall(initKey)) ?? {});
+  check(
+    "50 distinct hostile names create ONE field, not 50",
+    sprayed.filter((f) => f.startsWith("spray")).length === 0 && sprayed.length <= 20,
+    `${sprayed.length} field(s): ${sprayed.join(", ")}`,
+  );
+
+  // Read-side filter, same discipline as section 2.
+  await kv.hincrby(initKey, "telepathy-client", 1);
+  const filtered = (await readHandshakeDays(1))[0].clients!;
+  check("a field outside the closed set is dropped on read", filtered["telepathy-client"] === undefined);
+  check("the real buckets survive the junk field", filtered["claude_code"] === 2);
+
+  // Cost, and the #150 null-vs-empty distinction.
+  let initWrites = 0;
+  const realHi = kv.hincrby.bind(kv);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (kv as any).hincrby = (k: string, f: string, b: number) => { initWrites++; return realHi(k, f, b); };
+  for (let i = 0; i < 5; i++) await recordMcpHandshake("claude-code");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (kv as any).hincrby = realHi;
+  check("5 handshakes cost exactly 5 HINCRBY", initWrites === 5, `${initWrites} write(s)`);
+
+  const realHg = kv.hgetall.bind(kv);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (kv as any).hgetall = async () => { throw new Error("KV down"); };
+  const blind = (await readHandshakeDays(1))[0];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (kv as any).hgetall = realHg;
+  check(
+    "an unreadable day is null, never an empty object",
+    blind.clients === null,
+    "{} would be read as 'nobody connected' — a conclusion, not a missing datapoint",
+  );
+
+  let threw = false;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (kv as any).hincrby = async () => { throw new Error("KV down"); };
+  try { await recordMcpHandshake("claude-code"); } catch { threw = true; }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (kv as any).hincrby = realHi;
+  check("a KV failure never breaks the handshake", !threw, "initialize must answer even with no meter");
+
+  // Coverage: the one line that counts connecting agents, in the one branch that
+  // sees them. A grep, because this check cannot execute the route.
+  const mcpRoute = path.join(SRC, "app/api/mcp/route.ts");
+  const mcpSrc   = existsSync(mcpRoute) ? readFileSync(mcpRoute, "utf8") : "";
+  check("app/api/mcp/route.ts exists", mcpSrc.length > 0);
+  const initAt  = mcpSrc.indexOf('if (method === "initialize")');
+  const callAt  = mcpSrc.indexOf("recordMcpHandshake(");
+  const nextAt  = mcpSrc.indexOf('if (method === ', initAt + 10);
+  check("the initialize branch records the handshake", initAt > 0 && callAt > initAt && callAt < nextAt,
+    initAt < 0 ? "no initialize branch found"
+      : callAt < 0 ? "recordMcpHandshake is never called — connecting agents are invisible again"
+      : `initialize@${initAt} call@${callAt} nextBranch@${nextAt}`);
 
   console.log(
     failures === 0

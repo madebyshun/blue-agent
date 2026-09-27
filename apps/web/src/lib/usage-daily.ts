@@ -35,6 +35,11 @@
  * require knowing WHO called it, and the cheapest way to keep that promise is to
  * have no field to put it in.
  *
+ * The `usage:mcpinit:<day>` counter at the bottom of this file is the one thing
+ * that records anything about the CALLER, and it is bucketed software identity
+ * (`claude_code`, `cursor`, `other`), never a person — see its own header for
+ * why the bucket list is closed and why the client VERSION is dropped.
+ *
  * COST
  * ----
  * Upstash bills per command, and an Upstash budget overrun is what unscheduled
@@ -49,6 +54,8 @@
  *   read  — ONE `HGETALL` per day. A 14-day report is 14 commands.
  *   TTL   — `RETENTION_DAYS`, set lazily (see `expirySet`) so it costs ~1 extra
  *           command per serverless instance per day rather than one per call.
+ *   init  — ONE more `HINCRBY` per MCP `initialize`, which is once per client
+ *           session rather than once per call, so it is noise next to the above.
  *
  * Both functions swallow their errors. A metering failure must never turn into a
  * failed tool call — the counter is the least important thing in the request.
@@ -87,7 +94,11 @@ export function utcDay(d: Date = new Date()): string {
 }
 
 /**
- * Days we have already set a TTL on, per serverless instance.
+ * Keys we have already set a TTL on, per serverless instance. Holds the FULL
+ * key, not the day, because two different daily hashes live in here now and a
+ * bare `2026-09-27` would make the first writer suppress the second one's
+ * `EXPIRE` — leaving a hash with no TTL, which is the one failure this cache
+ * exists to prevent.
  *
  * `HINCRBY` on a missing key creates it with no expiry, so something has to call
  * `EXPIRE`. Doing it on every write doubles the command cost of the whole module.
@@ -110,12 +121,11 @@ export async function recordCall(
   outcome: UsageOutcome,
 ): Promise<void> {
   if (!tool) return;
-  const day = utcDay();
-  const key = KEY(day);
+  const key = KEY(utcDay());
   try {
     await kv.hincrby(key, `${surface}|${tool}|${outcome}`, 1);
-    if (!expirySet.has(day)) {
-      expirySet.add(day);
+    if (!expirySet.has(key)) {
+      expirySet.add(key);
       await kv.expire(key, RETENTION_DAYS * 86_400);
     }
   } catch {
@@ -168,6 +178,146 @@ export async function readDays(days: number): Promise<DayUsage[]> {
       rows = null;
     }
     out.push({ day, rows });
+  }
+  return out;
+}
+
+/* ─────────────────────── MCP handshakes ───────────────────────────────────────
+ *
+ * How many agents CONNECT, which is a different question from how many tool
+ * calls they make, and the one nobody could answer. "Is anyone actually running
+ * `claude mcp add blue-agent`?" was unanswerable in either direction: the tool
+ * counters above only move when a client both connects AND picks one of the 19
+ * tools, so a client that installed, listed, and never called is invisible, and
+ * a client that called one tool forty times is indistinguishable from forty
+ * clients. `initialize` is the one message every MCP client must send exactly
+ * once before it can do anything, so counting it is the closest thing to a
+ * session count that exists in the protocol.
+ *
+ * WHAT THIS IS NOT. It is not an install count and must never be quoted as one.
+ * Every editor restart re-handshakes, so one developer who restarts Cursor ten
+ * times is ten handshakes. It bounds the answer from above and it distinguishes
+ * "nobody" from "somebody", which is the decision it exists to support.
+ *
+ * WHY THE BUCKET LIST IS CLOSED. `clientInfo.name` is attacker-controlled: the
+ * route is public, unauthenticated and CORS-open, so writing the raw string as a
+ * hash field is an unbounded-cardinality KV write that anyone can spray. The
+ * families below are the whole range, plus `other` and `unnamed`, so the hash
+ * can never exceed a couple of dozen fields no matter what arrives.
+ *
+ * The cost of that: a genuinely popular new client lands in `other` and its name
+ * is nowhere. Accepted deliberately. If `other` starts to dominate, the fix is
+ * to add a family here and wait a day, NOT to open the field up — this module is
+ * forward-only anyway, so a late-added bucket loses nothing but backfill.
+ *
+ * NOT RECORDED: `clientInfo.version`. It multiplies cardinality by every point
+ * release and there is no decision anyone would make differently knowing it.
+ */
+
+const INIT_KEY = (day: string) => `usage:mcpinit:${day}`;
+
+/**
+ * Known MCP client families, matched as a SUBSTRING of the normalized name
+ * because real clients send decorated variants (`cursor-vscode`,
+ * `Claude Code`) rather than a bare family name.
+ *
+ * ⚠️ ORDER IS LOAD-BEARING — first match wins. `cursor_vscode` contains both
+ * `cursor` and `vscode`, so `cursor` has to come first or every Cursor session
+ * is filed as VS Code. Add new families ABOVE any shorter string they contain.
+ *
+ * ⚠️ UNDERSCORES, NOT HYPHENS, and that is not cosmetic. `claude-code` beside
+ * `claude-sonnet-5` is indistinguishable from a model id, and
+ * scripts/model-id-check.ts correctly flagged all three `claude-*` entries when
+ * this list was hyphenated. That check deliberately has no value allowlist — it
+ * narrows structurally — and the structure it relies on is that every real
+ * Virtuals model id is lowercase and HYPHENATED. So an underscored bucket is in a
+ * namespace that provably cannot collide, rather than an exemption that has to be
+ * argued for once per entry. `normalizeMcpClient` folds the wire name to `_` for
+ * the same reason. Do not "tidy" these back to hyphens.
+ */
+const MCP_CLIENT_FAMILIES = [
+  "claude_code",
+  "claude_desktop",
+  "claude_ai",
+  "cursor",
+  "cline",
+  "roo_cline",
+  "windsurf",
+  "continue",
+  "librechat",
+  "goose",
+  "mcp_inspector",
+  "langchain",
+  "openai",
+  "n8n",
+  "zed",
+  "vscode",
+  "visual_studio_code",
+] as const;
+
+const VALID_CLIENT = new Set<string>([...MCP_CLIENT_FAMILIES, "other", "unnamed"]);
+
+/**
+ * Bucket a caller-supplied `clientInfo.name` into one of the closed set above.
+ *
+ * `unnamed` and `other` are kept apart on purpose: `unnamed` is a caller that
+ * sent no name at all (a raw `curl`, a smoke script, our own CI), `other` is a
+ * real client we do not have a bucket for. Collapsing them would hide the only
+ * signal that says "add a family to the list".
+ */
+export function normalizeMcpClient(raw: unknown): string {
+  if (typeof raw !== "string") return "unnamed";
+  const s = raw.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  if (!s) return "unnamed";
+  for (const family of MCP_CLIENT_FAMILIES) {
+    if (s.includes(family)) return family;
+  }
+  return "other";
+}
+
+/** Record one MCP `initialize`. Never throws — same contract as `recordCall`. */
+export async function recordMcpHandshake(clientName: unknown): Promise<void> {
+  const key = INIT_KEY(utcDay());
+  try {
+    await kv.hincrby(key, normalizeMcpClient(clientName), 1);
+    if (!expirySet.has(key)) {
+      expirySet.add(key);
+      await kv.expire(key, RETENTION_DAYS * 86_400);
+    }
+  } catch {
+    // Best-effort by design. A metering failure must not break the handshake
+    // that every MCP session depends on.
+  }
+}
+
+export interface DayHandshakes {
+  day: string;
+  /** null = the HGETALL threw. NOT the same as {}, which is "read fine, nobody connected". */
+  clients: Record<string, number> | null;
+}
+
+/** Read the last `days` UTC days of handshakes, newest first. */
+export async function readHandshakeDays(days: number): Promise<DayHandshakes[]> {
+  const n = Math.max(1, Math.min(days, RETENTION_DAYS));
+  const out: DayHandshakes[] = [];
+  for (let i = 0; i < n; i++) {
+    const day = utcDay(new Date(Date.now() - i * 86_400_000));
+    let clients: DayHandshakes["clients"];
+    try {
+      const h = await kv.hgetall(INIT_KEY(day));
+      clients = {};
+      for (const [field, raw] of Object.entries(h ?? {})) {
+        // Anything outside the closed set is junk from a bad write or a family
+        // since removed; skip it rather than let it surface as a real client.
+        if (!VALID_CLIENT.has(field)) continue;
+        const count = Number(raw);
+        if (!Number.isFinite(count)) continue;
+        clients[field] = (clients[field] ?? 0) + count;
+      }
+    } catch {
+      clients = null;
+    }
+    out.push({ day, clients });
   }
   return out;
 }

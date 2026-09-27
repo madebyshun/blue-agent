@@ -38,7 +38,7 @@
  * not because nothing was called. Do not present early buckets as a baseline.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { readDays, RETENTION_DAYS, type UsageSurface } from "@/lib/usage-daily";
+import { readDays, readHandshakeDays, RETENTION_DAYS, type UsageSurface } from "@/lib/usage-daily";
 
 export const runtime = "nodejs";
 export const maxDuration = 15;
@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
   const raw  = Number(req.nextUrl.searchParams.get("days") ?? 14);
   const days = Number.isFinite(raw) ? Math.max(1, Math.min(Math.trunc(raw), RETENTION_DAYS)) : 14;
 
-  const buckets = await readDays(days);
+  const [buckets, initBuckets] = await Promise.all([readDays(days), readHandshakeDays(days)]);
 
   // Roll the readable days up per (surface, tool).
   const totals: Record<string, { surface: UsageSurface; tool: string; ok: number; err: number }> = {};
@@ -85,6 +85,17 @@ export async function GET(req: NextRequest) {
     bySurface[r.surface].tools++;
   }
 
+  // MCP `initialize` count, per client family. Same null-vs-empty discipline as
+  // above: an unreadable day is counted, never folded in as a zero.
+  const byClient: Record<string, number> = {};
+  let unreadableInitDays = 0;
+  for (const b of initBuckets) {
+    if (b.clients === null) { unreadableInitDays++; continue; }
+    for (const [client, n] of Object.entries(b.clients)) {
+      byClient[client] = (byClient[client] ?? 0) + n;
+    }
+  }
+
   return NextResponse.json(
     {
       window_days:     days,
@@ -99,6 +110,20 @@ export async function GET(req: NextRequest) {
       /** Per (surface, tool), summed over the readable days, busiest first. */
       tools:           ranked,
       days:            buckets,
+      /**
+       * MCP `initialize` messages. NOT an install count — every editor restart
+       * re-handshakes, so this bounds installs from above. `unnamed` is a caller
+       * that sent no clientInfo (curl, smoke scripts, our own CI); `other` is a
+       * real client with no bucket yet.
+       */
+      mcp_handshakes: {
+        note:
+          "Counts MCP `initialize` messages, not installs: one client restarting " +
+          "ten times is ten handshakes. Use it to tell 'nobody' from 'somebody'.",
+        unreadable_days: unreadableInitDays,
+        by_client:       byClient,
+        days:            initBuckets,
+      },
     },
     { headers: { "Cache-Control": "no-store" } },
   );

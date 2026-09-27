@@ -59,7 +59,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { rateLimit, getIdentifier } from "@/lib/rate-limit";
 import { kv } from "@/lib/kv";
-import { recordCall } from "@/lib/usage-daily";
+import { recordCall, recordMcpHandshake } from "@/lib/usage-daily";
 import { internalX402Headers, hasInternalKey } from "@/lib/x402-internal";
 import { encodeTransferWithMemo, isValidMemo } from "@/lib/b20/encode";
 import { MCP_TOOLS } from "@/lib/mcp-tools";
@@ -828,6 +828,11 @@ export async function POST(req: NextRequest) {
 
   // ── initialize ──────────────────────────────────────────────────────────────
   if (method === "initialize") {
+    // The only place a connecting agent is counted at all. Every other counter in
+    // this route needs the client to also PICK a tool, so a client that installs,
+    // lists and never calls is invisible without this line. Bucketed software
+    // identity only — see the handshake header in lib/usage-daily.ts.
+    await recordMcpHandshake((p.clientInfo as { name?: unknown } | undefined)?.name);
     return ok(id, {
       protocolVersion: "2024-11-05",
       capabilities: { tools: {} },
