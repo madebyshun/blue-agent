@@ -142,15 +142,49 @@ export async function GET(
     return honestNotImplemented(tool);
   }
 
-  const requirements = buildRequirements(String(priceUnits));
   const meta = AGENT_TOOLS.find(t => t.id === tool);
-  const paymentRequired = buildPaymentRequired(tool, requirements, meta);
   // Same reasoning as buildBazaarExtension: this is the schema an agent reads
   // in the 402 immediately BEFORE it decides to pay, so it has to be the wire
   // shape. `fields` is dropped — JSON Schema is what a caller consumes.
   const inputSchema = meta
     ? (({ fields: _fields, ...schema }) => schema)(wireSchema(meta))
     : undefined;
+
+  // ── A $0.00 tool must not answer the DISCOVERY verb with a bill either ────
+  //
+  // MEASURED 2026-09-27 against production: all six free ids answered 402 here
+  // while POST answered 200 for the same id. The `priceUnits === 0` bypass in
+  // `handle()` below was added to the POST path only, so GET went on quoting
+  // `amount: "0"` — the exact defect the comment above that bypass describes as
+  // fixed, on the verb an agent probes FIRST. It stayed green because
+  // `x402-free-and-validation-test.ts` imports only `POST`; the suite enumerates
+  // every free tool from the catalog but had no idea the route had two doors.
+  //
+  // GET remains the discovery verb: it answers with the descriptor and input
+  // schema, never the tool's output. It just no longer claims a price. No
+  // `accepts`, no `payment-required` header — there is nothing to accept and
+  // nothing to settle, and an authorization for 0 buys neither side anything.
+  if (priceUnits === 0) {
+    return NextResponse.json(
+      {
+        x402Version: 2,
+        free: true,
+        price: "$0.00",
+        hint: "Free — no payment, no wallet, no X-PAYMENT header. POST JSON to this URL to run it.",
+        tool: meta ? {
+          id: meta.id,
+          name: meta.name,
+          description: meta.description,
+          price: meta.price,
+          input: inputSchema,
+        } : undefined,
+      },
+      { status: 200, headers: { "Access-Control-Allow-Origin": "*" } }
+    );
+  }
+
+  const requirements = buildRequirements(String(priceUnits));
+  const paymentRequired = buildPaymentRequired(tool, requirements, meta);
 
   const paymentRequiredHeader = Buffer.from(JSON.stringify(paymentRequired)).toString("base64");
   return NextResponse.json(

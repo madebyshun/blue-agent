@@ -66,7 +66,7 @@
  * what is being asserted is that the caller was never asked to sign.
  */
 import { NextRequest } from "next/server";
-import { POST } from "../src/app/api/x402/[tool]/route";
+import { GET, POST } from "../src/app/api/x402/[tool]/route";
 import { AGENT_TOOLS } from "../src/lib/agent-tools";
 
 let failures = 0;
@@ -155,6 +155,56 @@ async function call(tool: string, body: unknown) {
         `${t.id} does not quote an amount`,
         body.accepts === undefined,
         JSON.stringify(body.accepts),
+      );
+    }
+  }
+
+  // ── 2c. …over GET as well, which is the verb an agent probes FIRST ───────
+  //
+  // MEASURED 2026-09-27 against production: every id in case 2b answered 200 on
+  // POST and 402 on GET. Cases 1–2b enumerate the free set from the catalog so
+  // they cannot fall behind as it grows, and they were green throughout — because
+  // this file imported only `POST` and the route has two exported doors. The
+  // enumeration was never the weak axis; the VERB was, and nothing named it.
+  //
+  // `/api/x402/[tool]` is documented as self-describing: an agent GETs it to read
+  // the input schema before deciding to call. So GET is where a free tool is
+  // discovered, and it was the one path still answering "Payment Required" with
+  // `amount: "0"` — turning away exactly the callers the free tier exists for,
+  // the ones checking whether a token is a scam before their first transaction.
+  //
+  // Asserted as a pair with 2b rather than replacing it: the bug was the GAP
+  // between two verbs, so a check that covers either one alone cannot see it.
+  console.log("\n2c. every $0.00 tool refuses to demand payment over GET too");
+  {
+    const free = AGENT_TOOLS.filter((t) => (t.priceUSDC ?? -1) === 0);
+    check("the catalog still has free tools to check", free.length > 0, `found ${free.length}`);
+    for (const t of free) {
+      const req = new NextRequest(`https://blueagent.dev/api/x402/${t.id}`, { method: "GET" });
+      const res = await GET(req, { params: Promise.resolve({ tool: t.id }) });
+      const body = await res.json().catch(() => ({}));
+      check(
+        `GET ${t.id} (${t.price}) does not answer 402`,
+        res.status !== 402,
+        `got ${res.status}`,
+      );
+      check(
+        `GET ${t.id} does not ship a payment-required header`,
+        res.headers.get("payment-required") === null,
+        String(res.headers.get("payment-required")),
+      );
+      check(
+        `GET ${t.id} does not quote an amount`,
+        body.accepts === undefined,
+        JSON.stringify(body.accepts),
+      );
+      // GET is discovery, not execution: it must still hand back the schema an
+      // agent needs to build the POST. Dropping to a bare 200 would stop the
+      // 402 and break the thing the 402 was at least doing correctly.
+      check(
+        `GET ${t.id} still describes itself so the call can be built`,
+        body.tool?.id === t.id && body.tool?.input !== undefined,
+        JSON.stringify(body.tool?.id),
       );
     }
   }
