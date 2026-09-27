@@ -106,14 +106,16 @@ how good the prompt is. **Prompts do not prevent hallucination; data sources do.
 
 ## Retiring a surface (luật chống-bỏ-rơi)
 
-Six surfaces were built, quietly abandoned, and left live: `apps/api` (61 days between
+Seven surfaces were built, quietly abandoned, and left live: `apps/api` (61 days between
 last maintenance and deletion), `apps/portal` (46), Blue Sentinel (~100), Blue Feed, the
-microtask marketplace, and `/api/tool-runner` (123). **Not one was caught by a mechanism** —
-every one was caught by a human eventually noticing. While abandoned, Sentinel leaked
+microtask marketplace, `/api/tool-runner` (123), and `/api/hub/collab-builder` (128).
+**Not one was caught by a mechanism** — every one was caught by a human eventually
+noticing. While abandoned, Sentinel leaked
 `CRON_SECRET` from an unauthenticated route and a paid Hub tool was still selling it; the CLI
 still sold a microtask ledger backed by a `Map` that never persisted; Blue Feed's published
 links had to be 301'd after the fact; tool-runner answered for every catalog id with
-improvised text under the real product's name.
+improvised text under the real product's name; collab-builder let any anonymous caller who
+found the URL spend our Virtuals inference budget, with no auth, no price and no rate limit.
 
 The damage is never "dead code exists" — that is normal. It is the gap between **stopping
 maintenance** and **stopping exposure**. Everything below exists to close that gap.
@@ -127,8 +129,22 @@ maintenance** and **stopping exposure**. Everything below exists to close that g
   Second instance, MEASURED 2026-09-27: `/api/tool-runner`'s last feature commit was
   2026-05-27, but three sweeps (`maxDuration` 2026-06-09, the `callLLM` migration 2026-07-20,
   and the Aeon/MiroShark retirement *hours* earlier) left git reading "touched today" on a
-  route no one had called in 123 days. Twice now the sweep that refreshed the timestamp was
-  itself a piece of good hygiene — that is the trap, not an accident.
+  route no one had called in 123 days.
+  Third instance, MEASURED 2026-09-28: `/api/hub/collab-builder`'s last feature commit was its
+  OWN CREATION (`add4ddef`, 2026-05-23) — 128 days, never once touched for a feature after
+  birth — yet three sweeps (the `callLLM` migration 2026-07-27, a model-id fix 2026-09-26, the
+  Aeon/MiroShark retirement 2026-09-27) left git reading "touched yesterday". Note what
+  `add4ddef` also added: the Blue Sentinel landing page. **Instance #1 and instance #3 shipped
+  in the same commit, and Sentinel's retirement did not take its co-born sibling** — so when
+  you retire a surface, read its birth commit and check what else came with it.
+  Three times now the sweep that refreshed the timestamp was itself a piece of good
+  hygiene — that is the trap, not an accident.
+  🔴 **Do NOT "fix" this class with a gate-shaped check.** collab-builder never reads
+  `AGENT_TOOLS`, so `catalog-compute-check.ts` could not see it and a wider "route calls
+  `callLLM` without a gate" assertion would need an exemption list — the repo has deliberate
+  free LLM surfaces (every `/api/mcp` tool but `blue_call`). That file's own header records
+  that an exemption list is what hid the second x402 door: being listed read as having been
+  reviewed. This one is a dated measurement on purpose, not a script.
 - **An unmetered surface is not a harmless one — audit what it SAYS, not just what it
   charges.** MEASURED 2026-09-27: `/api/tool-runner` was unauthenticated, unpriced and
   uncalled, which is what made it read like a spare part worth leaving alone. It also

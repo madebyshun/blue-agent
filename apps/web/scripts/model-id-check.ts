@@ -5,10 +5,11 @@
  * Written 2026-09-26. Twelve files hardcoded `"claude-haiku-4-5"`, an id the
  * Virtuals catalog has NEVER listed — there is no haiku of any version among its
  * 204 entries. Three of those sites forwarded it to `callLLM`, so
- * `launch-simulator-2`, `launch-simulator-3` and `/api/hub/collab-builder` failed
- * 100% of the time: two 500s and a 503. The other nine passed the id to a shim
- * that DROPS `opts.model`, so they returned 200 while advertising a model choice
- * they never made — which is precisely why nobody noticed the three that didn't.
+ * `launch-simulator-2`, `launch-simulator-3` and `/api/hub/collab-builder`
+ * (that route retired 2026-09-28) failed 100% of the time: two 500s and a 503.
+ * The other nine passed the id to a shim that DROPS `opts.model`, so they
+ * returned 200 while advertising a model choice they never made — which is
+ * precisely why nobody noticed the three that didn't.
  *
  * ═══ WHY A CHECK AND NOT JUST THE FIX ═══
  *
