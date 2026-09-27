@@ -40,6 +40,25 @@ function sideOf(pair: DsPair, token: string): { symbol: string | null; name: str
   return { symbol: b?.symbol ?? null, name: b?.name ?? null, address: b?.address ?? null };
 }
 
+/**
+ * Constant-product slippage for a trade of `sizeUsd` against a pool holding
+ * `liquidityUsd`, as a percentage. Exported so `safe-trending` quotes the same
+ * number this tool does instead of carrying a second copy of the formula that
+ * can drift from it.
+ *
+ * Null liquidity yields null, never 0 — an unmeasured pool is not a deep one.
+ */
+export function slippagePct(sizeUsd: number, liquidityUsd: number | null): number | null {
+  if (liquidityUsd == null || !Number.isFinite(liquidityUsd) || liquidityUsd <= 0) return null;
+  return +((sizeUsd / liquidityUsd) * 100).toFixed(2);
+}
+
+/** Exit risk from pool depth alone. Same thresholds this handler has always used. */
+export function exitRiskFor(liquidityUsd: number | null): "LOW" | "MEDIUM" | "HIGH" | null {
+  if (liquidityUsd == null || !Number.isFinite(liquidityUsd)) return null;
+  return liquidityUsd < 50_000 ? "HIGH" : liquidityUsd < 250_000 ? "MEDIUM" : "LOW";
+}
+
 async function getDeepestBasePair(token: string): Promise<DsPair | null> {
   const isAddress = /^0x[a-fA-F0-9]{40}$/.test(token);
   const url = isAddress
@@ -113,11 +132,10 @@ export default async function handler(req: Request): Promise<Response> {
     // Constant-product approximation. impact_Npct_usd ≈ trade size that moves
     // price ~N% ≈ L * N / 100. slippage for size X ≈ (X / L * 100)%.
     const impactUsd = (pct: number) => +(L * (pct / 100)).toFixed(2);
-    const slip = (size: number) => ((size / L) * 100).toFixed(2) + "%";
+    const slip = (size: number) => `${slippagePct(size, L)}%`;
 
     // exit_risk: <50k HIGH, <250k MEDIUM, else LOW.
-    const exit_risk: "LOW" | "MEDIUM" | "HIGH" =
-      L < 50_000 ? "HIGH" : L < 250_000 ? "MEDIUM" : "LOW";
+    const exit_risk = exitRiskFor(L) as "LOW" | "MEDIUM" | "HIGH";
 
     return Response.json({
       tool: "liquidity-depth",

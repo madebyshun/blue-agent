@@ -10,6 +10,7 @@
 // two counts must stay equal (112 == 112 today).
 import hTokenPrice from "./token-price";
 import hPoolScan from "./pool-scan";
+import hSafeTrending from "./safe-trending";
 import hWalletHoldings from "./wallet-holdings";
 import hNewPools from "./new-pools";
 import hGasTracker from "./gas-tracker";
@@ -130,6 +131,7 @@ import hRhRwaPricingKit      from "./rh-rwa-pricing-kit";
 export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "token-price": hTokenPrice,
   "pool-scan": hPoolScan,
+  "safe-trending": hSafeTrending,
   "wallet-holdings": hWalletHoldings,
   "new-pools": hNewPools,
   "gas-tracker": hGasTracker,

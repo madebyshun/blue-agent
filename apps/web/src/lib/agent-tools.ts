@@ -94,6 +94,27 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     x402Body: (v) => ({ limit: v.limit ? Number(v.limit) : 10 }),
   },
   {
+    id: "safe-trending",
+    name: "Safe Trending",
+    // SAFE means one specific thing and the description has to say which, or
+    // the name promises an audit the tool does not perform.
+    description:
+      "Trending Base tokens, each with its buy/sell tax read from the contract and its exit depth. SAFE here = tradeable with verified tax. A clean scan is not a buy signal.",
+    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
+    category: "on-chain",
+    inputs: [
+      { key: "min_liquidity_usd", label: "Min liquidity USD (optional)", placeholder: "500000" },
+      { key: "limit", label: "Limit (optional)", placeholder: "10" },
+    ],
+    isComposite: true,
+    price: "$0.15", priceUSDC: 150000,
+    x402Url: `${X402_BASE}/safe-trending`,
+    x402Body: (v) => ({
+      min_liquidity_usd: v.min_liquidity_usd ? Number(v.min_liquidity_usd) : 500000,
+      limit: v.limit ? Number(v.limit) : 10,
+    }),
+  },
+  {
     id: "wallet-holdings",
     name: "Wallet Holdings",
     description: "Live ERC-20 + ETH holdings and USD value for a Base wallet (Moralis).",

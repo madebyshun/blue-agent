@@ -83,7 +83,7 @@ JSON Schema per tool) · [`llms.txt`](https://blueagent.dev/llms.txt) (short bri
      Source of truth: apps/web/src/lib/agent-tools.ts (AGENT_TOOLS).
      Body fields are the WIRE shape (post-x402Body), not the Hub form. -->
 
-Blue Hub exposes **111 paid tools** across 11 categories.
+Blue Hub exposes **112 paid tools** across 11 categories.
 
 Categories: on-chain · security · intelligence · builder · trading · content · agent-economy · base-ecosystem · earn · signal · portfolio
 
@@ -92,7 +92,7 @@ USDC `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`. Fields marked `*` are require
 every other field has a server-side default. Machine-readable equivalent, with
 full JSON Schema per tool: https://blueagent.dev/api/catalog
 
-### on-chain (27)
+### on-chain (28)
 
 | id | price | body | what it does |
 |---|---|---|---|
@@ -119,6 +119,7 @@ full JSON Schema per tool: https://blueagent.dev/api/catalog
 | `rh-stock-search` | $0.02 | `query`* `limit` | Fuzzy search across the canonical Robinhood Chain RWA registry. Typo-tolerant (Levenshtein + prefix). Returns top-N ranked matches. Never fabricates a contract address. |
 | `rh-stock-token` | $0.05 | `query`* | Canonical Robinhood Chain (4663) tokenized-stock lookup. Input a ticker (MSTR, AAPL, TSLA) or company name → contract address, decimals, Chainlink oracle price + DEX spot cross-check + Blockscout link. Real data only (docs.robinhood.com + Chainlink AggregatorV3 + GeckoTerminal). |
 | `rh-usdg-route` | $0.05 | `from_asset` `amount` | Cheapest USDG (Global Dollar) acquisition on Robinhood Chain given a starting asset. Returns WETH-swap path, sell-RWA path, and bridge-first path with real GT + on-chain pool data. |
+| `safe-trending` | $0.15 | `min_liquidity_usd` `limit` | Trending Base tokens, each with its buy/sell tax read from the contract and its exit depth. SAFE here = tradeable with verified tax. A clean scan is not a buy signal. |
 | `scam-detector` | $0.10 | `contract`* | Detect honeypot / rug / fake-token patterns on a Base contract. |
 | `token-price` | $0.01 | `token`* | Live price, mcap, volume and liquidity for any Base token (DexScreener). |
 | `wallet-holdings` | $0.02 | `address`* | Live ERC-20 + ETH holdings and USD value for a Base wallet (Moralis). |
@@ -280,7 +281,7 @@ The MCP surface is deliberately a **subset**, not a mirror.
 
 MCP serves 18 tools — 7 `blue_` + 10 `hub_` + 1 `b20_`.
 
-Only the 10 `hub_` tools are drawn from the 111-tool catalog; `blue_` are the door
+Only the 10 `hub_` tools are drawn from the 112-tool catalog; `blue_` are the door
 (`blue_registry`, `blue_call`), the execution primitives and two console commands, and `b20_`
 is an MCP-only calldata builder. So **none of these numbers is interchangeable with another** —
 a count always belongs to the one surface it was measured on. If you need a total, measure the
@@ -289,7 +290,7 @@ surface you are actually calling.
 **Cut from 85 to 18 on 2026-09-26, and the cut removed no capability.** The 85-tool manifest
 was 32,160 bytes — roughly 8,000 tokens spent before the agent read a single word of the user's
 question — and published MCP research finds tool-selection accuracy degrades sharply past
-~40 always-loaded entries. All 111 catalog tools remain live at `/api/x402/<id>`; `blue_registry`
+~40 always-loaded entries. All 112 catalog tools remain live at `/api/x402/<id>`; `blue_registry`
 lists them and `blue_call` runs any of them, so the other 95 moved from "always in context" to
 "one lookup away". A manifest is a context budget, not an inventory.
 

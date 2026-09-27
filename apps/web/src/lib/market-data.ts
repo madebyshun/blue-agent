@@ -127,7 +127,20 @@ export type Pool = {
   change: { h1: number | null; h6: number | null; h24: number | null };
   volume24h: number | null;
   liquidityUsd: number | null;
+  /**
+   * GT's `market_cap_usd`, falling back to `fdv_usd`. Pre-existing behaviour,
+   * kept because several callers render it as a single headline number.
+   *
+   * ⚠️ Do NOT derive an fdv/mcap ratio from this. When GT omits `market_cap_usd`
+   * this field silently BECOMES the fdv, so the ratio computes to exactly 1 and
+   * an unlock overhang disappears instead of being reported as unknown. Use the
+   * two unfallen-back fields below, which is why they exist.
+   */
   marketCap: number | null;
+  /** `market_cap_usd` with NO fallback — null when GT did not report one. */
+  marketCapReported: number | null;
+  /** `fdv_usd`. Same response as everything else here; costs no extra request. */
+  fdv: number | null;
   url: string;
 };
 
@@ -203,6 +216,8 @@ function mapGtPool(p: GtPool, chain: GtChain): Pool {
     volume24h: num(a.volume_usd?.h24),
     liquidityUsd: num(a.reserve_in_usd),
     marketCap: num(a.market_cap_usd) ?? num(a.fdv_usd),
+    marketCapReported: num(a.market_cap_usd),
+    fdv: num(a.fdv_usd),
     url: a.address ? `https://www.geckoterminal.com/${chain}/pools/${a.address}` : "",
   };
 }

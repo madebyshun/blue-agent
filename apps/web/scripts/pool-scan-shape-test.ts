@@ -87,6 +87,8 @@ const pool = (p: Partial<Pool> = {}): Pool => ({
   volume24h: 1_000_000,
   liquidityUsd: 5_000_000,
   marketCap: null,
+  marketCapReported: null,
+  fdv: null,
   url: "https://www.geckoterminal.com/base/pools/0x…f1",
   ...p,
 });
