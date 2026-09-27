@@ -11,3 +11,12 @@ node_modules/
 # Test harness output — keep test-hub.mjs, ignore the files it writes
 *.log
 test-hub-report.json
+
+# Smoke-run output. `out/` is the default OUT_DIR of scripts/p4-mcp-smoke.ts and
+# scripts/p4-x402-smoke.ts (both `process.env.OUT_DIR ?? path.join(cwd, "out", …)`),
+# so every run left 27-odd timestamped result files sitting in `git status` as
+# untracked. Ignored rather than tracked: they are per-run records of a live
+# surface, and a committed one would read as the current answer long after the
+# surface moved. Note this ALSO matches the `out/` that `next export` writes —
+# fine, that is generated too, and this file is scoped to apps/web.
+out/
