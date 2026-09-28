@@ -1490,6 +1490,38 @@ for (const rel of DOC_FILES) {
   );
 }
 
+/* The x402 tool path is Virtuals-only: `api/_lib/llm.ts` removed Venice HTTP on
+   2026-07-25 and documents `webSearch` as an IGNORED param because Virtuals
+   cannot search. So no catalog description may sell web search, promise source
+   URLs, or name Venice as the model behind a tool.
+
+   This is a PROPERTY assertion, not an exemption list — it holds for every entry
+   because it is a fact about the gateway, not a judgement about any one tool.
+   Negated forms are allowed, the same way the Bankr block above allows a
+   historical mention that carries a removal marker.
+
+   MEASURED 2026-09-28 — three PAID entries failed it, and the shape of the
+   failure is the reason this check exists. `rh-stock-report` ($0.20) advertised
+   "Venice web-searched news headlines with source URLs" and `rh-stock-agent-brief`
+   ($0.20) "Web-search-grounded context" — while BOTH handlers already carried
+   comments stating that no search runs and that `web_sources` is always empty.
+   The handlers had been repaired; the copy that SELLS them had not, and an agent
+   choosing a tool reads the description, not the handler. (`narrative-scan`,
+   $0.10, named "Venice LLM" for the same reason.) Note why it stayed plausible:
+   Venice IS live — on the Blue Chat preset path, a different surface — so the
+   claim looked like a true statement filed against the wrong product. */
+const SEARCH_CLAIM_RE = /web[-\s]?search(?:ed)?|search[-\s]?grounded|source URLs|\bVenice\b/i;
+const SEARCH_DISCLAIMED_RE = /no web[-\s]?search|not web[-\s]?searched|no source URLs are claimed|cannot search/i;
+const searchClaims = AGENT_TOOLS.filter((t) => {
+  const d = t.description ?? "";
+  return SEARCH_CLAIM_RE.test(d) && !SEARCH_DISCLAIMED_RE.test(d);
+}).map((t) => `${t.id}: "${(t.description ?? "").match(SEARCH_CLAIM_RE)?.[0]}"`);
+check(
+  "no catalog description sells web search or names Venice",
+  searchClaims.length === 0,
+  searchClaims.join(" | ") || `${AGENT_TOOLS.length} descriptions clean`,
+);
+
 console.log(
   failures === 0
     ? `\nALL ${checks} CHECKS PASSED\n`

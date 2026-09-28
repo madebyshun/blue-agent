@@ -1,8 +1,11 @@
 // x402/rh-stock-agent-brief (A4) — agent-facing "why now" narrative.
 // Price: $0.20
 //
-// A concise, agent-consumable JSON brief: real facts + web-search-grounded
-// context + a DETERMINISTIC verdict field (hard-mapped from numbers, not
+// A concise, agent-consumable JSON brief: real facts + model-recall context
+// (NOT web-searched — Virtuals cannot search, so `web_sources` is always
+// empty; this header said "web-search-grounded" until 2026-09-28 while line
+// ~93 of this same file already documented the correction)
+// + a DETERMINISTIC verdict field (hard-mapped from numbers, not
 // LLM-picked). Agents wire the verdict directly into downstream skill
 // calls without parsing prose.
 

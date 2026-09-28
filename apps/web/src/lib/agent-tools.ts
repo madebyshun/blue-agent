@@ -1472,7 +1472,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
   {
     id: "narrative-scan",
     name: "Narrative Scan",
-    description: "Detects active Base narratives from real trending token data. Tracks Emerging → Rising → Peak → Fading lifecycle in KV. Venice LLM grounded by GeckoTerminal.",
+    description: "Detects active Base narratives from real trending token data. Tracks Emerging → Rising → Peak → Fading lifecycle in KV. Virtuals LLM grounded by GeckoTerminal.",
     agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
     category: "signal",
     inputs: [],
@@ -1940,7 +1940,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
   {
     id: "rh-stock-report",
     name: "RH Stock Report",
-    description: "Concise Markdown research brief for a Robinhood Chain RWA: verified on-chain facts (Chainlink oracle + DEX depth) + Venice web-searched news headlines with source URLs. Temperature 0.3, LLM never invents numbers.",
+    description: "Concise Markdown research brief for a Robinhood Chain RWA: verified on-chain facts (Chainlink oracle + DEX depth) + model-recall market context, labelled as such. No web search on this gateway, so no source URLs are claimed. Temperature 0.3, LLM never invents numbers.",
     agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
     category: "content",
     inputs: [
@@ -1955,7 +1955,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
   {
     id: "rh-stock-agent-brief",
     name: "RH Stock Agent Brief",
-    description: "Agent-consumable JSON brief for a Robinhood Chain RWA. Deterministic market-hours-aware verdict: WATCH / ARB_LONG_DEX / ARB_SHORT_DEX (market OPEN) · FROZEN_ALIGNED / PREMARKET_DRIFT / AFTERHOURS_DRIFT (CLOSED) · THIN_LIQUIDITY / NO_ORACLE / INSUFFICIENT_DATA. Uses shared resolvePrimaryPool for cross-tool consistency. Web-search-grounded context + risk flags.",
+    description: "Agent-consumable JSON brief for a Robinhood Chain RWA. Deterministic market-hours-aware verdict: WATCH / ARB_LONG_DEX / ARB_SHORT_DEX (market OPEN) · FROZEN_ALIGNED / PREMARKET_DRIFT / AFTERHOURS_DRIFT (CLOSED) · THIN_LIQUIDITY / NO_ORACLE / INSUFFICIENT_DATA. Uses shared resolvePrimaryPool for cross-tool consistency. Model-recall context (no web search on this gateway) + risk flags.",
     agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
     category: "signal",
     inputs: [
