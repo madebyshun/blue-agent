@@ -47,6 +47,24 @@ import { kv } from "@/lib/kv";
 import { utcDay, RETENTION_DAYS } from "@/lib/usage-daily";
 import type { HoodChain } from "@/lib/blue-hood/types";
 
+/**
+ * Chain dimension of one metered call.
+ *
+ * NOT `HoodChain`, because this is a billing dimension and not a chain
+ * selector. `"none"` is a call rejected before any chain was known. `"both"` is
+ * the cross-venue spread endpoint, whose answer is about the PAIR and which
+ * therefore takes no `chain` argument at all (see
+ * `api/hood/dislocation/spread/route.ts`). Folding `"both"` into one of the two
+ * venues would make an invoice claim usage on a venue the caller never asked
+ * about, and folding it into `"none"` would file a successful read under the
+ * bucket meaning "rejected".
+ *
+ * ⚠️ Any new value here widens KV cardinality per caller — the `KEY_CAP`
+ * comment in `recordDislocationCall` sizes the cap on chains × outcomes, so
+ * update that arithmetic in the same edit.
+ */
+export type DislocationChain = HoodChain | "none" | "both";
+
 /** Outcome of one metered call, from the caller's point of view. */
 export type DislocationOutcome =
   /** A live row, inside the freshness window. */
@@ -129,7 +147,7 @@ const admitted = new Set<string>();
 /** Record one call. Never throws. */
 export async function recordDislocationCall(
   keyHash: string,
-  chain: HoodChain | "none",
+  chain: DislocationChain,
   outcome: DislocationOutcome,
 ): Promise<void> {
   const key = KEY(utcDay());
@@ -139,8 +157,11 @@ export async function recordDislocationCall(
       const existing = await kv.hgetall(key);
       const fields = Object.keys(existing ?? {});
       // Count DISTINCT CALLERS, not distinct fields: one caller legitimately
-      // occupies up to 2 chains x 3 outcomes = 6 fields, so capping on raw field
-      // count would evict real customers at a sixth of the intended ceiling.
+      // occupies up to 4 `DislocationChain` values x 3 outcomes = 12 fields, so
+      // capping on raw field count would evict real customers at a twelfth of
+      // the intended ceiling. (It was 6 before `"both"` existed — the ratio
+      // moves every time `DislocationChain` grows, which is why the cap counts
+      // callers and not fields.)
       const callers = new Set(
         fields.filter((f) => f !== OVERFLOW_FIELD).map((f) => f.split("|")[0]),
       );
