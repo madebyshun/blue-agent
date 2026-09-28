@@ -152,6 +152,11 @@ const MARKS: Readonly<Record<string, { slug: string; accent: string }>> = {
   // decision; a desk that lists a company without marking it shows that company
   // two ways, which is the thing this table exists to prevent.
   "base:TSLA": { slug: "tesla", accent: "#E06666" },
+  // Same one-commit rule as `base:TSLA` above — SPCX joined `BASE_STOCKS` on
+  // 2026-09-28 and `robinhood:SPCX` already existed, so shipping the registry
+  // row without this line is a guaranteed `hood-logo-check` failure
+  // ("HALF-MARKED: SPCX"), by design.
+  "base:SPCX": { slug: "spacex", accent: "#FFFFFF" },
 
   // ── Robinhood Chain 4663 (RHJ) ──
   "robinhood:AAPL": { slug: "apple", accent: "#FFFFFF" },

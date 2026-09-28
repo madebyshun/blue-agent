@@ -79,23 +79,47 @@
  * So the band is only meaningful when a HUMAN can check the anchor against an
  * independent public quote.
  *
- * That is a real bar, and SPCX (SpaceX) fails it: SpaceX is not publicly
- * traded, so no independent reference price exists for anyone — us or a user
- * auditing the track record. Its band would be unfalsifiable by construction.
- * SPCX was therefore DEFERRED on 2026-09-06 despite passing every measurable
- * gate with room to spare ($165,042 liquidity, $1,592,131 24h volume — the
- * second-deepest flow of the six candidates, 71/71 live candles). This is not a
- * quality judgement about the token; it is an admission that we cannot build
- * the safety net that every other row gets. Do not "fix" this by anchoring
- * SPCX's band to its own feed.
+ * That is a real bar, and it is the bar SPCX (SpaceX) was DEFERRED against on
+ * 2026-09-06 — this file said "SpaceX is not publicly traded, so no independent
+ * reference price exists for anyone", called the band "unfalsifiable by
+ * construction", and made the deferral *permanent until SpaceX lists*, despite
+ * SPCX passing every measurable gate with room to spare ($165,042 liquidity,
+ * $1,592,131 24h volume, 71/71 live candles).
+ *
+ * 🔴 THE RULE WAS RIGHT AND THE FACT WAS WRONG — AND THE FACT WAS ALREADY WRONG
+ * THE DAY IT WAS WRITTEN. SpaceX listed on Nasdaq as SPCX on **2026-06-12** at a
+ * $135 IPO price, three months BEFORE that note. It went unnoticed for another
+ * three weeks because a deferral that names its own release condition READS like
+ * something is watching for it. Nothing is: prose watches for nothing, and a
+ * sentence in a header cannot poll a stock exchange. SPCX was admitted
+ * 2026-09-28, the first time anyone checked the premise instead of inheriting
+ * it, and the check took one web search.
+ *
+ * The transferable lesson is not "we were wrong about SpaceX". It is that a
+ * claim about the OUTSIDE WORLD with no check behind it does not decay into an
+ * obviously stale claim — it decays into a claim that still looks live, and the
+ * more confidently it is written the longer it survives. "Permanent until X"
+ * was the most confident sentence in this file and it had the shortest true
+ * lifetime. **When you defer a ticker on an external fact, date the measurement
+ * of that fact**, so the next reader knows the sentence is a snapshot and not a
+ * standing condition.
+ *
+ * None of that weakens the rule itself, which is unchanged and still binding: a
+ * band needs an independent public quote, and a ticker with none cannot be
+ * admitted. Do not "fix" a missing reference by anchoring a band to its own
+ * feed.
  *
  * ── The deferrals, and why they are DIFFERENT things ─────────────────────────
- * Both pass the pool floors. Neither can be admitted, for unrelated reasons —
- * do not collapse them into one "rejected" bucket:
+ * Both passed the pool floors. Both were refused for unrelated reasons, and
+ * exactly one of those reasons survived a re-measurement — do not collapse them
+ * into one "rejected" bucket:
  *
- *   • SPCX — NO INDEPENDENT REFERENCE EXISTS. SpaceX is not publicly traded, so
- *     nobody (us or a user auditing the record) can check the anchor. Permanent
- *     until SpaceX lists.
+ *   • SPCX — RESOLVED 2026-09-28, admitted as a row below. The stated reason
+ *     ("no independent reference exists") was false when written; see the 🔴
+ *     above. Kept in this list rather than deleted, because the deferral that
+ *     proved hardest to reopen was the one that had already written down its
+ *     own release condition — that is the failure worth remembering, and
+ *     deleting the entry would delete the evidence for it.
  *
  *   • SNDK — THE BAND RECIPE DOES NOT FIT. Anchor confirmed ($1,770.23 oracle
  *     vs $1,740.00 public, 1.7%), pool excellent ($225,313 / $659,494, 72/72
@@ -248,7 +272,9 @@ export const BASE_STOCKS: readonly BaseStock[] = [
   // (`isB20 == true`, `decimals == 8`, `symbol == "<TICKER>c"`, name matches) —
   // never derived from the Robinhood registry, which holds DIFFERENT contracts
   // for these same tickers on a chain that shares no state with Base.
-  // TSLA · SNDK · SPCX deferred; see the three-deferrals note in the header.
+  // TSLA · SNDK · SPCX were deferred THAT DAY; see the deferrals note in the
+  // header. TSLA was admitted 2026-09-08 and SPCX 2026-09-28 (both rows below);
+  // only SNDK is still out, and only on the band recipe.
   {
     // Pool evidence (Aerodrome AMZNc/USDC `0xd03bc8c7…`): $278,082 liquidity,
     // $482,906 24h volume, 72/72 hourly candles live (0 zero-volume, 0 flat).
@@ -337,6 +363,53 @@ export const BASE_STOCKS: readonly BaseStock[] = [
     // lands ~25× outside either edge.
     saneBand: { lo: 92, hi: 1476 },
     admittedAt: "2026-09-08",
+  },
+  // ── Admitted 2026-09-28 ────────────────────────────────────────────────────
+  {
+    // The deferral that was wrong about the WORLD rather than about the pool or
+    // about our read — the third distinct failure shape this file has recorded.
+    // See the 🔴 in the header. Re-probed during US regular hours on admission
+    // day via `scripts/base-stock-admission-probe.ts`, which returned PASS:
+    //
+    // Pool evidence (Aerodrome SPCXc/USDC `0x0bf58fe0…8c0e`): $1,016,234
+    // liquidity, $5,884,984 24h volume, 72h scanned with 0 zero-volume and 0
+    // flat-close hours. DEX $146.97 vs oracle $146.99 — drift 0.018%, the
+    // tightest agreement of any row at its own admission.
+    //
+    // ⚠️ SPCXc sits in seven memecoin pools (`gELON/SPCXc` $57,970,
+    // `ElonRWA/SPCXc` $37,816, `ELON/SPCXc` $34,810, …). None is the TSLA/STC
+    // shape and the difference is worth stating precisely, because "there are
+    // memecoin pools" is not the hazard: `dexPriceDexScreener` ranks pairs whose
+    // BASE token is ours, and SPCXc is the QUOTE token in every one of those —
+    // so the sort never reaches them. Both base-side pools are USDC-quoted
+    // ($1,016,234 Aerodrome and $26,305 Uniswap, priced $147.03 and $147.46).
+    // That is a property of today's pool set, not a guarantee: the day a
+    // `SPCXc/<memecoin>` pair is created this ticker acquires the exact TSLA
+    // hazard, and only the anchored-quote rule (#435) stands between it and a
+    // published wrong price. Never relax the quote-asset gate for this row.
+    ticker: "SPCX",
+    name: "Space Exploration Technologies Corp.",
+    token: "0xb2000000000000000000007b9fcbd005511aCBd5",
+    symbol: "SPCXc",
+    chainlinkFeed: "0x6A634B235903C4ad6376892180d6fF8612e3Fa68",
+    chainlinkHeartbeat: 86400,
+    // Band anchor: oracle share price $146.99, read 2026-09-28, checked against
+    // an independent public quote of $148.68 (1.1%) — the exact check the
+    // 2026-09-06 note declared impossible for this ticker. Standard
+    // [anchor/4, anchor*4], no widening needed.
+    //
+    // ⚠️ The observed range below is SINCE-IPO (2026-06-12), NOT 52 weeks. SPCX
+    // has ~3.5 months of trading history, so treat $104.83–$225.64 (2.15×) as a
+    // lower bound on this ticker's volatility and not as a measured envelope —
+    // every other row's margin was computed against a full year. Even so the
+    // margins are comfortable: 2.9× above the floor, 2.6× below the ceiling,
+    // versus the 1.53× that forced MSTR's widening. A 10² decimals error lands
+    // at $1.47 or $14,699, ~25× outside either edge. Revisit this band at 12
+    // months of trading rather than assuming a 3.5-month range holds — and note
+    // that SNDK, the one ticker still deferred, is deferred for exactly the
+    // failure a young volatile listing can grow into.
+    saneBand: { lo: 36, hi: 588 },
+    admittedAt: "2026-09-28",
   },
 ] as const;
 

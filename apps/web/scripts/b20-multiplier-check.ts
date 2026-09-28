@@ -309,6 +309,24 @@ export const SANE_BAND: Record<string, [number, number]> = {
   // range (1.68× wide) still leaves a doubling detectable, so this row does the
   // job MSTR's cannot; do not widen it to "match the others".
   TSLA: [230, 620],
+  // Admitted 2026-09-28, band added in the SAME commit — which is the whole
+  // point of the ⚠️ above. TSLA shipped a day without one because the probe that
+  // notices has no scheduled runner; this row existed before the registry row
+  // was ever pushed.
+  //
+  // Anchor: oracle share price $146.99 at admission, cross-checked against an
+  // independent public quote of $148.68 (1.1%). Observed range $104.83–$225.64,
+  // so the floor sits 24% under the low and the ceiling 24% over the high —
+  // the same margins as TSLA — while ÷2 ⇒ $73.50 and 2× ⇒ $293.98 both land
+  // outside. SPCX joins TSLA rather than MSTR: a doubling is still detectable
+  // here, so do not widen this row toward MSTR's shape.
+  //
+  // ⚠️ That range is SINCE-IPO (2026-06-12), ~3.5 months, not 52 weeks like
+  // every row above. It is the thinnest evidence base in this table, and the
+  // failure mode is asymmetric: too-tight cries wolf on a genuine run and gets
+  // the whole check ignored. If SPCX approaches $280 on real volume, widen this
+  // row and say so — do not silence the probe.
+  SPCX: [80, 280],
 };
 
 /** Hermetic: every admitted ticker owns an acceptance band, and that band is a
