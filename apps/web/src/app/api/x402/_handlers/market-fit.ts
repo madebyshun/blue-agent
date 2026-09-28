@@ -4,7 +4,7 @@
 // timing read is anchored to REAL Base market context (live chain TVL + trending
 // pools from DefiLlama/GeckoTerminal) instead of fabricated "movers". The LLM never
 // presents the score as a measurement. Resilient: retry + graceful fallback, never 500.
-// Price: $0.35
+// Price: $0.25
 
 import { getBaseTvl, getBaseTrending, tvlToPrompt, poolsToPrompt } from "@/lib/market-data";
 import { callLLM } from "@/app/api/_lib/llm";

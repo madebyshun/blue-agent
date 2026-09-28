@@ -1,5 +1,5 @@
 // x402/new-pools — freshly created Base liquidity pools with a basic risk flag
-// Price: $0.05 — live GeckoTerminal new-pools, no LLM, no fabricated numbers.
+// Price: $0.02 — live GeckoTerminal new-pools, no LLM, no fabricated numbers.
 
 import { getBaseNewPools } from "@/lib/market-data";
 import { filterScamPools } from "./_scam-filter";

@@ -1,6 +1,6 @@
 // x402/stack-recommender/index.ts
 // Stack Recommender — Blue build + Aeon deep-research + MiroShark analyst
-// Price: $0.35
+// Price: $0.20
 // Fully self-contained
 
 import { getAeonOutput, formatAeonForLLM } from "@/app/api/_lib/aeon-kv";

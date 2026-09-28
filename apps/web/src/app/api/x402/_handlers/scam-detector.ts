@@ -1,5 +1,5 @@
 // x402/scam-detector — scam/rug/honeypot risk for a Base token contract
-// Price: $0.25 — Grounds the LLM in real DexScreener liquidity/age + Basescan verification
+// Price: $0.10 — Grounds the LLM in real DexScreener liquidity/age + Basescan verification
 
 import { callLLM } from "@/app/api/_lib/llm";
 import { getBasescanSource } from "@/lib/moralis";

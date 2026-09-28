@@ -1,5 +1,5 @@
 // x402/cross-protocol-yield — best Base yield pools for a given token, ranked by risk
-// Price: $0.20 — Real apy/tvl/ilRisk from DefiLlama (getBaseYields); risk scored in CODE
+// Price: $0.15 — Real apy/tvl/ilRisk from DefiLlama (getBaseYields); risk scored in CODE
 
 import { getBaseYields, type YieldPool } from "@/lib/market-data";
 

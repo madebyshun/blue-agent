@@ -1,6 +1,6 @@
 // x402/investor-memo/index.ts
 // Investor Memo — Blue raise + Aeon deep-research + MiroShark analyst + influencer
-// Price: $0.75
+// Price: $0.35
 // Fully self-contained
 
 import { getAeonOutput, formatAeonForLLM } from "@/app/api/_lib/aeon-kv";

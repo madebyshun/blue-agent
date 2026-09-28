@@ -1,6 +1,6 @@
 // x402/base-grant-finder/index.ts
 // Base Grant Finder — Aeon deep-research + MiroShark analyst + Blue raise
-// Price: $0.35
+// Price: $0.20
 
 import { getAeonOutput, formatAeonForLLM } from "@/app/api/_lib/aeon-kv";
 import { callLLM } from "@/app/api/_lib/llm";

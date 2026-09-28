@@ -1,5 +1,5 @@
 // x402/wallet-holdings — ERC-20 + native ETH balances for any Base wallet
-// Price: $0.05 — pure on-chain data, no LLM. Never fabricates a price.
+// Price: $0.02 — pure on-chain data, no LLM. Never fabricates a price.
 //
 // 🔴 FAIL LOUD. This handler used to swallow every upstream failure into
 // `[]` / `null` and then publish `total_usd: 0` with HTTP 200. MEASURED

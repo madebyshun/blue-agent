@@ -1,5 +1,5 @@
 // x402/liquidity-depth — DEX liquidity depth, price impact and exit-risk for a Base token
-// Price: $0.15 — PURE MATH, no LLM. Constant-product (x*y=k) approximation.
+// Price: $0.03 — PURE MATH, no LLM. Constant-product (x*y=k) approximation.
 //
 // Base-only, and it must SAY so when it finds nothing: `No Base-chain DEX pair
 // found for "0x…"` is read as "this token has no liquidity anywhere". On a

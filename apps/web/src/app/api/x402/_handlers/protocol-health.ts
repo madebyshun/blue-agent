@@ -1,5 +1,5 @@
 // x402/protocol-health — TVL trend, anomaly & health verdict for a Base protocol
-// Price: $0.25 — Real TVL/change/category from DefiLlama; LLM synthesis only.
+// Price: $0.10 — Real TVL/change/category from DefiLlama; LLM synthesis only.
 
 import { callLLM } from "@/app/api/_lib/llm";
 import { findBaseProtocol, protocolToPrompt } from "@/lib/market-data";

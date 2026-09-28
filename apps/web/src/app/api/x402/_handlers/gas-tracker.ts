@@ -1,5 +1,5 @@
 // x402/gas-tracker — live Base gas price + USD cost estimates for common actions
-// Price: $0.02 — Base RPC + DexScreener ETH price, no LLM, no fabricated numbers.
+// Price: $0.01 — Base RPC + DexScreener ETH price, no LLM, no fabricated numbers.
 
 const BASE_RPC = "https://mainnet.base.org";
 const WETH_BASE = "0x4200000000000000000000000000000000000006";

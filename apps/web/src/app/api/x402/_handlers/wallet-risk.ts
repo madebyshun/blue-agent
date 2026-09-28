@@ -1,5 +1,5 @@
 // x402/wallet-risk — on-chain risk profile for any Base wallet
-// Price: $0.15 — counts computed in code, risk_score/flags from the LLM over real
+// Price: $0.05 — counts computed in code, risk_score/flags from the LLM over real
 // Moralis tx data. Verdict is hard-mapped from the score, never LLM-chosen.
 //
 // 🔴 CLEAN IS A FINDING, NOT A DEFAULT. Two lines in this file used to hand out

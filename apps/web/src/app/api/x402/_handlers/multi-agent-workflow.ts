@@ -1,6 +1,6 @@
 // x402/multi-agent-workflow/index.ts
 // Multi-Agent Workflow Builder — Aeon deep-research + MiroShark analyst + Blue build
-// Price: $0.50
+// Price: $0.25
 
 type Msg = { role: string; content: string };
 import { getAeonOutput, formatAeonForLLM } from "@/app/api/_lib/aeon-kv";

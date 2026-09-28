@@ -5,7 +5,7 @@
 // momentum read. The LLM scores readiness on top — never invents market numbers.
 // Without a token address the launch is pre-market, so the score is a clearly
 // labelled estimate. Resilient: retry + graceful fallback, never 500.
-// Price: $0.50
+// Price: $0.30
 
 import { getBaseTvl, getBaseTrending, tvlToPrompt, poolsToPrompt, getTokenMarket, type TokenMarket } from "@/lib/market-data";
 import { callLLM } from "@/app/api/_lib/llm";

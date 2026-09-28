@@ -1,6 +1,6 @@
 // x402/builder-deep-dd/index.ts
 // Builder Deep DD — Aeon deep-research + Blue audit + MiroShark analyst
-// Price: $1.00 — comprehensive due diligence on a builder or project
+// Price: $0.35 — comprehensive due diligence on a builder or project
 // Fully self-contained
 
 import { slugifyRepo, fetchRepo, scoreRepoActivity, repoFactsPrompt } from "@/lib/github";

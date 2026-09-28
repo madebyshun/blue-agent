@@ -4,7 +4,7 @@
 // about positioning/moats on top of the real numbers; it never invents TVL. The
 // subject project itself is described in text (no live metric pre-launch), so its
 // score is qualitative — clearly labelled. Resilient: retry + fallback, never 500.
-// Price: $0.75
+// Price: $0.20
 
 import { findBaseProtocol, protocolToPrompt, type BaseProtocol } from "@/lib/market-data";
 import { callLLM, STATIC_KNOWLEDGE_DISCLAIMER } from "@/app/api/_lib/llm";

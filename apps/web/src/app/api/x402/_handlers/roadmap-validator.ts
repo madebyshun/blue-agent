@@ -1,6 +1,6 @@
 // x402/roadmap-validator/index.ts
 // Roadmap Validator — Blue build + Aeon narrative-tracker + MiroShark 4-persona
-// Price: $0.50 — validate roadmap against current market + ecosystem
+// Price: $0.25 — validate roadmap against current market + ecosystem
 // Fully self-contained
 
 import { getAeonOutput, formatAeonForLLM } from "@/app/api/_lib/aeon-kv";

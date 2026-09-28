@@ -4,7 +4,7 @@
 // NOT wired to a live CT/Twitter feed, so the scores (content_score, viral_potential,
 // engagement_prediction) are AI ESTIMATES from model knowledge, not measured metrics.
 // Output is labelled accordingly. Resilient: never 500.
-// Price: $0.35
+// Price: $0.20
 
 import { getAeonOutput, formatAeonForLLM } from "@/app/api/_lib/aeon-kv";
 import { NO_FABRICATION_RULE, callLLM } from "@/app/api/_lib/llm";

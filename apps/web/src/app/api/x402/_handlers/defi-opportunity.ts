@@ -2,7 +2,7 @@
 // DeFi yield scan over REAL Base pools (DefiLlama yields). Every protocol, APY and
 // TVL is live. The LLM ranks/explains the real pools and flags risk — it never
 // invents a protocol or an APY.
-// Price: $0.35
+// Price: $0.25
 
 import { getBaseYields, getBaseTvl, yieldsToPrompt, tvlToPrompt, type YieldPool } from "@/lib/market-data";
 import { callLLM } from "@/app/api/_lib/llm";

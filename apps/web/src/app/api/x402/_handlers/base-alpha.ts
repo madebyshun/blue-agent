@@ -1,5 +1,5 @@
 // x402/base-alpha — Base-chain alpha digest: narratives, momentum picks, divergence
-// Price: $0.25 — Real trending pools + TVL from market-data; LLM only groups/labels.
+// Price: $0.10 — Real trending pools + TVL from market-data; LLM only groups/labels.
 
 import { callLLM, extractJsonObject } from "@/app/api/_lib/llm";
 import { getBaseTrending, getBaseTvl, poolsToPrompt, tvlToPrompt } from "@/lib/market-data";

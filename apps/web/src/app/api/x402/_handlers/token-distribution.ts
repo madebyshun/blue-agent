@@ -1,5 +1,5 @@
 // x402/token-distribution — holder concentration & rug-risk for a Base token
-// Price: $0.20 — Holder data from Moralis, scoring/verdict computed in CODE (no LLM).
+// Price: $0.05 — Holder data from Moralis, scoring/verdict computed in CODE (no LLM).
 
 import { getTokenMarket } from "@/lib/market-data";
 

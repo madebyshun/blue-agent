@@ -3,7 +3,7 @@
 // IMPORTANT: there is no live social-media feed wired in, so this is an AI ESTIMATE
 // of likely sentiment generated from model knowledge — NOT measured from real posts.
 // The output is labelled accordingly (data_source + disclaimer). Resilient: never 500.
-// Price: $0.25
+// Price: $0.20
 
 import { getAeonOutput, formatAeonForLLM } from "@/app/api/_lib/aeon-kv";
 import { callLLM, STATIC_KNOWLEDGE_DISCLAIMER } from "@/app/api/_lib/llm";

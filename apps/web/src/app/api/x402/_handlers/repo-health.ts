@@ -1,6 +1,6 @@
 // x402/repo-health
 // Repo Health Check — REAL GitHub data + LLM qualitative review.
-// Price: $0.35. Fully self-contained (no workspace imports — Bankr-deployable).
+// Price: $0.20. Fully self-contained (no workspace imports — Bankr-deployable).
 //
 // Numeric scores are derived from live GitHub metrics (stars, forks, open
 // issues, commit recency/velocity, presence of tests/CI/docs), NOT guessed by

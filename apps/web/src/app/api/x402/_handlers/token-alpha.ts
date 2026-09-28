@@ -1,5 +1,5 @@
 // x402/token-alpha — single-token trade signal with whale confirmation for Base
-// Price: $0.25 — Real price/liquidity (DexScreener) + whale flow (Moralis); LLM synthesis.
+// Price: $0.15 — Real price/liquidity (DexScreener) + whale flow (Moralis); LLM synthesis.
 
 import { callLLM, extractJsonObject } from "@/app/api/_lib/llm";
 import { getTokenMarket } from "@/lib/market-data";

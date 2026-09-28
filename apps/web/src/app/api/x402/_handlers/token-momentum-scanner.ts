@@ -2,7 +2,7 @@
 // Momentum scan over REAL Base pools (GeckoTerminal trending + new). Candidates,
 // prices, %-changes and volume are live — the LLM only scores/annotates them and
 // anchors entry/target to the real current price. No invented tickers.
-// Price: $0.25
+// Price: $0.20
 
 import { getBaseTrending, getBaseNewPools, poolsToPrompt, type Pool } from "@/lib/market-data";
 import { callLLM } from "@/app/api/_lib/llm";

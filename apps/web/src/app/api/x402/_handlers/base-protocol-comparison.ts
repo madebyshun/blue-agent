@@ -3,7 +3,7 @@
 // category). If only one is given, a real same-category competitor is picked
 // from DefiLlama. The LLM reasons on top of the live numbers — never invents TVL.
 // Resilient: retry + graceful fallback, never 500.
-// Price: $0.50
+// Price: $0.25
 
 import { findBaseProtocol, getBaseProtocols, protocolToPrompt, type BaseProtocol } from "@/lib/market-data";
 import { callLLM } from "@/app/api/_lib/llm";

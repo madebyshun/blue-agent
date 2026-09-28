@@ -3,7 +3,7 @@
 // supplied (live stars/commits/recency → deterministic activity score). The LLM
 // only writes the narrative on top; without a repo it's a labelled estimate.
 // Resilient: retry + graceful fallback, never 500.
-// Price: $0.35
+// Price: $0.25
 
 import { fetchRepo, slugifyRepo, scoreRepoActivity, repoFactsPrompt, type RepoData } from "@/lib/github";
 import { callLLM } from "@/app/api/_lib/llm";

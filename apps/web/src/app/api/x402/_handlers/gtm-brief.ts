@@ -1,6 +1,6 @@
 // x402/gtm-brief/index.ts
 // Go-to-Market Brief — Blue idea + Aeon narrative-tracker + MiroShark influencer + retail
-// Price: $0.50
+// Price: $0.25
 // Fully self-contained
 
 import { getAeonOutput, formatAeonForLLM } from "@/app/api/_lib/aeon-kv";

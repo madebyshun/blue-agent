@@ -1,6 +1,6 @@
 // x402/fundraise-timing/index.ts
 // Fundraise Timing — Aeon token-movers + narrative-tracker + MiroShark influencer + Blue raise
-// Price: $0.50
+// Price: $0.20
 // Fully self-contained
 
 import { getAeonOutput, formatAeonForLLM } from "@/app/api/_lib/aeon-kv";

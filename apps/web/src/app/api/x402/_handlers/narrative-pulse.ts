@@ -1,5 +1,5 @@
 // x402/narrative-pulse — live Base/CT narrative tracker (GeckoTerminal trending pools)
-// Price: $0.20 — Tokens grounded in the real GeckoTerminal trending list; LLM only
+// Price: $0.10 — Tokens grounded in the real GeckoTerminal trending list; LLM only
 // synthesizes narrative labels (no web search — labels are low-confidence)
 
 import { callLLM, extractJsonObject, STATIC_KNOWLEDGE_DISCLAIMER } from "@/app/api/_lib/llm";

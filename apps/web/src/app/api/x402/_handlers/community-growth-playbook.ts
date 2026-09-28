@@ -1,6 +1,6 @@
 // x402/community-growth-playbook/index.ts
 // Community Growth Playbook — Aeon narrative-tracker + MiroShark 4-persona + Blue idea
-// Price: $0.50
+// Price: $0.25
 
 import { getAeonOutput, formatAeonForLLM } from "@/app/api/_lib/aeon-kv";
 import { callLLM } from "@/app/api/_lib/llm";

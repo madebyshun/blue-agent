@@ -1,6 +1,6 @@
 // x402/pitch-intelligence/index.ts
 // Pitch Intelligence — Blue raise + Aeon narrative-tracker + MiroShark influencer
-// Price: $0.35
+// Price: $0.30
 // Fully self-contained
 
 import { getAeonOutput, formatAeonForLLM } from "@/app/api/_lib/aeon-kv";

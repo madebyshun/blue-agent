@@ -3,7 +3,7 @@
 // LLM frames narratives and position calls, but every token it references must be
 // in the live trending set — no invented tickers. Narrative phase/velocity are
 // analysis; the tokens and their moves are real.
-// Price: $0.25
+// Price: $0.15
 
 import { getBaseTrending, poolsToPrompt, type Pool } from "@/lib/market-data";
 import { callLLM } from "@/app/api/_lib/llm";

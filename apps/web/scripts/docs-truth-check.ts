@@ -1522,6 +1522,37 @@ check(
   searchClaims.join(" | ") || `${AGENT_TOOLS.length} descriptions clean`,
 );
 
+/* Most handlers open with a `// Price: $X` header. That number is DECORATIVE —
+   `api/x402/[tool]/route.ts` builds PRICE_UNITS from the catalog's `t.price` and
+   charges from that, so a stale header never mischarges anyone. It is pinned
+   anyway because of the direction the error travels.
+
+   MEASURED 2026-09-28: 34 of the 92 handlers carrying the header disagreed with
+   the catalog, and ALL 34 named a HIGHER price — the fossil of one catalog-wide
+   price cut that never reached the comments. Two consequences. Any revenue
+   figure someone derives by reading handlers is inflated. And a maintainer who
+   notices the disagreement has a 50/50 chance of "reconciling" it the wrong way:
+   copying $1.00 out of builder-deep-dd's header into the catalog is a real
+   overcharge, arrived at by making the repo self-consistent. A duplicated number
+   that nothing compares is a trap for whoever tidies it. */
+const priceHeaderDrift: string[] = [];
+const HANDLER_DIR = join(WEB, "src/app/api/x402/_handlers");
+for (const file of readdirSync(HANDLER_DIR)) {
+  if (!file.endsWith(".ts") || file.startsWith("_")) continue;
+  const tool = AGENT_TOOLS.find((t) => t.id === file.replace(/\.ts$/, ""));
+  if (!tool) continue;
+  const header = readFileSync(join(HANDLER_DIR, file), "utf8").split("\n").slice(0, 25).join("\n");
+  const stated = header.match(/\/\/\s*Price:\s*(\$[\d.]+?)\.?(?=\s|$)/m)?.[1];
+  if (stated && stated !== tool.price) {
+    priceHeaderDrift.push(`${tool.id}: header ${stated} vs catalog ${tool.price}`);
+  }
+}
+check(
+  "every handler price header matches the catalog price that is charged",
+  priceHeaderDrift.length === 0,
+  priceHeaderDrift.join(" | ") || "all headers agree with the catalog",
+);
+
 console.log(
   failures === 0
     ? `\nALL ${checks} CHECKS PASSED\n`
