@@ -64,8 +64,16 @@ Robinhood Chain (chainId 4663, Arbitrum Orbit L2) has **~26 tokenized US equitie
 |---|---|---|---|---|---|
 | A1 | `hub_rh_rwa_dca` | ticker, amount, cadence | session-key DCA schedule | extends existing `blue_dca` | $0.20 |
 | A2 | `hub_rh_stock_alert` | ticker, threshold | webhook / TG alert reg | KV store + cron | $0.10 |
-| A3 | `hub_rh_stock_report` | ticker | on-chain vol + real-world news brief | GeckoTerminal + Venice web-search | $0.20 |
-| A4 | `hub_rh_stock_agent_brief` | ticker | LLM-authored "why now" narrative | Venice with citations | $0.20 |
+| A3 | `hub_rh_stock_report` | ticker | on-chain vol + labelled model-recall background | GeckoTerminal + Virtuals (no search) | $0.20 |
+| A4 | `hub_rh_stock_agent_brief` | ticker | LLM-authored "why now" narrative | Virtuals (no search, no citations) | $0.20 |
+
+> A3/A4 planned "Venice web-search" and "Venice with citations". Neither shipped that
+> way and neither can: the tool path is Virtuals-only since 2026-07-25 and `webSearch`
+> is a documented no-op there, so A4 returns `web_sources: []` by construction. The rows
+> above are corrected in place (2026-09-28) because this spec is where the shipped
+> catalog copy was derived from — leaving the plan wrong is how the same claim gets
+> re-derived. Venice IS live, but on the Blue Chat preset path, which is a different
+> surface from these paid tools.
 
 ### 7 · Cross-chain / bridge
 
