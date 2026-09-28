@@ -14,6 +14,20 @@
 //     nothing would fail loudly. That is exactly why it is flagged, not fixed.
 // The steps are real. The word "agent" was the lie, and it has been removed
 // from the catalog description; the internals are a separate decision.
+//
+// 🔴 2026-09-28 — "leave the shape alone" was read for a day as "leave the
+// CONTENTS alone", and that is the mistake this note exists to stop repeating.
+// The key NAMES are a compatibility question and still ShunTr's. What was
+// inside them was not a naming question at all: with no feed present the schema
+// still demanded `ecosystem_health`, and a missing sentiment pass let invented
+// percentages through under `status:"simulated"`. Both are now written in code
+// on every path (see the block after the retry loop). Names untouched, sub-field
+// names untouched, so no caller can break — only the values got honest.
+// MEASURED the same day: nothing outside this directory reads `.aeon` or
+// `.miroshark`, and no doc promises either, so "breaks existing callers" is a
+// claim about EXTERNAL callers only and has never been tested. Recorded because
+// it is the stated reason for a deferral, and an untested reason ages into a
+// fact if nobody writes down which half was measured.
 import { getAeonOutput, formatAeonForLLM } from "@/app/api/_lib/aeon-kv";
 import { callLLM } from "@/app/api/_lib/llm";
 
@@ -124,11 +138,42 @@ export default async function handler(req: Request): Promise<Response> {
       ? `\n=== MiroShark Consensus ===\nbull=${miroShark.bull}% bear=${miroShark.bear}% neutral=${miroShark.neutral}%\nrecommendation=${miroShark.recommendation}\nsentiment=${miroShark.sentiment_summary}`
       : "";
 
+    // What the model is TOLD is present must match what is actually in the
+    // message, and it must never be asked for a field it has no source for.
+    // Until 2026-09-28 the next line asserted "MiroShark and Aeon results are in
+    // the message" unconditionally while the schema DEMANDED an `aeon` object
+    // containing `ecosystem_health` — so on any run where the feed was missing
+    // the model had to invent one, and an invented "strong" is indistinguishable
+    // from a measured one in the paid response.
+    //   For THIS tier "missing" is not an edge case, it is the only state:
+    //   `aeon:digest` has no writer anywhere in the repo. cron/research-loop
+    //   writes only `deep-research`, and /api/aeon-feed needs a POST from Aeon
+    //   (retired 2026-09-27) — "digest" is not even in its SKILL_PATTERNS.
+    const sources = [
+      aeon.available ? "Aeon ecosystem signals" : null,
+      miroShark ? "the MiroShark sentiment consensus" : null,
+    ].filter(Boolean) as string[];
+    const sourceLine = sources.length
+      ? `${sources.join(" and ")} ${sources.length > 1 ? "are" : "is"} in the message below; nothing else is available to you.`
+      : `NEITHER the Aeon ecosystem feed NOR the MiroShark sentiment pass returned anything for this run. Judge from the project description alone and say so in your summary.`;
+    const verdictRule = sources.length
+      ? `final_verdict = your own judgement, weighted by ${sources.join(" and ")}.`
+      : `final_verdict = your own judgement from the description alone — there is no second opinion to weigh.`;
+    // Ask for the aeon block only when it can be grounded. When it cannot, the
+    // block is still returned to the caller (shape is unchanged) but it is
+    // written in code below, not by the model.
+    const aeonSchema = aeon.available
+      ? `"aeon":{"ecosystem_health":"strong|neutral|weak","narrative_fit":"<1 sentence>"},`
+      : "";
+    const msSchema = miroShark
+      ? `"miroshark":{"bull":<copy>,"bear":<copy>,"neutral":<copy>,"recommendation":"<copy>","sentiment_summary":"<copy>"},`
+      : "";
+
     const system = `You are Blue Agent — AI-native founder console for Base builders.
-Run Launch Simulator Tier 1 (Quick Signal) — a fast, baseline pre-launch gut-check. NO market data (that is Tier 2). MiroShark and Aeon results are in the message. Provide Blue Agent analysis + final_verdict as weighted consensus.
+Run Launch Simulator Tier 1 (Quick Signal) — a fast, baseline pre-launch gut-check. NO market data (that is Tier 2). ${sourceLine}
 CRITICAL: Return ONLY raw JSON. No markdown. Start with { end with }.
-Schema: {"blue_agent":{"verdict":"LAUNCH|WAIT|ABORT","score":<0-100>,"summary":"<2 sentences>","strengths":["..","..."],"risks":["..","..."]},"aeon":{"status":"live or simulated","ecosystem_health":"strong|neutral|weak","narrative_fit":"<1 sentence>"},"miroshark":{"status":"simulated","bull":<copy>,"bear":<copy>,"neutral":<copy>,"recommendation":"<copy>","sentiment_summary":"<copy>"},"final_verdict":"LAUNCH|WAIT|ABORT","confidence":<0-100>,"action_items":["..",".."]}
-Rules: copy miroshark values EXACTLY. final_verdict = weighted consensus of all 3 agents. Exactly 2 short action_items. Be direct, builder-first.`;
+Schema: {"blue_agent":{"verdict":"LAUNCH|WAIT|ABORT","score":<0-100>,"summary":"<2 sentences>","strengths":["..","..."],"risks":["..","..."]},${aeonSchema}${msSchema}"final_verdict":"LAUNCH|WAIT|ABORT","confidence":<0-100>,"action_items":["..",".."]}
+Rules: ${miroShark ? "copy miroshark values EXACTLY. " : ""}${verdictRule} Exactly 2 short action_items. Never invent a data source you were not given. Be direct, builder-first.`;
 
     const userMsg = `Project: ${project}\nTicker: ${ticker || "TBD"}\nDescription: ${description}${aeonSection}${msSection}`;
 
@@ -147,15 +192,44 @@ Rules: copy miroshark values EXACTLY. final_verdict = weighted consensus of all 
     }
     if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
-    if (miroShark && result.miroshark && typeof result.miroshark === "object") {
-      const ms = result.miroshark as Record<string, unknown>;
+    // Both blocks are written HERE, never accepted from the model, and both are
+    // written on every path — including the degraded one. `status` is provenance:
+    // a fact about our infrastructure, not an opinion the model is entitled to
+    // hold. Two bugs this replaces, both live until 2026-09-28:
+    //   • `if (miroShark && result.miroshark …)` — when the sentiment sub-call
+    //     returned null the guard fell through, so the bull/bear/neutral the
+    //     SYNTHESIS model had made up (it was handed no MiroShark section at all)
+    //     shipped to the buyer stamped `status:"simulated"`. Invented percentages
+    //     wearing a provenance label is the worst shape this can fail in.
+    //   • aeon fell back to `status:"simulated"` when the feed was missing.
+    //     Nothing was simulated — the KV read returned null and no call ran.
+    //     "unavailable" is the true word; per CLAUDE.md missing data is
+    //     "unknown", never a value inferred from absence.
+    if (miroShark) {
+      const ms = (typeof result.miroshark === "object" && result.miroshark)
+        ? result.miroshark as Record<string, unknown> : {};
       ms.bull = miroShark.bull; ms.bear = miroShark.bear; ms.neutral = miroShark.neutral;
       ms.recommendation = miroShark.recommendation; ms.sentiment_summary = miroShark.sentiment_summary;
       ms.status = "simulated";
       if (miroShark.personas) ms.personas = miroShark.personas;
+      result.miroshark = ms;
+    } else {
+      result.miroshark = {
+        status: "unavailable", bull: null, bear: null, neutral: null,
+        recommendation: "unknown",
+        sentiment_summary: "The sentiment pass returned no usable result on this run; no consensus was produced.",
+      };
     }
-    if (result.aeon && typeof result.aeon === "object") {
-      (result.aeon as Record<string, unknown>).status = aeon.available ? "live" : "simulated";
+    if (aeon.available) {
+      const a = (typeof result.aeon === "object" && result.aeon)
+        ? result.aeon as Record<string, unknown> : {};
+      a.status = "live";
+      result.aeon = a;
+    } else {
+      result.aeon = {
+        status: "unavailable", ecosystem_health: "unknown",
+        narrative_fit: "No ecosystem feed was available for this run, so nothing here is derived from ecosystem data.",
+      };
     }
 
     return Response.json({

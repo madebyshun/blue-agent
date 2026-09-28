@@ -1371,9 +1371,17 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     // are prompts on one Virtuals endpoint, and two of the three names are now
     // retired products. Describe the WORK, not a roster.
     // ⚠️ The handler's JSON response still emits `aeon` and `miroshark` keys
-    // (same for tiers 2 and 3). Those are the paid response SHAPE, not copy —
-    // renaming them breaks every existing caller, so it is ShunTr's call and is
-    // deliberately not done here. See the Task-5 writeup.
+    // (same for tiers 2 and 3). Those NAMES are the paid response SHAPE, not
+    // copy — renaming them breaks every existing caller, so it is ShunTr's call
+    // and is deliberately not done here. See the Task-5 writeup.
+    // 🔴 Read "not done here" as covering the names ONLY. For a day it was read
+    // as covering what is INSIDE them too, and that is a different question with
+    // a different answer: no compatibility argument protects a wrong value. Both
+    // blocks turned out to be fabricated whenever their source was absent — which
+    // for tier 1 is always, `aeon:digest` having no writer anywhere in the repo.
+    // Fixed 2026-09-28 in the handlers, code-set on every path, key and sub-key
+    // names untouched. `docs-truth-check.ts` now fails on any prompt schema that
+    // lets the model choose its own `status`.
     description: "Quick Signal — baseline ecosystem read, weighted sentiment pass, one verdict. Fast pre-launch gut-check.",
     agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
     category: "builder",

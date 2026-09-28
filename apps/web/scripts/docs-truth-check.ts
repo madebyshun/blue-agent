@@ -1553,6 +1553,54 @@ check(
   priceHeaderDrift.join(" | ") || "all headers agree with the catalog",
 );
 
+/* Provenance is a fact about OUR infrastructure, never an opinion the model is
+   entitled to hold. A prompt schema that offers the model a choice between a
+   "this is real" word and a "this is made up" word has handed it the one field a
+   buyer reads to decide how much of the answer to trust.
+
+   FOUND 2026-09-28 in launch-simulator-1/2/3, all three paid ($0.10/$0.35/$0.50):
+   `"aeon":{"status":"live or simulated","ecosystem_health":"strong|neutral|weak"}`.
+   The `status` half WAS overwritten in code — but with "simulated" when the feed
+   was ABSENT, claiming a simulation that never ran; and the health half was not
+   overwritten at all, so the model invented it from nothing. Both are now written
+   in code on every path.
+
+   A PROPERTY assertion, not an exemption list — the exemption shape is what hid
+   the second payment door, so this one trips anywhere under src/app/api/, for any
+   key, with nothing to get added to. Matching is deliberately narrow: it fires
+   only when a status-like field's OWN value string mixes both vocabularies. A
+   schema that hard-codes one label ("status":"simulated") passes, because that is
+   us stating a fact — which is exactly the shape the fix moved to. */
+const REAL_WORD = String.raw`live|real|measured|verified|actual|onchain|on-chain`;
+const FAKE_WORD = String.raw`simulated|estimated|synthetic|mock|model-generated|fabricated`;
+const PROV_KEY = String.raw`"(?:status|source|provenance|data_source)"\s*:\s*`;
+const PROVENANCE_CHOICE_RE = new RegExp(
+  `${PROV_KEY}"[^"]*\\b(?:${REAL_WORD})\\b[^"]*\\b(?:${FAKE_WORD})\\b[^"]*"` +
+    "|" +
+    `${PROV_KEY}"[^"]*\\b(?:${FAKE_WORD})\\b[^"]*\\b(?:${REAL_WORD})\\b[^"]*"`,
+  "i",
+);
+const provenanceChoices: string[] = [];
+function walkApiDir(dir: string): void {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const p = join(dir, entry.name);
+    if (entry.isDirectory()) { walkApiDir(p); continue; }
+    if (!entry.name.endsWith(".ts") && !entry.name.endsWith(".tsx")) continue;
+    for (const line of readFileSync(p, "utf8").split("\n")) {
+      const t = line.trimStart();
+      if (t.startsWith("//") || t.startsWith("*")) continue;
+      const hit = line.match(PROVENANCE_CHOICE_RE);
+      if (hit) provenanceChoices.push(`${p.slice(WEB.length + 1)}: ${hit[0].slice(0, 70)}`);
+    }
+  }
+}
+walkApiDir(join(WEB, "src/app/api"));
+check(
+  "no prompt schema lets the model pick its own provenance label",
+  provenanceChoices.length === 0,
+  provenanceChoices.join(" | ") || "provenance is code-set everywhere under src/app/api",
+);
+
 console.log(
   failures === 0
     ? `\nALL ${checks} CHECKS PASSED\n`

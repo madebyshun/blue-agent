@@ -158,11 +158,41 @@ export default async function handler(req: Request): Promise<Response> {
       ? `\n=== MiroShark Consensus ===\nbull=${miroShark.bull}% bear=${miroShark.bear}% neutral=${miroShark.neutral}%\nrecommendation=${miroShark.recommendation}\nsentiment=${miroShark.sentiment_summary}`
       : "";
 
+    // See the equivalent block in launch-simulator-1.ts for the full reasoning.
+    // Short version: the model is told what is actually in the message, and is
+    // never asked for a field it has no source for. This asserted "MiroShark and
+    // Aeon results are in the message" unconditionally until 2026-09-28 while
+    // demanding `ecosystem_health` and a `timing_score` — numbers it had to
+    // invent whenever the feed was missing, which for `aeon:digest` is always
+    // (no writer exists in this repo) and for `aeon:token-movers` is since Aeon
+    // was retired 2026-09-27.
+    //   `risk_matrix` is deliberately NOT made conditional: every one of its five
+    // scores is a judgement about the project itself, which the description
+    // supports. `ecosystem_fit` is the closest call and stays, because it asks
+    // how the project fits Base — not what the ecosystem feed measured today.
+    const sources = [
+      aeon.available ? "Aeon ecosystem signals" : null,
+      miroShark ? "the MiroShark sentiment consensus" : null,
+      marketData.available ? "live DexScreener market data" : null,
+    ].filter(Boolean) as string[];
+    const sourceLine = sources.length
+      ? `${sources.join(", ")} ${sources.length > 1 ? "are" : "is"} in the message below; nothing else is available to you.`
+      : `NONE of the ecosystem, sentiment or market sources returned anything for this run. Judge from the project description alone and say so in your summary.`;
+    const verdictRule = sources.length
+      ? `final_verdict = your own judgement, weighted by ${sources.join(" and ")}.`
+      : `final_verdict = your own judgement from the description alone — there is no second opinion to weigh.`;
+    const aeonSchema = aeon.available
+      ? `"aeon":{"ecosystem_health":"strong|neutral|weak","timing_score":<0-10>,"narrative_fit":"<1 sentence>","signals":["..."]},`
+      : "";
+    const msSchema = miroShark
+      ? `"miroshark":{"bull":<copy>,"bear":<copy>,"neutral":<copy>,"recommendation":"<copy>","sentiment_summary":"<copy>"},`
+      : "";
+
     const system = `You are Blue Agent — AI-native founder console for Base builders.
-Run Launch Simulator Tier 3 (Full Simulation). MiroShark and Aeon results are in the message. Provide Blue Agent analysis + final_verdict as weighted consensus.
+Run Launch Simulator Tier 3 (Full Simulation). ${sourceLine}
 CRITICAL: Return ONLY raw JSON. No markdown. Start with { end with }.
-Schema: {"blue_agent":{"verdict":"LAUNCH|WAIT|ABORT","score":<0-100>,"summary":"<2-3 sentences>","strengths":["..."],"risks":["..."]},"aeon":{"status":"live or simulated","ecosystem_health":"strong|neutral|weak","timing_score":<0-10>,"narrative_fit":"<1 sentence>","signals":["..."]},"miroshark":{"status":"simulated","bull":<copy>,"bear":<copy>,"neutral":<copy>,"recommendation":"<copy>","sentiment_summary":"<copy>"},"final_verdict":"LAUNCH|WAIT|ABORT","confidence":<0-100>,"action_items":["...","...","..."],"risk_matrix":{"market_timing":<0-10>,"community_readiness":<0-10>,"ecosystem_fit":<0-10>,"technical_readiness":<0-10>,"narrative_strength":<0-10>},"timeline_recommendation":"<text>"}
-Rules: copy miroshark values EXACTLY. final_verdict = weighted consensus of all 3 agents. Be direct, builder-first.`;
+Schema: {"blue_agent":{"verdict":"LAUNCH|WAIT|ABORT","score":<0-100>,"summary":"<2-3 sentences>","strengths":["..."],"risks":["..."]},${aeonSchema}${msSchema}"final_verdict":"LAUNCH|WAIT|ABORT","confidence":<0-100>,"action_items":["...","...","..."],"risk_matrix":{"market_timing":<0-10>,"community_readiness":<0-10>,"ecosystem_fit":<0-10>,"technical_readiness":<0-10>,"narrative_strength":<0-10>},"timeline_recommendation":"<text>"}
+Rules: ${miroShark ? "copy miroshark values EXACTLY. " : ""}${verdictRule} Never invent a data source you were not given. Be direct, builder-first.`;
 
     const userMsg = `Project: ${project}\nTicker: ${ticker || "TBD"}\nDescription: ${description}${marketSection}${aeonSection}${msSection}`;
 
@@ -181,15 +211,40 @@ Rules: copy miroshark values EXACTLY. final_verdict = weighted consensus of all 
     }
     if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
-    if (miroShark && result.miroshark && typeof result.miroshark === "object") {
-      const ms = result.miroshark as Record<string, unknown>;
+    // Written HERE on every path, never accepted from the model — `status` is
+    // provenance, a fact about our infrastructure, not an opinion the model may
+    // hold. The old `if (miroShark && result.miroshark …)` fell through when the
+    // sentiment sub-call returned null, shipping percentages the synthesis model
+    // invented under `status:"simulated"`; and aeon fell back to "simulated"
+    // when nothing had been simulated at all. `timing_score` is null rather than
+    // 0 on purpose — a 0 out of 10 reads as "terrible timing", which is a value
+    // inferred from absence, exactly what CLAUDE.md forbids.
+    if (miroShark) {
+      const ms = (typeof result.miroshark === "object" && result.miroshark)
+        ? result.miroshark as Record<string, unknown> : {};
       ms.bull = miroShark.bull; ms.bear = miroShark.bear; ms.neutral = miroShark.neutral;
       ms.recommendation = miroShark.recommendation; ms.sentiment_summary = miroShark.sentiment_summary;
       ms.status = "simulated";
       if (miroShark.personas) ms.personas = miroShark.personas;
+      result.miroshark = ms;
+    } else {
+      result.miroshark = {
+        status: "unavailable", bull: null, bear: null, neutral: null,
+        recommendation: "unknown",
+        sentiment_summary: "The sentiment pass returned no usable result on this run; no consensus was produced.",
+      };
     }
-    if (result.aeon && typeof result.aeon === "object") {
-      (result.aeon as Record<string, unknown>).status = aeon.available ? "live" : "simulated";
+    if (aeon.available) {
+      const a = (typeof result.aeon === "object" && result.aeon)
+        ? result.aeon as Record<string, unknown> : {};
+      a.status = "live";
+      result.aeon = a;
+    } else {
+      result.aeon = {
+        status: "unavailable", ecosystem_health: "unknown", timing_score: null,
+        narrative_fit: "No ecosystem feed was available for this run, so nothing here is derived from ecosystem data.",
+        signals: [],
+      };
     }
 
     return Response.json({
