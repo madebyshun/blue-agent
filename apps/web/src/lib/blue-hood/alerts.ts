@@ -31,7 +31,7 @@
  * `bh:alert:addr:{addr}` + a `delivered.webpush` cursor and must NOT drain the
  * queue.
  */
-import { kvGet, kvSet, kvMutate } from "@/lib/kv";
+import { kvGet, kvSet, kvMutate, kvGetProbe, type KvMutateResult } from "@/lib/kv";
 import {
   kvAlert,
   kvAlertsByAddr,
@@ -414,20 +414,58 @@ export async function peekPendingAlerts(limit: number): Promise<HoodAlert[]> {
   let pruned = false;
   for (const id of ids) {
     if (out.length >= limit) { alive.push(id); continue; }
-    const rec = await kvGet<HoodAlert>(kvAlert(id));
-    if (rec) { out.push(rec); alive.push(id); }
-    else { pruned = true; } // record gone (TTL/expiry) — drop the dead id
+    // kvGetProbe, NOT kvGet: pruning is a DELETE from the only record that an
+    // alert has not been sent yet, so it must key off a genuine `miss`. `kvGet`
+    // returns null for a throttled read too, and dropping an id on that reading
+    // loses the DM outright — not the delivery cursor, the message. A read error
+    // keeps the id (and skips the row this tick); the next tick retries it.
+    const probe = await kvGetProbe<HoodAlert>(kvAlert(id));
+    if (probe.status === "hit") { out.push(probe.value); alive.push(id); }
+    else if (probe.status === "miss") { pruned = true; } // record really gone (TTL) — drop the dead id
+    else { alive.push(id); console.error(`[alerts] ${id} kept in pending — record read failed: ${probe.message}`); }
   }
   if (pruned) await kvSet(KV_ALERT_PENDING, alive);
   return out;
 }
 
-/** Stamp a channel's delivery cursor on the shared record. Idempotent. Never throws. */
-export async function markAlertDelivered(id: string, channel: AlertChannel): Promise<void> {
-  const rec = await kvGet<HoodAlert>(kvAlert(id));
-  if (!rec) return;
-  rec.delivered = { ...rec.delivered, [channel]: new Date().toISOString() };
-  await kvSet(kvAlert(id), rec, TTL_ALERT);
+/**
+ * Outcome of a delivery-cursor stamp, in `kvMutate`'s vocabulary. The caller
+ * MUST branch on it before clearing the id from the pending queue:
+ *   • ok        — cursor written. Safe to clear.
+ *   • unchanged — the record is genuinely gone (TTL). Nothing to stamp and
+ *                 nothing to retry, so clearing is also correct.
+ *   • skipped   — the READ failed. We do not know what the record says.
+ *   • failed    — the write failed.
+ * The last two mean the cursor is NOT on disk; clearing the id on either loses
+ * the record permanently, because the queue is what would have retried it.
+ */
+export type AlertStampResult = KvMutateResult;
+
+/** True when the cursor is durably on disk (or provably has nothing left to stamp). */
+export function alertStampLanded(r: AlertStampResult): boolean {
+  return r === "ok" || r === "unchanged";
+}
+
+/**
+ * Stamp a channel's delivery cursor on the shared record. Idempotent.
+ * Never throws — it REPORTS instead, which is the whole point: this used to
+ * return `void` and bail on a bare `return` when its `kvGet` came back empty,
+ * so a throttled read looked identical to a successful stamp and the drain
+ * cleared the id anyway. Via `kvMutate` so a failed read cannot write, and a
+ * failed write cannot pass for a successful one.
+ */
+export async function markAlertDelivered(id: string, channel: AlertChannel): Promise<AlertStampResult> {
+  return stampCursor(id, channel, new Date().toISOString());
+}
+
+/** Shared read-modify-write for both cursor stamps. `null` ⇒ record gone ⇒ "unchanged". */
+async function stampCursor(id: string, channel: AlertChannel, value: string): Promise<AlertStampResult> {
+  return kvMutate<HoodAlert | null>(
+    kvAlert(id),
+    null,
+    (rec) => (rec ? { ...rec, delivered: { ...rec.delivered, [channel]: value } } : null),
+    TTL_ALERT,
+  );
 }
 
 /**
@@ -436,13 +474,13 @@ export async function markAlertDelivered(id: string, channel: AlertChannel): Pro
  * `markAlertDelivered`'s ISO timestamp: a reader can tell "sent" from
  * "permanently skipped", and the 2.2 drain uses it to drop a never-deliverable
  * alert from the pending queue instead of retrying it forever. Idempotent.
- * Never throws.
+ * Never throws — reports, for the same reason as `markAlertDelivered`. This
+ * branch sends no DM at all, so the cursor is the ONLY artifact the row
+ * produces: an unreported no-op here loses the entire outcome, not just its
+ * receipt.
  */
-export async function markAlertSkipped(id: string, channel: AlertChannel, reason: string): Promise<void> {
-  const rec = await kvGet<HoodAlert>(kvAlert(id));
-  if (!rec) return;
-  rec.delivered = { ...rec.delivered, [channel]: reason };
-  await kvSet(kvAlert(id), rec, TTL_ALERT);
+export async function markAlertSkipped(id: string, channel: AlertChannel, reason: string): Promise<AlertStampResult> {
+  return stampCursor(id, channel, reason);
 }
 
 /**
