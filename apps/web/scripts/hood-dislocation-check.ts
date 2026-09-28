@@ -47,6 +47,9 @@ import { kv } from "../src/lib/kv";
 import { KV_SNAPSHOT_LATEST, KV_BASE_ROWS_LATEST } from "../src/lib/blue-hood/kv-keys";
 import { ARB_MIN_ABS_PCT, DRIFT_MIN_ABS_PCT } from "../src/lib/blue-hood/types";
 import { HEALTHY_MAX_AGE_S, POLL_INTERVAL_S } from "../src/lib/blue-hood/health";
+// Imported, not re-typed: group 8 asserts the meter's field format, and a test
+// that hardcoded its own SHA-256 would keep passing after the real hash changed.
+import { hashApiKey, ANON_KEY_HASH } from "../src/lib/blue-hood/dislocation-usage";
 import type {
   BaseDeskLatest,
   BaseTickerSnapshot,
@@ -150,6 +153,64 @@ async function withReadFailure<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
+/**
+ * Like `withKv`, but RECORDS the meter's writes instead of swallowing them.
+ *
+ * Exists because the metering assertion used to be `/recordDislocationCall/`
+ * grepped out of the route source — the weakest check in this file, and the one
+ * with the most to prove. A grep passes when the call is present but wired to
+ * the wrong outcome, present but unreachable, or present and recording the raw
+ * key. MEASURED 2026-09-28: it could not be corroborated from production
+ * either, because this machine's `.env.local` points at a different Upstash DB
+ * than the deployment (local `bh:base:rows:latest` is absent while the live
+ * route serves it), so `readDislocationDays()` here reads an empty database and
+ * says nothing about whether prod recorded anything. Behaviour has to be pinned
+ * where it CAN be observed.
+ *
+ * `set optional` on `failReads`: the same recorder has to work on the degraded
+ * path, because "a KV failure still gets metered" is precisely the case where a
+ * silent meter would hide the outage it is supposed to make visible.
+ */
+async function withRecordedMeter<T>(
+  map: KvMap,
+  fn: () => Promise<T>,
+  opts: { failReads?: boolean } = {},
+): Promise<{ result: T; fields: string[] }> {
+  const fields: string[] = [];
+  const realGet = kv.get.bind(kv);
+  const realHgetall = kv.hgetall.bind(kv);
+  const realHincrby = kv.hincrby.bind(kv);
+  const realExpire = kv.expire.bind(kv);
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  (kv as any).get = async (key: string) => {
+    if (opts.failReads) throw new Error("simulated Upstash throttle (max requests limit exceeded)");
+    return key in map ? map[key] : null;
+  };
+  (kv as any).hgetall = async () => ({});
+  (kv as any).hincrby = async (_key: string, field: string) => {
+    fields.push(field);
+    return 1;
+  };
+  (kv as any).expire = async () => 1;
+  /* eslint-enable @typescript-eslint/no-explicit-any */
+  try {
+    const result = await fn();
+    // The route fires the meter with `void` — deliberately, so a metering
+    // stall can never delay a market-data read. That means the write lands
+    // AFTER the response resolves, and a test that reads `fields` immediately
+    // would see an empty array and call it a missing meter.
+    await new Promise((r) => setTimeout(r, 20));
+    return { result, fields };
+  } finally {
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    (kv as any).get = realGet;
+    (kv as any).hgetall = realHgetall;
+    (kv as any).hincrby = realHincrby;
+    (kv as any).expire = realExpire;
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+  }
+}
+
 /* ── Fixtures ─────────────────────────────────────────────────────────────── */
 
 function row(over: Partial<TickerSnapshot> = {}): TickerSnapshot {
@@ -200,6 +261,22 @@ async function call(qs: string, map: KvMap): Promise<{ status: number; body: Bod
   const { GET } = await import("../src/app/api/hood/dislocation/route");
   const res = await withKv(map, () => GET(new Request(`https://blueagent.dev/api/hood/dislocation${qs}`)));
   return { status: res.status, body: (await res.json()) as Body };
+}
+
+/** A real handler call whose meter writes are captured. `key` is sent as `x-api-key`. */
+async function callMetered(
+  qs: string,
+  map: KvMap,
+  opts: { key?: string; failReads?: boolean } = {},
+): Promise<{ status: number; fields: string[] }> {
+  const { GET } = await import("../src/app/api/hood/dislocation/route");
+  const headers = opts.key ? { "x-api-key": opts.key } : undefined;
+  const { result, fields } = await withRecordedMeter(
+    map,
+    () => GET(new Request(`https://blueagent.dev/api/hood/dislocation${qs}`, { headers })),
+    { failReads: opts.failReads },
+  );
+  return { status: result.status, fields };
 }
 
 async function callFailing(qs: string): Promise<{ status: number; body: Body }> {
@@ -440,14 +517,27 @@ async function main(): Promise<void> {
       `body has oracle_age_seconds=${JSON.stringify(rh.body.oracle_age_seconds)}`,
     );
 
-    const started = nowIso();
+    // Whole second ON PURPOSE. `started_at` carries milliseconds in production
+    // and the route divides it by 1000, so a fixture built from `nowIso()` puts
+    // the expected value on a rounding boundary: the age came out 42.ms and
+    // `Math.round` returned 43 whenever the clock's millisecond part was >= 500.
+    // MEASURED 2026-09-28: 3 of 6 consecutive runs failed. It passed the gate
+    // and passed CI on the way in, which is how a coin-flip assertion gets
+    // shipped — it is only ever half-wrong, and the half you see is green.
+    //
+    // 🔴 Do NOT repair a reappearance by widening this to a tolerance. A
+    // tolerance of even one second is precisely the error a now()-based
+    // implementation produces when the test runs fast, i.e. it would admit the
+    // exact bug 5.3 exists to catch. Pin the fixture, keep the equality.
+    const startedMs = Math.floor(Date.now() / 1000) * 1000;
+    const started = new Date(startedMs).toISOString();
     const baseNum = await call("?ticker=NVDA&chain=base", {
       [KV_BASE_ROWS_LATEST]: baseLatest(
         [
           row({
             chain: "base",
             polled_at_ms: 10_000,
-            oracle_updated_at: Math.floor(new Date(started).getTime() / 1000) + 10 - 42,
+            oracle_updated_at: startedMs / 1000 + 10 - 42,
           }),
         ],
         started,
@@ -541,6 +631,8 @@ async function main(): Promise<void> {
       "7.5 never CDN-cached (a cached dislocation is the hazard staleness exists to prevent)",
       /no-store/.test(routeSrc) && !/s-maxage/.test(routeSrc),
     );
+    // Source-level only. The behaviour it stands for is group 8 — see there for
+    // why a grep is not enough on its own.
     check("7.6 metering is per-key from day one", /recordDislocationCall/.test(routeSrc));
     // The meter must not become a second identity store.
     const meterSrc = read("src/lib/blue-hood/dislocation-usage.ts");
@@ -556,6 +648,57 @@ async function main(): Promise<void> {
       "7.10 the meter uses its own KV key, not the no-identity usage:day hash",
       /hood:disloc:day:/.test(meterSrc) && !/`usage:day:/.test(meterSrc),
     );
+  }
+
+  // ── 8. Metering actually fires, and records the right thing ─────────────
+  // The reason this endpoint counts calls at all is that it is the first Blue
+  // Hood surface meant to be SOLD, and an uncounted pilot cannot be priced or
+  // invoiced. So "the meter is wired" is a product requirement, not hygiene —
+  // and 7.6 only proves the identifier appears in the file.
+  console.log("\n8. the meter records what it claims to");
+  {
+    const RAW_KEY = "pilot-secret-key-do-not-store";
+    const expectedHash = hashApiKey(RAW_KEY);
+
+    const okCall = await callMetered("?ticker=NVDA&chain=base", freshBase, { key: RAW_KEY });
+    check("8.1 a served answer is metered exactly once", okCall.fields.length === 1,
+      `fields: ${JSON.stringify(okCall.fields)}`);
+    check("8.2 …under the caller's hashed key, the queried chain, outcome ok",
+      okCall.fields[0] === `${expectedHash}|base|ok`,
+      `got ${JSON.stringify(okCall.fields[0])}`);
+    // The whole point of hashing is that KV holds nothing replayable.
+    check("8.3 …and the RAW key is nowhere in what gets stored",
+      !okCall.fields.some((f) => f.includes(RAW_KEY)));
+
+    // A rejected call still costs us a request, so it still has to be counted —
+    // otherwise a customer hammering a 400 looks like zero usage.
+    const rejected = await callMetered("?ticker=NVDA", freshBase, { key: RAW_KEY });
+    check("8.4 a 400 is metered too, with chain 'none' (there was no valid chain to name)",
+      rejected.status === 400 && rejected.fields[0] === `${expectedHash}|none|rejected`,
+      `status ${rejected.status}, fields ${JSON.stringify(rejected.fields)}`);
+
+    // This is the case a silent meter would hide: the outage itself.
+    const failed8 = await callMetered("?ticker=NVDA&chain=robinhood", {}, { key: RAW_KEY, failReads: true });
+    check("8.5 a KV read failure is metered as 'stale', not dropped and not 'ok'",
+      failed8.fields[0] === `${expectedHash}|robinhood|stale`,
+      `fields: ${JSON.stringify(failed8.fields)}`);
+
+    // Anonymous traffic is countable but must not be attributed to a customer.
+    const anon = await callMetered("?ticker=NVDA&chain=base", freshBase);
+    check("8.6 a keyless caller is counted separately, not folded into a customer",
+      anon.fields[0] === `${ANON_KEY_HASH}|base|ok`,
+      `fields: ${JSON.stringify(anon.fields)}`);
+    check("8.7 …and 'anon' is not a reachable hash, so no caller can impersonate it",
+      hashApiKey("anon") !== ANON_KEY_HASH && /^[0-9a-f]+$/.test(expectedHash));
+
+    // Positive control. Every assertion above is of the form "the recorder saw
+    // X" and would pass vacuously against a recorder that saw nothing — which
+    // is exactly what a route with the meter deleted produces. Prove the
+    // harness can tell the difference before trusting a green 8.1–8.6.
+    const silent = await withRecordedMeter(freshBase, async () => "no meter here");
+    check("8.8 positive control: the recorder reports an EMPTY field list when nothing meters",
+      silent.fields.length === 0);
+    check("8.9 positive control: an empty list fails the 8.1 assertion", !(silent.fields.length === 1));
   }
 
   console.log(`\n${passed} passed, ${failed} failed`);
