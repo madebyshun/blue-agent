@@ -2001,9 +2001,10 @@ async function callHubTool(
     hub_crypto_rpc:  "/api/crypto-rpc",
     hub_token_price: "/api/token-price",
     // There is no `builder-score` x402 handler — the id is absent from both
-    // AGENT_TOOLS and HANDLERS, so `/api/x402/builder-score` answers 501
-    // TOOL_UNAVAILABLE (measured in prod 2026-09-03). The live implementation
-    // is the top-level route, which serves the same `{ handle }` input.
+    // AGENT_TOOLS and HANDLERS, so `/api/x402/builder-score` answers 404
+    // UNKNOWN_TOOL_ID (it was 501 TOOL_UNAVAILABLE when measured in prod
+    // 2026-09-03; split 2026-09-28). The live implementation is the top-level
+    // route, which serves the same `{ handle }` input.
     hub_builder_score: "/api/builder-score",
   };
   const apiPath = FREE_DIRECT[toolName]

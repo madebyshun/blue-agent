@@ -126,7 +126,7 @@ const handlerFiles = readdirSync(join(WEB, "src/app/api/x402/_handlers"))
 check(
   "C3 every handler file is registered or allowlisted",
   handlerFiles.filter((id) => !handlerIds.has(id) && !(id in UNREGISTERED)),
-  "in neither map and nothing claims it — /api/x402/<id> 501s and /hub cannot list it"
+  "in neither map and nothing claims it — /api/x402/<id> 404s and /hub cannot list it"
 );
 // An allowlist with nothing behind it is a mute button: delete the importer and
 // the entry keeps waving the file through as dead code forever. Require the
@@ -306,7 +306,7 @@ console.log(`   (@blueagent/skill: ${skillSrc.size} tools)`);
 // shadow each other, they compose, and both entries for a free tool are
 // load-bearing in different ways. G1 and G3 are precisely those two deletions:
 // drop `hub_builder_score` from FREE_DIRECT and chat silently falls through to
-// /api/x402/builder-score, which answers 501; drop it from TOOL_ENDPOINT and
+// /api/x402/builder-score, which answers 404; drop it from TOOL_ENDPOINT and
 // chat answers "[Unknown tool: hub_builder_score]" having never read the
 // override. Neither deletion fails to compile and neither changes a test today.
 const chatEntries = [...chatBlock("const TOOL_ENDPOINT", "};").matchAll(/^\s{2}([a-z0-9_]+):\s*"([a-z0-9-]+)"/gm)];
@@ -337,7 +337,7 @@ check(
   chatEntries
     .filter(([, name, id]) => (!catalogIds.has(id) || !(id in HANDLERS)) && !freeNames.has(name))
     .map(([, name, id]) => `${name}->${id}`),
-  "unresolvable id and no override — /api/x402/<id> answers 501 TOOL_UNAVAILABLE"
+  "unresolvable id and no override — /api/x402/<id> answers 404 UNKNOWN_TOOL_ID"
 );
 check(
   "G2 every FREE_DIRECT path is a real route on disk",

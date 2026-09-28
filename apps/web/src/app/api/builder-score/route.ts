@@ -10,9 +10,11 @@
 // This block used to claim the bounce protected an "x402 paywall" and that
 // external integrations "intentionally use the PAID /api/x402/builder-score".
 // Both were false. MEASURED 2026-09-18: `builder-score` is absent from AGENT_TOOLS
-// and HANDLERS, so /api/x402/builder-score answers 501 TOOL_UNAVAILABLE — it has
-// never had a price and there is no paywall here to bypass. The bounce is a
-// first-party-only guard, nothing more.
+// and HANDLERS, so /api/x402/builder-score does not serve it — it has never had a
+// price and there is no paywall here to bypass. The bounce is a first-party-only
+// guard, nothing more. (That door answered 501 TOOL_UNAVAILABLE until 2026-09-28
+// and now answers 404 UNKNOWN_TOOL_ID: an id in neither map is not unimplemented,
+// it is unknown, and 501 told the caller its id was right.)
 //
 // Both external callers now point here, which is where the working compute is:
 // chat's hub_builder_score (FREE_DIRECT, since 2026-09-03) and the @blueagent/skill

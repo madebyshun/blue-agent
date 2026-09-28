@@ -17,7 +17,7 @@ Two things this file used to claim, both false:
 
 | Claim | Reality |
 |---|---|
-| `hub_builder_score(handle)` is callable | No such tool. `/api/x402/builder-score` answers **501** — `builder-score` is deliberately not registered in the catalog. |
+| `hub_builder_score(handle)` is callable | No such tool. `/api/x402/builder-score` answers **404 `UNKNOWN_TOOL_ID`** (501 until 2026-09-28) — `builder-score` is deliberately not registered in the catalog. |
 | "$0.001 per call" | It has never had a price. There is no paywall here to pay. |
 
 It also claimed a split from `blue_score` — that `hub_builder_score` took an

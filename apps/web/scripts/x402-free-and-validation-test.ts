@@ -61,6 +61,8 @@
  *   g. emit a $0 x402 pricing entry for a free tool ..................... case 6b
  *   h. put the word "paid" back in description_for_model ................ case 6c
  *   i. emit a $0 `accepts` entry for a free tool in the Bazaar doc ...... case 6d
+ *   j. collapse honestUnavailable back into one message ................ case 7a, 7b
+ *   k. answer an unknown id with 501 again ............................. case 7a
  *
  * Hermetic: `globalThis.fetch` is stubbed, so a free tool that reaches its
  * handler fails there rather than calling out. That failure is still a pass —
@@ -447,6 +449,77 @@ async function call(tool: string, body: unknown) {
             paid.every((t) => (byId.get(t.id)?.accepts?.length ?? 0) === 1),
             paid.filter((t) => (byId.get(t.id)?.accepts?.length ?? 0) !== 1).map((t) => t.id).join(", ") || `${paid.length} priced`);
     }
+  }
+
+  // ── 7. The two "you were not charged" answers must tell different stories ─
+  /* One function served both "id is in AGENT_TOOLS but missing from HANDLERS"
+     and "id is in neither", and its hint asserted the first unconditionally:
+     "This tool id exists in the public catalog but is not currently
+     implemented." MEASURED against production 2026-09-28 — `zzz-never-existed`
+     and the just-retired `picks-check` both got that sentence verbatim.
+
+     The ASYMMETRY is what makes it worth pinning rather than just fixing. That
+     day `/api/catalog` reported `{listed: 114, withHandler: 114, noOrphans:
+     true}`, and dead-tool-check.ts pins catalog == handlers in CI — so the case
+     the message described was provably EMPTY while the case it did not describe
+     is unbounded. Essentially all real traffic was told the id was right and
+     the server was at fault, so an agent that mistyped or hallucinated an id
+     concludes "transient outage" and retries, instead of re-reading the
+     catalog. Same shape as the ai-tool 404 in 6b, inverted: there a machine was
+     told a real id was wrong, here it is told a wrong id is real.
+
+     Both directions are asserted, because either one alone stays green if the
+     branch is collapsed back into a single message. */
+  console.log("\n7. an unknown id and an unimplemented id answer differently");
+  {
+    // ── 7a. Unknown id — the unbounded case, and the one that was lying ────
+    const { status, body, paymentHeader } = await call("zzz-never-existed", {});
+    check("an unknown id answers 404, not 501", status === 404, `got ${status}`);
+    check("…is never quoted a price", paymentHeader === null, String(paymentHeader));
+    check("…still states the caller was not charged",
+          typeof body.error === "string" && (body.error as string).includes("not charged"),
+          String(body.error));
+    // The assertion this whole case exists for.
+    check("…does NOT claim the id is in the catalog",
+          !/exists in the public catalog/.test(String(body.hint)), String(body.hint));
+    check("…and points at the authoritative id list instead",
+          `${body.hint} ${body.catalogUrl}`.includes("/api/catalog"),
+          `${body.hint} | ${body.catalogUrl}`);
+    check("…distinguishable by code, not just by prose",
+          body.code === "UNKNOWN_TOOL_ID", String(body.code));
+  }
+  {
+    // ── 7b. Listed but unimplemented — the one case where that hint is true ─
+    //
+    // Production has no orphan to call (that is 7a's whole point), and the
+    // catalog == handler invariant must NOT be weakened to manufacture one. So
+    // the orphan is synthetic and exists only across this one call: cloned from
+    // a real entry so it satisfies AgentTool by construction, given an id no
+    // handler can hold, popped in `finally`. PRICE_UNITS is built at import, so
+    // the clone is absent from it and hits exactly the guard a real orphan
+    // would — which is also why honestUnavailable reads AGENT_TOOLS live rather
+    // than from a hoisted Set. Hoist it and this case can no longer be written.
+    const ORPHAN = "synthetic-orphan-do-not-register";
+    const sizeBefore = AGENT_TOOLS.length;
+    AGENT_TOOLS.push({ ...AGENT_TOOLS[0], id: ORPHAN });
+    try {
+      const { status, body, paymentHeader } = await call(ORPHAN, {});
+      check("a listed id with no handler still answers 501", status === 501, `got ${status}`);
+      check("…is never quoted a price", paymentHeader === null, String(paymentHeader));
+      check("…still states the caller was not charged",
+            typeof body.error === "string" && (body.error as string).includes("not charged"),
+            String(body.error));
+      check("…DOES claim the catalog listing — true only here",
+            /exists in the public catalog/.test(String(body.hint)), String(body.hint));
+      check("…and keeps its own code", body.code === "TOOL_UNAVAILABLE", String(body.code));
+    } finally {
+      AGENT_TOOLS.pop();
+    }
+    // The mutation is shared module state. If it ever leaks, case 6's
+    // manifest sweeps start counting a tool that does not exist.
+    check("the synthetic orphan left the catalog as it found it",
+          AGENT_TOOLS.length === sizeBefore && !AGENT_TOOLS.some((t) => t.id === ORPHAN),
+          `${AGENT_TOOLS.length} vs ${sizeBefore}`);
   }
 
   console.log(failures === 0 ? "\nPASS — free means free, and a quote implies a runnable request" : `\nFAIL — ${failures} assertion(s)`);

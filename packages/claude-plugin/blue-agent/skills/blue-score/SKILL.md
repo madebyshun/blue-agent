@@ -26,8 +26,9 @@ Builder Score (0-100) for any GitHub handle, Farcaster handle, or wallet address
 > ⚠️ Unlike the other cut tools, this one **cannot** be reached through
 > `blue_call`. `blue_call` posts to `/api/x402/<id>`, and `builder-score` is
 > deliberately absent from both `HANDLERS` and `AGENT_TOOLS` — that endpoint
-> answers **501**, and there is no price to pay. The working compute is a plain
-> free HTTP route. Call it directly:
+> answers **404 `UNKNOWN_TOOL_ID`** (it said 501 until 2026-09-28), and there is
+> no price to pay. The working compute is a plain free HTTP route. Call it
+> directly:
 
 ```
 GET https://blueagent.dev/api/builder-score?handle=<handle>

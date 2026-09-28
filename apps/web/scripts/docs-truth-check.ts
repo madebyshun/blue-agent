@@ -651,7 +651,7 @@ console.log("\n8. @blueagent/skill and @blueagent/agentkit name only real tools"
 // Groups 6 and 7 covered the markdown. The packages are the same bug one layer
 // out and strictly worse: a wrong count in a .md is read by a human who can go
 // look, while a wrong toolId in an npm package is executed by an agent that gets
-// a 501 it cannot diagnose. MEASURED 2026-09-18 — @blueagent/skill 0.4.0 shipped
+// a 404 it cannot diagnose. MEASURED 2026-09-18 — @blueagent/skill 0.4.0 shipped
 // 7 such ids and agentkit 1.2.0 shipped 20, the exact NEVER_EXISTED set above.
 //
 // Derivation, not a whitelist: the names come from the package source and the
@@ -757,7 +757,8 @@ check(
 // Group 7 scans a fixed file list that never included the packages, which is how
 // blue_score kept calling `/api/x402/builder-score` for months: a *hardcoded* id
 // in a URL rather than a `toolId:` field, in a file nothing checked. MEASURED
-// 2026-09-18 — that id is in neither map, so it answered 501 on every call, while
+// 2026-09-18 — that id is in neither map, so it failed on every call (501 then,
+// 404 UNKNOWN_TOOL_ID since 2026-09-28), while
 // the free `/api/builder-score` (guarded only by a browser-only Sec-Fetch-Site
 // check, which no Node caller trips) had been returning 200 the whole time.
 // Any literal tool id baked into an /api/x402/ or /api/v1/ path here must resolve.
@@ -952,7 +953,7 @@ check(
 // Every advertised skill must name a tool that exists AND quote its real price.
 // `blue_score` advertised `price_usdc: "0.00"` / `payment: "free"` for an id in
 // neither map — the worst shape available, because an agent reads "free", skips
-// its own spend-approval step, and gets a 501 it cannot diagnose.
+// its own spend-approval step, and gets a 404 it cannot diagnose.
 const skillErrors = (AGENT_JSON.skills ?? []).flatMap((s: Record<string, unknown>) => {
   const id = String(s.tool_id ?? "");
   const tool = AGENT_TOOLS.find((t) => t.id === id);
