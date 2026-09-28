@@ -14,6 +14,14 @@ async function llm(system: string, user: string, temp = 0, tokens = 1000): Promi
   return (await callLLM({ system, user, temperature: temp, maxTokens: tokens })).text;
 }
 const DISCLAIMER = "AI estimate of likely community sentiment generated from model knowledge — NOT measured from live social posts. Treat scores as directional, not data.";
+// Returned instead of invented percentages when the persona pass yields nothing.
+// Nulls rather than zeros: a 0% bull reads as "measured, and nobody is bullish",
+// which is a stronger claim than the one we are entitled to make.
+const UNAVAILABLE_CONSENSUS = {
+  status: "unavailable", bull: null, bear: null, neutral: null,
+  community_temperature: "unknown",
+  sentiment_summary: "The persona pass returned no usable result on this run; no consensus was produced.",
+} as const;
 function parseJson(t: string): Record<string, unknown> | null {
   let s = t.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
   const i = s.indexOf("{"), j = s.lastIndexOf("}");
@@ -66,7 +74,21 @@ Schema: {
   "sentiment_summary":"<1 sentence>"
 }`,
       `Project: ${project}\nDescription: ${description}\nNarratives: ${narrativeRaw ?? "Base ecosystem"}`, 0.5, 800);
-    const consensus = parseJson(msRaw) ?? { bull: 40, bear: 30, neutral: 30, community_temperature: "neutral" };
+    // 🔴 Fell back to `{ bull: 40, bear: 30, neutral: 30, community_temperature:
+    // "neutral" }` until 2026-09-28 — invented percentages shipped under the
+    // `miroshark` key whenever the sentiment pass failed to parse. Three things
+    // made them worse than they look: they are IDENTICAL on every failure, so a
+    // buyer paying twice cannot tell a stub from a run; this file's whole point
+    // is a sentiment number, so the stub replaces the product; and the sibling
+    // handler doing the same job (community-growth-playbook:53) already used
+    // `?? {}`, while roadmap-validator used a DIFFERENT invented triple
+    // (45/25/30) for the same concept — which is how you know none of them was a
+    // considered prior. Per CLAUDE.md, missing data is "unknown", never a value
+    // inferred from absence.
+    const consensus = parseJson(msRaw);
+    const consensusForPrompt = consensus
+      ? JSON.stringify(consensus)
+      : "UNAVAILABLE — the persona pass returned nothing this run. Do not infer a consensus; say \"insufficient data\".";
 
     const resultRaw = await llm(`${NARRATIVE_CTX}
 
@@ -83,14 +105,14 @@ Schema: {
   "recommended_actions": ["<action>"],
   "summary": "<2 sentences>"
 }`,
-      `Project: ${project}\nNarratives: ${narrativeRaw ?? "Base"}\nConsensus: ${JSON.stringify(consensus)}`, 0.3, 700);
+      `Project: ${project}\nNarratives: ${narrativeRaw ?? "Base"}\nConsensus: ${consensusForPrompt}`, 0.3, 700);
 
     let result = parseJson(resultRaw);
     if (!result) {
       result = {
         sentiment_score: null,
         overall: "neutral",
-        consensus,
+        consensus: consensus ?? UNAVAILABLE_CONSENSUS,
         key_drivers: [],
         risk_signals: [],
         community_health: "stable",
@@ -107,7 +129,7 @@ Schema: {
       disclaimer: DISCLAIMER,
       confidence_note: STATIC_KNOWLEDGE_DISCLAIMER,
       project,
-      miroshark: consensus,
+      miroshark: consensus ?? UNAVAILABLE_CONSENSUS,
       ...result,
     });
   } catch (e) {

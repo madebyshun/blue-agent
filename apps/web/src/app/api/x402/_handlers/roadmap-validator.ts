@@ -46,21 +46,39 @@ Evaluate this roadmap's market timing and community reception.
 CRITICAL: Return ONLY raw JSON.
 Schema: {"personas":{"analyst":{"stance":"bull|bear|neutral","weight":1.8,"rationale":"<1 sentence>"},"influencer":{"stance":"bull|bear|neutral","weight":2.8,"rationale":"<1 sentence>"},"retail":{"stance":"bull|bear|neutral","weight":1.0,"rationale":"<1 sentence>"},"observer":{"stance":"bull|bear|neutral","weight":0.5,"rationale":"<1 sentence>"}},"bull":<0-100>,"bear":<0-100>,"neutral":<0-100>,"sentiment_summary":"<1 sentence>"}`,
       `Project: ${project}\nRoadmap: ${roadmap}\nEcosystem: ${narrativeRaw ?? "Base ecosystem"}`, 0.2, 800);
-    const consensus = parseJson(msRaw) ?? { bull: 45, bear: 25, neutral: 30 };
-    { const b = Number(consensus.bull)||0, br = Number(consensus.bear)||0;
-      consensus.recommendation = (b - br) >= 25 ? "execute" : (br - b) >= 25 ? "skip" : "alert_human"; }
+    // 🔴 Fell back to `{ bull: 45, bear: 25, neutral: 30 }` until 2026-09-28.
+    // Worse here than in community-sentiment, because the invented triple did not
+    // just get returned — it was fed to the verdict prompt below, where the score
+    // it influences hard-maps to SHIP / REVISE / PIVOT. A failed sub-call quietly
+    // put made-up sentiment inside a paid go/no-go. (Tell that these numbers were
+    // arbitrary: community-sentiment invented 40/30/30 for the same concept, and
+    // community-growth-playbook:53 already used `?? {}`.)
+    const consensus = parseJson(msRaw);
+    if (consensus) {
+      const b = Number(consensus.bull) || 0, br = Number(consensus.bear) || 0;
+      consensus.recommendation = (b - br) >= 25 ? "execute" : (br - b) >= 25 ? "skip" : "alert_human";
+    }
+    // Nulls rather than zeros — a 0% bull reads as measured indifference.
+    const consensusOut = consensus ?? {
+      status: "unavailable", bull: null, bear: null, neutral: null,
+      recommendation: "alert_human",
+      sentiment_summary: "The persona pass returned no usable result on this run; no consensus was produced.",
+    };
+    const consensusForPrompt = consensus
+      ? JSON.stringify(consensus)
+      : "UNAVAILABLE — the persona pass returned nothing this run. Judge the roadmap on the build analysis alone and do not infer market reception.";
 
     const verdictRaw = await llm(`You are Blue Agent — roadmap validation engine.
 CRITICAL: Return ONLY raw JSON.
 Schema: {"score":<0-100>,"narrative_alignment":{"score":<0-10>,"aligned":<boolean>,"note":"<1 sentence>"},"timeline_assessment":"realistic|aggressive|too_slow","consensus":{"bull":<0-100>,"bear":<0-100>,"neutral":<0-100>},"strengths":["<strength>"],"gaps":["<gap>"],"recommended_changes":["<change>"],"builder_note":"<1 sentence>"}`,
-      `Project: ${project}\nRoadmap: ${roadmap}\nBuild analysis: ${JSON.stringify(buildAnalysis)}\nNarratives: ${narrativeRaw ?? "Base ecosystem"}\nConsensus: ${JSON.stringify(consensus)}`, 0, 1000);
+      `Project: ${project}\nRoadmap: ${roadmap}\nBuild analysis: ${JSON.stringify(buildAnalysis)}\nNarratives: ${narrativeRaw ?? "Base ecosystem"}\nConsensus: ${consensusForPrompt}`, 0, 1000);
 
     const verdict = parseJson(verdictRaw);
     if (!verdict) throw new Error("Failed to parse verdict");
     const _sc = typeof verdict.score === "number" ? verdict.score : 50;
     verdict.verdict = _sc >= 65 ? "SHIP" : _sc >= 45 ? "REVISE" : "PIVOT";
 
-    return Response.json({ tool: "roadmap-validator", timestamp: new Date().toISOString(), project, timeline, build_analysis: buildAnalysis, miroshark: consensus, ...verdict, disclaimer: "AI-generated advisory from model knowledge — scores and the bull/bear consensus are model estimates, not measured community sentiment or a guarantee. Verify independently." });
+    return Response.json({ tool: "roadmap-validator", timestamp: new Date().toISOString(), project, timeline, build_analysis: buildAnalysis, miroshark: consensusOut, ...verdict, disclaimer: "AI-generated advisory from model knowledge — scores and the bull/bear consensus are model estimates, not measured community sentiment or a guarantee. Verify independently." });
   } catch (e) {
     return Response.json({ error: "Roadmap validation failed", message: (e as Error).message }, { status: 500 });
   }

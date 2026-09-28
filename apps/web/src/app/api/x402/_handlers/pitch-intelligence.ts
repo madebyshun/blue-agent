@@ -50,7 +50,19 @@ Evaluate this pitch from an influencer/KOL perspective. Would you hype this?
 CRITICAL: Return ONLY raw JSON.
 Schema: {"would_hype":<boolean>,"hype_score":<0-10>,"narrative_hooks":["<hook>"],"weak_points":["<weak point>"],"suggested_angle":"<best narrative angle>","influencer_verdict":"<1 sentence>"}`,
         `Project: ${project}\nDescription: ${description}\nNarratives: ${narrativeRaw ?? "Base ecosystem"}\nPitch: ${JSON.stringify(raisePitch)}`, 0.5, 600);
-    const influencerTake = parseJson(msRaw) ?? { would_hype: false, hype_score: 5, narrative_hooks: [], weak_points: [], suggested_angle: "Focus on Base-native angle", influencer_verdict: "Needs stronger narrative" };
+    // 🔴 Fell back to `{ would_hype: false, hype_score: 5, suggested_angle:
+    // "Focus on Base-native angle", influencer_verdict: "Needs stronger
+    // narrative" }` until 2026-09-28. A canned opinion wearing a persona's name:
+    // identical on every failure, and the two prose fields read as though someone
+    // had actually assessed THIS pitch. `hype_score: 5` is the same
+    // value-inferred-from-absence CLAUDE.md forbids — 5/10 is a real middling
+    // score, not a "we do not know".
+    const influencerTake = parseJson(msRaw) ?? {
+      status: "unavailable", would_hype: null, hype_score: null,
+      narrative_hooks: [], weak_points: [],
+      suggested_angle: null,
+      influencer_verdict: "The influencer persona pass returned no usable result on this run.",
+    };
 
     const resultRaw = await llm(`You are Blue Agent — pitch intelligence engine.
 The project name is EXACTLY "${project}". NEVER alter, shorten, abbreviate, or rename it — output it verbatim in every field.

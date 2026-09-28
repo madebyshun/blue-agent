@@ -24,7 +24,15 @@ Dimensions(total 100): skillDepth(0-25), onchainActivity(0-25), reliability(0-20
 CRITICAL: Return ONLY raw JSON.
 Schema: {"handle":"<handle>","xp":<0-100>,"tier":"Bot|Specialist|Operator|Sovereign","dimensions":{"skillDepth":<0-25>,"onchainActivity":<0-25>,"reliability":<0-20>,"interoperability":<0-20>,"reputation":<0-10>},"specialty":"<main domain>","strengths":["<strength>"]}`,
     `Score agent: ${handle}`, 0.3, 500);
-  return parseJson(raw) ?? { handle, xp: 30, tier: "Specialist", specialty: "unknown" };
+  // 🔴 Fell back to `{ handle, xp: 30, tier: "Specialist" }` until 2026-09-28.
+  // `specialty: "unknown"` in that same object shows the author knew the right
+  // shape — and then gave a NAMED THIRD PARTY an invented reputation score and
+  // tier anyway. That is the worst variant of this bug in the repo: the fabricated
+  // value is an assessment of somebody else, published under our name.
+  return parseJson(raw) ?? {
+    handle, status: "unavailable", xp: null, tier: "unknown", specialty: "unknown",
+    note: "Scoring pass returned no usable result on this run; this agent was not scored.",
+  };
 }
 
 export default async function handler(req: Request): Promise<Response> {
