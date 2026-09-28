@@ -10,7 +10,8 @@ export interface BlueAgentProviderOptions extends BlueAgentClientOptions {
  *
  * Exposes the 12 x402 tools on Base that actually resolve to a live handler.
  * This was 32 until v1.3.0; the other 20 ids existed in neither AGENT_TOOLS nor
- * HANDLERS and returned 501 from production, so they were never callable. Do not
+ * HANDLERS and were refused by production (501 then, 404 UNKNOWN_TOOL_ID since
+ * 2026-09-28), so they were never callable. Do not
  * add an action here without checking the id against
  * https://blueagent.dev/api/catalog — apps/web/scripts/docs-truth-check.ts pins it.
  */

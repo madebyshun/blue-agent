@@ -59,7 +59,9 @@ export async function GET() {
   // `HANDLERS[t.id]` is a regression guard, not a fix: measured 2026-08-28 all
   // 112 catalog entries have a handler, so this changes nothing today. It is
   // here because the sibling `/api/v1` index DID drift into advertising two
-  // ids with no handler (`allowance-audit`, `phishing-scan`), which answer 501.
+  // ids with no handler (`allowance-audit`, `phishing-scan`). Those two are
+  // absent from this catalog as well, so they answer 404 UNKNOWN_TOOL_ID; an
+  // entry that IS listed here and lost its handler answers 501 instead.
   // A directory that indexes this endpoint cannot tell a real tool from a
   // ghost, so the filter has to.
   const tools = AGENT_TOOLS
@@ -113,7 +115,7 @@ export async function GET() {
       // intersection this response actually published. Equal ⟹ no ghosts.
       //
       // The comment above the filter explains why the filter exists at all: the
-      // sibling /api/v1 index DID advertise two ids that answer 501, and a
+      // sibling /api/v1 index DID advertise two ids that answer 404, and a
       // directory indexing it could not tell a real tool from a ghost. Silently
       // filtering fixes the list but hides the fact — a caller sees a smaller
       // number with no way to know whether we trimmed ghosts or lost tools.

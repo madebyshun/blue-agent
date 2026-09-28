@@ -102,12 +102,21 @@ export async function callTool(
 
   if (!response.ok) {
     const text = await response.text().catch(() => "");
-    // 501 is the server saying "this id is in the catalog but has no handler —
-    // you were not charged". Name it, so a dead id is diagnosable from the error.
-    if (response.status === 501) {
+    // Two distinct "you were not charged" answers, split server-side on
+    // 2026-09-28. They used to share a 501 whose message claimed the id WAS in
+    // the catalog, which is the wrong thing to tell whoever mistyped it.
+    //   404 → the id is not in the catalog at all (the common case; `false`
+    //         here means re-check the name, not retry).
+    //   501 → listed but unimplemented, i.e. genuinely our side.
+    // Both are named so a dead id stays diagnosable from the error text.
+    if (response.status === 404 || response.status === 501) {
+      const listed = response.status === 501;
       throw new Error(
-        `Tool '${toolName}' is not implemented on the server (501) — no payment was taken. ` +
-        `Check https://blueagent.dev/api/catalog for the live tool ids.`
+        listed
+          ? `Tool '${toolName}' is listed but not implemented on the server (501) — no payment was taken. ` +
+            `Check https://blueagent.dev/api/catalog for the live tool ids.`
+          : `Tool '${toolName}' is not a known tool id (404) — no payment was taken. ` +
+            `Check https://blueagent.dev/api/catalog for the live tool ids.`
       );
     }
     throw new Error(`Tool '${toolName}' failed with status ${response.status}: ${text}`);

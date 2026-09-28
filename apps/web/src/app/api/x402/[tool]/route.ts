@@ -105,14 +105,51 @@ function buildPaymentRequired(
   };
 }
 
-// Honest response when a tool id is not implemented (missing from HANDLERS or
-// AGENT_TOOLS). Previously we returned 503 with a terse "Tool not available",
-// which agents interpreted as an intermittent upstream error and retried in a
-// loop. 501 Not Implemented is the correct HTTP semantic for "this endpoint
-// exists in the catalog but has no implementation right now" and the payload
-// spells out that the caller was not charged so paying agents don't burn
-// retries. Verified via scripts/p4-x402-smoke.ts.
-function honestNotImplemented(tool: string) {
+// TWO different failures reach here, and until 2026-09-28 they shared one
+// message that was only ever true of the rarer one. Originally this was a 503
+// with a terse "Tool not available", which agents read as an intermittent
+// upstream error and retried in a loop; the status was fixed to 501 and the
+// prose was not, so it went on producing a wrong CONCLUSION instead of a wrong
+// retry. Both branches still say "you were not charged" — nothing is settled on
+// either path, and no `payment-required` header is sent.
+//
+// 🔴 The old hint asserted "this id exists in the public catalog" unconditionally,
+// and that case is provably EMPTY in production while the other is unbounded.
+// `/api/catalog` reports `{listed: 114, withHandler: 114, noOrphans: true}` and
+// dead-tool-check.ts pins catalog == handlers in CI, so essentially all real
+// traffic here is a typo'd or hallucinated id being told the id is RIGHT and the
+// server is at fault. That is the direction that costs the caller: the agent
+// concludes "transient outage" and retries or reports a false failure, instead
+// of re-checking the id. The mirror-image bug is written up in the header of
+// `.well-known/ai-tool/[tool]/route.ts` — "the reader is a machine that will
+// conclude the id is wrong and stop asking". This was that, inverted.
+//
+// 404 for the unknown id, because 501 means "the server does not support this
+// functionality" and that misdescribes a resource which simply does not exist.
+// Checked against consumers first: no test and none of the four published
+// manifests encode 501, and `scripts/p4-x402-smoke.ts` — named in the comment
+// this replaces — only iterates AGENT_TOOLS, so it never reached this branch at
+// all. `packages/agentkit` did branch on 501 and now accepts both.
+function honestUnavailable(tool: string) {
+  // Looked up live rather than hoisted into a module-level Set on purpose: a
+  // Set built at import cannot be given a synthetic orphan, and production has
+  // no real one to test against (see case 7 in x402-free-and-validation-test).
+  if (!AGENT_TOOLS.some(t => t.id === tool)) {
+    return NextResponse.json(
+      {
+        error: "Unknown tool id — you were not charged.",
+        code:  "UNKNOWN_TOOL_ID",
+        tool,
+        hint:  "This id is not in the Blue Hub catalog. Do not retry — re-check the id against the authoritative list at https://blueagent.dev/api/catalog.",
+        catalogUrl: "https://blueagent.dev/api/catalog",
+      },
+      {
+        status: 404,
+        headers: { "Access-Control-Allow-Origin": "*" },
+      },
+    );
+  }
+
   return NextResponse.json(
     {
       error: "Tool temporarily unavailable — you were not charged.",
@@ -139,7 +176,7 @@ export async function GET(
   // priceUnits may be 0 for genuinely-free tools (e.g. rh-rwa-verify @ $0.00).
   // Use explicit undefined check — `!priceUnits` incorrectly 503s free tools.
   if (!handler || priceUnits === undefined) {
-    return honestNotImplemented(tool);
+    return honestUnavailable(tool);
   }
 
   const meta = AGENT_TOOLS.find(t => t.id === tool);
@@ -237,7 +274,7 @@ async function handle(
   // priceUnits may be 0 for free tools (e.g. rh-rwa-verify @ $0.00) — must use
   // explicit undefined check, not `!priceUnits` which would 503 them.
   if (!handler || priceUnits === undefined) {
-    return honestNotImplemented(tool);
+    return honestUnavailable(tool);
   }
 
   const requirements = buildRequirements(String(priceUnits));

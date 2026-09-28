@@ -17,8 +17,10 @@
  *     the call and gets a 402, or overpays. Prices are the one field a paying
  *     machine cannot sanity-check for itself.
  *   • 2 GHOST ids (`allowance-audit`, `phishing-scan`) were advertised but had
- *     no handler. Calling them returns 501 with the hint "the catalog listing
- *     will be removed shortly" — a promise this file never kept.
+ *     no handler — and no catalog entry either, so calling them now returns
+ *     404 UNKNOWN_TOOL_ID. Until 2026-09-28 they got a 501 promising "the
+ *     catalog listing will be removed shortly": a promise this file never
+ *     kept, about a listing that never existed.
  *   • 77 of 112 real tools were MISSING, so 69% of the surface was
  *     undiscoverable to any agent that trusted this endpoint.
  *

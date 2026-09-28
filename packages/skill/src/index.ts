@@ -56,9 +56,10 @@ async function callHubTool(toolId: string, body: Record<string, unknown>): Promi
 async function fetchBuilderScore(handle: string): Promise<string> {
   // This used to call `/api/x402/builder-score`, described in-comment as the PAID
   // endpoint external callers pay per call. MEASURED 2026-09-18: that id is in
-  // neither AGENT_TOOLS nor HANDLERS, so it has always answered 501 "you were not
-  // charged" — GET and POST alike. It was never a paywall and never carried a
-  // price; blue_score threw `Builder Score API error: 501` on every invocation.
+  // neither AGENT_TOOLS nor HANDLERS, so it answered 501 "you were not charged"
+  // — GET and POST alike — and answers 404 UNKNOWN_TOOL_ID since 2026-09-28. It
+  // was never a paywall and never carried a price; blue_score threw
+  // `Builder Score API error: 501` on every invocation.
   //
   // `/api/builder-score` runs the same handler and returns 200. Its guard rejects
   // cross-site *browser* callers via Sec-Fetch-Site, a header no Node process
@@ -67,13 +68,25 @@ async function fetchBuilderScore(handle: string): Promise<string> {
   //
   // To make it genuinely paid: register `builder-score` in AGENT_TOOLS + HANDLERS
   // with a price, then flip this URL back. One line on each side.
+  //
+  // What that flip costs changed on 2026-09-28: `/api/x402/builder-score` now
+  // answers 404 UNKNOWN_TOOL_ID, not 501 — an id in neither map is unknown, not
+  // unimplemented, and 501 told the caller its id was right. So the branch below
+  // accepts BOTH codes. Until today it accepted only 501, which would have made
+  // the friendly message die silently the moment anyone repointed this URL.
   const url = `${BLUEAGENT_API}/api/builder-score?handle=${encodeURIComponent(handle)}`;
   const res = await fetch(url);
   if (res.status === 402) {
     return `Builder Score is a paid x402 tool.\nConnect a wallet and pay via x402 to call it.\nSee: https://blueagent.dev/api-docs#auth`;
   }
-  if (res.status === 501) {
-    return `Builder Score is not implemented on the server (501) — you were not charged.\nLive tool ids: https://blueagent.dev/api/catalog`;
+  if (res.status === 403) {
+    // The first-party guard on `/api/builder-score`, and the ONLY non-200 this URL
+    // actually emits. Unreachable from Node (it keys off Sec-Fetch-Site, a header
+    // no Node fetch sends) but answered honestly in case a proxy ever adds one.
+    return `Builder Score is first-party only — you were not charged.\nLive tool ids: https://blueagent.dev/api/catalog`;
+  }
+  if (res.status === 404 || res.status === 501) {
+    return `Builder Score is not available on the server (${res.status}) — you were not charged.\nLive tool ids: https://blueagent.dev/api/catalog`;
   }
   if (!res.ok) throw new Error(`Builder Score API error: ${res.status}`);
   return JSON.stringify(await res.json(), null, 2);

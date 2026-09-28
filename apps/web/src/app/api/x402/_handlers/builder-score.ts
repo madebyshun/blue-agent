@@ -10,7 +10,7 @@
 // grounded numbers; missing data is labelled "unavailable". Resilient: never 500.
 //
 // NOT a paid x402 tool, despite sitting in _handlers/. It is in neither HANDLERS
-// nor AGENT_TOOLS, so /api/x402/builder-score answers 501 and /hub never lists
+// nor AGENT_TOOLS, so /api/x402/builder-score answers 404 and /hub never lists
 // it. This line read "Price: $0.35" until 2026-09-26 — a price for a tool that
 // has never been purchasable, and the one detail that makes a reader tidy this
 // file away or register it. Every live caller reaches it through the FREE

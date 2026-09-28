@@ -569,7 +569,7 @@ function ToolInfoBlock({ tool }: { tool: Tool }) {
           {/* The SAME expression ToolRunner.run() posts to. A community tool is
               served by the registry proxy, not by /api/x402/<id> — printing the
               native path on all six external cards handed every reader a URL
-              that 501s, in the one panel whose whole job is to be copied. */}
+              that 404s, in the one panel whose whole job is to be copied. */}
           <code className="font-mono text-[11px] text-[#4FC3F7] bg-[#0D0D1A] border border-[#1A1A2E] rounded-md px-2 py-1 inline-block">POST {tool.callPath ?? `/api/x402/${tool.id}`}</code>
         </div>
         <div>
