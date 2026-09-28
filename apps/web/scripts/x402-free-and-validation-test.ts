@@ -100,9 +100,14 @@ async function call(tool: string, body: unknown) {
   console.log("x402 free-tool + pre-quote validation suite\n");
 
   // ── 1. A $0.00 tool with no inputs ───────────────────────────────────────
-  console.log("1. picks-check ($0.00) called with no payment header");
+  // Was `picks-check` until it was retired 2026-09-28. `blue-doctor` is not an
+  // arbitrary stand-in: it is the ONLY free id whose catalog entry declares
+  // `inputs: []`, so it is the only one that still exercises what this case is
+  // named for — a tool an agent can invoke with a literally empty body. Every
+  // other free id takes at least an optional field.
+  console.log("1. blue-doctor ($0.00) called with no payment header");
   {
-    const { status, paymentHeader, body } = await call("picks-check", {});
+    const { status, paymentHeader, body } = await call("blue-doctor", {});
     check("does not answer 402", status !== 402, `got ${status}`);
     check("does not ship a payment-required header", paymentHeader === null, String(paymentHeader));
     check("does not quote an amount", body.accepts === undefined);

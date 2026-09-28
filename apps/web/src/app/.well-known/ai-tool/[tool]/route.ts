@@ -66,9 +66,11 @@ export async function GET(
    *
    * A 404 saying "not found" about something that IS found is worse than a bare
    * failure: the reader is a machine that will conclude the id is wrong and stop
-   * asking. And the six are precisely blue-doctor, hood-live, hood-track-record,
-   * picks-check, rh-rwa-verify and rh-token-scan — the safety checks and our own
-   * track record. Discovery could see nothing that costs nothing.
+   * asking. And the six 404ing that day (2026-09-27) were precisely the safety
+   * checks and our own track record — so discovery could see nothing that costs
+   * nothing. Their ids are deliberately NOT listed here: the set has changed since
+   * (five today, `picks-check` retired 2026-09-28) and a list in a comment has no
+   * pin. `priceUSDC === 0` against AGENT_TOOLS is the live answer.
    *
    * "Not found" now means not found. Price only decides what `pricing` says.
    */

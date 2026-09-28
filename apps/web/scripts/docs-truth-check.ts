@@ -887,13 +887,46 @@ check(
   PLUGIN.includes(`${PAID_TOOLS} are paid`) && PLUGIN.includes(`other ${FREE_TOOLS.length} are priced $0.00`),
   `expected "${PAID_TOOLS} are paid" and "other ${FREE_TOOLS.length} are priced $0.00"`,
 );
+/**
+ * THREE published files enumerate the free ids BY NAME — llms.txt, plugin.md and
+ * agent.json — and until 2026-09-28 only agent.json was pinned in both
+ * directions. plugin.md's pin was "every free tool is named", which is
+ * one-directional, and llms.txt's list had no pin at all. That asymmetry is not
+ * hypothetical: on 2026-09-28 `picks-check` was retired, this suite went green
+ * with 214/214, and **both** llms.txt and plugin.md were still advertising it to
+ * agents as a callable $0.00 id. A "nothing is missing" assertion cannot see a
+ * dead entry, and a dead entry is the worse failure — a missing id costs a
+ * caller one discovery round-trip, a dead one costs a 404 it cannot diagnose.
+ *
+ * So the invariant asserted is the full RENDERING, derived from the catalog:
+ * exact members, exact order, one delimiter per file. That is bidirectional by
+ * construction — extra, missing and reordered all fail the same way, with no
+ * exemption list to go stale.
+ *
+ * Whitespace is normalised first because both files hard-wrap prose, so the list
+ * straddles a line break in each; without this the pin would fail on a reflow
+ * and teach the next reader to weaken it. The `>` is stripped for the same
+ * reason and is not cosmetic — plugin.md keeps its list inside a blockquote, so
+ * the wrap injects a `> ` into the middle of the run. Collapsing whitespace
+ * alone leaves that marker behind and the pin fails for a reason that has
+ * nothing to do with the ids. Strip the line-prefix decoration, not just the
+ * newline.
+ */
 {
-  const unnamed = FREE_TOOLS.filter((t) => !PLUGIN.includes(t.id));
-  check(
-    "plugin.md names every free tool id",
-    unnamed.length === 0,
-    unnamed.map((t) => t.id).join(", ") || `${FREE_TOOLS.length} named`,
-  );
+  const squash = (s: string) => s.replace(/^[ \t]*>[ \t]?/gm, " ").replace(/\s+/g, " ");
+  const ids = FREE_TOOLS.map((t) => t.id);
+  for (const [label, text, expected] of [
+    ["llms.txt", LLMS, ids.join(", ")],
+    ["plugin.md", PLUGIN, ids.map((id) => `\`${id}\``).join(" · ")],
+  ] as const) {
+    check(
+      `${label} — the free-id list is exactly the $0.00 set, in catalog order`,
+      squash(text).includes(squash(expected)),
+      squash(text).includes(squash(expected))
+        ? `${ids.length} ids match`
+        : `expected the run "${expected}" — a stale id here is advertised as callable`,
+    );
+  }
 }
 check(
   "agent.json — x402.paid_tools equals the catalog's paid count",

@@ -41,9 +41,9 @@ tokens) and **Robinhood Chain 4663**. The same ticker can exist on both, so a
 ticker string alone never identifies a token — chain plus address does.
 
 ### 3. Blue Hub
-115 tools for agents and developers, called over plain HTTP with no API key and
+114 tools for agents and developers, called over plain HTTP with no API key and
 no account. 109 are paid per call in USDC on Base, settled via EIP-3009 under
-the x402 protocol; prices run from $0.005 to $5.00, median $0.10. The other 6
+the x402 protocol; prices run from $0.005 to $5.00, median $0.10. The other 5
 are free — they never return 402 and never ask for a signature.
 
 The founder workflow `idea → build → audit → ship → raise` is a cluster of

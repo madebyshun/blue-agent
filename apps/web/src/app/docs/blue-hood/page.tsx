@@ -12,9 +12,17 @@ import { AGENT_TOOLS, TOOL_COUNT } from "@/lib/agent-tools";
    Derived from the catalog now — the same fix STATS in _data.ts already carries.
    `priceUSDC` is the field to read, not `price`: it is an integer in 6-decimal
    USDC units, so it cannot be tripped up by a "$" or a missing trailing zero,
-   and it is what the x402 route actually charges. Free tools (priceUSDC 0 —
-   picks-check, rh-rwa-verify) are excluded from the floor on purpose, because
-   "from $0.00" would describe the catalog as free. */
+   and it is what the x402 route actually charges. Free tools (priceUSDC 0) are
+   excluded from the floor on purpose, because "from $0.00" would describe the
+   catalog as free.
+
+   This comment used to NAME them — "picks-check, rh-rwa-verify" — and by
+   2026-09-28 both halves of that were wrong: the free set had grown to five, and
+   `picks-check` had been retired out of the catalog entirely. The `.filter(n > 0)`
+   below never needed the names, so the list was decoration that aged into a false
+   statement. Stated as the rule instead, which cannot drift from the code beneath
+   it. Same lesson the header of lib/mcp-tools.ts already records: a list in a
+   comment has no pin and no reader who would notice it rot. */
 const PAID_USDC = AGENT_TOOLS.map((t) => t.priceUSDC ?? 0).filter((n) => n > 0);
 const fmtUSDC = (n: number) => `$${(n / 1e6).toFixed(n < 10000 ? 3 : 2)}`;
 const PRICE_FLOOR = fmtUSDC(Math.min(...PAID_USDC));

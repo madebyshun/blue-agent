@@ -21,11 +21,12 @@
  *     Part 1 never makes `kv.set` throw, so half of that condition ships
  *     unexercised.
  *
- *  I. The two-key ordering in picks-check. This is the one genuinely new
- *     algorithm in part 2: HISTORY must be appended before PENDING is cleared,
- *     and PENDING must not be cleared at all if the append did not land.
- *     Case I calls the REAL exported `persistPickCheck` — not a copy of it.
- *     Testing a reimplementation would prove nothing about what ships.
+ *  I. GONE 2026-09-28, deleted with its subject — `picks-check` was retired, so
+ *     the real `persistPickCheck` it drove no longer exists. See the inline note
+ *     where it stood: the hazard it covered (append the durable record before
+ *     clearing the queue) is still live and less protected in the alert drain.
+ *     The letters are NOT renumbered; G/H/J/K keep the names every comment,
+ *     commit message and issue already uses.
  *
  *  J/K. The brief-worker (added with the LAST part-2 site). This one is
  *     structurally different from every case above, and that is why it needs
@@ -49,7 +50,7 @@
  *         blanket read failure cannot express "the queue read worked and the
  *         arrow read did not", which is the only shape that reaches the bug.
  *
- * Cases G, I, J and K are control PAIRS: the "before" shape is reimplemented
+ * Cases G, J and K are control PAIRS: the "before" shape is reimplemented
  * inline and asserted to be destructive (or dishonest), then the shipped code is
  * asserted not to be under the identical fault. Either half alone is decoration
  * — the old-shape assertion is what proves the new one is measuring something
@@ -58,7 +59,6 @@
  */
 
 import { kv, kvGet, kvSet, kvDel, kvMutate } from "../src/lib/kv";
-import { persistPickCheck, type PickOutcome, type PendingPick } from "../src/app/api/x402/_handlers/picks-check";
 import { KV_BRIEF_QUEUE, kvArrow } from "../src/lib/blue-hood/kv-keys";
 
 let failures = 0;
@@ -133,17 +133,6 @@ async function recordingSet<T>(fn: () => Promise<T>): Promise<{ result: T; calls
   try { return { result: await fn(), calls }; } finally { kv.set = realSet; }
 }
 
-const outcome = (symbol: string, o: PickOutcome["outcome"] = "WIN"): PickOutcome => ({
-  symbol, price_at_signal: 1, signal_ts: 0, check_after: 0, volume_24h: 1, liquidity_usd: 1,
-  price_at_check: 1.1, outcome_pct: 10, outcome: o, checked_ts: Date.now(),
-});
-const pick = (symbol: string, checkAfter: number): PendingPick => ({
-  symbol, price_at_signal: 1, signal_ts: 0, check_after: checkAfter, volume_24h: 1, liquidity_usd: 1,
-});
-
-const HISTORY_KEY = "feed:picks:history";
-const PENDING_KEY = "feed:picks:pending";
-
 async function main() {
   console.log("\n#150 Group A part-2 control test\n");
 
@@ -177,60 +166,33 @@ async function main() {
   check('returns "failed" (not "ok")', failRes === "failed", `got "${failRes}"`);
   check("value unchanged on disk", afterFail.length === 1 && afterFail[0] === "seed", JSON.stringify(afterFail));
 
-  // ── I. picks-check two-key ordering ──────────────────────────────────────
-  const priorHistory = Array.from({ length: 30 }, (_, i) => outcome(`OLD${i}`));
-  const duePicks     = [pick("DUE1", 0), pick("DUE2", 0)];
-  const stillPending = [pick("LATER", Date.now() + 86_400_000)];
-  const newOutcomes  = [outcome("DUE1"), outcome("DUE2", "LOSS")];
+  // ── I. picks-check two-key ordering — DELETED 2026-09-28 with its subject ──
+  //
+  // I drove the REAL exported `persistPickCheck` from
+  // `_handlers/picks-check.ts`, which was deleted the same day: its writer
+  // (`base-token-scan` in the hourly feed cron) went with Blue Feed on
+  // 2026-09-02, both KV keys aged out in July, and the only reachable branch
+  // answered `code: "feed_retired"`. A three-legged control pair for a function
+  // that no longer ships proves nothing about what ships — so it went rather
+  // than being retargeted at a copy, which is the very thing the header warns
+  // against.
+  //
+  // 🔴 What I was the ONLY test of, and what is now uncovered: "append the
+  // durable record BEFORE clearing the queue, and do not clear it at all if the
+  // append did not land." That hazard is still live in
+  // `api/cron/blue-hood/alert-drain/route.ts` → `drainOne`, and it is guarded
+  // there strictly less well than picks-check was. `persistPickCheck` wrapped
+  // the ordering inside one function and RETURNED whether the append landed, so
+  // a caller could not get it wrong. The drain instead calls two separate
+  // `void` functions — `markAlertDelivered(id, channel)` then
+  // `removeFromPending(id)` — and each one bails with a bare `return` when its
+  // `kvGet` comes back empty. The order is right; the success check does not
+  // exist, so a stamp that silently no-opped still gets its id cleared, which
+  // is exactly what I-B asserted must not happen. `alert-engine-test.ts` covers
+  // only that drain's happy path. Do NOT read this deletion as a finding that
+  // the hazard was theoretical.
 
-  console.log("\nI-A. CONTROL — old parallel `Promise.all([kvSet(pending), kvSet(history)])`:");
-  await kvSet(HISTORY_KEY, priorHistory);
-  await kvSet(PENDING_KEY, [...duePicks, ...stillPending]);
-  await withReadFailure(async () => {
-    // Verbatim the shape part 2 removes. Do NOT "fix" this — it is the control
-    // and it is supposed to lose the record.
-    const history = (await kvGet<PickOutcome[]>(HISTORY_KEY)) ?? [];
-    const updated = [...newOutcomes, ...history].slice(0, 30);
-    await Promise.all([
-      kvSet(PENDING_KEY, stillPending, 7 * 24 * 3600),
-      kvSet(HISTORY_KEY, updated, 30 * 24 * 3600),
-    ]);
-  });
-  const oldHist = (await kvGet<PickOutcome[]>(HISTORY_KEY)) ?? [];
-  const oldPend = (await kvGet<PendingPick[]>(PENDING_KEY)) ?? [];
-  check("old shape collapses the 30-entry track record", oldHist.length === 2, `30 → ${oldHist.length}`);
-  check("old shape clears pending anyway", oldPend.length === 1, `${oldPend.length} left`);
-
-  console.log("\nI-B. FIX — shipped `persistPickCheck`, identical fault:");
-  await kvSet(HISTORY_KEY, priorHistory);
-  await kvSet(PENDING_KEY, [...duePicks, ...stillPending]);
-  const skipped = await withReadFailure(() => persistPickCheck(newOutcomes, stillPending));
-  const newHist = (await kvGet<PickOutcome[]>(HISTORY_KEY)) ?? [];
-  const newPend = (await kvGet<PendingPick[]>(PENDING_KEY)) ?? [];
-  check("reports persisted=false", skipped.persisted === false, `persisted=${skipped.persisted}`);
-  check("track record survives intact", newHist.length === 30 && newHist[0].symbol === "OLD0", `${newHist.length} entries, head=${newHist[0]?.symbol}`);
-  check(
-    "pending NOT cleared — due picks stay queued for a retry",
-    newPend.length === 3 && newPend.some((p) => p.symbol === "DUE1"),
-    `${newPend.length} entries: ${newPend.map((p) => p.symbol).join(",")}`,
-  );
-
-  // Without this, "never write anything" would pass I-B.
-  console.log("\nI-C. HAPPY PATH — healthy KV, same inputs:");
-  await kvSet(HISTORY_KEY, priorHistory);
-  await kvSet(PENDING_KEY, [...duePicks, ...stillPending]);
-  const okRes = await persistPickCheck(newOutcomes, stillPending);
-  const okHist = (await kvGet<PickOutcome[]>(HISTORY_KEY)) ?? [];
-  const okPend = (await kvGet<PendingPick[]>(PENDING_KEY)) ?? [];
-  check("reports persisted=true", okRes.persisted === true, `persisted=${okRes.persisted}`);
-  check(
-    "prepends outcomes and caps at 30",
-    okHist.length === 30 && okHist[0].symbol === "DUE1" && okHist[2].symbol === "OLD0",
-    `${okHist.length} entries, head=${okHist[0]?.symbol}`,
-  );
-  check("pending cleared down to the not-yet-due picks", okPend.length === 1 && okPend[0].symbol === "LATER", `${okPend.length} entries`);
-
-  await kv.del(HISTORY_KEY, PENDING_KEY, "test:p2:ttl", "test:p2:nottl", "test:p2:writefail");
+  await kv.del("test:p2:ttl", "test:p2:nottl", "test:p2:writefail");
 
   await briefWorkerCases();
 

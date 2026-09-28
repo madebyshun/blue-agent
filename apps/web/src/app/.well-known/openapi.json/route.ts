@@ -53,11 +53,11 @@ export async function GET() {
    * loader and the agent directories read, while `t.price` ("$0.00", a truthy
    * string) made the expression look like it was only testing for presence.
    *
-   * That omission is the expensive direction. The six are the SAFETY checks and
-   * our own track record — blue-doctor, hood-live, hood-track-record,
-   * picks-check, rh-rwa-verify, rh-token-scan — the calls an agent should make
-   * BEFORE it signs anything, and they were the only ones discovery could not
-   * see. An agent reading this spec learned about 109 tools that all want money
+   * That omission is the expensive direction. The six absent that day (2026-09-27)
+   * were the SAFETY checks and our own track record — the calls an agent should
+   * make BEFORE it signs anything, and they were the only ones discovery could not
+   * see. Ids omitted on purpose: the set is five now (`picks-check` retired
+   * 2026-09-28) and `priceUSDC === 0` is where to read it, not a comment. An agent reading this spec learned about 109 tools that all want money
    * and none of the ones that want nothing.
    *
    * Test against `undefined`, never for truth: `0` is a price, not an absence.

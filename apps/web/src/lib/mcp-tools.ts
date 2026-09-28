@@ -113,7 +113,7 @@ export const MCP_TOOLS = [
   {
     name: "blue_registry",
     description:
-      "Search the full Blue Hub catalog of 115 callable tools — 109 x402-paid and 6 free — covering on-chain data, security, DeFi, token intel and builder tooling, and get each one's id, price, category and input shape. Use when the user's request has no exact match among the tools loaded here, BEFORE telling them it cannot be done — most capabilities live in the catalog, not in this manifest. Pair it with blue_call: registry finds the id, blue_call runs it. Triggers — \"what tools do you have\", \"can you analyse X\", \"is there a tool for Y\", \"list your capabilities\", or any request you are about to decline. Covers Base 8453 and Robinhood Chain 4663; each result states its own chain. Free.",
+      "Search the full Blue Hub catalog of 114 callable tools — 109 x402-paid and 5 free — covering on-chain data, security, DeFi, token intel and builder tooling, and get each one's id, price, category and input shape. Use when the user's request has no exact match among the tools loaded here, BEFORE telling them it cannot be done — most capabilities live in the catalog, not in this manifest. Pair it with blue_call: registry finds the id, blue_call runs it. Triggers — \"what tools do you have\", \"can you analyse X\", \"is there a tool for Y\", \"list your capabilities\", or any request you are about to decline. Covers Base 8453 and Robinhood Chain 4663; each result states its own chain. Free.",
     inputSchema: {
       type: "object",
       properties: {
@@ -125,7 +125,7 @@ export const MCP_TOOLS = [
   {
     name: "blue_call",
     description:
-      "Execute ANY tool from the Blue Hub catalog by its id — the execution counterpart to blue_registry. Use after blue_registry returns an id you want to run. PAYMENT depends on the id, so read the price blue_registry gave you before deciding: 109 ids are x402-paid and the first call returns HTTP 402 with a `paymentRequirements` object (USDC on Base 8453, EIP-3009 transferWithAuthorization, payTo and exact amount included) — sign that authorization with your own wallet and call again with the resulting header in `payment` to get the result. The other 6 are priced $0.00 and NEVER answer 402: call them with no `payment`, no wallet and no signature, and do not wait for requirements that will not arrive. You hold your own keys — Blue Agent never sees them and never pulls funds. Triggers — any time you have a catalog id and need its output. Report a 402 to the user verbatim rather than inventing the tool's output.",
+      "Execute ANY tool from the Blue Hub catalog by its id — the execution counterpart to blue_registry. Use after blue_registry returns an id you want to run. PAYMENT depends on the id, so read the price blue_registry gave you before deciding: 109 ids are x402-paid and the first call returns HTTP 402 with a `paymentRequirements` object (USDC on Base 8453, EIP-3009 transferWithAuthorization, payTo and exact amount included) — sign that authorization with your own wallet and call again with the resulting header in `payment` to get the result. The other 5 are priced $0.00 and NEVER answer 402: call them with no `payment`, no wallet and no signature, and do not wait for requirements that will not arrive. You hold your own keys — Blue Agent never sees them and never pulls funds. Triggers — any time you have a catalog id and need its output. Report a 402 to the user verbatim rather than inventing the tool's output.",
     inputSchema: {
       type: "object",
       properties: {

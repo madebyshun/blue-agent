@@ -91,7 +91,6 @@ import h54 from "./launch-simulator-1";
 import hBaseTokenScan  from "./base-token-scan";
 import hDefiYieldScan  from "./defi-yield-scan";
 import hNarrativeScan  from "./narrative-scan";
-import hPicksCheck     from "./picks-check";
 // RH RWA Phase 1 (L1·L2·L3·L4·M1) — Robinhood Chain tokenized-stock skills
 import hRhStockToken   from "./rh-stock-token";
 import hRhRwaIndex     from "./rh-rwa-index";
@@ -219,7 +218,6 @@ export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "base-token-scan":    hBaseTokenScan,
   "defi-yield-scan":    hDefiYieldScan,
   "narrative-scan":     hNarrativeScan,
-  "picks-check":        hPicksCheck,
   // ── RH RWA Phase 1 ────────────────────────────────────────────────────
   "rh-stock-token":     hRhStockToken,
   "rh-rwa-index":       hRhRwaIndex,
