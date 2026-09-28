@@ -177,20 +177,33 @@ async function main() {
   // than being retargeted at a copy, which is the very thing the header warns
   // against.
   //
-  // 🔴 What I was the ONLY test of, and what is now uncovered: "append the
-  // durable record BEFORE clearing the queue, and do not clear it at all if the
-  // append did not land." That hazard is still live in
-  // `api/cron/blue-hood/alert-drain/route.ts` → `drainOne`, and it is guarded
-  // there strictly less well than picks-check was. `persistPickCheck` wrapped
-  // the ordering inside one function and RETURNED whether the append landed, so
-  // a caller could not get it wrong. The drain instead calls two separate
-  // `void` functions — `markAlertDelivered(id, channel)` then
-  // `removeFromPending(id)` — and each one bails with a bare `return` when its
-  // `kvGet` comes back empty. The order is right; the success check does not
-  // exist, so a stamp that silently no-opped still gets its id cleared, which
-  // is exactly what I-B asserted must not happen. `alert-engine-test.ts` covers
-  // only that drain's happy path. Do NOT read this deletion as a finding that
-  // the hazard was theoretical.
+  // What I was the ONLY test of: "append the durable record BEFORE clearing the
+  // queue, and do not clear it at all if the append did not land." When I was
+  // deleted this comment recorded that hazard as LIVE AND UNCOVERED in
+  // `api/cron/blue-hood/alert-drain/route.ts` → `drainOne`, guarded strictly
+  // worse than picks-check was: `persistPickCheck` wrapped the ordering in one
+  // function and RETURNED whether the append landed, so a caller could not get
+  // it wrong, while the drain called two `void` functions — `markAlertDelivered`
+  // then `removeFromPending` — each bailing on a bare `return` when its `kvGet`
+  // came back empty. Right order, no success check, so a silently no-opped stamp
+  // still got its id cleared: exactly what I-B asserted must not happen.
+  //
+  // CLOSED the same day, 2026-09-28. Both stamps now go through `kvMutate` and
+  // report an `AlertStampResult`; `removeFromPending` runs only behind
+  // `alertStampLanded`. Coverage moved rather than vanished — `alert-engine-test.ts`
+  // cases D-A…D-G are the same control-pair shape I had (old shape reimplemented
+  // inline and asserted to LOSE the record, shipped route under the identical
+  // fault asserted not to, plus healthy-KV legs so "never remove" cannot pass).
+  // The fault there is selective and temporal, not a blanket read failure: a
+  // blanket one trips the route's health gate and never hands a row to
+  // `drainOne`, so it cannot reach the bug.
+  //
+  // Two things worth carrying forward. The fix found a SECOND collapse of the
+  // same kind one layer up, in `peekPendingAlerts` — `kvGet` + `if (rec)` read a
+  // throttle as a TTL expiry and DELETED the queue entry, losing the message and
+  // not merely its cursor (D-F/D-G). And note what closed it: a deletion that
+  // wrote down what it stopped covering. Do NOT read this deletion as a finding
+  // that the hazard was theoretical.
 
   await kv.del("test:p2:ttl", "test:p2:nottl", "test:p2:writefail");
 

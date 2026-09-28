@@ -25,6 +25,16 @@
  *            – ok   → markAlertDelivered("telegram") + removeFromPending.
  *            – fail → KEEP in pending (temporary), log, retry next cycle.
  *
+ *      A SILENTLY NO-OPPED STAMP IS NOT A DEFINITE OUTCOME. Both stamps report
+ *      (`AlertStampResult`) and `removeFromPending` runs only when the cursor
+ *      actually landed — otherwise the row stays queued as `stamp_kept`. They
+ *      used to return `void` and bail on a bare `return` when their `kvGet` came
+ *      back empty, and `kvGet` reports a throttle as an empty key, so the id was
+ *      cleared on a stamp that never happened and the record was unrecoverable.
+ *      On the delivered branch that costs a duplicate DM on the retry, which is
+ *      the at-least-once contract this queue already declares; the alternative
+ *      is a record that says an alert was never sent when it was.
+ *
  * FIRE-AND-FORGET: every send is wrapped; a Telegram outage degrades delivery
  * only — it never throws out of this route, which always returns 200.
  *
@@ -37,6 +47,7 @@ import {
   markAlertDelivered,
   markAlertSkipped,
   removeFromPending,
+  alertStampLanded,
   type HoodAlert,
 } from "@/lib/blue-hood/alerts";
 import { tgUserForAddress } from "@/lib/blue-hood/watchlist";
@@ -158,7 +169,7 @@ function renderAlert(a: HoodAlert): string {
   return lines.join("\n");
 }
 
-type RowOutcome = "delivered" | "skipped_no_tg" | "retry_kept" | "error_kept";
+type RowOutcome = "delivered" | "skipped_no_tg" | "retry_kept" | "error_kept" | "stamp_kept";
 
 async function drainOne(a: HoodAlert): Promise<RowOutcome> {
   // Resolve the recipient's Telegram id. A BROADCAST copy carries tg_user_id
@@ -166,13 +177,29 @@ async function drainOne(a: HoodAlert): Promise<RowOutcome> {
   const tgId = a.tg_user_id ?? (await tgUserForAddress(a.address));
   if (!tgId) {
     // Permanent skip — no Telegram link. Stamp + remove so it can't wedge forever.
-    await markAlertSkipped(a.id, "telegram", "skipped_no_tg");
+    const stamp = await markAlertSkipped(a.id, "telegram", "skipped_no_tg");
+    if (!alertStampLanded(stamp)) {
+      // No DM was sent on this branch, so the cursor is the row's only artifact.
+      console.warn(`[alert-drain] skip cursor did not land id=${a.id} stamp=${stamp} — kept in pending`);
+      return "stamp_kept";
+    }
     await removeFromPending(a.id);
     return "skipped_no_tg";
   }
   const sent = await sendMessage(tgId, renderAlert(a));
   if (sent.ok) {
-    await markAlertDelivered(a.id, "telegram");
+    const stamp = await markAlertDelivered(a.id, "telegram");
+    if (!alertStampLanded(stamp)) {
+      // The DM IS sent — this keeps the ROW, so the record survives to be
+      // stamped next tick. That costs a duplicate DM, which is the contract
+      // this queue already declares (at-least-once). Clearing the id instead
+      // would trade a visible duplicate for a silently missing record.
+      console.warn(
+        `[alert-drain] DM SENT but delivery cursor did not land id=${a.id} tg=${tgId} stamp=${stamp} ` +
+          `— kept in pending, expect a duplicate DM on the retry`,
+      );
+      return "stamp_kept";
+    }
     await removeFromPending(a.id);
     return "delivered";
   }
@@ -216,6 +243,7 @@ async function handle(req: NextRequest) {
     skipped_no_tg: 0,
     retry_kept: 0,
     error_kept: 0,
+    stamp_kept: 0,
   };
   for (const a of pending) {
     try {
@@ -230,7 +258,8 @@ async function handle(req: NextRequest) {
   console.log(
     `[alert-drain] done duration_ms=${Date.now() - started} peeked=${pending.length} ` +
       `delivered=${tally.delivered} skipped_no_tg=${tally.skipped_no_tg} ` +
-      `retry_kept=${tally.retry_kept} error_kept=${tally.error_kept} health=${health.status}`,
+      `retry_kept=${tally.retry_kept} error_kept=${tally.error_kept} ` +
+      `stamp_kept=${tally.stamp_kept} health=${health.status}`,
   );
 
   return NextResponse.json({
