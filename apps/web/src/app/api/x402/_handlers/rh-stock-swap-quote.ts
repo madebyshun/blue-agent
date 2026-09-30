@@ -30,6 +30,7 @@ import {
   checkTokenToTokenRoute,
 } from "@/lib/robinhood/swap";
 import { findWethPools, bestPool } from "@/lib/robinhood/pool";
+import { preTradeCheck } from "@/lib/pre-trade-check";
 
 // If the pool spot deviates from the Chainlink oracle by more than this,
 // the tool surfaces a `pool_deviates_from_oracle` warning so a caller can
@@ -91,6 +92,9 @@ export default async function handler(req: Request): Promise<Response> {
     const tokenOut = (side === "buy") ? token.contract : quoteAddr;
     const tokenInDecimals  = (side === "buy") ? quoteDecimals : token.decimals;
     const tokenOutDecimals = (side === "buy") ? token.decimals : quoteDecimals;
+    // G2 — the pre-trade check the prepare step and every card run on the same
+    // token, so a quote shows the WARNs the signature will be asked to accept.
+    const checkP = preTradeCheck({ chain: "robinhood", kind: "swap", token: tokenOut }).catch(() => null);
 
     // ── Use SHARED primary pool selector so X1 quotes against exactly the
     //    same pool X2 will execute against, and so M2/M5/A4/L1 stay
@@ -265,6 +269,7 @@ export default async function handler(req: Request): Promise<Response> {
       one_side_usd_used: one_side_usd,      // depth used for the impact math
       pool_selection: primary.selection,
       warnings,
+      check: await checkP,
       route: {
         kind: route_kind,
         // `executable` is the honest "can prepare build V3 calldata" flag.

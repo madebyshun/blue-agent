@@ -20,6 +20,7 @@ import { UnverifiedBalance } from "@/components/wallet/UnverifiedBalance";
 import { useSpendableBalance } from "@/lib/wallet/useSpendableBalance";
 import { resolveSpend } from "@/lib/wallet/read-state";
 import { useRecordAction } from "@/hooks/useRecordAction";
+import { PreTradeBanner, usePreTradeCheck } from "@/components/wallet/PreTradeBanner";
 
 // Chain metadata — hard-coded rather than reused from viem, so this card has
 // no cross-file coupling to the wagmi config. Base blue vs Robinhood green
@@ -162,6 +163,14 @@ export function RobinhoodBridgeCard({ result }: { result: RobinhoodBridgeResult 
   const [prep, setPrep]   = useState<PrepareResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [prepErr, setPrepErr] = useState("");
+  // G2 — the pre-trade check on the bridged token AND on Relay's measured cost:
+  // over BRIDGE_BLOCK_COST_PERCENT the bridge is refused, over the high-cost
+  // line it needs a tick. Waits for the quote, since the cost is part of it.
+  const pt = usePreTradeCheck({
+    chain: fromChain, kind: "bridge", token: rawToken || null,
+    bridgeCostPercent: prep?.meta?.totalCostPercent ?? null,
+    enabled: !loading,
+  });
   // States walked in sequence — the button reflects whichever is active.
   const [step, setStep] = useState<
     "idle" | "switching" | "approving" | "sending" | "delivering" | "filled" | "error"
@@ -174,6 +183,7 @@ export function RobinhoodBridgeCard({ result }: { result: RobinhoodBridgeResult 
   useRecordAction(txHash, () => ({
     wallet: connected, kind: "bridge", chain: fromChain,
     params: { fromChain, toChain, token: rawToken || null, amount: initialAmt || null },
+    check: pt.check ? { verdict: pt.check.verdict, reasons: pt.check.reasons.map((r) => r.text) } : null,
   }));
 
   // Balance for the sender on the SOURCE chain — used to gate the signature.
@@ -343,7 +353,7 @@ export function RobinhoodBridgeCard({ result }: { result: RobinhoodBridgeResult 
 
   // `gate === "ok"` replaces `!overBalance` — it additionally requires that the
   // balance was actually READ, so an unread balance blocks instead of passing.
-  const canSign = !!prep?.tx && !prepErr && !loading && gate === "ok"
+  const canSign = !!prep?.tx && !prepErr && !loading && gate === "ok" && pt.cleared && !pt.blocked
     && step !== "switching" && step !== "approving" && step !== "sending" && step !== "delivering";
   const busy = step === "switching" || step === "approving" || step === "sending" || step === "delivering";
 
@@ -603,6 +613,8 @@ export function RobinhoodBridgeCard({ result }: { result: RobinhoodBridgeResult 
           )}
           {step === "error" && <p className="text-[10px] text-amber-400 mb-2">{err}</p>}
 
+          <PreTradeBanner pt={pt} />
+
           {/* Primary button — three cascading actions:
               1. Switch chain (if wrong).
               2. Approve (if approve tx exists and not yet signed).
@@ -632,6 +644,9 @@ export function RobinhoodBridgeCard({ result }: { result: RobinhoodBridgeResult 
               : prepErr   ? "Retry"
               : wrongChain    ? `Switch to ${fromCfg.label}`
               : overBalance   ? "Insufficient balance"
+              : pt.blocked    ? "Blocked — see the check above"
+              : pt.state === "loading" ? "Checking this trade…"
+              : !pt.cleared   ? "Confirm the check above"
               : needsApprove  ? `Approve ${symbol}`
               // When the delivered token differs, the button names it. A user
               // who clicks "Bridge 10 USDC → Robinhood" and receives USDG was

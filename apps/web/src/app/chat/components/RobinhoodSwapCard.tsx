@@ -18,6 +18,7 @@ import { useSpendableBalance } from "@/lib/wallet/useSpendableBalance";
 import { resolveSpend } from "@/lib/wallet/read-state";
 import { clampDecimals } from "@/lib/wallet/amount";
 import { useRecordAction } from "@/hooks/useRecordAction";
+import { PreTradeBanner, usePreTradeCheck } from "@/components/wallet/PreTradeBanner";
 
 const RH_ROUTER = "0x3bb0e9E3dB75faDC5f1f8b7D7B9D761Ef15cd23D" as const;
 const RH_CHAIN_ID = 4663;
@@ -128,6 +129,7 @@ export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
       ? ({ tokenIn: tokenInAddr, tokenOut: token, amount } as Record<string, string>)
       : ({ direction, token, amount } as Record<string, string>),
     quote: { venue: "RobinhoodSwapRouter", expected_out: estimatedOut != null ? String(estimatedOut) : null, min_out: minOut != null ? String(minOut) : null },
+    check: pt.check ? { verdict: pt.check.verdict, reasons: pt.check.reasons.map((r) => r.text) } : null,
   }));
 
   // The balance of whatever this swap SPENDS: native ETH on a buy, the token
@@ -234,7 +236,10 @@ export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
   const anyLoading = isT2T ? loadingT2T : loadingQuote;
   // `gate === "ok"` replaces `!overBalance` — it additionally requires that the
   // balance was actually READ, so an unread balance blocks instead of passing.
-  const canSwap = !!address && hasPool && amt > 0 && gate === "ok" && !anyLoading && step !== "approving" && step !== "swapping";
+  // G2 — checked on what this swap BUYS: tokenOut, or ETH on an ETH-mode sell.
+  const pt = usePreTradeCheck({ chain: "robinhood", kind: "swap", token: isT2T || direction === "buy" ? (token || null) : "ETH" });
+  const canSwap = !!address && hasPool && amt > 0 && gate === "ok" && !anyLoading && step !== "approving" && step !== "swapping"
+    && pt.cleared && !pt.blocked;
   const busy = step === "approving" || step === "swapping";
 
   async function doSwap() {
@@ -530,6 +535,7 @@ export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
           )}
           {step === "error" && prepRoute !== "none" && <p className="text-[10px] text-amber-400 mb-2">{err}</p>}
 
+          <PreTradeBanner pt={pt} />
           <button onClick={doSwap} disabled={!canSwap || busy}
             className="w-full text-[12px] font-bold py-2.5 rounded-lg transition-all disabled:opacity-50"
             style={(!isT2T && direction === "buy") || isT2T
@@ -541,6 +547,9 @@ export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
               : !isT2T && quote?.hasPool === false ? "No pool yet"
               : prepRoute === "none" ? "No route"
               : overBalance ? "Insufficient balance"
+              : pt.blocked ? "Blocked — see the check above"
+              : pt.state === "loading" ? "Checking this trade…"
+              : !pt.cleared ? "Confirm the check above"
               : `Confirm · ${usdLabel || `${amtLabel} ${inSym}`}`}
           </button>
         </>

@@ -87,6 +87,7 @@ import {
 } from "@/lib/tx-chains";
 import { B20_FACTORY } from "@/lib/base-stocks/registry";
 import { createAction, type ActionKind } from "@/lib/actions";
+import { preTradeCheck, type PreTradeCheck } from "@/lib/pre-trade-check";
 import { FACTORY_ABI as B20_FACTORY_ABI } from "@/lib/b20/inspect-abi";
 import { ROBINHOOD_SWAP_ROUTER_ADDRESS } from "@/lib/robinhood/swap";
 import { buildBaseApprove, parseSlippageArg } from "@/lib/zerox-swap";
@@ -727,6 +728,50 @@ async function estimateRhOut(
 }
 
 /**
+ * G2 (2026-09-30): the pre-trade check — the same lib/pre-trade-check.ts the
+ * wallet cards show — on every build these tools return. A BLOCK (a measured
+ * honeypot, an impostor of a registered token, a bridge costing over the
+ * limit) is refused as [PRE_TRADE_BLOCK] and no calldata leaves; WARN and PASS
+ * ride along as `check`, a WARN with the instruction to put its reasons to the
+ * user before they sign. Swaps and sends are checked BEFORE the build, on the
+ * token bought / moved. A bridge is checked AFTER its build, because its cost
+ * only exists once Relay has quoted a route — the build has no side effect, and
+ * a refused bridge returns none of it.
+ */
+function preTradeRefusal(check: PreTradeCheck): Error {
+  const why = check.reasons.filter((r) => r.level === "BLOCK").map((r) => r.text).join(" ");
+  const e = new Error(`Refused — ${check.label}: ${why} Nothing was built. Tell the user why; do not retry the same trade.`) as Error & { code?: string };
+  e.code = "PRE_TRADE_BLOCK";
+  return e;
+}
+
+async function withPreTradeCheck(kind: ActionKind, args: Record<string, unknown>, build: () => Promise<string>): Promise<string> {
+  const chain = parseTxChain(kind === "bridge" ? args.fromChain : args.chain);
+  const token = String((kind === "swap" ? args.tokenOut : args.token) ?? "").trim();
+  // Missing fields are the builder's to refuse, with its own message.
+  if (!chain || !token) return build();
+  let check: PreTradeCheck | null = null;
+  if (kind !== "bridge") {
+    check = await preTradeCheck({ chain, kind, token });
+    if (check.verdict === "BLOCK") throw preTradeRefusal(check);
+  }
+  const text = await build();
+  let parsed: Record<string, unknown>;
+  try { parsed = JSON.parse(text) as Record<string, unknown>; } catch { return text; }
+  if (parsed.ok === false) return text;
+  if (kind === "bridge") {
+    const cost = (parsed.meta as { totalCostPercent?: unknown } | undefined)?.totalCostPercent;
+    check = await preTradeCheck({ chain, kind, token, bridgeCostPercent: typeof cost === "number" ? cost : null });
+    if (check.verdict === "BLOCK") throw preTradeRefusal(check);
+  }
+  if (!check) return text;
+  parsed.check = check.verdict === "WARN"
+    ? { ...check, instruction: "Show these reasons to the user and get an explicit yes before they sign." }
+    : check;
+  return JSON.stringify(parsed, null, 2);
+}
+
+/**
  * G1 (2026-09-30): every transaction these builders return is also an ACTION
  * RECORD, and the response says how to finish it. The wallet here is only the
  * `fromAddress` the agent passed — unproven — so the record stays out of that
@@ -743,6 +788,10 @@ async function withActionRecord(kind: ActionKind, args: Record<string, unknown>,
   if (!chain || !/^0x[a-fA-F0-9]{40}$/.test(wallet)) return text;
   const s = (v: unknown) => (typeof v === "string" ? v.slice(0, 120) : typeof v === "number" ? String(v) : null);
   const meta = (parsed.meta ?? {}) as Record<string, unknown>;
+  const chk = parsed.check as { verdict?: unknown; reasons?: unknown } | undefined;
+  const check = chk && typeof chk.verdict === "string" && Array.isArray(chk.reasons)
+    ? { verdict: chk.verdict, reasons: chk.reasons.map((r) => String((r as { text?: unknown })?.text ?? "")).filter(Boolean).slice(0, 10) }
+    : undefined;
   try {
     const rec = await createAction({
       wallet, kind, chain, source: "mcp",
@@ -754,6 +803,7 @@ async function withActionRecord(kind: ActionKind, args: Record<string, unknown>,
       quote: kind === "swap"
         ? { venue: s(meta.venue) ?? (chain === "robinhood" ? "RobinhoodSwapRouter" : null), expected_out: s(meta.buyAmount), min_out: s(meta.minBuyAmount) ?? s(parsed.amountOutMinimum) }
         : undefined,
+      check,
     });
     parsed.action = {
       id: rec.id,
@@ -1058,17 +1108,17 @@ export async function POST(req: NextRequest) {
       // Execution primitives — unsigned calldata, user signs. See the block above
       // `postPrepare` for why `chain` is required with no default on all of these.
       if (name === "blue_swap_tx") {
-        const text = await withActionRecord("swap", args, await callSwapTx(args));
+        const text = await withActionRecord("swap", args, await withPreTradeCheck("swap", args, () => callSwapTx(args)));
         await recordCall(meterId, "mcp", "ok");
         return ok(id, { content: [{ type: "text", text }] }, useSse);
       }
       if (name === "blue_send_tx") {
-        const text = await withActionRecord("send", args, await callSendTx(args));
+        const text = await withActionRecord("send", args, await withPreTradeCheck("send", args, () => callSendTx(args)));
         await recordCall(meterId, "mcp", "ok");
         return ok(id, { content: [{ type: "text", text }] }, useSse);
       }
       if (name === "blue_bridge_tx") {
-        const text = await withActionRecord("bridge", args, await callBridgeTx(args));
+        const text = await withActionRecord("bridge", args, await withPreTradeCheck("bridge", args, () => callBridgeTx(args)));
         await recordCall(meterId, "mcp", "ok");
         return ok(id, { content: [{ type: "text", text }] }, useSse);
       }

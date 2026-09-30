@@ -48,6 +48,7 @@ import { base } from "wagmi/chains";
 import { ERC20_ABI } from "@/lib/yield-execution";
 import { DATA_SUFFIX } from "@/constants/builderCode";
 import { useRecordAction } from "@/hooks/useRecordAction";
+import { PreTradeBanner, usePreTradeCheck } from "@/components/wallet/PreTradeBanner";
 import { BASE_MAJORS } from "@/lib/wallet/token-trust";
 import { useSpendableBalance } from "@/lib/wallet/useSpendableBalance";
 import { resolveSpend } from "@/lib/wallet/read-state";
@@ -214,11 +215,10 @@ export default function SwapCard({
   const [quote, setQuote] = useState<Quote | null>(null);
   const [loading, setLoading] = useState(false);
   const [slippageBps, setSlippageBps] = useState<number>(100);
-  // A token outside the four BlueAgent holds a canonical address for is
-  // swappable, but only after the user says they checked it — the address is
-  // all we know about it (plan §1 fix 4: the card accepted any address with no
-  // word said). Reset whenever either side changes.
-  const [ackUnverified, setAckUnverified] = useState(false);
+  // G2 — the pre-trade check on the token being BOUGHT (the side a honeypot or
+  // an impostor would trap). BLOCK disables signing; WARN needs a tick. It
+  // replaces the plain "unverified token" tick this card had since fix 4.
+  const pt = usePreTradeCheck({ chain: "base", kind: "swap", token: buy.native ? "ETH" : buy.addr });
   const [step, setStep] = useState<"idle" | "approving" | "swapping" | "done" | "error">("idle");
   const [err, setErr] = useState("");
   const [txHash, setTxHash] = useState("");
@@ -227,6 +227,7 @@ export default function SwapCard({
     wallet: account, kind: "swap", chain: "base",
     params: { tokenIn: sell.addr, tokenOut: buy.addr, amountIn: amount, slippageBps },
     quote: { venue: "0x", expected_out: quote?.buyAmount ?? null, min_out: quote?.minBuyAmount ?? null },
+    check: pt.check ? { verdict: pt.check.verdict, reasons: pt.check.reasons.map((r) => r.text) } : null,
   }));
 
   // Balance of the sell token — read (with its scale) through the one hook, so
@@ -290,7 +291,6 @@ export default function SwapCard({
     return () => clearTimeout(t);
   }, [sellBase, sell.addr, buy.addr, account, slippageBps]);
 
-  useEffect(() => { setAckUnverified(false); }, [sell.addr, buy.addr]);
 
   // Apply a quick-sell pre-fill from the token table: set the (possibly
   // non-major) sell token + amount and default the buy side to USDC — but sell
@@ -334,7 +334,6 @@ export default function SwapCard({
     if (tok === sell.addr.toLowerCase() && bal.decimals != null) return `${fmt(Number(formatUnits(BigInt(f.amount), bal.decimals)))} ${label(sell)}`;
     return `${f.amount} (base units of ${truncAddr(f.token)})`;
   })();
-  const unverified = [sell, buy].filter(t => !t.native && !inMajors(t));
 
   function flip() { setSell(buy); setBuy(sell); setAmount(""); setQuote(null); setPendingWord(""); }
   // The percentage buttons and the quantity WORDS are one calculation, in BASE
@@ -372,7 +371,7 @@ export default function SwapCard({
   const optionsFor = (t: Token) => (inMajors(t) ? TOKENS : [t, ...TOKENS]);
 
   const canSwap = !!account && !!quote?.transaction && amt > 0 && gate === "ok" && !loading && buyDec != null
-    && (unverified.length === 0 || ackUnverified);
+    && pt.cleared && !pt.blocked;
   const busy = step === "approving" || step === "swapping";
 
   async function swap() {
@@ -548,17 +547,7 @@ export default function SwapCard({
         {zeroExFee && <span className="ml-auto text-slate-600" title="0x's own fee, itemised in the quote">0x fee {zeroExFee}</span>}
       </div>
 
-      {/* A token outside the verified four: said out loud, and the swap waits
-          for an explicit "I checked it". */}
-      {unverified.length > 0 && (
-        <label className="flex items-start gap-2 rounded-lg border border-amber-500/25 bg-amber-500/5 px-2.5 py-2 mb-3 cursor-pointer">
-          <input type="checkbox" checked={ackUnverified} onChange={e => setAckUnverified(e.target.checked)} className="mt-0.5" />
-          <span className="text-[9px] text-amber-300/90 leading-relaxed">
-            {unverified.map(t => truncAddr(t.addr)).join(" / ")} is not one of the tokens BlueAgent verifies on Base — only its
-            address is known. I checked this contract myself before swapping.
-          </span>
-        </label>
-      )}
+      <PreTradeBanner pt={pt} />
 
       {quote?.needsKey && <p className="text-[9px] text-amber-400 mb-2">Convert needs a free 0x API key — set <span className="text-slate-300">ZEROX_API_KEY</span>.</p>}
       {step === "error" && <p className="text-[10px] text-amber-400 mb-2">{err}</p>}
@@ -573,7 +562,9 @@ export default function SwapCard({
           : overBalance ? "Insufficient balance"
           : gate === "unverified" ? "Balance unread — held"
           : buyDec == null ? "Token scale unread — held"
-          : unverified.length > 0 && !ackUnverified ? "Confirm you checked the token"
+          : pt.blocked ? "Blocked — see the check above"
+          : pt.state === "loading" ? "Checking this trade…"
+          : !pt.cleared ? "Confirm the check above"
           : `Convert ${amt > 0 ? fmt(amt) : ""} ${label(sell)} → ${label(buy)}`}
       </ConfirmButton>
       <CardNote>Best route via 0x · 0x fee shown when quoted · you sign · non-custodial · Base mainnet.</CardNote>

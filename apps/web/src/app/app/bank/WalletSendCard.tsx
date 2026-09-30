@@ -92,6 +92,7 @@ import { ERC20_ABI } from "@/lib/yield-execution";
 import { DATA_SUFFIX } from "@/constants/builderCode";
 import { useSponsoredGas } from "@/hooks/useSponsoredGas";
 import { useRecordAction } from "@/hooks/useRecordAction";
+import { PreTradeBanner, usePreTradeCheck } from "@/components/wallet/PreTradeBanner";
 import { B20_ENABLED, B20_USDC } from "@/lib/orders";
 import { encodeTransferWithMemo, isValidMemo, MEMO_MAX_CHARS } from "@/lib/b20/encode";
 import { useSpendableBalance } from "@/lib/wallet/useSpendableBalance";
@@ -279,6 +280,7 @@ export default function WalletSendCard({
     wallet: account, kind: "send", chain: network === "robinhood" ? "robinhood" : "base",
     // `toAddress` is declared further down; the closure runs after render, when it is set.
     params: { token: asset.address ?? "ETH", symbol: asset.symbol || null, amount: String(amount), to: toAddress ?? recipient },
+    check: pt.check ? { verdict: pt.check.verdict, reasons: pt.check.reasons.map((r) => r.text) } : null,
   }));
 
   const cfg = WALLET_CHAINS[network];
@@ -289,6 +291,10 @@ export default function WalletSendCard({
   // never to a placeholder ticker, which on a send screen would be a label
   // claiming an identity nothing read.
   const symbol = asset.symbol || truncAddr(asset.address ?? "");
+  // G2 — the pre-trade check on the asset being sent. A send is never blocked
+  // for an impostor (moving one you hold hurts no one) — it is told, and the
+  // WARN needs a tick; the check's other reasons (B20 issuer policy) are INFO.
+  const pt = usePreTradeCheck({ chain: network === "robinhood" ? "robinhood" : "base", kind: "send", token: asset.address ?? "ETH" });
 
   // ── EIP-5792 ───────────────────────────────────────────────────────────────
   // Routes 5792-capable wallets through `wallet_sendCalls`, which is the only
@@ -429,7 +435,8 @@ export default function WalletSendCard({
     over: balance != null && amt > balance,
   });
   const overBalance = gate === "insufficient";
-  const valid = !!toAddress && amt > 0 && gate === "ok" && bal.decimals != null && !memoTooLong;
+  const valid = !!toAddress && amt > 0 && gate === "ok" && bal.decimals != null && !memoTooLong
+    && pt.cleared && !pt.blocked;
   const busy = step === "preparing" || step === "switching" || step === "signing" || step === "broadcasting";
 
   // 25 / 50 / 100% presets computed in BASE UNITS (raw * bps / 10000n) so the
@@ -875,6 +882,8 @@ export default function WalletSendCard({
       {step === "broadcasting" && <p className="font-mono text-[10px] text-slate-400 mb-2">Broadcasting… waiting for the block.</p>}
       {step === "error" && <p className="font-mono text-[10px] text-amber-400 mb-2">{err}</p>}
 
+      <PreTradeBanner pt={pt} />
+
       <ConfirmButton onClick={send} disabled={!valid || busy || !isConnected}>
         {!isConnected ? "Connect your wallet"
           : busy
@@ -884,6 +893,9 @@ export default function WalletSendCard({
               : "Broadcasting…")
             : gate === "unverified" ? "Balance unread — held"
             : overBalance ? "Insufficient balance"
+            : pt.blocked ? "Blocked — see the check above"
+            : pt.state === "loading" ? "Checking this trade…"
+            : !pt.cleared ? "Confirm the check above"
             : `Send ${amt > 0 ? fmt(amt) : ""} ${symbol}${toAddress ? ` → ${recipIsName ? recip : truncAddr(toAddress)}` : ""}`}
       </ConfirmButton>
       <CardNote>

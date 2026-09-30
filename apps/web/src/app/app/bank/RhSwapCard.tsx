@@ -78,6 +78,7 @@ import { UnverifiedBalance } from "@/components/wallet/UnverifiedBalance";
 import { Picker, PickerRow } from "@/components/wallet/Picker";
 import { WalletCard, Field, NetworkPicker, ConfirmButton, CardNote } from "@/components/wallet/CardShell";
 import { useRecordAction } from "@/hooks/useRecordAction";
+import { PreTradeBanner, usePreTradeCheck } from "@/components/wallet/PreTradeBanner";
 
 const RH = WALLET_CHAINS.robinhood;
 const RH_CHAIN_ID = RH.chainId; // 4663
@@ -192,6 +193,7 @@ export default function RhSwapCard({
     wallet: account, kind: "swap", chain: "robinhood",
     params: { direction, token: activeAddr, amount },
     quote: { venue: "RobinhoodSwapRouter", expected_out: estimatedOut != null ? String(estimatedOut) : null, min_out: minOut != null ? String(minOut) : null },
+    check: pt.check ? { verdict: pt.check.verdict, reasons: pt.check.reasons.map((r) => r.text) } : null,
   }));
 
   // Which ERC-20 sits on the non-ETH side.
@@ -273,7 +275,9 @@ export default function RhSwapCard({
   });
   const overBalance = gate === "insufficient";
   const busy = step === "switching" || step === "preparing" || step === "approving" || step === "swapping" || step === "broadcasting";
-  const valid = tokenReady && hasPool && amt > 0 && gate === "ok" && !quoting;
+  // G2 — checked on what this swap BUYS: the token on a buy, ETH on a sell.
+  const pt = usePreTradeCheck({ chain: "robinhood", kind: "swap", token: direction === "buy" ? (tokenReady ? activeAddr : null) : "ETH" });
+  const valid = tokenReady && hasPool && amt > 0 && gate === "ok" && !quoting && pt.cleared && !pt.blocked;
 
   // Max and the quantity WORDS are ONE calculation, in BASE UNITS. Computing it
   // on `balance` (a float) is how "100%" lands a hair above the real holding
@@ -574,6 +578,7 @@ export default function RhSwapCard({
       {step === "broadcasting" && <p className="text-[10px] text-slate-400 mb-2">Broadcasting… waiting for the block.</p>}
       {step === "error" && <p className="text-[10px] text-amber-400 mb-2">{err}</p>}
 
+      <PreTradeBanner pt={pt} />
       <ConfirmButton tone="blue" onClick={doSwap} disabled={!valid || busy}>
         {!isConnected ? "Connect your wallet"
           : busy
@@ -587,6 +592,9 @@ export default function RhSwapCard({
             : quoting ? "Quoting…"
             : quote?.ok && quote.hasPool === false ? "No pool yet"
             : overBalance ? "Insufficient balance"
+            : pt.blocked ? "Blocked — see the check above"
+            : pt.state === "loading" ? "Checking this trade…"
+            : !pt.cleared ? "Confirm the check above"
             : `Swap ${amt > 0 ? fmt(amt) : ""} ${inSym}`}
       </ConfirmButton>
       <CardNote>Robinhood Chain · you sign · non-custodial · 4663.</CardNote>

@@ -20,6 +20,7 @@ import {
   ROBINHOOD_MAINNET_VERIFIED_WETH9,
   ROBINHOOD_SWAP_ROUTER_ADDRESS,
 } from "@/lib/robinhood/swap";
+import { preTradeCheck } from "@/lib/pre-trade-check";
 
 const USDG_ADDR = "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168" as const;
 
@@ -77,6 +78,15 @@ export default async function handler(req: Request): Promise<Response> {
     const tokenOut        = (side === "buy") ? token.contract : quoteAddr;
     const tokenInDecimals = (side === "buy") ? quoteDecimals : token.decimals;
     const tokenOutDecimals= (side === "buy") ? token.decimals : quoteDecimals;
+
+    // G2 — the pre-trade check every execution door asks (lib/pre-trade-check).
+    // The ticker came from the registry, so an impostor cannot arrive here; the
+    // check still rides along (a stock token's weekend and oracle-gap WARNs), and
+    // a BLOCK refuses before any calldata exists — non-2xx, so nobody is charged.
+    const check = await preTradeCheck({ chain: "robinhood", kind: "swap", token: tokenOut });
+    if (check.verdict === "BLOCK") {
+      return Response.json({ tool: "rh-stock-swap-prepare", ticker: token.ticker, error: "PRE_TRADE_BLOCK", check, network: RH_CHAIN, timestamp }, { status: 409 });
+    }
 
     // ── QUOTE MUST come from the pool that will EXECUTE the swap ─────────
     // Previously used Chainlink oracle → min_out set against a price the
@@ -222,6 +232,7 @@ export default async function handler(req: Request): Promise<Response> {
         amount_out_minimum_base_units: amountOutMinimum.toString(),
       },
       warnings,
+      check,
       route: {
         kind: built.route,   // "direct" | "multi-hop"
         call_count: built.calls?.length ?? 0,
