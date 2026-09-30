@@ -130,11 +130,13 @@ const PACKS: { usdc: string; cr: number; label: string; popular?: boolean }[] = 
 const SONNET_CR = 50;
 const FREE_DAILY = 500; // WALLET_DAILY (credits.ts) — free credits per wallet/day.
 
+// No id from lib/tool-halts.ts: a halted tool refuses every call, so listing it
+// here sells something the Hub will not run (pinned by token-pick-facts-test).
 const HUB_CATEGORIES = [
-  { label: "RH RWA",       tools: "rh-stock-arb · rh-stock-movers · rh-stock-swap · rh-rwa-dca" },
+  { label: "RH RWA",       tools: "rh-stock-arb · rh-stock-movers · rh-stock-swap · rh-rwa-verify" },
   { label: "On-chain",     tools: "token price · pool scan · gas tracker · bridge route" },
   { label: "Security",     tools: "honeypot · risk gate · scam detector · scam-clone check" },
-  { label: "Intelligence", tools: "token alpha · narrative pulse · whale tracker" },
+  { label: "Intelligence", tools: "base alpha · narrative pulse · protocol health" },
   { label: "DeFi",         tools: "cross-protocol yield · liquidity depth · morpho vault" },
   { label: "Builder",      tools: "repo health · founder check · roadmap validator" },
 ];
@@ -215,30 +217,39 @@ function SectionHead({ num, kicker, title, sub }: {
 
 // ─── Chat mockup with typing animation ────────────────────────────────────────
 // A dark "screen" — stays dark in both themes, like a real terminal. Reads the
-// chain: the response numbers cite a live source (DexScreener + onchain
-// transfers), not a fabricated multi-agent framing. Single-accent: blue for
-// keywords/values-of-note, neutral slate for everything else.
+// chain: the response cites its live source by name, not a fabricated
+// multi-agent framing. Single-accent: blue for keywords/values-of-note, neutral
+// slate for everything else.
+//
+// The answer is the tool that answers the QUESTION, in the field names that
+// tool really returns (`_handlers/token-price.ts`) — facts and nothing else.
+// Until 2026-10-01 this mock answered with `"signal": "BUY"`, a confidence and
+// an entry from token-pick-signal, plus a second tool that is now halted: a
+// trade call the product stopped making on 2026-09-30 (facts only, plan §3),
+// from a tool that takes no token and so could not have answered "AERO's"
+// anything. scripts/token-pick-facts-test.ts pins both — no verdict fields
+// here, and no id from lib/tool-halts.ts.
 
 const CHAT_SEGMENTS: { t: string; cls: string }[] = [
   { t: "What are AERO's liquidity and 24h volume right now?", cls: "text-slate-300" },
-  { t: "\n↳ token-pick-signal · whale-tracker", cls: "text-slate-500" },
+  { t: "\n↳ token-price", cls: "text-slate-500" },
   { t: "\n\n{ ", cls: "text-slate-500" },
-  { t: '"signal"', cls: "text-slate-400" },
-  { t: ": ", cls: "text-slate-500" },
-  { t: '"BUY"', cls: "text-[#4FC3F7] font-semibold" },
-  { t: ", ", cls: "text-slate-500" },
-  { t: '"token"', cls: "text-slate-400" },
+  { t: '"symbol"', cls: "text-slate-400" },
   { t: ": ", cls: "text-slate-500" },
   { t: '"AERO"', cls: "text-[#4FC3F7] font-semibold" },
   { t: ", ", cls: "text-slate-500" },
-  { t: '"confidence"', cls: "text-slate-400" },
-  { t: ": 82, ", cls: "text-slate-500" },
-  { t: '"entry"', cls: "text-slate-400" },
+  { t: '"liquidity_usd"', cls: "text-slate-400" },
   { t: ": ", cls: "text-slate-500" },
-  { t: '"$0.49"', cls: "text-white" },
+  { t: "18400000", cls: "text-white" },
   { t: ", ", cls: "text-slate-500" },
-  { t: '"source"', cls: "text-slate-400" },
-  { t: ': "live DexScreener + 50 transfers" }', cls: "text-slate-500" },
+  { t: '"volume_24h"', cls: "text-slate-400" },
+  { t: ": ", cls: "text-slate-500" },
+  { t: "9100000", cls: "text-white" },
+  { t: ", ", cls: "text-slate-500" },
+  { t: '"price_usd"', cls: "text-slate-400" },
+  { t: ": 0.49, ", cls: "text-slate-500" },
+  { t: '"data_source"', cls: "text-slate-400" },
+  { t: ': "DexScreener (live)" }', cls: "text-slate-500" },
   { t: "\n\n50 cr · Sonnet 5 · 2.1s · Base ", cls: "text-slate-500" },
   { t: "✓", cls: "text-[#4FC3F7]" },
 ];

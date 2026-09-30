@@ -69,7 +69,7 @@ no auth. Returns:
     {
       "id": "token-pick-signal",
       "name": "Token Pick Signal",
-      "description": "Actionable token pick + kill criterion …",
+      "description": "The top Base token by an on-chain quality score … — facts from live pools, no buy/sell call.",
       "price": "$0.20",
       "priceUsdcUnits": 200000,
       "endpoint": "https://blueagent.dev/api/x402/token-pick-signal",
@@ -151,11 +151,14 @@ The 200 response carries the result and the settlement receipt:
 ```json
 {
   "tool": "token-pick-signal",
-  "headline": "…",
-  "pick": { "token": "…", "thesis": "…", "entry": "…", "kill_criterion": "…" },
-  "blue_verdict": "BUY",
-  "confidence": 76,
-  "timestamp": "2026-05-30T…",
+  "facts_only": true,
+  "no_pick": false,
+  "pick": {
+    "token": "…", "price": "$…", "liquidity": "$…", "volume_24h": "$…",
+    "score": 71, "signal_type": "building", "caution": []
+  },
+  "note": "Top Base token by an on-chain quality score — facts from live pools, not a recommendation to buy or sell.",
+  "timestamp": "2026-10-01T…",
   "_settle": {
     "ok": true,
     "status": 200,
@@ -192,10 +195,13 @@ action, and Base MCP's native x402 support handles it end-to-end.
 
 That said, Blue Hub composes cleanly with execution plugins:
 
-- **Blue analyzes, another plugin executes.** A typical pattern: call
-  `token-pick-signal` (Blue Hub) → if verdict is `BUY`, prepare an
-  Aerodrome / Uniswap swap via that plugin's `send_calls`. Blue Hub
-  supplies the *decision*; the execution plugin supplies the *action*.
+- **Blue measures, the user decides, another plugin executes.** A typical
+  pattern: the user names a token and a size → call `liquidity-depth`
+  (Blue Hub) for the slippage estimate and exit risk at that size → show
+  it, and only on the user's go-ahead prepare an Aerodrome / Uniswap swap
+  via that plugin's `send_calls`. Blue Hub supplies the *facts*; the
+  execution plugin supplies the *action*. No Blue Hub tool returns a
+  buy/sell call to branch on — `token-pick-signal` reports facts only.
 - **Audit-then-act.** Run `contract-trust` (Blue Hub) before any
   user-initiated `send_calls` against an unknown contract; abort if the
   verdict is `RED_FLAG`.
@@ -215,7 +221,7 @@ That said, Blue Hub composes cleanly with execution plugins:
 |---------------------------|--------|--------------------------------------------------------------|
 | `contract-trust`          | $0.15  | SAFE / CAUTION / RED_FLAG verdict before swapping            |
 | `ecosystem-digest`        | $0.20  | Weekly Base pulse — movers, narratives, what to watch        |
-| `token-pick-signal`       | $0.20  | One actionable pick + entry, sizing, kill criterion          |
+| `token-pick-signal`       | $0.20  | Top Base token by on-chain quality score — facts, no call    |
 | `narrative-position`      | $0.15  | Narrative map · FRONT-RUN / RIDE / FADE / IGNORE             |
 | `market-fit`              | $0.25  | GO / WAIT / PIVOT verdict for a Base project                 |
 | `token-launch-readiness`  | $0.30  | Score 0–100 + GO/WAIT verdict + checklist                    |
@@ -223,9 +229,8 @@ That said, Blue Hub composes cleanly with execution plugins:
 | `competitor-scan`         | $0.20  | Competitive landscape · STRONG / COMPETITIVE / WEAK          |
 | `investor-memo`           | $0.35  | Full investor memo (market / thesis / traction / ask)        |
 | `base-grant-finder`       | $0.20  | Matching grants for a Base project (Coinbase, OP RetroPGF)   |
-| `whale-copy-signal`       | $0.25  | Smart-money flows + copy-trade signal                        |
+| `liquidity-depth`         | $0.03  | Liquidity depth, slippage estimate and exit risk for a token |
 | `protocol-risk-monitor`   | $0.35  | Real-time protocol risk · smart-contract, liquidity, oracle  |
-| `wallet-risk`             | $0.05  | AML / risk screen for a Base wallet from real on-chain flow  |
 | `blue-idea`               | $0.05  | Rough concept → fundable brief (programmatic only)           |
 | `blue-build`              | $0.50  | Architecture, stack, folder structure, integrations          |
 | `blue-audit`              | $1.00  | Security + product risk review · critical issues · go/no-go  |
@@ -244,7 +249,7 @@ That said, Blue Hub composes cleanly with execution plugins:
 > 3. If verdict is `RED_FLAG`, surface to user and *do not* prepare the swap.
 
 **Token research**
-> User: *"Find me an asymmetric Base setup right now."*
+> User: *"Which Base token has the strongest liquidity and volume right now?"*
 >
 > 1. `POST /api/x402/token-pick-signal` with `{ "context": "…" }`
 > 2. Returns the top Base token by an on-chain quality score — facts only (price, liquidity, volume, score, caution flags); no entry, target or buy/sell call.
