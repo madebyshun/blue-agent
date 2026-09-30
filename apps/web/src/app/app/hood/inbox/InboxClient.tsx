@@ -23,7 +23,7 @@ import ArrowBriefBlock from "../ArrowBriefBlock";
 import EnableAlertsButton from "./EnableAlertsButton";
 import ReviewSignPanel from "@/components/blue-hood/ReviewSignPanel";
 import HoodShellFrame from "../HoodShellFrame";
-import { ARROWS_FROZEN, ARROW_TRADE_ENABLED } from "@/lib/blue-hood/arrow-freeze";
+import { ARROWS_FROZEN, ARROWS_FROZEN_NOTE, ARROW_TRADE_ENABLED } from "@/lib/blue-hood/arrow-freeze";
 import { useHoodShellData } from "../useHoodShellData";
 
 const RH_EXPLORER = "https://robinhoodchain.blockscout.com";
@@ -204,7 +204,14 @@ function Header({ unread, onMarkAllRead }: { unread: number; onMarkAllRead: () =
             Track record →
           </Link>
         )}
-        <EnableAlertsButton />
+        {/* No new arrow can fire while frozen, so no push can ever be sent —
+            the opt-in would promise a delivery nothing performs. */}
+        {ARROWS_FROZEN && (
+          <span style={{ color: "#64748B" }} title={ARROWS_FROZEN_NOTE}>
+            alerts paused
+          </span>
+        )}
+        {!ARROWS_FROZEN && <EnableAlertsButton />}
         {unread > 0 && (
           <button
             onClick={onMarkAllRead}

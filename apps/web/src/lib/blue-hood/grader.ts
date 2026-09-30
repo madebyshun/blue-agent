@@ -29,7 +29,7 @@
  */
 import { kvGet, kvSet } from "@/lib/kv";
 import { onArrowUpdated, invalidateArrowCache } from "./arrow-cache";
-import { callTool } from "./tool-caller";
+import { callRecorderTool } from "./tool-caller";
 import {
   kvArrow,
   kvArrowOpenIndex,
@@ -422,7 +422,9 @@ export async function readGradePrices(
   }
 
   // robinhood (default) — the original M5 read.
-  const r = await callTool<M5Response>("rh-stock-arb", { ticker: arrow.ticker });
+  // Raw reading (recorder path): the published M5 door withholds the DEX leg
+  // under F6, and an open arrow is still graded on the price it fired on.
+  const r = await callRecorderTool<M5Response>("rh-stock-arb", { ticker: arrow.ticker });
   // Downgraded to a soft skip: throwing here dumped the arrow into
   // `errored[]` every cycle forever, and one bad ticker's rate-limit
   // could parade through the log endlessly. Return null → try again on

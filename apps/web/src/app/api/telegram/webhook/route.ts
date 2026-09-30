@@ -23,8 +23,17 @@
  * Commands (all read-only, no sign/trade):
  *   /start        — intro + hard safety declaration + Open-Blue-Hood link
  *   /link CODE    — bind this Telegram user ↔ the wallet that minted CODE (1.7)
- *   /drift TICKER — live oracle vs DEX drift from the latest snapshot (health-gated)
+ *   /drift TICKER — the latest snapshot's row for an RH ticker (health-gated),
+ *                   published through the F6 quarantine: oracle price, with the
+ *                   DEX price and drift withheld while that leg is repaired
  *   /track        — public hit-rate, gated below the sample threshold (0.2)
+ *
+ * WHILE ARROWS ARE FROZEN (arrow-freeze.ts) no alert can be produced: arrows are
+ * the only thing alerts are made of, and the brief-worker and alert-drain are
+ * both off the timer. So /start, the link replies and the help text say that
+ * signals stopped, and a plain /start does NOT enrol anyone in the broadcast
+ * list — joining a firehose that cannot flow, under a promise that it will, is
+ * the thing this bot must not do. Locked by scripts/arrow-freeze-check.ts §4.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { kvGetProbe } from "@/lib/kv";
@@ -36,7 +45,8 @@ import {
   removeFromBroadcast,
 } from "@/lib/blue-hood/watchlist";
 import { KV_SNAPSHOT_LATEST } from "@/lib/blue-hood/kv-keys";
-import { publishDeskRow } from "@/lib/blue-hood/quarantine";
+import { publishDeskRow, isQuarantinedRow } from "@/lib/blue-hood/quarantine";
+import { ARROWS_FROZEN, ARROWS_FROZEN_NOTE, ARROW_TRADE_ENABLED } from "@/lib/blue-hood/arrow-freeze";
 import type { HoodSnapshot } from "@/lib/blue-hood/types";
 import { readPublicArrows } from "@/lib/blue-hood/public-feed";
 import { computeHitRate } from "@/lib/blue-hood/hit-rate-gate";
@@ -107,6 +117,41 @@ async function handleStart(rest: string, from?: TgUser): Promise<string> {
     return linkReply(payload.slice(payload.indexOf("_") + 1), from);
   }
 
+  const hood = absoluteUrl("/hood");
+  const commands = [
+    `<b>Commands</b>`,
+    `• <code>/drift TICKER</code> — ${driftHelp()}`,
+    `• <code>/track</code> — public hit-rate${ARROWS_FROZEN ? " (historical)" : ""}`,
+    `• <code>/mute</code> — ${ARROWS_FROZEN ? "leave the broadcast list" : "stop broadcasts (your watchlist alerts stay)"}`,
+  ];
+  // Trading straight from a signal is its own switch (arrow-freeze.ts), off
+  // since 2026-09-30 — only point at it while it exists.
+  const safety = [
+    `🔒 <b>Safety</b>`,
+    `Blue Hood never asks for your seed phrase or private key, and never signs transactions here.` +
+      (ARROW_TRADE_ENABLED ? ` To act on a signal, you sign in your own wallet in the app.` : ""),
+  ];
+
+  // Arrows are frozen: nothing can fire, so nothing can be broadcast. Saying
+  // "you'll now get every signal as it fires" — and enrolling the user in a list
+  // that cannot flow — is a promise of a delivery nothing performs. Say so, and
+  // leave the list alone: a user who joins after publishing resumes should do it
+  // on a message that is true.
+  if (ARROWS_FROZEN) {
+    return [
+      `🎯 <b>Blue Hood</b>`,
+      `Oracle-vs-DEX readings for tokenized stocks on Base and Robinhood Chain.`,
+      ``,
+      `⏸ <b>Signals are paused.</b> ${esc(ARROWS_FROZEN_NOTE)} No alerts are sent while that holds, so there is nothing to subscribe to here yet.`,
+      ``,
+      ...safety,
+      ``,
+      `<a href="${hood}">Open Blue Hood →</a>`,
+      ``,
+      ...commands,
+    ].join("\n");
+  }
+
   // Plain /start (A1): join the broadcast firehose. Fire-and-forget — a KV hiccup
   // must not break the greeting.
   if (from?.id) {
@@ -117,23 +162,30 @@ async function handleStart(rest: string, from?: TgUser): Promise<string> {
     }
   }
 
-  const hood = absoluteUrl("/hood");
   return [
     `🎯 <b>Blue Hood</b>`,
     `Drift & arbitrage signals for tokenized stocks on Base and Robinhood Chain — every signal graded in public, misses included.`,
     ``,
     `🔔 You'll now get <b>every tradable signal</b> as it fires. Want only <i>your</i> tickers? Link your wallet in the app — one tap, no code to type.`,
     ``,
-    `🔒 <b>Safety</b>`,
-    `Blue Hood never asks for your seed phrase or private key, and never signs transactions here. To act on a signal, you sign in your own wallet in the app.`,
+    ...safety,
     ``,
     `<a href="${hood}">Open Blue Hood →</a>`,
     ``,
-    `<b>Commands</b>`,
-    `• <code>/drift TICKER</code> — live oracle vs DEX drift`,
-    `• <code>/track</code> — public hit-rate`,
-    `• <code>/mute</code> — stop broadcasts (your watchlist alerts stay)`,
+    ...commands,
   ].join("\n");
+}
+
+/**
+ * What `/drift` returns, in the help text. It reads the RH snapshot only (see
+ * `handleDrift`), and while the F6 quarantine holds that desk's DEX price and
+ * drift are withheld — so "live oracle vs DEX drift" would advertise the one
+ * number the command no longer answers with.
+ */
+function driftHelp(): string {
+  return isQuarantinedRow({ chain: "robinhood" })
+    ? "Robinhood Chain oracle price (DEX price and drift withheld while that desk's price source is repaired)"
+    : "live oracle vs DEX drift";
 }
 
 /**
@@ -142,16 +194,32 @@ async function handleStart(rest: string, from?: TgUser): Promise<string> {
  * expired code was never bound to one.
  */
 async function linkReply(rawCode: string, from?: TgUser): Promise<string> {
+  // While frozen the app does not offer "Get alerts on Telegram" or the watch
+  // star (arrow-freeze.ts), so every line below that sends the user back for
+  // one points at a button that is not there — and "you'll get alerts" is a
+  // delivery nothing performs. An old deep link still lands here; answer it
+  // truthfully rather than refuse it.
+  const paused = `⏸ ${esc(ARROWS_FROZEN_NOTE)} No alerts are sent while that holds.`;
   const code = (rawCode.trim().split(/\s+/)[0] ?? "").toUpperCase();
   if (!code) {
-    return `Send the code from the app, e.g. <code>/link ABC123</code>. Create yours in Blue Hood.`;
+    return ARROWS_FROZEN
+      ? paused
+      : `Send the code from the app, e.g. <code>/link ABC123</code>. Create yours in Blue Hood.`;
   }
   if (!from?.id) {
     return `Couldn't read your Telegram id — please try again.`;
   }
   const res = await consumeTgLinkCode(code, from.id, from.username);
   if (!res.ok) {
-    return `❌ ${esc(res.reason)}. Open Blue Hood, tap “Get alerts on Telegram” for a fresh link.`;
+    return ARROWS_FROZEN
+      ? `❌ ${esc(res.reason)}.\n${paused}`
+      : `❌ ${esc(res.reason)}. Open Blue Hood, tap “Get alerts on Telegram” for a fresh link.`;
+  }
+  if (ARROWS_FROZEN) {
+    return [
+      `✅ Linked to <code>${esc(shortAddr(res.address))}</code>.`,
+      paused,
+    ].join("\n");
   }
   return [
     `✅ Linked to <code>${esc(shortAddr(res.address))}</code>.`,
@@ -174,6 +242,14 @@ async function handleMute(from?: TgUser): Promise<string> {
     } catch (e) {
       console.warn(`[tg-webhook] broadcast remove failed tg=${from.id}: ${(e as Error).message}`);
     }
+  }
+  // While frozen a plain /start no longer re-enrols, and linked-ticker alerts
+  // cannot come through either — both lines below would be false.
+  if (ARROWS_FROZEN) {
+    return [
+      `🔕 Muted — you're off the broadcast list.`,
+      `<i>${esc(ARROWS_FROZEN_NOTE)} No alerts are sent while that holds.</i>`,
+    ].join("\n");
   }
   return [
     `🔕 Muted. You won't get broadcast signals anymore.`,
@@ -257,6 +333,9 @@ async function handleDrift(rest: string): Promise<string> {
 async function handleTrack(): Promise<string> {
   const arrows = await readPublicArrows(100);
   const { hit_rate, per_type } = computeHitRate(arrows);
+  // While frozen the record stops growing; a sample count read without that
+  // looks like a desk still being graded toward its headline number.
+  const frozenLine = ARROWS_FROZEN ? `<i>${esc(ARROWS_FROZEN_NOTE)}</i>` : ``;
 
   if (!hit_rate.ready) {
     // NO fabricated pct below the sample threshold — that's the whole point of 0.2.
@@ -266,6 +345,7 @@ async function handleTrack(): Promise<string> {
       `Warming up — <b>${hit_rate.sample}</b> graded so far.`,
       `Every signal is graded in public, misses included.`,
       hit_rate.needed ? `<i>${hit_rate.needed} graded needed before a headline %.</i>` : ``,
+      frozenLine,
       ``,
       `<a href="${absoluteUrl("/track")}">See the public track record →</a>`,
     ]
@@ -286,6 +366,7 @@ async function handleTrack(): Promise<string> {
     ``,
     `<b>${hit_rate.pct}% hit rate</b> (${hit_rate.sample} graded)`,
     byType ? `By type: ${byType}` : ``,
+    frozenLine,
     ``,
     `<a href="${absoluteUrl("/track")}">See the full public record →</a>`,
   ]

@@ -43,6 +43,16 @@
  * hole instead of drawing through it. `seriesCoverage` wrote the warning about
  * connecting 03:00 to 09:00 before any chart existed; this is the route that
  * has to honour it.
+ *
+ * ## F6 — the Robinhood archive is published through the quarantine
+ *
+ * `chain=robinhood` serves the same DEX leg the quarantine withholds on the
+ * snapshot (lib/blue-hood/quarantine.ts), and this chart renders under the
+ * board row: before it went through `publishRhArchivePoints`, expanding an RH
+ * row drew the withheld drift directly beneath a row that said "withheld". The
+ * points are projected BEFORE `buildChartSeries`, so the deadband tally, the
+ * hover and the hero price all see the same nulls — nothing downstream can
+ * re-derive the number from a field that was left in. Base is untouched.
  */
 import { NextRequest, NextResponse } from "next/server";
 import {
@@ -60,6 +70,7 @@ import {
   type ChartDayInput,
 } from "@/lib/blue-hood/chart-series";
 import type { HoodChain } from "@/lib/blue-hood/types";
+import { publishRhArchivePoints, rhDeskProvenance } from "@/lib/blue-hood/quarantine";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -147,7 +158,9 @@ export async function GET(req: NextRequest) {
         ? {
             day: r.day,
             status: "hit" as const,
-            points: r.value.points,
+            // F6 — published through the quarantine (see the header). Coverage
+            // reads the raw points: it is about which HOURS exist, not prices.
+            points: publishRhArchivePoints(r.value.points),
             hours_absent: seriesCoverage(r.day, r.value.points, now).hours_absent,
           }
         : r.status === "error"
@@ -194,6 +207,8 @@ export async function GET(req: NextRequest) {
       ticker,
       chain,
       chain_id: chain === "base" ? 8453 : 4663,
+      // F6 — whether this desk's DEX leg is published. Base is always measured.
+      ...(chain === "base" ? { provenance: "measured" as const } : rhDeskProvenance()),
       archive_start: archiveStart,
       requested,
       // Two separate questions, as everywhere else in this archive: `complete`
@@ -236,6 +251,8 @@ export async function GET(req: NextRequest) {
           "THREE states, never two. `dated` = holds the Chainlink round the price was measured against. `undatable` = the feed was read and could not be dated. `predates_field` = never recorded, so nobody ever looked. Check `supported` FIRST: it is false on Robinhood, where no oracle round is recorded at all and the tally is 100% `predates_field` by construction rather than by observation",
         chain:
           "the chart is an assertion about ONE token. A ticker exists on both chains as different tokens with different pools, so this field is part of the answer, not decoration",
+        provenance:
+          "`quarantined` = this desk's DEX price is under repair (see provenance_note): dex_usd and drift_pct are null on every point, WITHHELD rather than unobserved, and `deadband.graded` counts none of them. The oracle line is as recorded",
       },
     },
     { headers: { "Cache-Control": cache } },

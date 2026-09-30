@@ -9,10 +9,25 @@
 //
 // This is a real trading signal, not an LLM opinion. The verdict is derived
 // deterministically from the numeric delta.
+//
+// F6 (lib/blue-hood/quarantine.ts) — TWO ENTRY POINTS, ON PURPOSE.
+//   • `measureRhStockArb` is the raw reading: the Blue Hood recorder's
+//     instrument. The poller builds the RH snapshot out of it and the grader
+//     closes open arrows with it; both reach it only through `callRecorderTool`
+//     (lib/blue-hood/tool-caller.ts). It is NOT in HANDLERS, so no HTTP door —
+//     paid, chat, blue_call — can serve it.
+//   • the default export is what HANDLERS["rh-stock-arb"] serves, and it
+//     publishes through the quarantine: the DEX price, the delta and the verdict
+//     derived from them are withheld with the reason. The diagnosis found that
+//     "DEX price" is GeckoTerminal's token-level USD figure, not the pool's rate,
+//     and every free and ACP door already withheld it — this $0.05 door was
+//     still selling it, because it computes the number live and so never
+//     appeared among the readers of the snapshot the quarantine was wired into.
 
 import { findByTicker, RH_CHAIN } from "@/lib/robinhood/rwa-registry";
 import { chainlinkLatest } from "@/lib/robinhood/rwa-price";
 import { resolvePrimaryPool, nyseMarketStatus } from "@/lib/robinhood/rwa-market";
+import { publishArbResult } from "@/lib/blue-hood/quarantine";
 
 // Base drift threshold below which we call the pair aligned. During
 // regular NYSE hours a fresh feed means a real arb; when the market is
@@ -25,7 +40,15 @@ const ALIGNED_PCT_CLOSED  = 1.5;
 // Anything past this while market is OPEN is a legit price-discovery gap.
 const FEED_FRESH_MAX_AGE_INHOURS_SECONDS = 15 * 60;
 
+/** The published door — HANDLERS["rh-stock-arb"]. See the F6 note above. */
 export default async function handler(req: Request): Promise<Response> {
+  const raw = await measureRhStockArb(req);
+  const body = (await raw.json()) as Record<string, unknown>;
+  return Response.json(publishArbResult(body), { status: raw.status });
+}
+
+/** The raw M5 reading — recorder-only. See the F6 note above. */
+export async function measureRhStockArb(req: Request): Promise<Response> {
   try {
     let body: { ticker?: string } = {};
     try { const t = await req.text(); if (t?.trim().startsWith("{")) body = JSON.parse(t); } catch {}

@@ -21,7 +21,7 @@
  */
 import { kvSet, kvGetProbe } from "@/lib/kv";
 import { HOOD_WATCHLIST, HOOD_REGISTRY_STATS } from "./registry";
-import { callTool } from "./tool-caller";
+import { callRecorderTool } from "./tool-caller";
 import {
   KV_SNAPSHOT_LATEST,
   TTL_SNAPSHOT_HOUR,
@@ -84,7 +84,9 @@ function staggerMs(): number {
 async function pollOne(ticker: string, cycleStart: number): Promise<TickerSnapshot> {
   const entry = HOOD_WATCHLIST.find((t) => t.ticker === ticker)!;
   const polled_at_ms = Date.now() - cycleStart;
-  const r = await callTool<M5Response>("rh-stock-arb", { ticker });
+  // The RAW reading, not HANDLERS["rh-stock-arb"]: that door publishes through
+  // the F6 quarantine, and this is the recorder (quarantine.ts, tool-caller.ts).
+  const r = await callRecorderTool<M5Response>("rh-stock-arb", { ticker });
 
   // Freshness attribution — inspect the memo for the URL M5 hit internally.
   const gtUrl = `${GT_TOKENS_URL_BASE}/${entry.contract.toLowerCase()}/pools?page=1`;

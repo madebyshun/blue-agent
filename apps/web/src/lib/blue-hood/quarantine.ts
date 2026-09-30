@@ -22,11 +22,24 @@
  * price source is fixed — that fix is a decision on the diagnosis, not part
  * of this module. Arrows are frozen (arrow-freeze.ts), so no RH arrow fires.
  *
- * Every reader of `KV_SNAPSHOT_LATEST` must either publish rows through
- * `publishDeskRow` or be a listed non-publishing reader — enforced by
- * scripts/rh-quarantine-check.ts.
+ * THREE DOORS carry that leg, and each has its own publish function here:
+ *   • the latest snapshot (`KV_SNAPSHOT_LATEST`) — `publishDeskRow(s)`;
+ *   • the permanent RH archive (`bh:series:day:*`, via `readSeriesDays`) —
+ *     `publishRhArchivePoints`. The recorder keeps writing raw points; the
+ *     routes that SERVE the archive withhold the DEX leg from them;
+ *   • the paid M5 tool (`rh-stock-arb`), which does not read the snapshot at
+ *     all — it IS the measurement, computed live — so it never showed up in a
+ *     list of snapshot readers while it sold the exact number withheld
+ *     everywhere else. Its HANDLERS entry publishes through `publishArbResult`;
+ *     the raw reading is `measureRhStockArb`, reachable only through
+ *     `callRecorderTool` (tool-caller.ts) by the poller and the grader.
+ *
+ * Every reader of each door either publishes through its function or is a
+ * non-publishing reader whose property is asserted — enforced by
+ * scripts/rh-quarantine-check.ts, which enumerates readers by what they call,
+ * not by a list of files known today.
  */
-import type { M5Verdict, TickerSnapshot } from "./types";
+import type { M5Verdict, SeriesPoint, TickerSnapshot } from "./types";
 
 export const RH_DESK_QUARANTINE = {
   active: true,
@@ -79,4 +92,85 @@ export function publishDeskRow<T extends TickerSnapshot>(row: T): T & { provenan
 
 export function publishDeskRows<T extends TickerSnapshot>(rows: readonly T[]): (T & { provenance: Provenance; provenance_note?: string })[] {
   return rows.map((r) => publishDeskRow(r));
+}
+
+/** The RH desk's publishing state, for a response that carries a whole window
+ *  of the desk rather than rows that can each say it (the archive routes). */
+export function rhDeskProvenance(): { provenance: Provenance; provenance_note?: string } {
+  return isQuarantinedRow({ chain: "robinhood" })
+    ? { provenance: "quarantined", provenance_note: RH_DESK_QUARANTINE.note }
+    : { provenance: "measured" };
+}
+
+/**
+ * Points of the PERMANENT RH archive (`bh:series:day:*`) as they may be
+ * PUBLISHED. The archive holds the same DEX leg as the snapshot — `mergeSeriesPoint`
+ * copies `dex_usd` / `drift_pct` straight off each cycle's rows — so serving it
+ * raw undid the quarantine one route over: `/api/hood/ticker-series` drew the
+ * withheld drift under a board row that said it was withheld.
+ *
+ * The archive itself is untouched; this is a read-side projection. The oracle
+ * price and total liquidity are real reads and stay. A row keeps its place in
+ * the hour even when the DEX price was its only price: the hour WAS observed,
+ * and dropping the row would turn "withheld" into "not priced", a different claim.
+ *
+ * Only for the RH archive. The Base archive (`bh:base:series:day:*`) has its own
+ * reader and a DEX leg that is not under repair.
+ */
+export function publishRhArchivePoints(points: readonly SeriesPoint[]): SeriesPoint[] {
+  if (!isQuarantinedRow({ chain: "robinhood" })) return [...points];
+  return points.map((p) => ({
+    ...p,
+    rows: p.rows.map((r) => ({ ...r, dex_usd: null, drift_pct: null })),
+  }));
+}
+
+/** Fields of the M5 `dex` object that are GeckoTerminal's token-level USD price
+ *  of the stock, or a change computed on it — the leg F6 found is not the pool's
+ *  own rate. Pool identity, depth and volume are real reads and are not here. */
+const ARB_DEX_WITHHELD = ["price_usd", "change_1h", "change_24h", "change_24h_pct"] as const;
+
+/**
+ * An `rh-stock-arb` (M5) response body as it may be PUBLISHED — by
+ * `HANDLERS["rh-stock-arb"]`, and therefore by every door that dispatches
+ * through HANDLERS: the paid x402 route, a chat credit call, `blue_call`.
+ *
+ * Withholds the DEX price, the delta computed from it (`abs_usd`, `pct`) and the
+ * verdict hard-mapped from that delta, exactly as `publishDeskRow` does for the
+ * snapshot row the poller builds out of this same response. The Chainlink block,
+ * the pool reference, its liquidity and volume, the market clock and the
+ * warnings stay. A body with no reading in it (400 / 404 / 500 `error`) passes
+ * through unchanged — there is nothing to withhold and nothing to mark.
+ *
+ * RH-only by construction: M5 reads Robinhood Chain and nothing else.
+ */
+export function publishArbResult<T extends Record<string, unknown>>(
+  body: T,
+): T | (T & { provenance: Provenance; provenance_note?: string }) {
+  if (typeof body.error === "string" || !("verdict" in body)) return body;
+  if (!isQuarantinedRow({ chain: "robinhood" })) return { ...body, provenance: "measured" };
+
+  const dex = body.dex;
+  let publishedDex: unknown = dex;
+  if (dex && typeof dex === "object") {
+    const d: Record<string, unknown> = { ...(dex as Record<string, unknown>) };
+    for (const k of ARB_DEX_WITHHELD) if (k in d) d[k] = null;
+    publishedDex = d;
+  }
+  const delta = body.delta;
+  const publishedDelta =
+    delta && typeof delta === "object"
+      ? { ...(delta as Record<string, unknown>), abs_usd: null, pct: null }
+      : delta;
+
+  return {
+    ...body,
+    // An errored read is not published as a verdict at all (see above), so
+    // every reading that reaches here had its verdict derived from the DEX leg.
+    verdict: "INSUFFICIENT_DATA" satisfies M5Verdict,
+    dex: publishedDex,
+    delta: publishedDelta,
+    provenance: "quarantined",
+    provenance_note: RH_DESK_QUARANTINE.note,
+  };
 }

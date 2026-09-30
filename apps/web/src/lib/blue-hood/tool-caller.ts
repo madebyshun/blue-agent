@@ -13,6 +13,10 @@
  * The default is local because prod itself will use local — Vercel functions
  * calling other Vercel functions over HTTP would burn extra $ + latency for
  * no gain. Http mode is there for out-of-band debugging.
+ *
+ * Both modes return what the tool PUBLISHES. The one reading the recorder needs
+ * unpublished — M5 under the F6 quarantine — goes through `callRecorderTool`
+ * below instead, which is always local.
  */
 
 import { internalX402Headers, hasInternalKey } from "@/lib/x402-internal";
@@ -59,17 +63,62 @@ export async function callTool<T = Record<string, unknown>>(
     const HANDLERS = await getLocalHandlers();
     const h = HANDLERS[tool];
     if (!h) return { ok: false, status: 503, error: `No local handler for ${tool}` };
-    // NOTE: local mode still hits real upstream data sources (GeckoTerminal,
-    // Chainlink RPC, etc.) — it just skips HTTP + x402 payment/bypass.
-    const req = new Request(`http://localhost/api/x402/${tool}`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const res = await h(req);
-    const data = (await res.json().catch(() => ({}))) as T;
-    if (!res.ok) return { ok: false, status: res.status, error: (data as { error?: string }).error ?? `HTTP ${res.status}` };
-    return { ok: true, data };
+    return await runLocal<T>(tool, h, body);
+  } catch (e) {
+    return { ok: false, status: 0, error: (e as Error).message };
+  }
+}
+
+// NOTE: local mode still hits real upstream data sources (GeckoTerminal,
+// Chainlink RPC, etc.) — it just skips HTTP + x402 payment/bypass.
+async function runLocal<T>(
+  tool: string,
+  h: (req: Request) => Promise<Response>,
+  body: unknown,
+): Promise<ToolResult<T>> {
+  const req = new Request(`http://localhost/api/x402/${tool}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const res = await h(req);
+  const data = (await res.json().catch(() => ({}))) as T;
+  if (!res.ok) return { ok: false, status: res.status, error: (data as { error?: string }).error ?? `HTTP ${res.status}` };
+  return { ok: true, data };
+}
+
+/**
+ * Raw measurements the RECORDER needs and no door may publish (F6,
+ * lib/blue-hood/quarantine.ts). `HANDLERS["rh-stock-arb"]` answers through the
+ * quarantine — DEX price, delta and verdict withheld — so `callTool` would hand
+ * the poller a snapshot with no DEX leg and the archive would stop recording
+ * the very numbers it is keeping so they can be re-derived once the price
+ * source is fixed. The grader needs the same reading to close open arrows.
+ */
+const RECORDER_SOURCES = {
+  "rh-stock-arb": async () =>
+    (await import("@/app/api/x402/_handlers/rh-stock-arb")).measureRhStockArb,
+} as const;
+export type RecorderSource = keyof typeof RECORDER_SOURCES;
+
+/**
+ * `callTool` for the recorder: same result shape, same never-throws contract,
+ * but it runs the UNPUBLISHED measurement.
+ *
+ * ALWAYS LOCAL, including in http mode. The raw reading has no HTTP door by
+ * design — the only route that serves this id serves the quarantined body — so
+ * "fetch it from BH_TOOL_TARGET" is not a thing that can be done, and pretending
+ * otherwise would silently record withheld nulls. Callers are the poller and the
+ * grader, which publish nothing; scripts/rh-quarantine-check.ts asserts that no
+ * route calls this.
+ */
+export async function callRecorderTool<T = Record<string, unknown>>(
+  tool: RecorderSource,
+  body: unknown,
+): Promise<ToolResult<T>> {
+  try {
+    const h = await RECORDER_SOURCES[tool]();
+    return await runLocal<T>(tool, h, body);
   } catch (e) {
     return { ok: false, status: 0, error: (e as Error).message };
   }

@@ -36,6 +36,7 @@ import type { HoodSnapshot, TickerSnapshot, M5Verdict, Arrow, HoodChain } from "
 import { chainOf, rowKey, ARB_MIN_ABS_PCT, DRIFT_MIN_ABS_PCT } from "@/lib/blue-hood/types";
 import { closedAlignedLabel, oracleRoundAgeText } from "@/lib/blue-hood/oracle-age";
 import { explorerTokenUrl } from "@/lib/blue-hood/detail-support";
+import { boardRowState, isWithheld, rowTotalTvl, DUST_TVL_USD } from "@/lib/blue-hood/board-rows";
 import HoodSidebar from "./HoodSidebar";
 import TickerDetailPanel from "./TickerDetailPanel";
 import ArrowBriefBlock from "./ArrowBriefBlock";
@@ -46,7 +47,7 @@ import EnableAlertsButton from "./inbox/EnableAlertsButton";
 import { HealthProvider, HealthBanner } from "./HealthProvider";
 import { WatchlistProvider, useWatchlist } from "./WatchlistProvider";
 import { WATCHLIST_LIMITS } from "@/lib/blue-hood/watchlist-config";
-import { ARROWS_FROZEN, ARROWS_FROZEN_SINCE, ARROW_TRADE_ENABLED } from "@/lib/blue-hood/arrow-freeze";
+import { ARROWS_FROZEN, ARROWS_FROZEN_NOTE, ARROWS_FROZEN_SINCE, ARROW_TRADE_ENABLED } from "@/lib/blue-hood/arrow-freeze";
 import { useEnsureSession } from "@/hooks/useEnsureSession";
 import HoodSwap from "./HoodSwap";
 
@@ -73,31 +74,11 @@ type Filter = "tradable" | "drifting" | "flow" | "frozen" | "dust" | "no_data" |
 // (see `chainOf`), so the default "all" and RH rows stay back-compatible.
 type ChainFilter = "all" | "base" | "robinhood";
 
-// T2 — dust floor matches the engine's arrow gate. Anything under this is
-// treated as untradable at the row level (verdict badged as DUST, drift
-// faded, sorted last, hidden from default filter).
-//
-// Reads TOTAL token liquidity (sum across every pool), matching the
-// rule-engine dust gate. Old check on `tvl_usd` (primary pool only)
-// would badge NVDA as DUST because its USDG-quoted pool is thin — even
-// though the bankr-robinhood WETH pool holds $21M. That was blinding
-// the board to the deepest tokens on chain. Fallback to `tvl_usd` for
-// rows served from mid-deploy cycles that predate `total_tvl_usd`.
-const DUST_TVL_USD = 5_000;
-
-function rowTotalTvlUi(r: TickerSnapshot): number {
-  return r.total_tvl_usd ?? r.tvl_usd ?? 0;
-}
-
-function isDust(r: TickerSnapshot): boolean {
-  return r.verdict !== "ERROR" && r.dex_usd !== null && rowTotalTvlUi(r) < DUST_TVL_USD;
-}
-function isNoData(r: TickerSnapshot): boolean {
-  return r.verdict === "ERROR" || r.verdict === "INSUFFICIENT_DATA" || r.dex_usd === null;
-}
-function isTradable(r: TickerSnapshot): boolean {
-  return !isDust(r) && !isNoData(r);
-}
+// T2 / T3 — which bucket a row belongs in (tradable / dust / no data) lives in
+// `blue-hood/board-rows.ts`, shared with the sidebar, together with the dust
+// floor and the total-liquidity read it is judged on. It used to be a private
+// copy here and another in HoodSidebar, and both read the F6 quarantine's
+// withheld DEX price as "no pool" — see that module's header.
 function isFrozenLike(v: TickerSnapshot["verdict"]): boolean {
   return v === "FROZEN_ALIGNED" || v === "PREMARKET_DRIFT" || v === "AFTERHOURS_DRIFT";
 }
@@ -228,9 +209,12 @@ export default function HoodClient() {
     const tradable: TickerSnapshot[] = [];
     const dust: TickerSnapshot[] = [];
     const no_data: TickerSnapshot[] = [];
+    // A row the F6 quarantine withheld is bucketed by its REAL liquidity, not
+    // dumped into "No data" because its DEX price is null (board-rows.ts).
     for (const r of inChain) {
-      if (isNoData(r)) no_data.push(r);
-      else if (isDust(r)) dust.push(r);
+      const state = boardRowState(r);
+      if (state === "no_data") no_data.push(r);
+      else if (state === "dust") dust.push(r);
       else tradable.push(r);
     }
     return { tradable, dust, no_data };
@@ -252,7 +236,7 @@ export default function HoodClient() {
       if (sort === "volume") return (b.volume_24h_usd ?? 0) - (a.volume_24h_usd ?? 0);
       // TVL sort — rank by TOTAL depth (matches dust gate + the honest
       // "which token has the deepest liquidity on chain" answer).
-      return rowTotalTvlUi(b) - rowTotalTvlUi(a);
+      return rowTotalTvl(b) - rowTotalTvl(a);
     });
   }, [buckets, sort, filter]);
 
@@ -442,9 +426,10 @@ function Header({
         {ARROWS_FROZEN ? "oracle-vs-DEX drift, live" : "oracle-vs-DEX drift, graded in public"}
       </span>
       {/* Right chip group — Inbox/Track links (they double as mobile nav,
-          since the BLUEHOOD sidebar is lg-only), alerts, the Telegram
-          deep-link, the live market badge, and the real snapshot-age
-          pulse. Mirrors the InboxClient + TrackRecordClient headers. */}
+          since the BLUEHOOD sidebar is lg-only), alerts and the Telegram
+          deep-link (or "alerts paused" while arrows are frozen), the live
+          market badge, and the real snapshot-age pulse. Mirrors the
+          InboxClient + TrackRecordClient headers. */}
       <div className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-2 font-mono text-[11px]">
         <Link
           href="/hood/inbox"
@@ -458,8 +443,17 @@ function Header({
             Track record →
           </Link>
         )}
-        <EnableAlertsButton />
-        <TelegramLinkButton />
+        {/* Alerts are only ever produced by a new arrow, and arrows are frozen
+            (arrow-freeze.ts): the brief-worker and alert-drain are off, so no
+            push and no Telegram message can be sent. Offering sign-up here
+            would promise a delivery nothing performs — say it is paused. */}
+        {ARROWS_FROZEN && (
+          <span style={{ color: "#64748B" }} title={ARROWS_FROZEN_NOTE}>
+            alerts paused
+          </span>
+        )}
+        {!ARROWS_FROZEN && <EnableAlertsButton />}
+        {!ARROWS_FROZEN && <TelegramLinkButton />}
         <span style={{ color: marketBadge.color }}>● {marketBadge.label}</span>
         <span className="flex items-center gap-1.5" style={{ color: "#64748B" }}>
           {/* T-V2 #1 — LIVE PULSE. Gentle dot signals the page is alive.
@@ -1025,11 +1019,18 @@ function DriftRow({
   isHeld: boolean;
 }) {
   const drift = r.drift_pct ?? 0;
-  const dust = isDust(r);
-  const noData = isNoData(r);
+  const state = boardRowState(r);
+  const dust = state === "dust";
+  const noData = state === "no_data";
+  // F6 — the pool was read and its DEX price withheld (board-rows.ts). The row
+  // renders like any other — oracle, TVL, volume, expandable into the Swap and
+  // the detail panel — with the DEX, drift and verdict cells saying "withheld".
+  const withheld = isWithheld(r);
   const driftColor = Math.abs(drift) < 0.5 ? "#9aa1ac" : drift > 0 ? GREEN_TEXT : RED;
 
   // T3 — NO DATA row is a distinct visual state: dim oracle, no DEX, no drift.
+  // Only a REAL absence lands here (errored, or the poller found no pool); a
+  // quarantined row never does, so "NO POOL" is no longer said of a live pool.
   if (noData) {
     return (
       <tr
@@ -1085,10 +1086,20 @@ function DriftRow({
   const driftDisplay = dust ? { color: "#4b5563" } : { color: driftColor };
   // T-B1 — sparkline cell content: only shown for tradable rows. Dust
   // rows fall through to the same em-dash placeholder as the header row.
-  const sparklineCell = dust ? (
-    <span style={{ color: "#334155" }}>—</span>
+  // A withheld row does too: its candles are GeckoTerminal's USD pricing of the
+  // same token, the leg the quarantine withholds, and a line drawn against the
+  // dashed oracle rule IS a drift picture.
+  const sparklineCell = dust || withheld ? (
+    <span style={{ color: "#334155" }} title={withheld ? r.provenance_note : undefined}>—</span>
   ) : (
     <Sparkline points={r.sparkline} oracle={r.oracle_usd} driftPct={r.drift_pct ?? null} />
+  );
+  // F6 — the DEX and drift cells of a withheld row say so, rather than "—"
+  // (which reads as "nothing there") or a 0.00% (which reads as "aligned").
+  const withheldCell = (
+    <span className="font-mono text-[11px] italic" style={{ color: MUTED }} title={r.provenance_note}>
+      withheld
+    </span>
   );
 
   const chevron = expanded ? "▾" : "▸";
@@ -1128,12 +1139,16 @@ function DriftRow({
               · held
             </span>
           )}
-          <WatchToggle ticker={r.ticker} chain={chainOf(r)} />
+          {/* The star subscribes to alerts, and while arrows are frozen nothing
+              can produce one (arrow-freeze.ts) — so it is not offered. */}
+          {!ARROWS_FROZEN && <WatchToggle ticker={r.ticker} chain={chainOf(r)} />}
         </td>
         <td className="px-3 py-2 text-right text-[#E7E9EE]">
           <FlashCell value={r.oracle_usd} />
         </td>
         <td className="px-3 py-2 text-right">
+          {/* The pool link stays on a withheld row: the pool is a real read,
+              only the price GeckoTerminal attaches to it is under repair. */}
           {r.pool_ref ? (
             <a
               href={poolUrl(r.pool_ref, chainOf(r))}
@@ -1142,14 +1157,14 @@ function DriftRow({
               onClick={(e) => e.stopPropagation()}
               className="text-[#E7E9EE] hover:underline"
             >
-              <FlashCell value={r.dex_usd} />
+              {withheld ? withheldCell : <FlashCell value={r.dex_usd} />}
             </a>
           ) : (
-            <span className="text-[#E7E9EE]"><FlashCell value={r.dex_usd} /></span>
+            <span className="text-[#E7E9EE]">{withheld ? withheldCell : <FlashCell value={r.dex_usd} />}</span>
           )}
         </td>
         <td className="px-3 py-2 text-right font-mono" style={driftDisplay}>
-          {drift > 0 ? "+" : ""}{drift.toFixed(2)}%
+          {withheld ? withheldCell : <>{drift > 0 ? "+" : ""}{drift.toFixed(2)}%</>}
         </td>
         <td className="px-3 py-2 text-left align-middle">{sparklineCell}</td>
         <td
@@ -1164,7 +1179,7 @@ function DriftRow({
           }
         >
           <div className="leading-tight">
-            <div>{formatUsd(rowTotalTvlUi(r))}</div>
+            <div>{formatUsd(rowTotalTvl(r))}</div>
             {r.total_tvl_usd !== null && r.tvl_usd !== null && r.total_tvl_usd !== r.tvl_usd ? (
               <div className="text-[10px] font-mono" style={{ color: MUTED }}>
                 {formatUsd(r.tvl_usd)} pri
@@ -1176,8 +1191,11 @@ function DriftRow({
         <td className="px-3 py-2 text-right">
           {/* T-V4 — right-align verdict badge so it hangs off the same
               edge as every numeric column above. Consistent alignment
-              per user feedback 2026-07-23. */}
-          {dust ? <DustBadge /> : (
+              per user feedback 2026-07-23.
+              A withheld row's verdict was computed from the withheld price, so
+              it gets its own badge ahead of DUST: the liquidity cell already
+              says "dust" in amber, the verdict cell says why there is none. */}
+          {withheld ? <WithheldBadge note={r.provenance_note} /> : dust ? <DustBadge /> : (
             <VerdictBadge
               verdict={r.verdict}
               session={r.market.session}
@@ -1238,6 +1256,9 @@ function DriftRow({
 //   • watchable    → ☆, tooltip "watch for alerts"
 // Lives inside a <tr onClick> that expands the detail panel, so EVERY handler
 // stops propagation — a click here must never toggle the row.
+// Not rendered while ARROWS_FROZEN: a watch only ever yields an alert when a
+// new arrow fires, so offering it then promises a delivery nothing performs
+// (locked by scripts/arrow-freeze-check.ts §4).
 // `chain` is REQUIRED, not optional with a default. The row already knows it —
 // the <ChainTag> two lines above this star renders `chainOf(r)` — and dropping
 // it here is what made ★ on the Base NVDA row subscribe to ROBINHOOD NVDA
@@ -1334,6 +1355,22 @@ function DustBadge() {
       title="Pool TVL below $5k floor — the engine won't fire arrows off this row"
     >
       DUST
+    </span>
+  );
+}
+
+// F6 — the verdict of a quarantined row. Not "NO DATA" (the pool was read) and
+// not a direction (it was computed from the withheld DEX price). The tooltip is
+// the quarantine's own note, so the reason is stated by the one module that
+// decides it rather than re-worded here.
+function WithheldBadge({ note }: { note?: string }) {
+  return (
+    <span
+      className="rounded px-2 py-0.5 font-mono text-[10px] font-semibold tracking-wider"
+      style={{ color: AMBER, backgroundColor: "rgba(245,179,66,0.10)" }}
+      title={note ?? "DEX price and drift withheld while the price source is repaired"}
+    >
+      WITHHELD
     </span>
   );
 }

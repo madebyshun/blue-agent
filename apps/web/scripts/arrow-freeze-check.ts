@@ -18,12 +18,28 @@
  * back to a Map), on a fixture that is proved to fire before it is proved not
  * to — otherwise "fired 0 while frozen" would pass on a fixture that never
  * fires at all.
+ *
+ * Part 4 covers what the freeze left SAYING the opposite. Commit d1573777 fixed
+ * the board's metric strip ("stops presenting frozen arrows as live") and left
+ * the alert sign-ups in the same header, the watch star on every row, a Telegram
+ * /start that enrolled users in a broadcast that cannot flow ("you'll now get
+ * every tradable signal as it fires"), and a chat instruction to close every
+ * arrow answer with "Signals fire…". An alert is only ever made from a new
+ * arrow, so none of those can deliver; each is checked here as a property or
+ * by running the real handler.
  */
+// Hermetic: this suite writes to KV (the rule engine, the Telegram broadcast
+// set). Clear the credentials so lib/kv can only ever reach its in-memory Map.
+for (const k of ["KV_REST_API_URL", "KV_REST_API_TOKEN", "UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN"]) {
+  delete process.env[k];
+}
+
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { kvGet, kvSet } from "../src/lib/kv";
 import { runRuleEngine } from "../src/lib/blue-hood/rule-engine";
-import { ARROWS_FROZEN, ARROW_TRADE_ENABLED } from "../src/lib/blue-hood/arrow-freeze";
+import { ARROWS_FROZEN, ARROWS_FROZEN_SINCE, ARROW_TRADE_ENABLED, arrowAnswerCloser } from "../src/lib/blue-hood/arrow-freeze";
+import { RH_DESK_QUARANTINE } from "../src/lib/blue-hood/quarantine";
 import type { HoodSnapshot, TickerSnapshot } from "../src/lib/blue-hood/types";
 
 let failures = 0;
@@ -189,6 +205,91 @@ async function resetArrows() {
     alertWriters.length === 1 && alertWriters[0].includes("brief-worker"), alertWriters.join(", "));
   check("3.3 while frozen, alert-drain is not on a timer either",
     !ARROWS_FROZEN || !scheduled("alert-drain"), `frozen=${ARROWS_FROZEN} scheduled=${scheduled("alert-drain")}`);
+
+  console.log("\n4. Nothing invites an alert sign-up — or says signals fire — that the freeze makes undeliverable");
+
+  // 4.1 — every render of an alert opt-in, anywhere under src/, sits under
+  // `!ARROWS_FROZEN &&` on its own line or the one before. A property over all
+  // files, like 2.2, so a fourth surface cannot be added without it.
+  const CTAS = ["EnableAlertsButton", "TelegramLinkButton", "WatchToggle"];
+  let ctaRenders = 0;
+  for (const f of files) {
+    const lines = stripComments(readFileSync(f, "utf8")).split("\n");
+    lines.forEach((line, i) => {
+      const cta = CTAS.find((c) => new RegExp(`<${c}\\b`).test(line));
+      if (!cta) return;
+      ctaRenders++;
+      const window = `${lines[i - 1] ?? ""}\n${line}`;
+      // No line number in the label: comments are stripped first, so it would
+      // not match the file.
+      check(`4.1 ${relative(ROOT, f)} renders <${cta}> only while not frozen`, /!ARROWS_FROZEN\s*&&/.test(window));
+    });
+  }
+  check("4.1 the alert opt-ins are still rendered somewhere (the detector is alive)", ctaRenders >= 4, `found ${ctaRenders}`);
+
+  // 4.2 — the Telegram bot, run for real. Env first, THEN import: lib/telegram/bot
+  // reads the token at module load. sendMessage is captured at the fetch layer,
+  // so what is asserted is the exact text Telegram would have been sent.
+  process.env.TELEGRAM_BOT_TOKEN = "arrow-freeze-check";
+  process.env.TELEGRAM_WEBHOOK_SECRET = "arrow-freeze-check";
+  const sent: string[] = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).includes("api.telegram.org")) {
+      try { sent.push(String((JSON.parse(String(init?.body ?? "{}")) as { text?: string }).text ?? "")); } catch { /* not ours */ }
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    }
+    return new Response("{}", { status: 404 });
+  }) as typeof fetch;
+  try {
+    const tg = await import("../src/app/api/telegram/webhook/route");
+    const { NextRequest } = await import("next/server");
+    const { broadcastMembers } = await import("../src/lib/blue-hood/watchlist");
+    const say = async (text: string) => {
+      sent.length = 0;
+      await tg.POST(new NextRequest("https://blueagent.dev/api/telegram/webhook", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-telegram-bot-api-secret-token": "arrow-freeze-check" },
+        body: JSON.stringify({ update_id: 1, message: { message_id: 1, chat: { id: 4242 }, from: { id: 4242 }, text } }),
+      }));
+      return sent.join("\n");
+    };
+
+    const start = await say("/start");
+    check("4.2 the bot answered /start (the capture is alive)", start.length > 0);
+    if (ARROWS_FROZEN) {
+      check("4.2 frozen /start says signals stopped, and when", start.includes(ARROWS_FROZEN_SINCE) && !/as it fires/i.test(start),
+        start.slice(0, 160));
+      check("4.2 frozen /start does NOT enrol the user in the broadcast list",
+        !(await broadcastMembers()).includes("4242"));
+    } else {
+      check("4.2 live /start enrols the user in the broadcast list", (await broadcastMembers()).includes("4242"));
+    }
+    check("4.2 /start points at trading-from-a-signal only while it exists",
+      ARROW_TRADE_ENABLED || !/To act on a signal/i.test(start));
+    check("4.2 /start's help does not advertise a live RH drift while the RH desk is quarantined",
+      !RH_DESK_QUARANTINE.active || !/live oracle vs DEX drift/i.test(start));
+
+    if (ARROWS_FROZEN) {
+      const badLink = await say("/start link_NOPE00");
+      check("4.2 frozen: a stale deep link is not sent back for a button that is hidden",
+        badLink.length > 0 && !/Get alerts on Telegram/i.test(badLink) && badLink.includes(ARROWS_FROZEN_SINCE), badLink.slice(0, 160));
+      const mute = await say("/mute");
+      check("4.2 frozen /mute promises neither re-enrolment nor linked alerts",
+        !/Send \/start any time/i.test(mute) && !/still come through/i.test(mute), mute.slice(0, 160));
+    }
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+
+  // 4.3 — Blue Chat's arrow answer is closed by one sentence the model is told
+  // to say verbatim. It follows the switch; the route may not inline its own.
+  check("4.3 the frozen closer names the stop date and does not say signals fire",
+    arrowAnswerCloser(true).includes(ARROWS_FROZEN_SINCE) && !/\bfire/i.test(arrowAnswerCloser(true)));
+  check("4.3 the live closer is unchanged (un-freezing restores it)", /^Signals fire from oracle-vs-DEX drift/.test(arrowAnswerCloser(false)));
+  const chatRoute = stripComments(read("src/app/api/chat/route.ts"));
+  check("4.3 the chat route ends arrow answers with arrowAnswerCloser(), not a literal",
+    /arrowAnswerCloser\(\)/.test(chatRoute) && !/Signals fire from oracle-vs-DEX drift/.test(chatRoute));
 
   console.log(`\narrow-freeze-check: ${passes}/${passes + failures} passed`);
   if (failures > 0) process.exit(1);

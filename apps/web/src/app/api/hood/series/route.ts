@@ -41,6 +41,14 @@
  * asking. Completed days are immutable and cached for a day; today and
  * yesterday still move (a cycle starting 23:58 UTC writes to yesterday's key
  * a couple of minutes after midnight) so they get 5 minutes.
+ *
+ * F6 — THIS IS A PUBLISHING DOOR OF THE RH DESK. The archive holds the same DEX
+ * leg the quarantine withholds on the snapshot (lib/blue-hood/quarantine.ts),
+ * so every served point goes through `publishRhArchivePoints` and the response
+ * says `provenance`. The archive in KV stays raw — that is the recorder's job,
+ * and the reason the numbers can be re-derived once the price source is fixed.
+ * Coverage is computed from the points' HOURS, which the quarantine does not
+ * touch, so the holes this route reports are the same either way.
  */
 import { NextRequest, NextResponse } from "next/server";
 import {
@@ -50,6 +58,7 @@ import {
   type SeriesCoverage,
 } from "@/lib/blue-hood/poller";
 import { yyyymmdd } from "@/lib/blue-hood/kv-keys";
+import { publishRhArchivePoints, rhDeskProvenance } from "@/lib/blue-hood/quarantine";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -153,7 +162,7 @@ export async function GET(req: NextRequest) {
           status: r.status,
           v: r.value.v,
           coverage: coverage.get(r.day)!,
-          points: r.value.points,
+          points: publishRhArchivePoints(r.value.points),
         }
       : r.status === "error"
         ? { day: r.day, status: r.status, message: r.message }
@@ -196,6 +205,9 @@ export async function GET(req: NextRequest) {
     {
       ok: true,
       archive_start: SERIES_ARCHIVE_START,
+      // F6 — "quarantined" ⟹ every row's `dex_usd` / `drift_pct` is withheld
+      // (null) with the reason; the oracle price and liquidity are as recorded.
+      ...rhDeskProvenance(),
       // False the moment any day in the window could not be read. A consumer
       // that flattens `days[].points` into one array MUST check this first,
       // or it will plot a hole it cannot see.
@@ -220,6 +232,8 @@ export async function GET(req: NextRequest) {
           "hours_absent = hours inside expected_from..expected_to with no point. WHY they are absent is UNKNOWN — cron did not run, nothing priced, or a KV error blocked the write. The future and the hours before recording began are excluded, so they are not listed",
         contiguous:
           "false when a readable day still has holes — distinct from `complete`, which is only about whether the days could be read at all",
+        provenance:
+          "`quarantined` = this desk's DEX price is under repair (see provenance_note): every row's dex_usd and drift_pct are null here, WITHHELD rather than unobserved. The row stays in its hour because the hour was recorded; the archive itself keeps the raw values",
       },
     },
     { headers: { "Cache-Control": cache } },

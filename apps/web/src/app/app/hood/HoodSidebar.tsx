@@ -21,6 +21,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Arrow, HoodSnapshot, M5Verdict, TickerSnapshot } from "@/lib/blue-hood/types";
 import { rowKey, chainOf } from "@/lib/blue-hood/types";
+import { boardRowState, isWithheld, rowTotalTvl, DUST_TVL_USD } from "@/lib/blue-hood/board-rows";
 import { ARROWS_FROZEN } from "@/lib/blue-hood/arrow-freeze";
 
 const RH_GREEN = "#34D399";
@@ -33,7 +34,6 @@ const INK2 = "#94A3B8";
 const INK1 = "#E2E8F0";
 const BORDER = "#1A1A2E";
 const BG = "#050508";
-const DUST_TVL_USD = 5_000;
 
 // #RRGGBB → rgba() at a given alpha — for the tinted pill border derived from
 // the dynamic market-status color. Falls back to the raw string for any
@@ -45,19 +45,10 @@ function alpha(hex: string, a: number): string {
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
 }
 
-// Dust check matches the rule-engine gate: TOTAL token liquidity, not
-// primary pool. Otherwise NVDA (bankr-robinhood WETH $21M + USDG $850k
-// primary) would incorrectly badge dust in the sidebar picker.
-function rowTotalTvlUi(r: TickerSnapshot): number {
-  return r.total_tvl_usd ?? r.tvl_usd ?? 0;
-}
-
-function isDust(r: TickerSnapshot): boolean {
-  return r.verdict !== "ERROR" && r.dex_usd !== null && rowTotalTvlUi(r) < DUST_TVL_USD;
-}
-function isNoData(r: TickerSnapshot): boolean {
-  return r.verdict === "ERROR" || r.verdict === "INSUFFICIENT_DATA" || r.dex_usd === null;
-}
+// Bucketing (tradable / dust / no data) is `blue-hood/board-rows.ts`, the SAME
+// function the drift board uses — dust on TOTAL token liquidity, matching the
+// rule-engine gate. This file used to hold its own copy, and it read the F6
+// quarantine's withheld DEX price as "No pool data this cycle" on every RH row.
 
 function verdictDotColor(v: M5Verdict | "ERROR"): string {
   switch (v) {
@@ -110,9 +101,9 @@ export default function HoodSidebar({
   // grouped, sorted, and hidden by default with a "· N dust pools" toggle.
   // NO DATA rows also cluster so a rate-limited cycle stays visible but
   // doesn't mingle with tradable rows.
-  const tradable = rows.filter((r) => !isDust(r) && !isNoData(r));
-  const dust = rows.filter(isDust);
-  const noData = rows.filter(isNoData);
+  const tradable = rows.filter((r) => boardRowState(r) === "tradable");
+  const dust = rows.filter((r) => boardRowState(r) === "dust");
+  const noData = rows.filter((r) => boardRowState(r) === "no_data");
   const [dustOpen, setDustOpen] = useState(false);
   const [noDataOpen, setNoDataOpen] = useState(false);
 
@@ -196,7 +187,7 @@ export default function HoodSidebar({
                     <ul className="pb-1">
                       {dust
                         .slice()
-                        .sort((a, b) => rowTotalTvlUi(b) - rowTotalTvlUi(a))
+                        .sort((a, b) => rowTotalTvl(b) - rowTotalTvl(a))
                         .map((r) => (
                           <WatchRow key={rowKey(r)} r={r} kind="dust" onSelect={onSelectTicker} />
                         ))}
@@ -402,7 +393,14 @@ function WatchRow({
         <span
           className={`w-1.5 h-1.5 rounded-full shrink-0 ${kind === "no_data" ? "" : ""}`}
           style={{ backgroundColor: dotColor }}
-          title={kind === "no_data" ? "No pool data this cycle" : r.verdict}
+          title={
+            kind === "no_data"
+              ? "No pool data this cycle"
+              // F6 — the pool was read; its DEX price and verdict are withheld.
+              : isWithheld(r)
+                ? r.provenance_note ?? "DEX price withheld while the price source is repaired"
+                : r.verdict
+          }
         />
         <span className="font-mono text-[10.5px] tracking-wide" style={{ color: INK1 }}>
           {r.ticker}
@@ -434,6 +432,7 @@ function WatchRow({
           <span
             className="ml-auto font-mono text-[10.5px] tabular-nums"
             style={{ color: driftColor(drift) }}
+            title={isWithheld(r) ? "drift withheld" : undefined}
           >
             {drift === 0 ? "—" : `${drift > 0 ? "+" : ""}${drift.toFixed(2)}%`}
           </span>

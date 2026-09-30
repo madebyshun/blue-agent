@@ -11,6 +11,18 @@
  *       untouched, the cross-venue spread refused by name
  *   §4  lifting it (tests only) brings the numbers back — the quarantine is
  *       the ONLY thing withholding them
+ *
+ * The snapshot is not the only door, and §1 alone could not see the others —
+ * that is how two of them stayed open after F6 shipped. Each has its own group,
+ * enumerated by what the code CALLS, not by a list of files known today:
+ *   §5  the paid M5 tool `rh-stock-arb`, which computes the RH drift live and
+ *       never reads the snapshot: HANDLERS publishes through the quarantine
+ *       (and so does the real x402 route in front of it), while the raw reading
+ *       reaches the recorder — poller and grader — and nothing that serves
+ *   §6  the permanent RH archive (`readSeriesDays`), served by /api/hood/series
+ *       and /api/hood/ticker-series: withheld on the way out, raw in KV
+ *   §7  the board: a quarantined row is bucketed by its real liquidity, not as
+ *       "NO POOL" — run on the rows /api/hood/snapshot actually publishes
  */
 for (const k of ["KV_REST_API_URL", "KV_REST_API_TOKEN", "UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN"]) {
   delete process.env[k];
@@ -155,6 +167,209 @@ const NON_PUBLISHING: Record<string, { why: string; holds: (src: string) => bool
     const b = (await (await dis.GET(new Request("https://blueagent.dev/api/hood/dislocation?ticker=NVDA&chain=robinhood"))).json()) as Record<string, unknown>;
     ok("with the quarantine lifted (test only), the RH drift is served again", b.drift_pct === 3.1 && b.provenance === "measured", JSON.stringify({ d: b.drift_pct, p: b.provenance }));
   });
+
+  // ── §5 ─────────────────────────────────────────────────────────────────────
+  console.log("\n5. the paid M5 tool (rh-stock-arb) publishes through the quarantine; the recorder reads raw");
+
+  // Who may touch the raw reading. Property, not path: any file that names it
+  // must be the handler that defines it or the recorder path that runs it, and
+  // anything that calls the recorder path must serve nothing (no route verb).
+  const all = walk(SRC);
+  const rawNamers = all.filter((f) => /\bmeasureRhStockArb\b/.test(code(fs.readFileSync(f, "utf8")))).map(rel).sort();
+  ok("the raw M5 reading is named only by its handler file and the recorder path",
+    JSON.stringify(rawNamers) === JSON.stringify(["src/app/api/x402/_handlers/rh-stock-arb.ts", "src/lib/blue-hood/tool-caller.ts"]),
+    rawNamers.join(", "));
+  const recorderCallers = all.filter((f) => /\bcallRecorderTool\s*[<(]/.test(code(fs.readFileSync(f, "utf8"))) && rel(f) !== "src/lib/blue-hood/tool-caller.ts");
+  ok(`the recorder path has callers (${recorderCallers.length}) — the detector is alive`, recorderCallers.length >= 2, recorderCallers.map(rel).join(", "));
+  for (const f of recorderCallers) {
+    ok(`${rel(f)}: calls the recorder path and serves nothing (no GET/POST export)`,
+      !/export\s+(async\s+)?function\s+(GET|POST|PUT|PATCH|DELETE)\b/.test(fs.readFileSync(f, "utf8")) && !rel(f).endsWith("/route.ts"));
+  }
+  const handlerSrc = code(fs.readFileSync(path.join(SRC, "app/api/x402/_handlers/rh-stock-arb.ts"), "utf8"));
+  ok("the HANDLERS entry is not the raw reading (the default export publishes)",
+    /export default async function handler[\s\S]*?publishArbResult\(/.test(handlerSrc) && !/export default async function measureRhStockArb/.test(handlerSrc));
+
+  // Behaviour, on a fabricated upstream: GeckoTerminal serves one USDG-anchored
+  // NVDA pool at $237.70, Chainlink answers $230.55 — a +3.10% "drift".
+  const NVDA = "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC".toLowerCase();
+  const USDG = "0x5fc5360d0400a0fd4f2af552add042d716f1d168";
+  const word = (n: bigint) => n.toString(16).padStart(64, "0");
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url.includes("geckoterminal.com") && url.includes(`/tokens/${NVDA}/pools`)) {
+      return new Response(JSON.stringify({
+        data: [{
+          attributes: {
+            address: `0x${"ab".repeat(32)}`, name: "NVDA / USDG",
+            base_token_price_usd: "237.7", quote_token_price_usd: "1.0",
+            reserve_in_usd: "5000000", volume_usd: { h24: "900000" },
+            price_change_percentage: { h1: "0.4", h24: "1.9" },
+          },
+          relationships: {
+            dex: { data: { id: "uniswap-v4-robinhood" } },
+            base_token: { data: { id: `robinhood_${NVDA}` } },
+            quote_token: { data: { id: `robinhood_${USDG}` } },
+          },
+        }],
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    }
+    let rpc: { id: number; method: string; params: [{ data?: string; input?: string }] } | null = null;
+    try { rpc = JSON.parse(String(init?.body ?? "")); } catch { rpc = null; }
+    if (rpc && rpc.method === "eth_call") {
+      const data = (rpc.params[0].data ?? rpc.params[0].input ?? "").toLowerCase();
+      const now = BigInt(Math.floor(Date.now() / 1000) - 60);
+      const result = data.startsWith("0x313ce567") // decimals()
+        ? `0x${word(8n)}`
+        : data.startsWith("0xfeaf968c") // latestRoundData()
+          ? `0x${word(1n)}${word(23_055_000_000n)}${word(now)}${word(now)}${word(1n)}`
+          : "0x";
+      return new Response(JSON.stringify({ jsonrpc: "2.0", id: rpc.id, result }), { status: 200, headers: { "content-type": "application/json" } });
+    }
+    return new Response("{}", { status: 404 });
+  }) as typeof fetch;
+
+  try {
+    type Arb = { verdict?: string; provenance?: string; provenance_note?: string; error?: string;
+      delta?: { pct: number | null; abs_usd: number | null } | null;
+      dex?: { price_usd?: number | null; change_24h_pct?: number | null; total_tvl_usd?: number; volume_24h_usd?: number | null; pool_ref?: string } | null;
+      chainlink?: { price_usd?: number } | null };
+    const published = (await (await HANDLERS["rh-stock-arb"](new Request("https://blueagent.dev/api/x402/rh-stock-arb", { method: "POST", body: JSON.stringify({ ticker: "NVDA" }) }))).json()) as Arb;
+    ok("HANDLERS[rh-stock-arb]: DEX price, delta and verdict withheld, marked quarantined with the note",
+      published.dex?.price_usd === null && published.delta?.pct === null && published.delta?.abs_usd === null &&
+        published.dex?.change_24h_pct === null && published.verdict === "INSUFFICIENT_DATA" &&
+        published.provenance === "quarantined" && published.provenance_note === RH_DESK_QUARANTINE.note,
+      JSON.stringify({ x: published.dex?.price_usd, d: published.delta, v: published.verdict, p: published.provenance }));
+    ok("…the reads that are real stay: Chainlink price, the pool, its liquidity and volume",
+      published.chainlink?.price_usd === 230.55 && published.dex?.total_tvl_usd === 5_000_000 &&
+        published.dex?.volume_24h_usd === 900_000 && typeof published.dex?.pool_ref === "string");
+
+    const { callRecorderTool } = await import("../src/lib/blue-hood/tool-caller");
+    const raw = await callRecorderTool<Arb>("rh-stock-arb", { ticker: "NVDA" });
+    const rawPct = raw.ok ? raw.data.delta?.pct : undefined;
+    ok("the recorder path gets the RAW reading (the archive keeps recording)",
+      raw.ok && raw.data.dex?.price_usd === 237.7 && typeof rawPct === "number" && Math.abs(rawPct - 3.1012) < 0.001 &&
+        raw.data.verdict !== "INSUFFICIENT_DATA" && raw.data.provenance === undefined,
+      JSON.stringify(raw.ok ? { x: raw.data.dex?.price_usd, d: rawPct, v: raw.data.verdict } : raw));
+
+    const bad = (await (await HANDLERS["rh-stock-arb"](new Request("https://blueagent.dev/api/x402/rh-stock-arb", { method: "POST", body: "{}" }))).json()) as Arb;
+    ok("an error body carries no reading and passes through unmarked", typeof bad.error === "string" && bad.provenance === undefined);
+
+    // The door itself: the real x402 route, on the internal free-bypass a server
+    // job uses (no payment needed to observe what the route serves).
+    process.env.INTERNAL_SERVICE_KEY = "rh-quarantine-check";
+    const x402 = await import("../src/app/api/x402/[tool]/route");
+    const { NextRequest } = await import("next/server");
+    const viaRoute = (await (await x402.POST(
+      new NextRequest("https://blueagent.dev/api/x402/rh-stock-arb", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-blue-internal": "rh-quarantine-check", "x-blue-service": "internal" },
+        body: JSON.stringify({ ticker: "NVDA" }),
+      }),
+      { params: Promise.resolve({ tool: "rh-stock-arb" }) },
+    )).json()) as Arb;
+    ok("/api/x402/rh-stock-arb (the paid door) serves the quarantined body",
+      viaRoute.provenance === "quarantined" && viaRoute.delta?.pct === null && viaRoute.dex?.price_usd === null && viaRoute.verdict === "INSUFFICIENT_DATA",
+      JSON.stringify({ p: viaRoute.provenance, d: viaRoute.delta?.pct, v: viaRoute.verdict }));
+
+    await withQuarantineLiftedForTest(async () => {
+      const lifted = (await (await HANDLERS["rh-stock-arb"](new Request("https://blueagent.dev/api/x402/rh-stock-arb", { method: "POST", body: JSON.stringify({ ticker: "NVDA" }) }))).json()) as Arb;
+      ok("lifted (test only), the paid tool serves the delta again, marked measured",
+        lifted.dex?.price_usd === 237.7 && typeof lifted.delta?.pct === "number" && lifted.provenance === "measured",
+        JSON.stringify({ x: lifted.dex?.price_usd, d: lifted.delta?.pct, p: lifted.provenance }));
+    });
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+
+  // ── §6 ─────────────────────────────────────────────────────────────────────
+  console.log("\n6. the permanent RH archive is withheld on the way out, raw in KV");
+
+  const archiveReaders = all.filter((f) => /\breadSeriesDays?\s*\(/.test(code(fs.readFileSync(f, "utf8"))) && rel(f) !== "src/lib/blue-hood/poller.ts");
+  ok(`found the archive's serving routes (${archiveReaders.length})`, archiveReaders.length >= 2, archiveReaders.map(rel).join(", "));
+  for (const f of archiveReaders) {
+    const src = fs.readFileSync(f, "utf8");
+    ok(`${rel(f)}: publishes the RH archive through the quarantine`,
+      /from "@\/lib\/blue-hood\/quarantine"/.test(src) && /\bpublishRhArchivePoints\(/.test(code(src)));
+  }
+
+  const { persistSeriesPoint, readSeriesDays } = await import("../src/lib/blue-hood/poller");
+  const { yyyymmdd } = await import("../src/lib/blue-hood/kv-keys");
+  const nowIso = new Date().toISOString();
+  await persistSeriesPoint({
+    cycle_id: 2, started_at: nowIso, finished_at: nowIso, duration_ms: 1000,
+    tickers: [row({ chain: undefined })],
+    metrics: { registry_total: 1, tokens_watched: 1, tokens_errored: 0, tvl_scanned_usd: 0, market_is_open: false, market_session: "afterhours" },
+  } as never);
+  const today = yyyymmdd(new Date());
+  const [stored] = await readSeriesDays([today]);
+  const storedRow = stored.status === "hit" ? stored.value.points.at(-1)?.rows.find((r) => r.ticker === "NVDA") : undefined;
+  ok("the recorder wrote the raw DEX leg to the archive (fixture is live)", storedRow?.dex_usd === 237.7 && storedRow?.drift_pct === 3.1, JSON.stringify(storedRow));
+
+  const { NextRequest: NR } = await import("next/server");
+  const seriesRoute = await import("../src/app/api/hood/series/route");
+  type SeriesBody = { provenance?: string; provenance_note?: string; days: { status: string; points?: { rows: { ticker: string; oracle_usd: number | null; dex_usd: number | null; drift_pct: number | null; total_tvl_usd: number | null }[] }[] }[] };
+  const series = (await (await seriesRoute.GET(new NR(`https://blueagent.dev/api/hood/series?day=${today}`))).json()) as SeriesBody;
+  const servedRows = series.days.flatMap((d) => d.points ?? []).flatMap((p) => p.rows).filter((r) => r.ticker === "NVDA");
+  ok("/api/hood/series: every served RH row has dex_usd and drift_pct withheld, marked quarantined",
+    servedRows.length > 0 && servedRows.every((r) => r.dex_usd === null && r.drift_pct === null) &&
+      series.provenance === "quarantined" && series.provenance_note === RH_DESK_QUARANTINE.note,
+    JSON.stringify({ n: servedRows.length, first: servedRows[0], p: series.provenance }));
+  ok("…the oracle price and liquidity are served as recorded", servedRows.every((r) => r.oracle_usd === 230.55 && r.total_tvl_usd === 6_000_000));
+
+  const tickerSeries = await import("../src/app/api/hood/ticker-series/route");
+  type TsBody = { provenance?: string; deadband?: { graded: number }; segments: { kind: string; points?: { dex_usd: number | null; drift_pct: number | null; oracle_usd: number | null }[] }[] };
+  const ts = (await (await tickerSeries.GET(new NR("https://blueagent.dev/api/hood/ticker-series?ticker=NVDA&chain=robinhood&days=1"))).json()) as TsBody;
+  const tsPoints = ts.segments.flatMap((s) => s.points ?? []);
+  ok("/api/hood/ticker-series (robinhood): the chart gets no DEX price and no drift, and grades none",
+    tsPoints.length > 0 && tsPoints.every((p) => p.dex_usd === null && p.drift_pct === null && p.oracle_usd === 230.55) &&
+      ts.deadband?.graded === 0 && ts.provenance === "quarantined",
+    JSON.stringify({ n: tsPoints.length, first: tsPoints[0], graded: ts.deadband?.graded, p: ts.provenance }));
+
+  const [after] = await readSeriesDays([today]);
+  const afterRow = after.status === "hit" ? after.value.points.at(-1)?.rows.find((r) => r.ticker === "NVDA") : undefined;
+  ok("…serving it did not touch the archive (still raw in KV)", afterRow?.dex_usd === 237.7 && afterRow?.drift_pct === 3.1);
+
+  await withQuarantineLiftedForTest(async () => {
+    const lifted = (await (await tickerSeries.GET(new NR("https://blueagent.dev/api/hood/ticker-series?ticker=NVDA&chain=robinhood&days=1"))).json()) as TsBody;
+    const pts = lifted.segments.flatMap((s) => s.points ?? []);
+    ok("lifted (test only), the RH chart draws the recorded DEX leg again, marked measured",
+      pts.some((p) => p.dex_usd === 237.7 && p.drift_pct === 3.1) && lifted.provenance === "measured");
+  });
+
+  // ── §7 ─────────────────────────────────────────────────────────────────────
+  console.log("\n7. the board buckets a quarantined row by its real liquidity, not as NO POOL");
+
+  const { boardRowState, isWithheld } = await import("../src/lib/blue-hood/board-rows");
+  // Re-read the snapshot route: §5/§6 leave KV_SNAPSHOT_LATEST as §3 wrote it.
+  const board = (await (await snapRoute.GET()).json()) as typeof snap;
+  const boardRh = board.snapshot.tickers.find((t) => t.chain === "robinhood")!;
+  const boardBase = board.snapshot.tickers.find((t) => t.chain === "base")!;
+  ok("the published RH row (a $6M pool) is TRADABLE and withheld — not no-data",
+    boardRowState(boardRh) === "tradable" && isWithheld(boardRh), `${boardRowState(boardRh)} withheld=${isWithheld(boardRh)}`);
+  ok("the published Base row is tradable and NOT withheld", boardRowState(boardBase) === "tradable" && !isWithheld(boardBase));
+  const { publishDeskRow } = await import("../src/lib/blue-hood/quarantine");
+  const thin = publishDeskRow(row({ chain: "robinhood", total_tvl_usd: 1_200, tvl_usd: 1_200 }));
+  ok("a withheld RH row on a thin pool is DUST (by its liquidity), still withheld", boardRowState(thin) === "dust" && isWithheld(thin));
+  const noPool = publishDeskRow(row({ chain: "robinhood", dex_usd: null, drift_pct: null, verdict: "INSUFFICIENT_DATA", no_data_reason: "no_pool" }));
+  ok("an RH row where the poller found NO pool is still no-data (a real absence)", boardRowState(noPool) === "no_data" && !isWithheld(noPool));
+  const errored = publishDeskRow(row({ chain: "robinhood", dex_usd: null, drift_pct: null, verdict: "ERROR", no_data_reason: "fetch_failed" }));
+  ok("an errored RH row stays no-data (FETCH FAILED), not withheld", boardRowState(errored) === "no_data" && !isWithheld(errored));
+  await withQuarantineLiftedForTest(async () => {
+    const measured = publishDeskRow(row({ chain: "robinhood" }));
+    ok("lifted, the same RH row is tradable and not withheld", boardRowState(measured) === "tradable" && !isWithheld(measured));
+  });
+
+  // Both "use client" trees bucket through the one module — a private copy is
+  // how the regression happened (two copies, both read withheld as "no pool").
+  for (const f of ["src/app/app/hood/HoodClient.tsx", "src/app/app/hood/HoodSidebar.tsx"]) {
+    const s = code(fs.readFileSync(path.join(WEB, f), "utf8"));
+    ok(`${f}: buckets through blue-hood/board-rows, with no private isNoData/isDust`,
+      /from "@\/lib\/blue-hood\/board-rows"/.test(s) && /\bboardRowState\(/.test(s) && !/function\s+(isNoData|isDust)\b/.test(s));
+  }
+  const client = code(fs.readFileSync(path.join(WEB, "src/app/app/hood/HoodClient.tsx"), "utf8"));
+  ok("HoodClient: the NO DATA branch is taken on the shared state, and a withheld row says WITHHELD",
+    /const noData = state === "no_data"/.test(client) && /<WithheldBadge\b/.test(client) && /withheld \?/.test(client));
 
   console.log(failures === 0 ? "\nrh-quarantine-check: PASS" : `\nrh-quarantine-check: FAIL — ${failures}`);
   process.exit(failures === 0 ? 0 : 1);

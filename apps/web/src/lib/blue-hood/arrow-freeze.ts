@@ -26,6 +26,23 @@ export const ARROWS_FROZEN_NOTE =
   "The record is historical: arrows already open are still graded, nothing new is added.";
 
 /**
+ * The sentence Blue Chat is told to END every arrow answer with.
+ *
+ * It was the literal "Signals fire from oracle-vs-DEX drift; grading is
+ * deterministic (see /hood/arrows)." — present tense, and pointing at the track
+ * record whose links the freeze hid everywhere else — so after 2026-09-30 the
+ * model closed every answer about an old arrow by telling the user Blue Hood
+ * was firing signals. The chat route's tool text is an instruction to a model,
+ * so it has to follow the switch exactly like a rendered surface does.
+ * `frozen` is a parameter only so scripts/arrow-freeze-check.ts can pin both arms.
+ */
+export function arrowAnswerCloser(frozen: boolean = ARROWS_FROZEN): string {
+  return frozen
+    ? `Blue Hood stopped publishing new arrows on ${ARROWS_FROZEN_SINCE}; this record is historical.`
+    : "Signals fire from oracle-vs-DEX drift; grading is deterministic (see /hood/arrows).";
+}
+
+/**
  * The [Review & Sign] button on an arrow opened a REAL Robinhood Chain trade
  * panel straight from a directional signal (chat audit 2026-09-30 §7.2). That
  * turns a published signal into a personalised "trade this now" — advice by

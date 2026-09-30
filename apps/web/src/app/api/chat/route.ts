@@ -1712,6 +1712,10 @@ async function callHubTool(
     // model to answer from it. `warnings` is passed through untouched, and KV
     // is NOT written: the stored arrow keeps the original text verbatim.
     const { briefHasNumberDrift, withholdDriftedBrief } = await import("@/lib/blue-hood/brief-serving");
+    // The sentence the reply must end with follows the arrow freeze: a
+    // present-tense "Signals fire…" after 2026-09-30 told users a stopped desk
+    // was live. One writer for it, in arrow-freeze.ts.
+    const { arrowAnswerCloser } = await import("@/lib/blue-hood/arrow-freeze");
     const briefWithheld = briefHasNumberDrift(stored.brief);
     const arrow = withholdDriftedBrief(stored);
 
@@ -1766,7 +1770,7 @@ async function callHubTool(
     ].filter(Boolean).join(" | ");
 
     return {
-      text: `Blue Hood arrow rendered. Facts you may quote verbatim (do NOT invent numbers beyond these): ${answerHints}. When the user asks "why short/long X?", answer from ${briefWithheld ? "verdict_note + facts_at_fire ONLY — this arrow's narrative line was withheld for failing number reconciliation, so there is no context to quote and you must not supply one" : "verdict_note + context"}; when they ask "what were the numbers?", quote facts_at_fire. Keep the reply to 2-3 sentences and end with "Signals fire from oracle-vs-DEX drift; grading is deterministic (see /hood/arrows)."`,
+      text: `Blue Hood arrow rendered. Facts you may quote verbatim (do NOT invent numbers beyond these): ${answerHints}. When the user asks "why short/long X?", answer from ${briefWithheld ? "verdict_note + facts_at_fire ONLY — this arrow's narrative line was withheld for failing number reconciliation, so there is no context to quote and you must not supply one" : "verdict_note + context"}; when they ask "what were the numbers?", quote facts_at_fire. Keep the reply to 2-3 sentences and end with "${arrowAnswerCloser()}"`,
       result: {
         kind: "hood_arrow",
         arrow,
