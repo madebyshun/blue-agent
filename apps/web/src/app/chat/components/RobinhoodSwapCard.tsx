@@ -126,8 +126,8 @@ export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
   useRecordAction(txHash, () => ({
     wallet: address, kind: "swap", chain: "robinhood",
     params: isT2T
-      ? ({ tokenIn: tokenInAddr, tokenOut: token, amount } as Record<string, string>)
-      : ({ direction, token, amount } as Record<string, string>),
+      ? ({ tokenIn: tokenInAddr, tokenOut: token, amount, symIn: inSym, symOut: outSym } as Record<string, string>)
+      : ({ direction, token, amount, symIn: inSym, symOut: outSym } as Record<string, string>),
     quote: { venue: "RobinhoodSwapRouter", expected_out: estimatedOut != null ? String(estimatedOut) : null, min_out: minOut != null ? String(minOut) : null },
     check: pt.check ? { verdict: pt.check.verdict, reasons: pt.check.reasons.map((r) => r.text) } : null,
   }));

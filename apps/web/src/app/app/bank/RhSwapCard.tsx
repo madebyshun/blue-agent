@@ -191,7 +191,7 @@ export default function RhSwapCard({
   // runs after render, when they hold the values that were signed.
   useRecordAction(txHash, () => ({
     wallet: account, kind: "swap", chain: "robinhood",
-    params: { direction, token: activeAddr, amount },
+    params: { direction, token: activeAddr, amount, symIn: inSym, symOut: outSym },
     quote: { venue: "RobinhoodSwapRouter", expected_out: estimatedOut != null ? String(estimatedOut) : null, min_out: minOut != null ? String(minOut) : null },
     check: pt.check ? { verdict: pt.check.verdict, reasons: pt.check.reasons.map((r) => r.text) } : null,
   }));

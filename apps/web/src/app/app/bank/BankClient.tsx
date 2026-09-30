@@ -71,6 +71,7 @@ import { parsePaymentQr, buildPaymentUri, type ParsedPayment } from "@/lib/payme
 // not reach the explanation. See the VIEWS list below.
 import OrdersPanel from "./OrdersPanel";
 import TransactionHistory, { type WalletTx, type TxSource } from "./TransactionHistory";
+import ActionHistory from "@/components/wallet/ActionHistory";
 import TokenTable from "./TokenTable";
 import RhTokenTable from "./RhTokenTable";
 import StockTable from "./StockTable";
@@ -2614,6 +2615,14 @@ export default function BankPage() {
               could not render. The honest exit it offered (the explorer, never
               a Retry) survives INSIDE TransactionHistory, per source, where it
               can still fire for a chain that genuinely goes unread. */}
+          {/* G3 — the trades signed through Blue Agent, with the check each
+              passed and the status the chain proved. Above the explorer
+              timeline, which covers everything else the wallet did. */}
+          {view === "activity" && (
+            <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4 mb-3">
+              <ActionHistory address={acct} limit={20} title="Actions via Blue Agent" />
+            </div>
+          )}
           {view === "activity" && (
             <TransactionHistory
               transactions={activityRows}

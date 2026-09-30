@@ -3,7 +3,7 @@
 // /app/usage — everything the connected wallet has CONSUMED from BlueAgent,
 // rebuilt to the design handoff's two-column layout.
 //
-// Two data sources, one page, because they answer one question from two angles:
+// Three data sources, one page, because they answer one question from three angles:
 //   • credits    — GET /api/credits/balance/[address] → the four KPI cells
 //     (spendable / daily left / top-up pool / spent all-time) and the RECENT
 //     ACTIVITY ledger. This is the ONE page that breaks the credit arithmetic
@@ -13,6 +13,9 @@
 //     AGENT-SPEND-BY-TOOL rail (right). The page calls the hook ONCE and passes
 //     the result into two <SpendConsole … bare only=…> mounts, so the expensive
 //     two-rail aggregation runs a single time.
+//   • actions    — GET /api/actions (SIWE, G3) → the swaps, sends and bridges
+//     signed through Blue Agent, with the pre-trade check each passed and the
+//     status the chain proved. Private: signed-out shows the sign-in offer.
 //
 // 100% real data, no mock numbers. The console keeps USDC and credits in
 // separate columns and never adds them — see SpendConsole's own header for why a
@@ -28,6 +31,7 @@ import { WalletPickerModal } from "@/components/WalletPicker";
 import TopUpModal from "@/components/TopUpModal";
 import SpendConsole, { useSpendSummary, scopeLabel } from "@/components/SpendConsole";
 import { useEnsureSession } from "@/hooks/useEnsureSession";
+import ActionHistory from "@/components/wallet/ActionHistory";
 import type { BalanceSummary, LedgerEvent } from "@/lib/credit-ledger";
 
 // Compact "time ago" for ledger rows (ms epoch → "3m", "2h", "5d").
@@ -263,6 +267,10 @@ export default function UsagePage() {
                     )}
                   </div>
                 </div>
+
+                {/* G3 — swaps, sends and bridges, each with the pre-trade
+                    check it passed and the status the chain proved. */}
+                <ActionHistory address={address} limit={50} title="Actions" />
               </div>
 
               {/* Right rail — AGENT SPEND · BY TOOL. The join no explorer can

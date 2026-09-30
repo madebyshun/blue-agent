@@ -225,7 +225,7 @@ export default function SwapCard({
   // G1 — the signed swap becomes an action record (only with a session).
   useRecordAction(txHash, () => ({
     wallet: account, kind: "swap", chain: "base",
-    params: { tokenIn: sell.addr, tokenOut: buy.addr, amountIn: amount, slippageBps },
+    params: { tokenIn: sell.addr, tokenOut: buy.addr, amountIn: amount, slippageBps, symIn: label(sell), symOut: label(buy) },
     quote: { venue: "0x", expected_out: quote?.buyAmount ?? null, min_out: quote?.minBuyAmount ?? null },
     check: pt.check ? { verdict: pt.check.verdict, reasons: pt.check.reasons.map((r) => r.text) } : null,
   }));

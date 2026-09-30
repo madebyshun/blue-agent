@@ -182,7 +182,7 @@ export function RobinhoodBridgeCard({ result }: { result: RobinhoodBridgeResult 
   // is signed on the ORIGIN chain, so that is the chain the proof is read on.
   useRecordAction(txHash, () => ({
     wallet: connected, kind: "bridge", chain: fromChain,
-    params: { fromChain, toChain, token: rawToken || null, amount: initialAmt || null },
+    params: { fromChain, toChain, token: rawToken || null, amount: initialAmt || null, symbol },
     check: pt.check ? { verdict: pt.check.verdict, reasons: pt.check.reasons.map((r) => r.text) } : null,
   }));
 
