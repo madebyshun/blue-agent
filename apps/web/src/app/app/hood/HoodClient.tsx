@@ -439,7 +439,7 @@ function Header({
         // HOOD
       </span>
       <span className="hidden lg:inline font-mono text-[10.5px]" style={{ color: "#64748B" }}>
-        oracle-vs-DEX drift, graded in public
+        {ARROWS_FROZEN ? "oracle-vs-DEX drift, live" : "oracle-vs-DEX drift, graded in public"}
       </span>
       {/* Right chip group — Inbox/Track links (they double as mobile nav,
           since the BLUEHOOD sidebar is lg-only), alerts, the Telegram
@@ -621,9 +621,19 @@ function MetricStrip({
         .join(" · ") || "chainlink-backed"
     : undefined;
 
+  // Arrows are frozen (arrow-freeze.ts): "arrows today" would read as a live
+  // feed and "hit rate 7d" as a record still being graded. Say what is true.
+  const arrowItems: { label: string; value: string; sub?: string }[] = ARROWS_FROZEN
+    ? [
+        { label: "ARROWS", value: "stopped", sub: `since ${ARROWS_FROZEN_SINCE}` },
+        { label: "TRACK RECORD", value: "historical", sub: "no new arrows graded" },
+      ]
+    : [
+        { label: "ARROWS TODAY", value: arrows ? String(arrows.arrows_today) : "…", sub: "fired in last 24h" },
+        { label: "HIT RATE 7D", value: hitLabel, sub: hitSub },
+      ];
   const items: { label: string; value: string; sub?: string }[] = [
-    { label: "ARROWS TODAY", value: arrows ? String(arrows.arrows_today) : "…", sub: "fired in last 24h" },
-    { label: "HIT RATE 7D", value: hitLabel, sub: hitSub },
+    ...arrowItems,
     { label: "TOKENS WATCHED", value: watchedValue, sub: watchedSub },
     { label: "TVL SCANNED", value: snap ? formatUsd(snap.metrics.tvl_scanned_usd) : "…", sub: "all pools, sum" },
   ];

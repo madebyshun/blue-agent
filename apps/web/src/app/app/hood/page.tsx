@@ -16,11 +16,11 @@ import HoodClient from "./HoodClient";
 export const metadata: Metadata = {
   title: "Blue Hood · Oracle-vs-DEX signals for tokenized stocks",
   description:
-    "Live drift board for tokenized stocks on Base (Coinbase B20) and Robinhood Chain. Chainlink oracle vs DEX pool spot, market-hours aware, every call graded in public — misses included. Non-custodial.",
+    "Live drift board for tokenized stocks on Base (Coinbase B20) and Robinhood Chain. Chainlink oracle vs DEX pool spot, market-hours aware, with a swap on every row. Non-custodial.",
   openGraph: {
     title: "Blue Hood · Oracle-vs-DEX signals for tokenized stocks",
     description:
-      "Chainlink oracle vs DEX drift on Base & Robinhood Chain. Every call graded in public — misses included.",
+      "Chainlink oracle vs DEX drift on Base & Robinhood Chain, live. The arrow record from before 2026-09-30 stays public.",
   },
 };
 
