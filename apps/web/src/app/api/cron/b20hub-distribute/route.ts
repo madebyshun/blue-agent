@@ -59,13 +59,16 @@ const BUYBACK_ABI = [
 ] as const;
 
 export async function GET(req: NextRequest) {
-  // ── Auth (allow Vercel Cron header OR CRON_SECRET Bearer) ────────────
+  // ── Auth: Bearer CRON_SECRET only, fail-closed ───────────────────────
+  // This used to also accept any request carrying an `x-vercel-cron` header.
+  // A header's presence is not a credential — any caller can send it — and
+  // this route signs with the keeper key. Vercel Cron sends
+  // `Authorization: Bearer $CRON_SECRET` itself when the env is set, so the
+  // Bearer check covers the real scheduler (and this route is not scheduled
+  // in vercel.json anyway). Locked by scripts/cron-auth-check.ts.
   const cronSecret = process.env.CRON_SECRET ?? "";
   const authHeader = req.headers.get("authorization") ?? "";
-  const isVercelCron = req.headers.has("x-vercel-cron");
-  const isAuthorized = isVercelCron || (
-    cronSecret !== "" && authHeader === `Bearer ${cronSecret}`
-  );
+  const isAuthorized = cronSecret !== "" && authHeader === `Bearer ${cronSecret}`;
   if (!isAuthorized) {
     return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   }

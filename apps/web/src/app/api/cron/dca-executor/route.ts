@@ -30,11 +30,22 @@ export const maxDuration = 300; // 5min — the cron may sweep many schedules
 
 const CONSECUTIVE_FAIL_PAUSE_THRESHOLD = 3;
 
+/**
+ * Bearer `CRON_SECRET` only, fail-closed.
+ *
+ * This used to also accept any request carrying an `x-vercel-cron` header. A
+ * header's presence is not a credential: any caller can send it, and this
+ * route signs transactions that move user USDC. Vercel Cron authenticates
+ * itself by sending `Authorization: Bearer $CRON_SECRET` when that env is set,
+ * so the Bearer check alone covers the real scheduler. (This route is not
+ * scheduled in vercel.json at all, so the header path was only ever reachable
+ * by someone other than Vercel.) Locked by scripts/cron-auth-check.ts.
+ */
 function isAuthorized(req: NextRequest): boolean {
   const cronSecret = process.env.CRON_SECRET ?? "";
+  if (!cronSecret) return false;
   const authHeader = req.headers.get("authorization") ?? "";
-  const isVercelCron = req.headers.has("x-vercel-cron");
-  return isVercelCron || (cronSecret !== "" && authHeader === `Bearer ${cronSecret}`);
+  return authHeader === `Bearer ${cronSecret}`;
 }
 
 /**
