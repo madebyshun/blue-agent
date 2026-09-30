@@ -112,6 +112,20 @@ export async function PUT(req: NextRequest) {
   if (!Array.isArray(body?.tasks)) {
     return NextResponse.json({ error: "`tasks` must be an array." }, { status: 400, headers: NO_STORE });
   }
+  // Over the cap is a refusal, not a silent trim (Scheduled research L5): the
+  // eleventh task used to be dropped here while the browser kept it marked
+  // "background", so it ran nowhere and the panel still showed its next run.
+  // Nothing is saved; the client shows this message and nothing pretends.
+  if (body.tasks.length > MAX_TASKS_PER_WALLET) {
+    return NextResponse.json(
+      {
+        error: `Background tasks are limited to ${MAX_TASKS_PER_WALLET} per wallet — you have ${body.tasks.length}. Switch one to "on open" and try again. Nothing was saved.`,
+        code:  "TOO_MANY_TASKS",
+        limit: MAX_TASKS_PER_WALLET,
+      },
+      { status: 422, headers: NO_STORE },
+    );
+  }
 
   // Read BEFORE writing so run history survives an edit. Without this, renaming
   // a task would erase its last result — and on an outage we would write the

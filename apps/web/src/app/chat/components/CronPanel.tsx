@@ -30,7 +30,6 @@ const SCHEDULES: { value: CronSchedule; label: string }[] = [
 ];
 
 const CRON_PRESETS = [
-  { label: "Daily token pick",        prompt: "/pick",                                    schedule: "daily"  as CronSchedule, time: "09:00" },
   { label: "Weekly Base digest",      prompt: "What happened on Base this week?",          schedule: "weekly" as CronSchedule, time: "09:00" },
   { label: "Daily narrative scan",    prompt: "What narratives are running on Base now?",  schedule: "daily"  as CronSchedule, time: "08:00" },
 ];
@@ -177,6 +176,21 @@ export default function CronPanel() {
         </button>
       </div>
 
+      {/* ── Stop everything the server runs for this wallet — including tasks
+           this browser never saw (L4). ─── */}
+      {schedule.count > 0 && (
+        <div className="shrink-0 px-5 py-2 border-b border-[#1A1A2E] flex items-center gap-3">
+          <p className="font-mono text-[10px] text-[#64748B]">{schedule.count} background task{schedule.count === 1 ? "" : "s"} run with this tab closed.</p>
+          <button
+            onClick={() => void schedule.disableAll()}
+            className="ml-auto font-mono text-[10px] rounded-md px-2.5 py-1"
+            style={{ color: "#F87171", border: "1px solid rgba(248,113,113,.3)" }}
+          >
+            Turn off all background tasks
+          </button>
+        </div>
+      )}
+
       {/* ── Background scheduler state — honest about what keeps it running. ─── */}
       {(schedule.state.phase === "signed-out" || schedule.state.phase === "error") && (
         <div className="shrink-0 px-5 py-2 border-b border-[#1A1A2E]">
@@ -244,7 +258,7 @@ export default function CronPanel() {
               <textarea
                 value={form.prompt}
                 onChange={e => setForm(f => ({ ...f, prompt: e.target.value }))}
-                placeholder="The prompt to run… e.g. /pick"
+                placeholder="The prompt to run… e.g. What happened on Base this week?"
                 rows={3}
                 className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-xl px-3 py-2.5 font-mono text-sm text-white placeholder:text-slate-700 outline-none transition-colors resize-none"
               />
@@ -289,7 +303,7 @@ export default function CronPanel() {
                 <span className="font-mono text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">NEXT 24 HOURS</span>
                 <span className="font-mono text-[10px] text-[#64748B] text-right">
                   {upcoming.length > 0
-                    ? `${upcoming.length} scheduled · ~${upcomingCredits} cr est.`
+                    ? `${upcoming.length} scheduled · ~${upcomingCredits} cr + tools est.`
                     : "no background runs due"}
                 </span>
               </div>
@@ -338,7 +352,7 @@ export default function CronPanel() {
             {/* ── TASKS ─── */}
             <div className="flex justify-between items-baseline gap-3 mt-6">
               <span className="font-mono text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">TASKS · {crons.length}</span>
-              <span className="hidden sm:block font-mono text-[10px] text-[#64748B] text-right">Background tasks run server-side and post results into Blue Chat.</span>
+              <span className="hidden sm:block font-mono text-[10px] text-[#64748B] text-right">Background tasks run server-side; each result shows up here, on its task.</span>
             </div>
 
             <div className="overflow-x-auto mt-3">
@@ -398,7 +412,7 @@ export default function CronPanel() {
                             </span>
                           )}
                         </span>
-                        <span className="font-mono text-[10.5px] font-medium text-[#E2E8F0] text-right">{cost} cr</span>
+                        <span className="font-mono text-[10.5px] font-medium text-[#E2E8F0] text-right" title="Message cost, plus the price of any paid Hub tool the run calls">{cost} cr{cron.tier === "free" ? "" : " + tools"}</span>
                       </div>
 
                       {/* ── Expanded controls — every real interaction the summary
@@ -411,7 +425,7 @@ export default function CronPanel() {
                           <div className="flex flex-wrap items-center gap-1.5 mb-3">
                             <span className="font-mono text-[10px] px-2 py-1 rounded-md bg-[#11111A] text-[#94A3B8]">🗓 {scheduleLabel(cron)}</span>
                             <span className="font-mono text-[10px] px-2 py-1 rounded-md bg-[#11111A] text-[#64748B]">
-                              {presetLabel(cron.tier)} · {cost} cr/run
+                              {presetLabel(cron.tier)} · {cost} cr/run{cron.tier === "free" ? "" : " + any paid tool it calls"}
                             </span>
                           </div>
 

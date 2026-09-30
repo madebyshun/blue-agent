@@ -1,7 +1,7 @@
 "use client";
 
-// /app/cron — Scheduled tasks promoted to a Control page. Reuses the same
-// <CronPanel> the chat surface renders as a tab.
+// /app/cron — Scheduled tasks, a first-class page. The chat surface has no tabs
+// any more (see chat/types.ts), so this is <CronPanel>'s only home.
 //
 // CronPanel now renders the handoff's own `// SCHEDULED` header bar (title +
 // sub-line + "+ Add task"), so this page does NOT wrap it in PanelHost — a

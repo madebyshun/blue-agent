@@ -29,8 +29,9 @@
  * already exist and gets billed for both.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { CronTask } from "./types";
+import type { CronTask, CronSchedule } from "./types";
 import { isBackground } from "./storage";
+import { useEnsureSession } from "@/hooks/useEnsureSession";
 
 export type ScheduleState =
   | { phase: "off" }                     // nothing is scheduled server-side
@@ -50,11 +51,23 @@ export interface UseScheduleSync {
    */
   enable:  (id: string) => Promise<void>;
   disable: (id: string) => Promise<void>;
+  /**
+   * Stop EVERY background task — the server copy included, even tasks this
+   * browser no longer knows about (Scheduled research L4). Local tasks are
+   * kept, switched to "on open".
+   */
+  disableAll: () => Promise<void>;
 }
 
-/** The fields the server is allowed to decide, as sent back on a GET. */
+/** A task as a GET returns it: the client-owned fields plus the server-owned ones. */
 interface ServerTask {
   id:            string;
+  label?:        string;
+  schedule?:     string;
+  time?:         string;
+  tz?:           string;
+  prompt?:       string;
+  tier?:         string;
   active?:       boolean;
   nextAt?:       number;
   lastRun?:      number;
@@ -87,8 +100,11 @@ export function useScheduleSync(
   crons: CronTask[],
   patchCron: (id: string, patch: Partial<CronTask>) => void,
   signIn: () => Promise<string>,
+  /** Add a task the SERVER runs but this browser has never seen (L4). */
+  adoptCron: (task: CronTask) => void,
 ): UseScheduleSync {
   const [state, setState] = useState<ScheduleState>({ phase: "off" });
+  const { hasSession } = useEnsureSession();
 
   const lastSent = useRef<string>("");
   const pulled   = useRef<string | null>(null);   // wallet we have already pulled for
@@ -101,13 +117,22 @@ export function useScheduleSync(
   // Once per wallet, on open. Not on a timer: the tick writes at most once per
   // task per day, so polling would spend requests to learn nothing. Re-opening
   // the tab is the natural refresh.
+  //
+  // Also when THIS browser has no background task but the wallet is signed in
+  // (2026-09-30, Scheduled research L4): tasks saved from another browser, or
+  // before localStorage was cleared, kept running and charging with no way to
+  // see or stop them here. Without a session there is nothing to ask — and no
+  // prompt is shown on open.
   useEffect(() => {
-    if (!walletAddr || background.length === 0) return;
+    if (!walletAddr) return;
     if (pulled.current === walletAddr) return;
-    pulled.current = walletAddr;
 
     let cancelled = false;
-    fetch("/api/chat/schedule", { cache: "no-store" })
+    void (async () => {
+      if (background.length === 0 && !(await hasSession(walletAddr))) return;
+      if (cancelled) return;
+      pulled.current = walletAddr;
+      return fetch("/api/chat/schedule", { cache: "no-store" })
       .then(async r => ({ status: r.status, body: await r.json().catch(() => ({})) }))
       .then(({ status, body }) => {
         if (cancelled) return;
@@ -119,8 +144,30 @@ export function useScheduleSync(
           return;
         }
         const tasks = Array.isArray(body?.tasks) ? (body.tasks as ServerTask[]) : [];
+        const localIds = new Set(crons.map(c => c.id));
         for (const t of tasks) {
           if (!t?.id) continue;
+          if (!localIds.has(t.id) && typeof t.prompt === "string") {
+            // Server-only: show it, marked background, so it can be seen and
+            // switched off from here.
+            adoptCron({
+              id: t.id,
+              label: t.label ?? "Scheduled task",
+              schedule: (t.schedule === "weekly" ? "weekly" : "daily") as CronSchedule,
+              time: t.time ?? "09:00",
+              tz: t.tz,
+              prompt: t.prompt,
+              tier: t.tier,
+              active: t.pausedReason ? false : t.active !== false,
+              background: true,
+              nextAt: t.nextAt,
+              lastRun: t.lastRun,
+              lastResult: t.lastResult,
+              lastError: t.lastError,
+              pausedReason: t.pausedReason,
+            });
+            continue;
+          }
           const patch: Partial<CronTask> = {
             nextAt:     t.nextAt,
             lastRun:    t.lastRun,
@@ -145,6 +192,7 @@ export function useScheduleSync(
         setState({ phase: "error", message: "Couldn't reach the scheduler." });
         pulled.current = null;
       });
+    })();
     return () => { cancelled = true; };
   }, [walletAddr, background.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -218,5 +266,24 @@ export function useScheduleSync(
     patchCron(id, { background: false, nextAt: undefined, pausedReason: undefined });
   }, [patchCron]);
 
-  return { state, count: background.length, enable, disable };
+  const disableAll = useCallback(async () => {
+    // DELETE first: it stops tasks this browser cannot see, which the per-task
+    // switch never could. Only on success are the local switches flipped, so
+    // the UI never claims "all off" while the server is still running them.
+    try {
+      const r = await fetch("/api/chat/schedule", { method: "DELETE" });
+      if (r.status === 401) { setState({ phase: "signed-out" }); return; }
+      if (!r.ok) { setState({ phase: "error", message: "Couldn't stop the background tasks — try again." }); return; }
+    } catch {
+      setState({ phase: "error", message: "Couldn't reach the scheduler." });
+      return;
+    }
+    for (const c of crons) {
+      if (isBackground(c)) patchCron(c.id, { background: false, nextAt: undefined, pausedReason: undefined });
+    }
+    lastSent.current = fingerprint("[]");
+    setState({ phase: "off" });
+  }, [crons, patchCron]);
+
+  return { state, count: background.length, enable, disable, disableAll };
 }

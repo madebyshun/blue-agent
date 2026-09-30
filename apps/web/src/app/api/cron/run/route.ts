@@ -38,6 +38,8 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { resolveActingWallet, actingWalletRefusal } from "@/lib/acting-wallet";
+import { rateLimit } from "@/lib/rate-limit";
+import { resolvePresetDispatch } from "@/app/chat/components/presets";
 
 export const runtime = "nodejs";
 
@@ -45,9 +47,13 @@ const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://blueagent.dev";
 
 // Expand bare slash commands into an explicit, tool-grounded ask so the model
 // reliably calls the backing Hub tool instead of answering from memory.
+//
+// `/pick` is no longer offered as a preset (2026-09-30, plan §3.4: no advice —
+// it asked for "thesis, entry, sizing and kill-criterion", a trade call). Tasks
+// users already saved with it keep running, as the FACTS the tool reads.
 const SLASH_EXPANSION: Record<string, string> = {
   "/pick":
-    "Give me today's best token pick on Base. Use the hub_token_pick tool — base the thesis, entry, sizing and kill-criterion on its live data. Do not invent numbers.",
+    "Show today's Base token facts from the hub_token_pick tool — live price, liquidity, volume and safety data only. Do not give a buy/sell call, entry, sizing, target or kill-criterion. Do not invent numbers.",
   "/scan":
     "Scan the current Base narratives. Use the hub_narrative tool and report the live mindshare/velocity/phase. Do not invent numbers.",
   "/digest":
@@ -146,6 +152,18 @@ export async function POST(req: NextRequest) {
     if (acting.status !== "ok") return actingWalletRefusal(acting);
     const internalKey = process.env.INTERNAL_SERVICE_KEY ?? "";
 
+    // Per WALLET, not per IP: the chat route's own limiter keys on the
+    // forwarded-for of this server-to-server hop, so it never saw the caller.
+    const rl = await rateLimit(`cron-run:${acting.wallet}`, "console");
+    if (!rl.success) {
+      return NextResponse.json({ error: "Too many runs — wait a minute and try again." }, { status: 429 });
+    }
+
+    // The preset's provider/model, resolved exactly as the composer resolves
+    // it. Sending only `tier` routed a Venice preset (Search) down the Virtuals
+    // branch with no web search (Scheduled research L11).
+    const dispatch = resolvePresetDispatch(tier);
+
     // Route through the live chat pipeline so the model has the real-data Hub
     // tools available — as the CALLER, with no borrowed authority. Forwarding
     // the wallet lets /api/chat set X-Blue-User on its x402 calls, so paid Hub
@@ -164,6 +182,9 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         messages: [{ role: "user", content: expandPrompt(prompt) }],
         tier,
+        provider: dispatch.provider,
+        ...(dispatch.modelId ? { modelId: dispatch.modelId } : {}),
+        ...(dispatch.webSearch ? { webSearch: true } : {}),
         address: acting.wallet,
       }),
       signal: AbortSignal.timeout(90_000),
@@ -183,8 +204,11 @@ export async function POST(req: NextRequest) {
       // the body either way. A status code here would make the browser's fetch
       // path treat it as a transport failure and show "run failed" instead of
       // the actual reason, which is the one thing the user can act on.
+      // Keep whatever the run had already written. A tool running out of
+      // credits mid-turn still leaves a paid-for answer; dropping it
+      // (`result: ""`) threw that away (Scheduled research L9).
       return NextResponse.json({
-        result: "",
+        result: run.text,
         insufficientCredits: run.insufficientCredits,
         error: run.insufficientCredits.message ?? "Not enough credits to run this task.",
       });

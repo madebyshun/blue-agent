@@ -39,7 +39,7 @@
  * Auth: `Authorization: Bearer $CRON_SECRET` (or `?secret=`) — the house pattern.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { kvTryLock, kvDel } from "@/lib/kv";
+import { kvTryLock, kvDel, kvSet, kvSetNX } from "@/lib/kv";
 import {
   listOwners,
   readOwnerTasks,
@@ -75,8 +75,27 @@ const LOCK_TTL_S = 6 * 60;
  * Bounded unattended spend. Ten daily tasks across all users landing in one
  * 5-minute window is plausible; a hundred is a bug, and this is where that bug
  * stops costing money. The remainder stays due and is picked up next tick.
+ *
+ * 3, not 8 (2026-09-30, Scheduled research L3): each run may take its full 95 s,
+ * and 8 × 95 s = 760 s against a 300 s `maxDuration` — a tick killed mid-pass
+ * after it had already debited runs whose `nextAt` it never saved, so the next
+ * tick charged them again. 3 × 95 s = 285 s fits.
  */
-const MAX_RUNS_PER_TICK = 8;
+const MAX_RUNS_PER_TICK = 3;
+
+/**
+ * One run per (task, window), even if saving the result fails: claimed with
+ * SET NX before the run, keyed by the window's own `nextAt`. A tick that dies
+ * between charging and saving leaves `nextAt` in the past, and without this the
+ * next tick would run — and bill — the same window again. 8 days covers weekly.
+ */
+const RAN_TTL_S = 8 * 24 * 3600;
+const ranKey = (wallet: string, id: string, at: number) => `crons:ran:${wallet}:${id}:${at}`;
+
+/** Last-tick heartbeat (Scheduled research §7.8): the only way to answer "has
+ *  the tick run at all?" without Vercel logs. Written on every tick that
+ *  reaches the owner pass. */
+const HEARTBEAT_KEY = "crons:tick:last";
 
 function isAuthorized(req: NextRequest): boolean {
   if (!CRON_SECRET) return process.env.NODE_ENV !== "production";
@@ -89,7 +108,7 @@ function isAuthorized(req: NextRequest): boolean {
 
 type RunOutcome =
   | { kind: "ok"; text: string }
-  | { kind: "insufficient"; needed?: number; balance?: number }
+  | { kind: "insufficient"; needed?: number; balance?: number; text?: string }
   | { kind: "error"; message: string };
 
 /**
@@ -131,7 +150,9 @@ async function runTask(task: ScheduledTask, wallet: string): Promise<RunOutcome>
     };
 
     if (data.insufficientCredits) {
-      return { kind: "insufficient", ...data.insufficientCredits };
+      // Keep the text the run already produced — it was paid for.
+      const partial = (data.result ?? "").trim();
+      return { kind: "insufficient", ...data.insufficientCredits, ...(partial ? { text: partial.slice(0, MAX_RESULT_CHARS) } : {}) };
     }
     if (!res.ok) {
       return { kind: "error", message: data.error ?? `HTTP ${res.status}` };
@@ -154,6 +175,30 @@ interface TickSummary {
   paused:  number;
   owners:  number;
   skipped: number;   // owners whose record could not be read this cycle
+}
+
+/**
+ * Re-read the owner's record and change ONE task, by id. Never writes back a
+ * task list read before a run: see the note at the top of the owner loop.
+ */
+async function patchTask(
+  wallet: string,
+  id: string,
+  apply: (t: ScheduledTask) => void,
+): Promise<"ok" | "gone" | "unavailable" | "failed"> {
+  const read = await readOwnerTasks(wallet);
+  if (read.status === "unavailable") return "unavailable";
+  if (read.status === "empty") return "gone";
+  const tasks = read.record.tasks;
+  const t = tasks.find((x) => x.id === id);
+  if (!t) return "gone"; // deleted meanwhile — do not resurrect it
+  apply(t);
+  try {
+    await writeOwnerTasks(wallet, tasks);
+    return "ok";
+  } catch {
+    return "failed";
+  }
 }
 
 async function tick(now: number): Promise<TickSummary & { nextAt: number | null }> {
@@ -186,12 +231,17 @@ async function tick(now: number): Promise<TickSummary & { nextAt: number | null 
       continue;
     }
 
+    // Used only to FIND due tasks. Each run re-reads the live record first and
+    // saves by patching that one task (Scheduled research L13): the user may
+    // delete, pause or re-time a task while an earlier run in this pass is in
+    // flight, and writing back the whole array read here would undo that —
+    // resurrecting a deleted task that then keeps charging.
     const tasks = read.record.tasks;
-    let dirty = false;
+    let lostSave = false;
 
-    for (const task of tasks) {
-      if (!task.active) continue;
-      if (!Number.isFinite(task.nextAt) || task.nextAt > now) continue;
+    for (const snapshot of tasks) {
+      if (!snapshot.active) continue;
+      if (!Number.isFinite(snapshot.nextAt) || snapshot.nextAt > now) continue;
 
       if (budget <= 0) {
         // Out of runs for this tick. Leave `nextAt` in the past so the task is
@@ -199,54 +249,72 @@ async function tick(now: number): Promise<TickSummary & { nextAt: number | null 
         soonest = soonest === null ? now : Math.min(soonest, now);
         continue;
       }
-      budget--;
 
-      const outcome = await runTask(task, wallet);
-      dirty = true;
-      task.lastRun = Date.now();
-
-      if (outcome.kind === "ok") {
-        task.lastResult = outcome.text;
-        task.lastError  = undefined;
-        summary.ran++;
-      } else if (outcome.kind === "insufficient") {
-        // Switch it off rather than retrying every 5 minutes forever. The user
-        // re-enables after topping up, and re-enabling clears this reason.
-        task.active = false;
-        task.pausedReason =
-          typeof outcome.needed === "number" && typeof outcome.balance === "number"
-            ? `Paused — needed ${outcome.needed} credits, balance was ${outcome.balance}. Top up and switch it back on.`
-            : "Paused — not enough credits. Top up and switch it back on.";
-        task.lastError = task.pausedReason;
-        summary.paused++;
-      } else {
-        // A transient failure does not pause the task: it records the error and
-        // moves to the next window. Pausing on one bad upstream response would
-        // silently disable everyone's tasks during an outage.
-        task.lastError = outcome.message.slice(0, 300);
-        summary.failed++;
+      const fresh = await readOwnerTasks(wallet);
+      if (fresh.status !== "found") {
+        if (fresh.status === "unavailable") soonest = soonest === null ? now + 60_000 : Math.min(soonest, now + 60_000);
+        break; // record gone or unreadable: nothing of this owner's runs now
       }
+      const live = fresh.record.tasks.find((t) => t.id === snapshot.id);
+      if (!live || !live.active || !Number.isFinite(live.nextAt) || live.nextAt > now) continue;
 
-      // Advance from now, not from the missed slot — a task does not owe runs
-      // for windows it slept through. See `nextFireAt`.
-      task.nextAt = nextFireAt(task, Date.now());
-    }
-
-    if (dirty) {
-      try {
-        await writeOwnerTasks(wallet, tasks);
-      } catch (e) {
-        // The run already happened and was already paid for. Losing the result
-        // is the smaller harm; what we must not do is let the failure look like
-        // a clean pass, because `nextAt` did not persist either and the task
-        // would fire again next tick — a double charge.
-        console.error(`[cron:user-tasks] write failed for ${wallet}: ${(e as Error).message}`);
-        soonest = soonest === null ? now + 60_000 : Math.min(soonest, now + 60_000);
+      // One run per window, even across a crash between charging and saving.
+      if (!(await kvSetNX(ranKey(wallet, live.id, live.nextAt), Date.now(), RAN_TTL_S))) {
+        // Already ran (or is running) for this window — only advance it.
+        const windowAt = live.nextAt;
+        await patchTask(wallet, live.id, (t) => {
+          if (t.nextAt === windowAt) t.nextAt = nextFireAt(t, Date.now());
+        });
         continue;
       }
+      budget--;
+
+      const outcome = await runTask(live, wallet);
+      const ranAt = Date.now();
+      if (outcome.kind === "ok") summary.ran++;
+      else if (outcome.kind === "insufficient") summary.paused++;
+      else summary.failed++;
+
+      const saved = await patchTask(wallet, live.id, (t) => {
+        t.lastRun = ranAt;
+        if (outcome.kind === "ok") {
+          t.lastResult = outcome.text;
+          t.lastError  = undefined;
+        } else if (outcome.kind === "insufficient") {
+          // Switch it off rather than retrying every 5 minutes forever. The
+          // user re-enables after topping up, and re-enabling clears this.
+          t.active = false;
+          t.pausedReason =
+            typeof outcome.needed === "number" && typeof outcome.balance === "number"
+              ? `Paused — needed ${outcome.needed} credits, balance was ${outcome.balance}. Top up and switch it back on.`
+              : typeof outcome.needed === "number"
+              ? `Paused — needed ${outcome.needed} credits (balance unknown). Top up and switch it back on.`
+              : "Paused — not enough credits. Top up and switch it back on.";
+          t.lastError = t.pausedReason;
+          if (outcome.text) t.lastResult = outcome.text;
+        } else {
+          // A transient failure does not pause the task: it records the error
+          // and moves to the next window. Pausing on one bad upstream response
+          // would silently disable everyone's tasks during an outage.
+          t.lastError = outcome.message.slice(0, 300);
+        }
+        // Advance from now, not from the missed slot — a task does not owe runs
+        // for windows it slept through. From the LIVE definition, so a time the
+        // user changed mid-run is the one the next window uses.
+        t.nextAt = nextFireAt(t, ranAt);
+      });
+      if (saved !== "ok") {
+        // The run happened and was paid for. The window marker above already
+        // stops a second charge; losing the result is the smaller harm.
+        console.error(`[cron:user-tasks] result not saved for ${wallet}/${live.id}: ${saved}`);
+        lostSave = true;
+      }
     }
 
-    const mine = earliestNextAt(tasks);
+    if (lostSave) soonest = soonest === null ? now + 60_000 : Math.min(soonest, now + 60_000);
+
+    const after = await readOwnerTasks(wallet);
+    const mine = earliestNextAt(after.status === "found" ? after.record.tasks : tasks);
     if (mine !== null) soonest = soonest === null ? mine : Math.min(soonest, mine);
   }
 
@@ -289,6 +357,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const result = await tick(now);
+    await kvSet(HEARTBEAT_KEY, { at: Date.now(), status: "ok", ...result }, 7 * 24 * 3600);
 
     // 3. Move the wake-up to the next real deadline. `writeWatermark` clamps it
     //    to at most an hour out, so even a wrong answer here self-corrects.

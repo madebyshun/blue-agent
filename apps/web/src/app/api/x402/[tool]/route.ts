@@ -330,6 +330,13 @@ async function handle(
     // — the chat backend reads that header to populate the in-message
     // credit chip with the real spend, not just the chat-message cost.
     let creditsDebited = 0;
+    // The debit happens BEFORE the handler (so a failing call cannot serve
+    // free compute), which made it the one rail that charged for failures: the
+    // USDC path settles only after a successful run, this one kept the credits
+    // when the handler threw or answered an error (Scheduled research L-table,
+    // W0-6(f), 2026-09-30). Each debit now carries a ref, and a failed run
+    // returns exactly that debit through the ledger's idempotent refund().
+    let creditRef: string | undefined;
     if (xBlueUser && /^0x[a-fA-F0-9]{40}$/.test(xBlueUser)) {
       const { fetchBlueBalance, getTierInfo } = await import("@/lib/credits");
       const { toolCreditCost }                = await import("@/lib/credit-pricing");
@@ -340,18 +347,29 @@ async function handle(
       const cost        = toolCreditCost(tool, holderTier);
 
       if (cost > 0) {
+        const ref = `tool:${tool}:${crypto.randomUUID()}`;
         try {
-          await spend(xBlueUser, cost, `tool:${tool}`);
+          await spend(xBlueUser, cost, `tool:${tool}`, ref);
           creditsDebited = cost;
+          creditRef = ref;
         } catch (e) {
           const err = e as Error & { code?: string };
           if (err.code === "INSUFFICIENT_CREDITS") {
+            // The REAL balance, read now. Callers used to fill this in with a
+            // hard-coded 0 (chat → "balance was 0" in every Scheduled pause
+            // note, whatever the wallet held). Unreadable → omitted, not 0.
+            let balance: number | undefined;
+            try {
+              const { getBalance } = await import("@/lib/credit-ledger");
+              balance = (await getBalance(xBlueUser)).balance;
+            } catch { /* leave it out rather than invent one */ }
             return NextResponse.json(
               {
                 error:  "Insufficient credits to call this tool",
                 code:   "INSUFFICIENT_CREDITS",
                 tool,
                 needed: cost,
+                ...(typeof balance === "number" ? { balance } : {}),
                 // Was "…or stake more BLUE for a bigger daily accrual." Staking
                 // stopped feeding credits before the stake surface was retired;
                 // the daily bucket is flat per wallet and extra is bought in USDC.
@@ -385,17 +403,35 @@ async function handle(
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     });
+    // Give back THIS request's debit, if it made one. Never throws: a refund
+    // that fails is logged and the error response still goes out.
+    const returnCredits = async () => {
+      if (!creditRef || !xBlueUser) return false;
+      try {
+        const { refund } = await import("@/lib/credit-ledger");
+        const r = await refund(xBlueUser, creditRef);
+        return r.status === "refunded" || r.status === "already";
+      } catch (err) {
+        console.error("[x402] tool credit refund failed:", (err as Error).message, creditRef);
+        return false;
+      }
+    };
     try {
       const resp = await handler(innerReq);
       const data = await resp.json().catch(() => ({}));
+      if (!resp.ok && (await returnCredits())) creditsDebited = 0;
       return NextResponse.json(data, {
         status:  resp.ok ? 200 : resp.status,
         headers: { "X-Credits-Debited": String(creditsDebited) },
       });
     } catch (e) {
+      const refunded = await returnCredits();
       return NextResponse.json(
-        { error: "Tool failed", message: (e as Error).message },
-        { status: 502 }
+        {
+          error: refunded ? "Tool failed — your credits were returned" : "Tool failed",
+          message: (e as Error).message,
+        },
+        { status: 502, headers: { "X-Credits-Debited": String(refunded ? 0 : creditsDebited) } }
       );
     }
   }

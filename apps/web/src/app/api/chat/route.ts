@@ -1263,7 +1263,7 @@ interface ToolCallResult {
    * Surfaced upstream so the chat stream can emit an `insufficient_credits`
    * SSE event instead of silently swallowing the failure.
    */
-  insufficient?: { needed: number; balance: number; tool: string };
+  insufficient?: { needed: number; balance?: number; tool: string };
   /**
    * Set when a paid tool was requested without a connected wallet (guest). The
    * synthesis step short-circuits to a "connect wallet" message rather than
@@ -2086,7 +2086,7 @@ async function callHubTool(
       // Distinguish credit-ledger 402 from "payment gate not bypassed" 402:
       // ours carries code: "INSUFFICIENT_CREDITS" + a needed field.
       const data = await res.json().catch(() => ({})) as {
-        code?: string; needed?: number;
+        code?: string; needed?: number; balance?: number;
       };
       if (data?.code === "WALLET_REQUIRED") {
         // Guest tried a paid tool. Flag it so the stream short-circuits to a
@@ -2099,7 +2099,8 @@ async function callHubTool(
       if (data?.code === "INSUFFICIENT_CREDITS" && typeof data.needed === "number") {
         return {
           text: `[${toolName}: not enough credits — need ${data.needed}, top up to continue]`,
-          insufficient: { needed: data.needed, balance: 0, tool: toolName },
+          // `balance` is whatever the x402 route read — never a stand-in 0.
+          insufficient: { needed: data.needed, balance: typeof data.balance === "number" ? data.balance : undefined, tool: toolName },
         };
       }
       return { text: `[${toolName}: payment required — set INTERNAL_SERVICE_KEY env var to enable]` };

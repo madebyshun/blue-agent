@@ -445,7 +445,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         // matches what the background tick will charge. Older tasks have none
         // and fall back to the composer, which is what they did before.
         body: JSON.stringify({ prompt: cron.prompt, tier: cron.tier ?? chatTier, address: walletAddr }),
-        signal: AbortSignal.timeout(60_000),
+        // Longer than cron/run's own 90 s wait on the chat pipeline, so a slow
+        // run is not shown as failed after it has been charged (L8).
+        signal: AbortSignal.timeout(100_000),
       });
       const data = await res.json() as {
         result?: string;
@@ -499,7 +501,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   // Keep the server's copy of the background tasks in step with this one, and
   // adopt whatever the tick did while the tab was closed.
-  const schedule = useScheduleSync(walletAddr, crons, updateCron, signIn);
+  // A task the server runs but this browser has never seen (another device, or
+  // cleared storage) is added here so it can be seen and switched off (L4).
+  const adoptCron = useCallback((task: CronTask) => {
+    setCreonsState(prev => {
+      if (prev.some(c => c.id === task.id)) return prev;
+      const next = [...prev, task];
+      saveCrons(next, walletAddr);
+      return next;
+    });
+  }, [walletAddr]);
+  const schedule = useScheduleSync(walletAddr, crons, updateCron, signIn, adoptCron);
 
   // ── Chat state ─────────────────────────────────────────────────────────────
   const [streaming,    setStreaming]    = useState(false);
