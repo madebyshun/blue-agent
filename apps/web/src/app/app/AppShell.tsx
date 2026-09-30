@@ -74,22 +74,17 @@ const svg = (d: ReactNode) => (
 );
 
 const IconChat = svg(<path strokeLinecap="round" strokeLinejoin="round" d="M8.625 9.75a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375m-13.5 3.01c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.184-4.183a1.14 1.14 0 0 1 .778-.332 48.294 48.294 0 0 0 5.83-.498c1.585-.233 2.708-1.626 2.708-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" />);
-const IconHub = svg(<path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z" />);
 const IconHood = svg(<><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 12h16.5m0 0-6-6m6 6-6 6" /><path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.5v15" /></>);
 // Wallet — billfold body + fold flap + rounded coin pocket (distinct from the credit-card Plans icon).
 const IconWallet = svg(<><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 9.75A2.25 2.25 0 0 1 4.5 7.5h15a2.25 2.25 0 0 1 2.25 2.25v7.5A2.25 2.25 0 0 1 19.5 19.5h-15a2.25 2.25 0 0 1-2.25-2.25v-7.5Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M18 7.5V6.75A2.25 2.25 0 0 0 15.75 4.5H5.25" /><path strokeLinecap="round" strokeLinejoin="round" d="M21.75 12.75h-3a1.875 1.875 0 0 0 0 3.75h3" /></>);
 // Overview — chart-pie (distinct from Hub's grid).
-const IconOverview = svg(<><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6a7.5 7.5 0 1 0 7.5 7.5h-7.5V6Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M13.5 10.5H21A7.5 7.5 0 0 0 13.5 3v7.5Z" /></>);
 // Skills — sparkles.
-const IconSkills = svg(<path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456Z" />);
 // Connectors — squares-plus.
-const IconConnectors = svg(<path strokeLinecap="round" strokeLinejoin="round" d="M13.5 16.875h3.375m0 0h3.375m-3.375 0V13.5m0 3.375v3.375M6 10.5h2.25a2.25 2.25 0 0 0 2.25-2.25V6a2.25 2.25 0 0 0-2.25-2.25H6A2.25 2.25 0 0 0 3.75 6v2.25A2.25 2.25 0 0 0 6 10.5Zm0 9.75h2.25A2.25 2.25 0 0 0 10.5 18v-2.25a2.25 2.25 0 0 0-2.25-2.25H6a2.25 2.25 0 0 0-2.25 2.25V18A2.25 2.25 0 0 0 6 20.25Zm9.75-9.75H18a2.25 2.25 0 0 0 2.25-2.25V6A2.25 2.25 0 0 0 18 3.75h-2.25A2.25 2.25 0 0 0 13.5 6v2.25a2.25 2.25 0 0 0 2.25 2.25Z" />);
 // Cron — clock.
 const IconCron = svg(<path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />);
 // Usage — chart-bar.
 const IconUsage = svg(<path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" />);
 // Plans — credit-card.
-const IconPlans = svg(<path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Z" />);
 // Docs — document.
 const IconDocs = svg(<path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />);
 // Home / Models used to be hand-rolled at 16px with strokeWidth 1.5 while every
@@ -97,7 +92,6 @@ const IconDocs = svg(<path strokeLinecap="round" strokeLinejoin="round" d="M19.5
 // the same column. Routed through the shared helper so one edit moves all of
 // them and the rail can't drift apart again.
 const IconHome = svg(<path strokeLinecap="round" strokeLinejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />);
-const IconModels = svg(<path strokeLinecap="round" strokeLinejoin="round" d="M9.75 17 9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2Z" />);
 
 // ── Nav model ───────────────────────────────────────────────────────────────────
 // Grouped sidebar mirroring the "onchain Agent OS" framing — three product
@@ -128,47 +122,30 @@ type NavGroup = { id: string; items: NavItem[] };
 const NAV_GROUPS: NavGroup[] = [
   {
     id: "group_agent",
+    // Five-item nav (ShunTr, 2026-09-30 — docs/rebuild-5-tang-2026-09-30.md §0):
+    // Chat is the primary surface; Wallet holds swap/send/bridge; Scheduled
+    // (/cron) and Usage follow. HIDDEN, not deleted — every route below still
+    // resolves, only the nav entry is gone: models, dashboard, connectors,
+    // hub (Hub tools stay live inside Chat and over x402), skills, plans.
     items: [
       { id: "chat", href: "/chat", icon: IconChat },
-      { id: "models", href: "/models", icon: IconModels },
       { id: "wallet", href: "/wallet", icon: IconWallet },
-      { id: "dashboard", href: "/dashboard", icon: IconOverview },
-      { id: "connectors", href: "/connectors", icon: IconConnectors },
       { id: "cron", href: "/cron", icon: IconCron },
       { id: "usage", href: "/usage", icon: IconUsage },
     ],
   },
   {
     id: "group_explore",
+    // Hood is an add-on feature next to Chat, not a second primary surface.
     items: [
       { id: "hood", href: "/hood", icon: IconHood, badge: "hood" },
     ],
   },
   {
-    id: "group_hub",
-    items: [
-      { id: "hub", href: "/hub", icon: IconHub, meta: "hubCount" },
-      // No meta on Skills. The handoff prints "8", but nothing in the shell can
-      // reach that number: the count lives inside <SkillsPanel>, a client
-      // component behind a fetch, and importing it here would mount it on every
-      // /app page. An 8 typed in by hand is a claim with no source — the exact
-      // thing a derived Hub count exists to avoid.
-      { id: "skills", href: "/skills", icon: IconSkills },
-    ],
-  },
-  {
     id: "group_account",
-    // The design handoff drops Docs from this group (it treats Docs as a
-    // marketing page, not an app view) and prints "Member" beside Plans.
-    // Neither is applied here, and both are deliberate:
-    //   · Docs STAYS. /docs/blue-chat is live and this is its only entrance
-    //     from inside the app. Removing a door to a working page is a product
-    //     decision, not a restyle — flagged for ShunTr rather than taken.
-    //   · Plans has no meta. "Member" is account state; reading it needs a
-    //     shell-wide fetch on every /app page, which is the cost profile that
-    //     produced #123/#148.
+    // Docs STAYS as the last entry: /docs/blue-chat is live and this is its
+    // only entrance from inside the app.
     items: [
-      { id: "plans", href: "/plans", icon: IconPlans },
       { id: "docs", href: "/docs/blue-chat", icon: IconDocs },
     ],
   },
