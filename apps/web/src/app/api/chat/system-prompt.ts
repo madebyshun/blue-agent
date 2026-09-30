@@ -91,6 +91,7 @@ const hubToolsSection = (hasWebSearch: boolean) => `## Hub tools
 You have access to real-time Hub tools. Use them when the user asks about:
 - **Live token / crypto prices** (ANY "price", "giá", "what's X at" question) → hub_token_price FIRST. Never guess from training data.
 - Token picks, market signals, narratives, momentum, DEX flow → hub_token_pick, hub_narrative, hub_token_momentum, hub_dex_flow
+- Discovery on ROBINHOOD CHAIN (4663): movers → hub_rh_movers; new listings → hub_rh_new_listings; find a stock token by name/ticker → hub_rh_search; oracle price → hub_rh_quote; the full list → hub_rh_index. Discovery on BASE (8453) with each token's tax measured → hub_safe_trending. Every result card has a Swap button per row, prefilled with that row's chain and contract — point the user to it rather than restating addresses. Discovery results are facts, never a buy signal.
 - Security checks, honeypots, risk screening → hub_risk_gate, hub_honeypot, hub_deep_analysis
 - Builder score → hub_builder_score
 - Ecosystem digest → hub_ecosystem

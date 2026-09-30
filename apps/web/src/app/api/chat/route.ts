@@ -435,6 +435,72 @@ const ALL_HUB_TOOLS = [
       properties: { context: { type: "string", description: "Optional market context or narrative to consider" } },
     },
   },
+  // ── Discovery (G0, 2026-09-30 — plan §0b, §7 #17 "thêm") ────────────────
+  // Chat is where users discover (§7 #18), and until now it could swap a
+  // Robinhood Chain token but not FIND one: none of the RH discovery tools was
+  // offered here, and safe-trending was reachable only through x402. These six
+  // are existing, live handlers; each result card carries a Swap button per row,
+  // prefilled with that row's chain + contract (never a ticker).
+  {
+    name: "hub_rh_movers",
+    description: "Top 24h gainers and losers among ROBINHOOD CHAIN (4663) stock/ETF tokens — dollar-anchored pools only, dust pools filtered out. Facts: price, 24h change, volume, pool depth, contract. Use for 'what's moving on Robinhood', 'top RH stocks today'. Stock tokens on Robinhood Chain are debt securities issued by Robinhood Assets (Jersey) that track a US share — never call them shares.",
+    input_schema: {
+      type: "object",
+      properties: {
+        limit:              { type: "number", description: "Rows per side (default 5)." },
+        min_tvl_usd:        { type: "number", description: "Dust floor on pool TVL, USD (default 5000)." },
+        min_volume_24h_usd: { type: "number", description: "Dust floor on 24h volume, USD (default 500)." },
+      },
+    },
+  },
+  {
+    name: "hub_rh_new_listings",
+    description: "New stock/ETF tokens deployed by the canonical Robinhood (RHJ) token factory on ROBINHOOD CHAIN (4663), read from the factory's own events — impersonators cannot appear. Presence proves provenance, not liquidity: most new listings have no pool yet. Use for 'new Robinhood listings', 'what was just listed on RH'.",
+    input_schema: {
+      type: "object",
+      properties: {
+        since_days: { type: "number", description: "Window in days (default 30)." },
+        limit:      { type: "number", description: "Max rows (default 20)." },
+      },
+    },
+  },
+  {
+    name: "hub_rh_search",
+    description: "Find a ROBINHOOD CHAIN (4663) stock/ETF token by ticker or company name in the canonical registry (typo-tolerant). Returns ticker, name and the verified contract — never an invented address. Use before swapping when the user names a company or a ticker you have not resolved.",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Ticker or company name, e.g. 'NVDA', 'nvidia', 'tesla'." },
+        limit: { type: "number", description: "Max matches (default 5)." },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "hub_rh_quote",
+    description: "Live Chainlink oracle quote for one ROBINHOOD CHAIN (4663) stock/ETF token by ticker: price, round time and staleness, plus the verified contract. Oracle feeds tick 24/5 — on weekends the price is Friday's close. Use for 'price of NVDA on Robinhood Chain'.",
+    input_schema: {
+      type: "object",
+      properties: { ticker: { type: "string", description: "Ticker, e.g. NVDA." } },
+      required: ["ticker"],
+    },
+  },
+  {
+    name: "hub_rh_index",
+    description: "The full canonical catalog of ROBINHOOD CHAIN (4663) stock and ETF tokens (180+ stocks, 20+ ETFs) with contracts. Zero input. Use for 'what stocks are on Robinhood Chain', 'list the RH ETFs'. Prefer hub_rh_search for one name.",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
+    name: "hub_safe_trending",
+    description: "Trending BASE (8453) tokens, each with its buy/sell tax READ from the contract and its exit depth (slippage on a $1k sale). SAFE here means tradeable with a measured tax — a clean scan is not a buy signal, and you must not present it as one. Use for 'what's trending on Base', 'safe trending tokens'.",
+    input_schema: {
+      type: "object",
+      properties: {
+        min_liquidity_usd: { type: "number", description: "Liquidity floor, USD (default 500000)." },
+        limit:             { type: "number", description: "Max tokens (default 10)." },
+      },
+    },
+  },
   {
     name: "hub_narrative",
     description: "Get the current narrative map — mindshare scores, velocity, phase (Emerging/Rising/Peak/Fading), and position calls (FRONT-RUN/RIDE/FADE/WATCH). Use when user asks about narratives, trends, what's running on CT. Do NOT also call hub_narrative_pulse for the same question — they read the same trending source; pick one.",
@@ -1232,6 +1298,13 @@ const TOOL_ENDPOINT: Record<string, string> = {
   hub_stack:            "stack-recommender",
   hub_pitch_intel:      "pitch-intelligence",
   hub_multi_agent:      "multi-agent-workflow",
+  // Discovery (G0, 2026-09-30) — see the block in ALL_HUB_TOOLS.
+  hub_rh_movers:        "rh-stock-movers",
+  hub_rh_new_listings:  "rh-stock-new-listings",
+  hub_rh_search:        "rh-stock-search",
+  hub_rh_quote:         "rh-stock-quote",
+  hub_rh_index:         "rh-rwa-index",
+  hub_safe_trending:    "safe-trending",
 };
 
 // ─── Internal Hub tool caller ─────────────────────────────────────────────────

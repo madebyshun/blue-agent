@@ -80,6 +80,8 @@ import BankRhSwapCard from "@/app/app/bank/RhSwapCard";
 import BankBridgeCard from "@/app/app/bank/BridgeCard";
 import DcaCard, { type DcaResult } from "./DcaCard";
 import { HoodArrowCard, type HoodArrowResult } from "./HoodArrowCard";
+import { DiscoveryCard, discoveryRows, type DiscoveryRow } from "./DiscoveryCard";
+import { WALLET_CHAINS } from "@/lib/wallet/chains";
 
 function truncAddr(addr: string, len = 6) {
   if (!addr || addr.length < 12) return addr;
@@ -2469,6 +2471,33 @@ function ConvertPanel({
   );
 }
 
+/**
+ * The swap a discovery row opens (G0). Armed with the row's chain + contract,
+ * never its ticker. Base rows open the Convert card buying that token; a
+ * Robinhood Chain row opens the card for its pool's quote asset — USDG → token
+ * for a dollar-anchored pool (the norm for stock tokens), ETH → token when the
+ * tool read a WETH pool.
+ */
+function DiscoverySwap({ row, account }: { row: DiscoveryRow; account?: `0x${string}` }) {
+  if (!row.address) return null;
+  const note = `From discovery — ${row.label ?? row.symbol}. Review the amount and route before signing.`;
+  if (row.chain === "base") {
+    return <ConvertPanel account={account} seedChain="base" initialBuy={row.address} />;
+  }
+  if (row.quoteVia === "ETH") {
+    return <ConvertPanel account={account} seedChain="robinhood" rhDirection="buy" rhToken={row.address} rhSymbol={row.symbol} rhNote={note} />;
+  }
+  const usdg = WALLET_CHAINS.robinhood.stable;
+  return (
+    <RobinhoodSwapCard result={{
+      kind: "robinhood_swap", direction: "buy",
+      token_address: row.address, token_symbol: row.symbol,
+      token_in_address: usdg, token_in_symbol: WALLET_CHAINS.robinhood.stableSymbol,
+      note,
+    }} />
+  );
+}
+
 export function ToolResultCard({ tool, result }: { tool: string; result: Record<string, unknown> }) {
   // Always called inside the chat (ChatMessages) — read the canonical wallet
   // here and hand it to the action cards as a prop so they don't depend on chat.
@@ -2581,6 +2610,19 @@ export function ToolResultCard({ tool, result }: { tool: string; result: Record<
           initialAmount={s.amount}
           initialAsset={s.asset || undefined} />
       );
+    }
+
+    // Discovery tools (G0) — one card, a Swap button per row.
+    case "hub_rh_movers":
+    case "hub_rh_new_listings":
+    case "hub_rh_search":
+    case "hub_rh_quote":
+    case "hub_rh_index":
+    case "hub_safe_trending": {
+      const d = discoveryRows(tool, r as Record<string, unknown>);
+      if (!d) return null;
+      return <DiscoveryCard title={d.title} rows={d.rows} more={d.more} note={d.note}
+        renderSwap={(row) => <DiscoverySwap row={row} account={account} />} />;
     }
 
     case "prepare_swap": {
