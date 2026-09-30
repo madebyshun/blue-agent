@@ -228,12 +228,12 @@ function culledRedirect(pathname: string): NextResponse | null {
 // also the surface that makes the other three legible ("what did that tool call
 // actually cost me"), which is worth nothing behind a gate.
 //
-// Nothing here is private-by-address: /api/wallet/spend, /api/wallet/spend-
-// summary and /api/credits/balance/[address] are all unauthenticated GETs
-// already, so this opens a page, not a dataset. If those should be gated, they
-// get gated together behind one signature check — see the header of
-// lib/wallet/spend-log.ts — not by leaving the page walled and calling it
-// privacy.
+// This opens a page, not a dataset. The per-wallet data behind it is gated at
+// the API, all of it together behind one SIWE check (2026-09-30):
+// /api/wallet/spend, /api/wallet/spend-summary and the per-event `?detail=1`
+// of /api/credits/balance/[address] answer only the signed-in wallet — see the
+// header of lib/wallet/spend-log.ts. Walling the page would not have been
+// privacy; gating the reads is.
 //
 // `signup` is exempt for a narrower reason: walling it would not stop a single
 // sign-in. The account control in the sidebar opens the same Privy modal from

@@ -47,7 +47,8 @@
  * decides on its own when to print "all-time" is how a total starts lying.
  */
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useEnsureSession } from "@/hooks/useEnsureSession";
 
 export type RailStatus = "ok" | "unavailable";
 
@@ -255,7 +256,10 @@ export type Load =
   | { s: "disconnected" }
   | { s: "loading" }
   | { s: "ok"; d: SpendSummaryDTO }
-  | { s: "failed" };
+  | { s: "failed" }
+  // Owner-only since 2026-09-30: connected, but no SIWE session for this
+  // wallet yet. Not a zero and not a failure — nothing was asked.
+  | { s: "signed-out"; signIn: () => void };
 
 /**
  * The fetch, lifted so ONE caller can feed two placements.
@@ -270,10 +274,19 @@ export function useSpendSummary(address?: string): Load {
   // Seeded from the address, not hard-coded to "loading" — the first paint of a
   // disconnected mount must already say so rather than flash a spinner.
   const [state, setState] = useState<Load>(address ? { s: "loading" } : { s: "disconnected" });
+  const { hasSession, ensureSession } = useEnsureSession();
+  const [nonce, setNonce] = useState(0);
+  // The signature is asked for only when the user clicks — never on load.
+  const signIn = useCallback(() => {
+    if (!address) return;
+    void ensureSession(address).then(() => setNonce(n => n + 1)).catch(() => {});
+  }, [address, ensureSession]);
   useEffect(() => {
     if (!address) { setState({ s: "disconnected" }); return; }
     let alive = true;
     setState({ s: "loading" });
+    void (async () => {
+    if (!(await hasSession(address))) { if (alive) setState({ s: "signed-out", signIn }); return; }
     fetch(`/api/wallet/spend-summary?address=${address}`)
       .then(r => r.json())
       // A 200 that CARRIES an error is a failed read, not an empty ledger.
@@ -291,8 +304,9 @@ export function useSpendSummary(address?: string): Load {
       // component already has the wording for it.
       .then((d: SpendSummaryDTO) => { if (alive) setState(d?.error ? { s: "failed" } : { s: "ok", d }); })
       .catch(() => { if (alive) setState({ s: "failed" }); });
+    })();
     return () => { alive = false; };
-  }, [address]);
+  }, [address, nonce, hasSession, signIn]);
   return state;
 }
 
@@ -393,6 +407,14 @@ export default function SpendConsole({
         <div className="font-mono text-[10px] text-slate-600 py-8 text-center leading-relaxed">
           Connect a wallet to see what it has spent.<br />
           <span className="text-slate-700">Receipts are per address — there is nothing to look up yet.</span>
+        </div>
+      )
+    ) : load.s === "signed-out" ? (
+      chartOnly ? null : (
+        <div className="font-mono text-[10px] text-slate-500 py-8 text-center leading-relaxed">
+          Spending is private to the wallet.<br />
+          <button onClick={load.signIn} className="mt-2 underline text-[#4FC3F7]">Sign in with your wallet to see it</button>
+          <span className="block text-slate-700 mt-1">One signature — no transaction.</span>
         </div>
       )
     ) : load.s === "loading" ? (

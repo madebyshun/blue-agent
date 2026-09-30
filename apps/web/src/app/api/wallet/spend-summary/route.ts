@@ -20,13 +20,17 @@
 // It converts `credits.paidAllTime` and nothing else — see spend-summary.ts on
 // why no single credit event has a dollar value.
 //
-// PUBLIC READ, deliberately, matching `/api/wallet/spend` and
-// `/api/credits/balance/[address]`: anyone with an address can already read
-// both rails. Gating this aggregate alone would be theatre — it derives from
-// two sources that are themselves open. Making it private means making all
-// three private behind one signature check, in its own PR.
+// OWNER-ONLY since 2026-09-30 (plan §2, W0-6). This line used to argue for a
+// PUBLIC read — anyone with an address could read which Hub tools it bought —
+// on the grounds that the credits rail published the same join, so gating one
+// alone would be theatre. Both went private in the same commit: this route,
+// /api/wallet/spend-summary, and the per-event `recent` list of
+// /api/credits/balance/[address] (its aggregate balance stays public). The
+// wallet comes from the SIWE session (lib/acting-wallet.ts); `address`, when
+// sent, must match it.
 
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
+import { resolveActingWallet, actingWalletRefusal } from "@/lib/acting-wallet";
 import { getSpendSummary } from "@/lib/wallet/spend-summary";
 import { CREDITS_PER_USDC } from "@/lib/payments";
 import { AGENT_TOOLS } from "@/lib/agent-tools";
@@ -37,29 +41,11 @@ export const runtime = "nodejs";
 
 const NAMES = new Map(AGENT_TOOLS.map(t => [t.id, t.name] as const));
 
-/** Shape-compatible zero, so a bad address never makes the client branch twice. */
-const EMPTY = {
-  usdc:    { status: "ok" as const, units: 0, calls: 0 },
-  credits: { status: "ok" as const, spentInWindow: 0, callsInWindow: 0, paidAllTime: 0, truncated: false },
-  chat:    { credits: 0, calls: 0 },
-  other:   { credits: 0, calls: 0 },
-  tools:   [] as never[],
-  days:    [] as never[],
-  oldestTs: null,
-  partial: false,
-  creditsPerUsdc: CREDITS_PER_USDC,
-};
+export async function GET(req: NextRequest) {
+  const acting = await resolveActingWallet(req, new URL(req.url).searchParams.get("address"));
+  if (acting.status !== "ok") return actingWalletRefusal(acting);
 
-export async function GET(req: Request) {
-  const address = new URL(req.url).searchParams.get("address") ?? "";
-
-  // A malformed address is a caller bug, not an outage: we know the answer is
-  // "nothing spent", so both rails report `ok` and the console renders empty.
-  if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
-    return NextResponse.json({ error: "invalid address", ...EMPTY, ts: Date.now() });
-  }
-
-  const s = await getSpendSummary(address);
+  const s = await getSpendSummary(acting.wallet);
 
   return NextResponse.json({
     ...s,

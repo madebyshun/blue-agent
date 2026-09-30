@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useEnsureSession } from "@/hooks/useEnsureSession";
 import { useBasename, shortAddr } from "@/lib/useBasename";
 import { TOPUP_TREASURY } from "@/lib/payments";
 import { WALLET_CHAINS, type WalletChain } from "@/lib/wallet/chains";
@@ -138,10 +139,16 @@ const NO_RECEIPTS: ReceiptState = { status: "ok", byTx: new Map(), all: [] };
 
 function useSpendReceipts(address?: string): ReceiptState {
   const [state, setState] = useState<ReceiptState>({ status: "loading", byTx: new Map(), all: [] });
+  // Receipts are owner-only since 2026-09-30. Without a session the rows still
+  // render — as the plain transfers they are on chain — just without the tool
+  // name only we know. No signature is asked for on load.
+  const { hasSession } = useEnsureSession();
   useEffect(() => {
     if (!address) { setState(NO_RECEIPTS); return; }
     let alive = true;
     setState({ status: "loading", byTx: new Map(), all: [] });
+    void (async () => {
+    if (!(await hasSession(address))) { if (alive) setState(NO_RECEIPTS); return; }
     fetch(`/api/wallet/spend?address=${address}`)
       .then(r => r.json())
       .then((j: { known?: boolean; receipts?: Receipt[] }) => {
@@ -156,8 +163,9 @@ function useSpendReceipts(address?: string): ReceiptState {
         setState({ status: "ok", byTx, all });
       })
       .catch(() => { if (alive) setState({ status: "unavailable", byTx: new Map(), all: [] }); });
+    })();
     return () => { alive = false; };
-  }, [address]);
+  }, [address, hasSession]);
   return state;
 }
 

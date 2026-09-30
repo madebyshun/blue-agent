@@ -14,14 +14,17 @@
 // removing. An id with no catalog entry (retired tool) returns `name: null`
 // and the client prints the raw id. It never guesses a label.
 //
-// PUBLIC READ, deliberately, and worth stating plainly: anyone who knows an
-// address can read which Hub tools that address bought. That is the same stance
-// `/api/credits/balance/[address]` already takes for the credits rail, which
-// publishes `reason: "tool:<id>"` per wallet. Gating one rail and not the other
-// would be theatre, not privacy. If this should be owner-only, both rails need
-// SIWE together — see the note in lib/wallet/spend-log.ts.
+// OWNER-ONLY since 2026-09-30 (plan §2, W0-6). This line used to argue for a
+// PUBLIC read — anyone with an address could read which Hub tools it bought —
+// on the grounds that the credits rail published the same join, so gating one
+// alone would be theatre. Both went private in the same commit: this route,
+// /api/wallet/spend-summary, and the per-event `recent` list of
+// /api/credits/balance/[address] (its aggregate balance stays public). The
+// wallet comes from the SIWE session (lib/acting-wallet.ts); `address`, when
+// sent, must match it.
 
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
+import { resolveActingWallet, actingWalletRefusal } from "@/lib/acting-wallet";
 import { getSpendLog } from "@/lib/wallet/spend-log";
 import { AGENT_TOOLS } from "@/lib/agent-tools";
 
@@ -30,15 +33,11 @@ export const dynamic = "force-dynamic";
 
 const NAMES = new Map(AGENT_TOOLS.map(t => [t.id, t.name] as const));
 
-export async function GET(req: Request) {
-  const address = new URL(req.url).searchParams.get("address") ?? "";
+export async function GET(req: NextRequest) {
+  const acting = await resolveActingWallet(req, new URL(req.url).searchParams.get("address"));
+  if (acting.status !== "ok") return actingWalletRefusal(acting);
 
-  // A malformed address is a caller bug, not an outage: we know the answer is
-  // "no receipts", so `known` stays true and the UI shows an empty drawer.
-  if (!/^0x[a-fA-F0-9]{40}$/.test(address))
-    return NextResponse.json({ receipts: [], known: true, error: "invalid address" });
-
-  const rows = await getSpendLog(address);
+  const rows = await getSpendLog(acting.wallet);
 
   // `null` from getSpendLog means KV was unreachable — WE DO NOT KNOW, which is
   // not the same claim as "there are none". It travels to the client as

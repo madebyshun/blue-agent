@@ -14,13 +14,13 @@
  * payer, so the wallet can say "Blue Hub · honeypot-check · $0.05" where it used
  * to say "Sent to 0x0295…".
  *
- * Who can read them: anyone with the address. `/api/wallet/spend` is an
- * unauthenticated GET. Say it out loud rather than let the word "own" imply a
- * gate that does not exist — the credits rail already publishes
- * `reason: "tool:<id>"` per wallet at `/api/credits/balance/[address]`, so
- * locking this one alone would change nothing an observer can learn. Making
- * either private means making BOTH private, behind one signature check, and
- * that is a deliberate decision with its own PR, not a flag flipped here.
+ * Who can read them: only the wallet itself, since 2026-09-30 (plan §2, W0-6).
+ * Until then `/api/wallet/spend` was an unauthenticated GET, and this header
+ * said why a lone gate would be theatre: the credits rail published the same
+ * join (`reason: "tool:<id>"`) at `/api/credits/balance/[address]`. So they
+ * went private TOGETHER, behind one SIWE check: this route, /spend-summary,
+ * and the per-event `?detail=1` of the balance route (whose aggregate balance
+ * stays public). See lib/acting-wallet.ts.
  *
  * Scope of what is stored — deliberately the minimum that makes a receipt a
  * receipt:

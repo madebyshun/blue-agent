@@ -3322,6 +3322,12 @@ function AgentSpendCard({ spend, priv }: { spend: SpendLoad; priv: (s: string) =
         <p className="font-mono text-[10px] text-[#F59E0B] mt-2 leading-relaxed">
           Couldn&apos;t load spending. A read failure, not a zero — your history is intact.
         </p>
+      ) : spend.s === "signed-out" ? (
+        <p className="font-mono text-[10px] text-slate-500 mt-2 leading-relaxed">
+          Spending is private to the wallet.{" "}
+          <button onClick={spend.signIn} className="underline text-[#4FC3F7]">Sign in to see it</button>
+          <span className="text-slate-600"> — one signature, no transaction.</span>
+        </p>
       ) : spend.d.usdc.status === "unavailable" && spend.d.credits.status === "unavailable" ? (
         <p className="font-mono text-[10px] text-[#F59E0B] mt-2 leading-relaxed">
           Both spend stores are unreachable right now.{" "}

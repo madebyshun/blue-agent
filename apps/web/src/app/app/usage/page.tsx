@@ -27,6 +27,7 @@ import { useWallet } from "@/hooks/useWallet";
 import { WalletPickerModal } from "@/components/WalletPicker";
 import TopUpModal from "@/components/TopUpModal";
 import SpendConsole, { useSpendSummary, scopeLabel } from "@/components/SpendConsole";
+import { useEnsureSession } from "@/hooks/useEnsureSession";
 import type { BalanceSummary, LedgerEvent } from "@/lib/credit-ledger";
 
 // Compact "time ago" for ledger rows (ms epoch → "3m", "2h", "5d").
@@ -103,19 +104,31 @@ export default function UsagePage() {
   // console mounts below via their `summary` prop (see the file header).
   const spend = useSpendSummary(address);
 
+  // The balance aggregate is public; the per-event `recent` list is owner-only
+  // since 2026-09-30 (`?detail=1`, SIWE). Without a session the KPIs still
+  // render and Recent activity offers the one signature instead.
+  const { hasSession, ensureSession } = useEnsureSession();
+  const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const load = useCallback(async () => {
     if (!address) { setData(null); return; }
     setLoading(true); setErr("");
     try {
-      const res = await fetch(`/api/credits/balance/${address}`);
+      const mine = await hasSession(address);
+      setSignedIn(mine);
+      const res = await fetch(`/api/credits/balance/${address}${mine ? "?detail=1" : ""}`);
       if (!res.ok) throw new Error(`Couldn't load balance (HTTP ${res.status}).`);
-      setData((await res.json()) as BalanceSummary);
+      const body = (await res.json()) as Omit<BalanceSummary, "recent"> & { recent?: BalanceSummary["recent"] };
+      setData({ ...body, recent: body.recent ?? [] });
     } catch (e) {
       setErr((e as Error).message);
     } finally {
       setLoading(false);
     }
-  }, [address]);
+  }, [address, hasSession]);
+  const signInForActivity = useCallback(() => {
+    if (!address) return;
+    void ensureSession(address).then(() => load()).catch(() => {});
+  }, [address, ensureSession, load]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -233,6 +246,12 @@ export default function UsagePage() {
                   <div className="mt-[11px]">
                     {loading && !data ? (
                       <p className="font-mono text-[11px] text-[#64748B] px-4 py-6 text-center">Loading…</p>
+                    ) : signedIn === false ? (
+                      <p className="font-mono text-[11px] text-[#64748B] px-4 py-6 text-center">
+                        Activity is private to the wallet.{" "}
+                        <button onClick={signInForActivity} className="underline text-[#4FC3F7]">Sign in to see it</button>
+                        {" "}— one signature, no transaction.
+                      </p>
                     ) : (data?.recent?.length ?? 0) === 0 ? (
                       <p className="font-mono text-[11px] text-[#64748B] px-4 py-6 text-center">
                         No activity yet. Credits spent on chat and tool runs show up here.

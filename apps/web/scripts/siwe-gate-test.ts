@@ -140,6 +140,30 @@ async function sseEvents(res: Response): Promise<Array<Record<string, unknown>>>
   res = await AL.GET(req(`/api/hood/alerts?address=${ALICE}`, { method: "GET" }));
   check("5.7 alerts without a session → 401", res.status === 401);
 
+  console.log("\n5b. Spend history is the wallet's own; the balance aggregate stays public");
+  const SP = await import("../src/app/api/wallet/spend/route");
+  res = await SP.GET(req(`/api/wallet/spend?address=${ALICE}`, { method: "GET" }));
+  check("5b.1 receipts without a session → 401", res.status === 401);
+  res = await SP.GET(req(`/api/wallet/spend?address=${ALICE}`, { method: "GET", cookie: aliceSession }));
+  check("5b.2 receipts with the owner's session → 200", res.status === 200);
+  res = await SP.GET(req(`/api/wallet/spend?address=${MALLORY}`, { method: "GET", cookie: aliceSession }));
+  check("5b.3 Alice cannot read Mallory's receipts", res.status === 401);
+  const SS = await import("../src/app/api/wallet/spend-summary/route");
+  res = await SS.GET(req(`/api/wallet/spend-summary?address=${ALICE}`, { method: "GET" }));
+  check("5b.4 spend summary without a session → 401", res.status === 401);
+  const BAL = await import("../src/app/api/credits/balance/[address]/route");
+  const balParams = { params: Promise.resolve({ address: ALICE }) };
+  res = await BAL.GET(req(`/api/credits/balance/${ALICE}`, { method: "GET" }), balParams);
+  const agg = (await res.json()) as Record<string, unknown>;
+  check("5b.5 the public balance carries the aggregate but no per-event list",
+    res.status === 200 && typeof agg.balance === "number" && !("recent" in agg), Object.keys(agg).join(","));
+  res = await BAL.GET(req(`/api/credits/balance/${ALICE}?detail=1`, { method: "GET" }), { params: Promise.resolve({ address: ALICE }) });
+  check("5b.6 ?detail=1 without a session → 401", res.status === 401);
+  res = await BAL.GET(req(`/api/credits/balance/${ALICE}?detail=1`, { method: "GET", cookie: aliceSession }), { params: Promise.resolve({ address: ALICE }) });
+  const det = (await res.json()) as Record<string, unknown>;
+  check("5b.7 ?detail=1 for the owner → the events, never cached",
+    res.status === 200 && Array.isArray(det.recent) && res.headers.get("Cache-Control") === "private, no-store");
+
   console.log("\n6. Discovery: every mutator route shows its proof");
   const ROOT = process.cwd();
   const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");

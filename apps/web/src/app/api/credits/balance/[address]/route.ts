@@ -20,27 +20,46 @@
  * feeding credits well before the stake surface was retired. It is kept as a
  * zero rather than dropped so existing clients don't break on a missing field.
  *
- * Public read; cached for 15s so the dashboard doesn't hammer KV on every render.
+ * Two answers since 2026-09-30 (plan §2, W0-6):
+ *   default    — the AGGREGATE (balances, pool, daily), public, cached 15 s so
+ *                the dashboard doesn't hammer KV on every render. Chat needs
+ *                this number before the user has signed anything.
+ *   ?detail=1  — the same plus `recent`, the per-event list. OWNER-ONLY: the
+ *                SIWE session must be this wallet, and it is never cached.
+ * `recent` names each debit ("tool:<id>", when) — the same join
+ * /api/wallet/spend and /spend-summary publish, and all three went owner-only
+ * together, as their headers required.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { isAddress } from "viem";
 import { getBalance } from "@/lib/credit-ledger";
+import { resolveActingWallet, actingWalletRefusal } from "@/lib/acting-wallet";
 
 export const runtime = "nodejs";
 // One RPC roundtrip + one KV read — well under a second in practice.
 export const maxDuration = 15;
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ address: string }> },
 ) {
   const { address } = await params;
   if (!isAddress(address)) {
     return NextResponse.json({ error: "Invalid address" }, { status: 400 });
   }
+  const detail = new URL(req.url).searchParams.get("detail") === "1";
+  if (detail) {
+    const acting = await resolveActingWallet(req, address);
+    if (acting.status !== "ok") return actingWalletRefusal(acting);
+  }
   try {
     const summary = await getBalance(address);
-    return NextResponse.json(summary, {
+    if (detail) {
+      return NextResponse.json(summary, { headers: { "Cache-Control": "private, no-store" } });
+    }
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { recent: _perEvent, ...aggregate } = summary;
+    return NextResponse.json(aggregate, {
       headers: {
         "Cache-Control": "public, s-maxage=15, stale-while-revalidate=60",
       },
