@@ -218,18 +218,22 @@ async function call(tool: string, body: unknown) {
   }
 
   // ── 3. Price discovery on a paid tool must still work ────────────────────
-  console.log("\n3. wallet-risk ($0.15) probed with an empty body");
+  // The example paid tool for cases 3–5 is contract-trust ($0.15, requires
+  // `address`). It was wallet-risk until 2026-09-30, when wallet-risk was HALTED
+  // (lib/tool-halts.ts — Moralis paused) and so rightly stopped quoting a price;
+  // what these cases test is the generic paid path, not that one tool.
+  console.log("\n3. contract-trust ($0.15) probed with an empty body");
   {
-    const { status, paymentHeader, body } = await call("wallet-risk", {});
+    const { status, paymentHeader, body } = await call("contract-trust", {});
     check("still answers 402 — this is how clients ask the price", status === 402, `got ${status}`);
     check("ships the payment-required header", typeof paymentHeader === "string" && paymentHeader.length > 0);
     check("quotes the tool", Array.isArray(body.accepts));
   }
 
   // ── 4. A malformed paid call is rejected before it is priced ─────────────
-  console.log("\n4. wallet-risk called with the wrong field name");
+  console.log("\n4. contract-trust called with the wrong field name");
   {
-    const { status, body, paymentHeader } = await call("wallet-risk", { addr: ADDR });
+    const { status, body, paymentHeader } = await call("contract-trust", { addr: ADDR });
     check("rejects with 400, not 402", status === 400, `got ${status}`);
     check("no price is quoted for a request that cannot succeed", paymentHeader === null);
     check("says why", body.code === "MISSING_REQUIRED_INPUT", String(body.code));
@@ -239,9 +243,9 @@ async function call(tool: string, body: unknown) {
   }
 
   // ── 5. A well-formed paid call gets its quote ────────────────────────────
-  console.log("\n5. wallet-risk called correctly, still unpaid");
+  console.log("\n5. contract-trust called correctly, still unpaid");
   {
-    const { status, paymentHeader } = await call("wallet-risk", { address: ADDR });
+    const { status, paymentHeader } = await call("contract-trust", { address: ADDR });
     check("answers 402 with a quote", status === 402, `got ${status}`);
     check("ships the payment-required header", typeof paymentHeader === "string" && paymentHeader.length > 0);
   }

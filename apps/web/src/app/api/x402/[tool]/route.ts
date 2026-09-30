@@ -15,6 +15,7 @@ import { wireSchema } from "@/lib/tool-wire-schema";
 import { recordCall } from "@/lib/usage-daily";
 import { kv } from "@/lib/kv";
 import { declareBuilderCodeExtension } from "@x402/extensions/builder-code";
+import { haltReason } from "@/lib/tool-halts";
 
 const BUILDER_CODE_EXT = declareBuilderCodeExtension("bc_2ejr35xc");
 
@@ -164,6 +165,27 @@ function honestUnavailable(tool: string) {
   );
 }
 
+// A listed id that is paused (lib/tool-halts.ts). Answered BEFORE any payment
+// requirement is issued and before the chat credit-debit path, so nothing is
+// settled and no credit is debited. 501 with an explicit "do not retry", for the
+// same reason honestUnavailable() moved off 503: agents read 503 as a transient
+// outage and retry in a loop.
+function haltedResponse(tool: string, reason: string) {
+  return NextResponse.json(
+    {
+      error: "Tool halted — you were not charged.",
+      code:  "TOOL_HALTED",
+      tool,
+      reason,
+      hint:  "Do not retry: this id is paused until the reason above is resolved. The live catalog is at https://blueagent.dev/api/catalog.",
+    },
+    {
+      status: 501,
+      headers: { "Access-Control-Allow-Origin": "*" },
+    },
+  );
+}
+
 // GET with no X-Payment → 402 (Bazaar discovery + browser preview)
 export async function GET(
   _req: NextRequest,
@@ -178,6 +200,9 @@ export async function GET(
   if (!handler || priceUnits === undefined) {
     return honestUnavailable(tool);
   }
+  // A halted id must not advertise payment requirements either.
+  const halt = haltReason(tool);
+  if (halt) return haltedResponse(tool, halt);
 
   const meta = AGENT_TOOLS.find(t => t.id === tool);
   // Same reasoning as buildBazaarExtension: this is the schema an agent reads
@@ -276,6 +301,10 @@ async function handle(
   if (!handler || priceUnits === undefined) {
     return honestUnavailable(tool);
   }
+  // Halted ids stop HERE: before payment verification, the internal bypass and
+  // the chat credit-debit path below, so no caller is charged for them.
+  const halt = haltReason(tool);
+  if (halt) return haltedResponse(tool, halt);
 
   const requirements = buildRequirements(String(priceUnits));
   const xPayment    = req.headers.get("x-payment") ?? req.headers.get("X-Payment");
