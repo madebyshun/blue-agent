@@ -15,6 +15,16 @@
  */
 export const ARROWS_FROZEN = true;
 
+/** The day publishing stopped — shown on the track-record pages and returned
+ *  by the public track-record/cohort APIs, so a record that stopped growing
+ *  says so instead of reading like a desk that broke. */
+export const ARROWS_FROZEN_SINCE = "2026-09-30";
+
+/** One sentence every surface can quote verbatim. */
+export const ARROWS_FROZEN_NOTE =
+  `Blue Hood stopped publishing new arrows on ${ARROWS_FROZEN_SINCE}. ` +
+  "The record is historical: arrows already open are still graded, nothing new is added.";
+
 /**
  * The [Review & Sign] button on an arrow opened a REAL Robinhood Chain trade
  * panel straight from a directional signal (chat audit 2026-09-30 §7.2). That

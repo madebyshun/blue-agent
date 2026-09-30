@@ -18,7 +18,6 @@ describing a cadence nothing ran at.
 |---|---|---|---|
 | `/api/cron/blue-hood/poll` | `*/5 * * * *` | every 5 min | one M5 poll cycle over the watchlist (24 tokens, 3s stagger ≈ 72s wall time), runs rule engine + grader, writes `bh:snapshot:latest` + `bh:arrow:*`. **While `ARROWS_FROZEN` (since 2026-09-30) the engine fires nothing new** — every candidate is counted as `skipped_frozen`; the grader keeps closing the arrows already open. Auth: `Authorization: Bearer $CRON_SECRET`. |
 | `/api/cron/blue-hood/sparkline-refresh` | `*/30 * * * *` | every 30 min | refreshes `bh:spark:{TICKER}` (24 tokens, 3s stagger, TTL 20 min). Runs OUTSIDE the poll hot path so the 72s cycle doesn't grow. Auth: `Authorization: Bearer $CRON_SECRET`. |
-| `/api/cron/blue-hood/alert-drain` | `*/2 * * * *` | every 2 min | drains the pending-alert queue to watchlist subscribers (Telegram DM + Web Push). Auth: `Authorization: Bearer $CRON_SECRET`. |
 | `/api/cron/blue-hood/archive-watch` | `7 * * * *` | hourly, at :07 | watchdog over the arrow archive — detects holes in the series and reports them rather than silently backfilling. Auth: `Authorization: Bearer $CRON_SECRET`. |
 | `/api/cron/user-tasks` | `*/5 * * * *` | every 5 min | Blue Chat background scheduled tasks — fires the tasks a user switched to Background so they run with the tab closed. Unrelated to Blue Hood; here for the whole-app view. Auth: `Authorization: Bearer $CRON_SECRET`. |
 | `/api/cron/acp-poll` | `*/2 * * * *` | every 2 min | one Virtuals ACP seller poll cycle for paid Offering #1 (`execution-plan`): connect → hydrate active jobs → act by status → stop. **Costs ZERO KV reads until the operator wires the offering** — `runAcpPollCycle()` reads only `ACP_WALLET_ADDRESS` / `ACP_WALLET_ID` / `ACP_SIGNER_PRIVATE_KEY` from env and returns `skipped:"acp_not_configured"` before touching KV or importing the SDK, so this row does not spend against the Upstash budget that has suspended the database three times (#148). Auth: `Authorization: Bearer $CRON_SECRET`. |
@@ -29,6 +28,13 @@ briefed arrows the engine had just fired, so with the engine firing nothing its
 queue can only be empty — every tick would be a paid KV read for no work. The
 route is intact and listed under Manual-only; re-add the timer in the same commit
 that flips `ARROWS_FROZEN` back to `false`.
+
+`/api/cron/blue-hood/alert-drain` (`*/2 * * * *`) was unscheduled the same day, for
+the same reason. Its queue (`bh:alert:pending`) is written by exactly one caller,
+`emitAlertsForArrow` inside the brief-worker, so with no arrows and no worker it
+can only hold alerts for arrows fired before the freeze — which the plan says to
+stop sending, not to finish sending. The queue is left in KV as it is (user/KV
+state is evidence). Re-add it together with the brief-worker.
 
 The `/api/cron/feed/daily` row was removed on 2026-09-02 when Blue Feed was
 retired and its cron deleted from `vercel.json`. `research-loop` was labelled
@@ -72,6 +78,7 @@ header rather than inferred from the cadence above:
 |---|---|
 | `GET /api/cron/research-loop` | Autonomous builder-research loop; writes `aeon:deep-research` via `setAeonOutput` (26h TTL) and `research:signals:latest` (7h TTL) / `:history` (14d TTL). **Unscheduled 2026-09-05** — route intact, timer removed. Five paid x402 handlers read the Aeon key and each degrades to a generic string when it expires; none fabricates. Auth: CRON_SECRET. |
 | `POST /api/cron/blue-hood/brief-worker` | Drains `bh:brief:queue` (A4 brief + chat card + Web Push fan-out per new arrow). **Unscheduled 2026-09-30** with the arrow freeze — nothing new is fired, so nothing is queued. Auth: CRON_SECRET. |
+| `GET /api/cron/blue-hood/alert-drain` | Drains `bh:alert:pending` to watchlist subscribers (Telegram DM). **Unscheduled 2026-09-30** with the arrow freeze — only the brief-worker feeds it. Auth: CRON_SECRET. |
 | `POST /api/cron/blue-hood/purge?confirm=1` | Wipe all arrow records + reset serial counter. Used before prod launch so `#0001` is the engine's first real arrow. Auth: CRON_SECRET. |
 | `POST /api/cron/blue-hood/seed-test-arrow` | Dev-only synthetic arrow (always `origin: "seeded"`, hidden from public feed). Local UI smoke path. Endpoint 404s in prod. |
 | `GET /api/hood/llm-health` | Manual poll of Virtuals, the only LLM gateway. Called by `scripts/blue-hood-smoke.ts` (see BH_SMOKE_STRICT). |

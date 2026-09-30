@@ -176,9 +176,19 @@ async function resetArrows() {
 
   console.log("\n3. Nothing keeps working for arrows that can no longer exist");
   const vercel = JSON.parse(read("vercel.json")) as { crons?: { path: string }[] };
-  const briefScheduled = (vercel.crons ?? []).some((c) => c.path.includes("brief-worker"));
+  const scheduled = (name: string) => (vercel.crons ?? []).some((c) => c.path.includes(name));
   check("3.1 while frozen, the brief-worker is not on a timer",
-    !ARROWS_FROZEN || !briefScheduled, `frozen=${ARROWS_FROZEN} scheduled=${briefScheduled}`);
+    !ARROWS_FROZEN || !scheduled("brief-worker"), `frozen=${ARROWS_FROZEN} scheduled=${scheduled("brief-worker")}`);
+  // alert-drain's queue has exactly one writer (emitAlertsForArrow, inside the
+  // brief-worker), so while frozen it could only finish sending pre-freeze
+  // arrows — which is what the freeze is meant to stop.
+  const alertWriters = files
+    .filter((f) => /(?<!function\s+)\bemitAlertsForArrow\s*\(/.test(stripComments(readFileSync(f, "utf8"))))
+    .map((f) => relative(ROOT, f));
+  check("3.2 the alert queue still has a single writer, and it is the brief-worker",
+    alertWriters.length === 1 && alertWriters[0].includes("brief-worker"), alertWriters.join(", "));
+  check("3.3 while frozen, alert-drain is not on a timer either",
+    !ARROWS_FROZEN || !scheduled("alert-drain"), `frozen=${ARROWS_FROZEN} scheduled=${scheduled("alert-drain")}`);
 
   console.log(`\narrow-freeze-check: ${passes}/${passes + failures} passed`);
   if (failures > 0) process.exit(1);

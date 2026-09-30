@@ -1,8 +1,11 @@
+import { ARROWS_FROZEN_NOTE } from "@/lib/blue-hood/arrow-freeze";
+
 /**
  * Shown on both track-record pages (/track and /hood/arrows) while
  * ARROWS_FROZEN is on. The receipts stay up — they are the honest record of
  * what was published — but a record that silently stops growing reads as a
- * desk that stopped working. Say it stopped on purpose, and since when.
+ * desk that stopped working. Say it stopped on purpose, and since when. The
+ * sentence is the same one the public APIs return in `meta.publishing.note`.
  */
 export default function ArrowsFrozenNotice() {
   return (
@@ -15,8 +18,7 @@ export default function ArrowsFrozenNotice() {
         Signals paused
       </span>
       <span className="mx-2" style={{ color: "#334155" }}>·</span>
-      Blue Hood stopped publishing new arrows on 2026-09-30. The record below is historical:
-      arrows that were already open are still graded, and nothing new is added.
+      {ARROWS_FROZEN_NOTE}
     </div>
   );
 }

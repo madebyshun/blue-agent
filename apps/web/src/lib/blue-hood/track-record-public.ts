@@ -19,6 +19,7 @@
 import type { Arrow } from "@/lib/blue-hood/types";
 import { readPublicArrowsProbe, arrowsFiredToday } from "@/lib/blue-hood/public-feed";
 import { ARROW_HYDRATED_MAX } from "@/lib/blue-hood/kv-keys";
+import { ARROWS_FROZEN, ARROWS_FROZEN_SINCE, ARROWS_FROZEN_NOTE } from "@/lib/blue-hood/arrow-freeze";
 import {
   computeHitRate,
   computeRecordCurve,
@@ -85,6 +86,8 @@ export interface PublicTrackRecord {
     api_version: string;
     grading_rules_url: string;
     grading: ReturnType<typeof gradingRulesMeta>;
+    /** Whether the engine still publishes (lib/blue-hood/arrow-freeze.ts). */
+    publishing: { frozen: boolean; frozen_since: string | null; note: string | null };
   };
 }
 
@@ -167,6 +170,9 @@ export function buildPublicTrackRecord(
       api_version: TRACK_RECORD_API_VERSION,
       grading_rules_url: GRADING_RULES_URL,
       grading: gradingRulesMeta(),
+      publishing: ARROWS_FROZEN
+        ? { frozen: true, frozen_since: ARROWS_FROZEN_SINCE, note: ARROWS_FROZEN_NOTE }
+        : { frozen: false, frozen_since: null, note: null },
     },
   };
 }

@@ -52,6 +52,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readCohortAnalysis } from "@/lib/blue-hood/cohort-read";
 import { COHORT_FDR, COHORT_MIN_SAMPLE } from "@/lib/blue-hood/cohort-stats";
+import { ARROWS_FROZEN, ARROWS_FROZEN_SINCE, ARROWS_FROZEN_NOTE } from "@/lib/blue-hood/arrow-freeze";
 
 export const runtime = "nodejs";
 export const revalidate = 300;
@@ -91,6 +92,11 @@ export async function GET(req: NextRequest) {
       // `survives_correction` is inline on every cohort. See cohort-read.ts ③.
       analyzed: read.analyzed,
       feed_capped: read.feed_capped,
+      // The record stopped growing on purpose (arrow-freeze.ts); say so, or a
+      // flat `graded` count reads like a broken desk.
+      publishing: ARROWS_FROZEN
+        ? { frozen: true, frozen_since: ARROWS_FROZEN_SINCE, note: ARROWS_FROZEN_NOTE }
+        : { frozen: false, frozen_since: null, note: null },
       window_note: read.feed_capped
         ? `Analysed the newest ${read.analyzed} public arrows. The record is LONGER than this — ` +
           "the feed blob is capped, so older arrows exist and were not included. This window " +
