@@ -90,6 +90,7 @@ import { isAddress, getAddress, parseUnits, formatUnits, namehash, encodeFunctio
 import { WALLET_CHAINS } from "@/lib/wallet/chains";
 import { ERC20_ABI } from "@/lib/yield-execution";
 import { DATA_SUFFIX } from "@/constants/builderCode";
+import { useSponsoredGas } from "@/hooks/useSponsoredGas";
 import { B20_ENABLED, B20_USDC } from "@/lib/orders";
 import { encodeTransferWithMemo, isValidMemo, MEMO_MAX_CHARS } from "@/lib/b20/encode";
 import { useSpendableBalance } from "@/lib/wallet/useSpendableBalance";
@@ -293,10 +294,15 @@ export default function WalletSendCard({
   const sendCallsReady = network === "base" && !!walletCapabilities;
   // Gas can only be sponsored when the wallet says so FOR THIS chain. Anything
   // less specific would put a "⚡ gasless" badge on a send the user pays for.
-  const gaslessSupported = sendCallsReady && Boolean(
+  const walletSupportsPaymaster = sendCallsReady && Boolean(
     (walletCapabilities as Record<number, { paymasterService?: { supported?: boolean } }> | undefined)
       ?.[chainId]?.paymasterService?.supported,
   );
+  // …and, since the paymaster was gated (2026-09-30), only when WE will
+  // sponsor this wallet: it must be the SIWE-signed-in one. Otherwise the send
+  // goes out user-paid, with no badge promising otherwise.
+  const { sponsored: gaslessSupported, freshUrl: sponsoredPaymasterUrl } =
+    useSponsoredGas("base", account, walletSupportsPaymaster);
 
   // ── B20 memo ───────────────────────────────────────────────────────────────
   // A memo is a property of ONE token — the configured B20 settlement token,
@@ -563,10 +569,12 @@ export default function WalletSendCard({
         // means a wallet that ignores the capability still sends — attribution
         // is never allowed to become a reason a transfer fails.
         if (sendCallsReady) {
-          const origin = typeof window !== "undefined" ? window.location.origin : "";
           const dataSuffix = { value: DATA_SUFFIX, optional: true };
-          const capabilities = gaslessSupported
-            ? { paymasterService: { url: `${origin}/api/paymaster?network=base` }, dataSuffix }
+          // A fresh token per send (they live 15 min). No token → no
+          // paymaster capability → the wallet asks the user for gas.
+          const pmUrl = gaslessSupported ? await sponsoredPaymasterUrl() : null;
+          const capabilities = pmUrl
+            ? { paymasterService: { url: pmUrl }, dataSuffix }
             : { dataSuffix };
           const res = await sendCallsAsync({ calls: [call], chainId, capabilities });
           // An id, not a tx hash — `callsStatus` above resolves the real one.

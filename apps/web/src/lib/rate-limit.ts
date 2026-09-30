@@ -36,6 +36,10 @@ export const RATE_LIMITS = {
   console: { limit: 10,  windowSeconds: 60  }, // 10 commands/min
   api:     { limit: 100, windowSeconds: 60  }, // 100 req/min for public API
   default: { limit: 60,  windowSeconds: 60  }, // 60 req/min default
+  // Per SIWE WALLET, not per IP: sponsored gas is the project's money. A send
+  // makes two paymaster calls (stub, then data), so this is ~20 sponsored
+  // sends an hour; past it the wallet gets a clear error and can send user-paid.
+  paymaster: { limit: 40, windowSeconds: 3600 },
 } as const;
 
 export type RateLimitKey = keyof typeof RATE_LIMITS;

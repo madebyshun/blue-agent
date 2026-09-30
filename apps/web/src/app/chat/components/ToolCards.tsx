@@ -11,6 +11,7 @@ import { YIELD_NETWORKS, ERC20_ABI, AAVE_POOL_ABI, ERC4626_ABI, WITHDRAW_ALL, su
 import { useChat } from "../ChatContext";
 import { useBasename } from "@/lib/useBasename";
 import { DATA_SUFFIX } from "@/constants/builderCode";
+import { useSponsoredGas } from "@/hooks/useSponsoredGas";
 import ManagePanel from "@/app/app/b20/ManagePanel";
 import { runB20ManageLoad, type ManageData } from "@/app/app/b20/manage-action";
 import { ConnectButton } from "@/components/ConnectModal";
@@ -2084,10 +2085,13 @@ export function SendCard({ result, account }: { result: SendResult; account?: `0
 
   const net = YIELD_NETWORKS[network];
   const chainId = net.chainId;
-  // Smart Wallet + paymaster present for this chain → we can sponsor gas.
-  const gaslessSupported = Boolean(
+  // Smart Wallet + paymaster present for this chain, AND the SIWE-signed-in
+  // wallet is this one (the paymaster is gated since 2026-09-30) → we sponsor.
+  const walletSupportsPaymaster = Boolean(
     (walletCapabilities as Record<number, { paymasterService?: { supported?: boolean } }> | undefined)?.[chainId]?.paymasterService?.supported,
   );
+  const { sponsored: gaslessSupported, freshUrl: sponsoredPaymasterUrl } =
+    useSponsoredGas(network, account, walletSupportsPaymaster);
   // Resolve the on-chain tx hash from an EIP-5792 batch once it confirms.
   const { data: callsStatus } = useCallsStatus({
     id: callsId,
@@ -2203,10 +2207,11 @@ export function SendCard({ result, account }: { result: SendResult; account?: `0
       const supportsSendCalls = !!walletCapabilities;
       if (supportsSendCalls) {
         const call = buildTransferCall(toAddress, dec);
-        const origin = typeof window !== "undefined" ? window.location.origin : "";
         const dataSuffix = { value: DATA_SUFFIX, optional: true };
-        const capabilities = gaslessSupported
-          ? { paymasterService: { url: `${origin}/api/paymaster?network=${network}` }, dataSuffix }
+        // Fresh sponsorship token per send; none → the wallet asks for gas.
+        const pmUrl = gaslessSupported ? await sponsoredPaymasterUrl() : null;
+        const capabilities = pmUrl
+          ? { paymasterService: { url: pmUrl }, dataSuffix }
           : { dataSuffix };
         const res = await sendCallsAsync({ calls: [call], chainId, capabilities });
         setCallsId(typeof res === "string" ? res : res.id); // status hook → done

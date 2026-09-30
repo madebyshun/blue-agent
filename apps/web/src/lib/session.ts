@@ -33,7 +33,8 @@
  */
 
 import type { NextRequest, NextResponse } from "next/server";
-import { verifyMessage } from "viem";
+import { createPublicClient, http, verifyMessage } from "viem";
+import { base } from "viem/chains";
 import { kvGetProbe, kvSet, kvSetNX, kvDel } from "@/lib/kv";
 
 // Re-exported so route handlers have one import, but DEFINED in a dependency-free
@@ -156,20 +157,48 @@ export async function spendNonce(nonce: string): Promise<NonceSpend> {
 // ─── Signature ───────────────────────────────────────────────────────────────
 
 /**
+ * Smart-wallet signatures need a chain to be checked against. Base, because
+ * that is where the smart wallets we serve live (Coinbase Smart Wallet — also
+ * the only wallets the paymaster sponsors), and because an ERC-6492 signature
+ * carries its own factory call, so an account not yet deployed still verifies.
+ */
+const siweChainClient = createPublicClient({
+  chain: base,
+  transport: http(process.env.BASE_RPC_URL || "https://mainnet.base.org"),
+});
+
+/**
  * Wrapped so a malformed signature is a 401, not a 500. viem throws on garbage
  * input rather than returning false.
+ *
+ * Two checks, cheapest first. The standalone `verifyMessage` util is ecrecover
+ * only — it refuses every contract-account signature (ERC-1271, and ERC-6492
+ * before deployment), which until 2026-09-30 meant a Coinbase Smart Wallet user
+ * could not sign in at all: "Signature does not match this address". The
+ * client's `verifyMessage` asks the chain instead, through the ERC-6492
+ * universal validator, so it covers deployed and counterfactual accounts. It
+ * cannot be talked into accepting a victim's address: a 6492 factory call can
+ * only put code at an address that factory derives, and an EOA has no code to
+ * ask. It costs one RPC call, and only for signatures ecrecover already
+ * rejected.
  */
 export async function verifySiwe(
   address: string,
   message: string,
   signature: string,
 ): Promise<boolean> {
+  const args = {
+    address:   address as `0x${string}`,
+    message,
+    signature: signature as `0x${string}`,
+  };
   try {
-    return await verifyMessage({
-      address:   address as `0x${string}`,
-      message,
-      signature: signature as `0x${string}`,
-    });
+    if (await verifyMessage(args)) return true;
+  } catch {
+    /* not an EOA signature — fall through to the contract-account check */
+  }
+  try {
+    return await siweChainClient.verifyMessage(args);
   } catch {
     return false;
   }
