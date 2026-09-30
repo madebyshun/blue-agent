@@ -462,7 +462,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     // already scored on-chain. Naming the real input (liquidity/turnover/
     // momentum from DexScreener) is both true and a stronger sell than the
     // adjective was — see feedback_marketing-copy: prove, don't announce.
-    description: "The highest-conviction asymmetric setup on Base, picked from live liquidity, turnover and momentum scores.",
+    description: "The top Base token by an on-chain quality score (liquidity, turnover, momentum) — facts from live pools, no buy/sell call.",
     agentHandle: "composite",
     agentName: "Blue Agent",
     agentType: "composite",

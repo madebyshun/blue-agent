@@ -220,7 +220,7 @@ function SectionHead({ num, kicker, title, sub }: {
 // keywords/values-of-note, neutral slate for everything else.
 
 const CHAT_SEGMENTS: { t: string; cls: string }[] = [
-  { t: "Is AERO an asymmetric setup right now?", cls: "text-slate-300" },
+  { t: "What are AERO's liquidity and 24h volume right now?", cls: "text-slate-300" },
   { t: "\n↳ token-pick-signal · whale-tracker", cls: "text-slate-500" },
   { t: "\n\n{ ", cls: "text-slate-500" },
   { t: '"signal"', cls: "text-slate-400" },

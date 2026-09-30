@@ -13,7 +13,7 @@ const SLASH = [
   { cmd: "/audit",  d: "Security review + deep analysis — reentrancy, oracle, MEV." },
   { cmd: "/ship",   d: "Deployment checklist, verification, and go-to-market brief." },
   { cmd: "/raise",  d: "Pitch narrative + investor memo for a fundraise." },
-  { cmd: "/pick",   d: "Token pick signal — an asymmetric setup with a thesis." },
+  { cmd: "/pick",   d: "Top Base token by on-chain quality score — facts only, no buy/sell call." },
   { cmd: "/scan",   d: "Honeypot / contract safety scan on a token address." },
   { cmd: "/wallet", d: "Full on-chain portfolio breakdown for a wallet." },
   { cmd: "/launch", d: "Deploy a B20 token on Base — opens a form card you sign in your own wallet." },

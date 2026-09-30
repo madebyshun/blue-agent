@@ -1,10 +1,15 @@
 // x402/token-pick-signal
-// One actionable token pick chosen from REAL Base pools (GeckoTerminal trending +
-// new). Candidates are hard-filtered for on-chain QUALITY (liquidity, volume,
-// anti-pump, thin-liq-vs-mcap), then SCORED in code (liquidity health, turnover,
-// momentum, divergence). The code selects the highest-quality pick and hard-maps
-// verdict + confidence from the score — the LLM only writes the thesis. It can
-// never invent a ticker, a number, or a cap label.
+// The top Base token by an on-chain QUALITY score, from REAL Base pools
+// (GeckoTerminal trending + new). Candidates are hard-filtered for quality
+// (liquidity, volume, anti-pump, thin-liq-vs-mcap), then SCORED in code
+// (liquidity health, turnover, momentum, divergence).
+//
+// 🔴 FACTS ONLY since 2026-09-30 (plan §3 fix 3, §7 #8). It used to return
+// "BUY / WATCH / SKIP" plus a model-written thesis, entry, kill-criterion and
+// horizon — a trade call, however carefully the verdict was code-mapped. The
+// rebuild's rule is that BlueAgent emits measured facts and nothing that
+// tells a user what to buy. So: the ranked facts, the score and what went
+// into it, the caution flags — and no verdict word, no entry, no model call.
 //
 // Cap is a RESULT, not an input: the tool scans every size and returns the best
 // by quality. A cap tier is applied ONLY when the user explicitly asks for one
@@ -12,38 +17,6 @@
 // Price: $0.20
 
 import { getBaseTrending, getBaseNewPools, type Pool } from "@/lib/market-data";
-import { callLLM } from "@/app/api/_lib/llm";
-
-type BankrMessage = { role: string; content: string };
-
-// Delegates to `callLLM`, which calls VIRTUALS AND NOTHING ELSE. This said
-// "the shared Virtuals → Venice → Bankr chain" until 2026-09-18; that chain
-// was stripped 2026-07-25 (see the header of api/_lib/llm.ts). There is no
-// retry across providers — on failure callLLM throws a typed LLM_UNAVAILABLE
-// for the caller to degrade around, rather than silently trying a second
-// vendor. Name/signature preserved so all call sites stay identical.
-async function callBankrLLM(opts: {
-  model?: string; system: string; messages: BankrMessage[];
-  temperature?: number; maxTokens?: number;
-}): Promise<string> {
-  const r = await callLLM({
-    system: opts.system,
-    messages: opts.messages,
-    temperature: opts.temperature,
-    maxTokens: opts.maxTokens,
-    model: opts.model,
-  });
-  return r.text;
-}
-
-function extractJsonObject(text: string): Record<string, unknown> | null {
-  let raw = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "");
-  const s = raw.indexOf("{"), e = raw.lastIndexOf("}");
-  if (s >= 0 && e > s) raw = raw.slice(s, e + 1);
-  try { return JSON.parse(raw); } catch {}
-  try { return JSON.parse(raw.replace(/[\x00-\x1F\x7F]/g, " ")); } catch {}
-  return null;
-}
 
 // ── Quality thresholds (FIX 1) ───────────────────────────────────────────────
 const MIN_LIQ = 50_000; // filter out thin liquidity
@@ -230,10 +203,9 @@ export default async function handler(req: Request): Promise<Response> {
       return Response.json({
         ...meta,
         no_pick: true,
+        facts_only: true,
         pick: null,
         near_misses: [],
-        blue_verdict: "NO_PICK",
-        confidence: 0,
         note: why,
         filters_applied,
         candidates_scanned: candidatesBefore,
@@ -251,47 +223,9 @@ export default async function handler(req: Request): Promise<Response> {
     const others = scored.slice(1, 5);
     const validSymbols = scored.map((s) => s.p.baseSymbol);
 
-    // FIX 6 — LLM writes the thesis ONLY for the code-selected pick. All numbers,
-    // the signal type, caution and verdict are code-controlled (no fabrication).
-    const capRule = capTier
-      ? `The user asked for ${capTier.tier}-cap (marketCap < ${fmtUsd(capTier.max)}); only qualifying tokens are listed.`
-      : `The user did NOT ask for a cap tier — pick by quality, ignore size.`;
+    void validSymbols; // the top row is code-selected from the real list; symbols listed for audit
 
-    const system = `You are Blue Agent — token pick signal for Base. You receive REAL Base tokens that are ALREADY quality-filtered and scored on-chain (liquidity, turnover, momentum, divergence). The single best pick by score is "${top.p.baseSymbol}".
-Cap tiers (by marketCap): micro <$10M, low <$50M, small <$100M, mid $50M-$1B, large >$1B.
-Rules:
-- Write the thesis for the SELECTED pick "${top.p.baseSymbol}" — chosen as the highest-quality opportunity by score (momentum, divergence, liquidity health), NOT by cap size. ${capRule}
-- NEVER label a token low-cap/micro-cap/small-cap if its real marketCap exceeds the threshold. Respect the numbers — no "low-cap-adjacent" softening.
-- The picks are pre-filtered and pre-scored on-chain. Use the given score / signal_type / caution. Confidence is derived from the score in code — do NOT invent a number.
-- Anchor entry to the real current price. Quote real %-moves only. "Base" is the chain, not a token.
-Return ONLY raw JSON. No markdown.
-Schema: {"thesis":"<1-2 sentences, why this is the highest-quality setup>","entry":"<level vs current price>","kill_criterion":"<1 sentence>","horizon":"<hours/days/weeks>","note":"<1 sentence market context>"}`;
-
-    const userContent = `SELECTED PICK: ${top.p.baseSymbol} (score ${top.quality}/100, signal ${top.signal_type}${top.caution.length ? `, caution ${top.caution.join("/")}` : ""})
-
-Scored candidates (best first):
-${scored.slice(0, 8).map(scoredLine).join("\n")}${context ? `\n\nUser focus: ${context}` : ""}`;
-
-    let narrative: Record<string, unknown> = {};
-    try {
-      const out = await callBankrLLM({
-        system,
-        messages: [{ role: "user", content: userContent }],
-        temperature: 0.3,
-        maxTokens: 600,
-      });
-      narrative = extractJsonObject(out) ?? {};
-    } catch (e) {
-      console.error("[TokenPickSignal] LLM thesis failed", (e as Error).message);
-    }
-
-    const str = (v: unknown, fallback: string) =>
-      typeof v === "string" && v.trim() ? v.trim() : fallback;
-
-    // Hard-map verdict + confidence from the code score (deterministic).
-    const blue_verdict = top.quality >= 70 ? "BUY" : top.quality >= 50 ? "WATCH" : "SKIP";
-    void validSymbols; // pick is code-selected from the real list; symbols listed for audit
-
+    // Every figure below is from the pool read; the summary is written in code.
     const pick = {
       token: top.p.baseSymbol,
       price: top.p.priceUsd != null ? `$${top.p.priceUsd}` : "unknown",
@@ -304,10 +238,7 @@ ${scored.slice(0, 8).map(scoredLine).join("\n")}${context ? `\n\nUser focus: ${c
       score: top.quality,
       signal_type: top.signal_type,
       caution: top.caution,
-      thesis: str(narrative.thesis, `Highest on-chain quality score (${top.quality}/100): healthy liquidity, real turnover, ${top.signal_type} signal.`),
-      entry: str(narrative.entry, `Near current price ${top.p.priceUsd != null ? "$" + top.p.priceUsd : ""}`.trim()),
-      kill_criterion: str(narrative.kill_criterion, "Liquidity drains or 24h trend breaks down."),
-      horizon: str(narrative.horizon, "days"),
+      summary: `Highest on-chain quality score (${top.quality}/100) of ${pool.length} qualifying Base pools: liquidity ${fmtUsd(top.p.liquidityUsd)}, 24h volume ${fmtUsd(top.p.volume24h)}, 24h change ${fmtPct(top.p.change.h24)}, ${top.signal_type} signal.`,
       url: top.p.url || null,
     };
 
@@ -322,13 +253,11 @@ ${scored.slice(0, 8).map(scoredLine).join("\n")}${context ? `\n\nUser focus: ${c
     return Response.json({
       ...meta,
       no_pick: false,
+      facts_only: true,
       pick,
       near_misses,
-      blue_verdict,
-      confidence: top.quality, // FIX 2 — confidence == code score, not LLM
-      note: str(narrative.note, capTier
-        ? `Best ${capTier.tier}-cap Base token by on-chain quality score.`
-        : "Best Base token by on-chain quality score — size is a result, not a filter."),
+      quality_score: top.quality,
+      note: `${capTier ? `Top ${capTier.tier}-cap` : "Top"} Base token by an on-chain quality score — facts from live pools, not a recommendation to buy or sell.`,
       filters_applied,        // FIX 7
       candidates_scanned: candidatesBefore,
     });

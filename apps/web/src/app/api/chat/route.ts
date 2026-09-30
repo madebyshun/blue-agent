@@ -429,7 +429,7 @@ const ALL_HUB_TOOLS = [
   },
   {
     name: "hub_token_pick",
-    description: "Get an AI token pick on Base — falsifiable thesis, entry point, sizing, and kill criterion. Use when user asks: 'what should I buy', 'token pick', 'best token today', 'what's a good trade'.",
+    description: "The top Base token by an on-chain quality score (liquidity health, turnover, momentum) from live pools — FACTS ONLY: price, market cap, liquidity, 24h volume and change, the score, caution flags, and the next-best rows. It gives NO buy/sell call, entry, target, sizing or kill criterion, and you must not add one: report the facts, and if the user wants to trade, they choose and you open the swap card. Use for 'best token today', 'what's trending with real liquidity', 'token pick'.",
     input_schema: {
       type: "object",
       properties: { context: { type: "string", description: "Optional market context or narrative to consider" } },

@@ -247,7 +247,7 @@ That said, Blue Hub composes cleanly with execution plugins:
 > User: *"Find me an asymmetric Base setup right now."*
 >
 > 1. `POST /api/x402/token-pick-signal` with `{ "context": "…" }`
-> 2. Returns pick + thesis + entry + kill criterion.
+> 2. Returns the top Base token by an on-chain quality score — facts only (price, liquidity, volume, score, caution flags); no entry, target or buy/sell call.
 
 **Builder DD before investing**
 > User: *"Should I invest in this project?"*

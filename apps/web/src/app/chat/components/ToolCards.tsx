@@ -566,98 +566,71 @@ export function DeepAnalysisCard({ result }: { result: DeepAnalysisResult }) {
 
 // ── TokenPickCard ─────────────────────────────────────────────────────────────
 
+interface TokenPickRow {
+  token?: string; price?: string; change_24h?: string; change_1h?: string;
+  market_cap?: string; cap_tier?: string; liquidity?: string; volume_24h?: string;
+  score?: number; signal_type?: string; caution?: string[]; summary?: string; url?: string | null;
+}
 interface TokenPickResult {
-  token?: string;
-  symbol?: string;
-  thesis?: string;
-  entry?: string;
-  target?: string;
-  kill_criterion?: string;
-  sizing?: string;
-  conviction?: string;
-  timeframe?: string;
-  catalysts?: string[];
-  risks?: string[];
-  narrative?: string;
-  // fallback flat structure
-  signal?: string;
-  pick?: string;
-  result?: string;
+  no_pick?: boolean;
+  facts_only?: boolean;
+  pick?: TokenPickRow | null;
+  near_misses?: { token?: string; score?: number; signal_type?: string; cap_tier?: string; caution?: string[] }[];
+  note?: string;
 }
 
-const CONVICTION_COLORS: Record<string, string> = {
-  high:   "#4ade80",
-  medium: "#fb923c",
-  low:    "#94a3b8",
-};
-
+/**
+ * Facts only (2026-09-30, plan §3 fix 3). This card used to render a trade —
+ * thesis, entry, target, size, a red "kill switch" and a conviction badge. The
+ * tool no longer returns any of that, so nothing here can look like a call.
+ */
 export function TokenPickCard({ result }: { result: TokenPickResult }) {
-  const conviction  = (result.conviction ?? "medium").toLowerCase();
-  const accentColor = CONVICTION_COLORS[conviction] ?? "#4FC3F7";
-  const symbol      = result.symbol ?? result.token?.split("(")[0]?.trim() ?? "Token";
+  const accentColor = "#4FC3F7";
+  const p = result.pick;
 
   return (
     <Card accentColor={accentColor}>
       <CardHeader accentColor={accentColor}>
         <div className="flex items-center gap-3">
-          <span className="text-sm">🎯</span>
+          <span className="text-sm">📊</span>
           <div>
-            <span className="font-mono text-[11px] text-slate-500 tracking-widest uppercase">Token Pick</span>
-            {symbol && (
-              <p className="font-mono text-[13px] font-bold" style={{ color: accentColor }}>${symbol}</p>
-            )}
+            <span className="font-mono text-[11px] text-slate-500 tracking-widest uppercase">Top by quality score · Base</span>
+            {p?.token && <p className="font-mono text-[13px] font-bold" style={{ color: accentColor }}>${p.token}</p>}
           </div>
         </div>
-        {result.conviction && (
-          <span className="font-mono text-[10px] px-2.5 py-1 rounded-full border font-semibold uppercase tracking-wider"
-            style={{ color: accentColor, borderColor: `${accentColor}40`, background: `${accentColor}12` }}>
-            {conviction} conviction
+        {typeof p?.score === "number" && (
+          <span className="font-mono text-[10px] px-2.5 py-1 rounded-full border" style={{ color: accentColor, borderColor: `${accentColor}40` }}>
+            score {p.score}/100
           </span>
         )}
       </CardHeader>
       <CardBody>
-        {/* Thesis */}
-        {result.thesis && (
-          <p className="font-mono text-[12px] text-slate-300 leading-relaxed">{result.thesis}</p>
-        )}
-
-        {/* Trade params */}
-        <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 font-mono text-[11px]">
-          {result.entry && (
-            <div><span className="text-slate-600">Entry</span> <span className="text-slate-300">{result.entry}</span></div>
-          )}
-          {result.target && (
-            <div><span className="text-slate-600">Target</span> <span style={{ color: accentColor }}>{result.target}</span></div>
-          )}
-          {result.sizing && (
-            <div><span className="text-slate-600">Size</span> <span className="text-slate-300">{result.sizing}</span></div>
-          )}
-          {result.timeframe && (
-            <div><span className="text-slate-600">Timeframe</span> <span className="text-slate-300">{result.timeframe}</span></div>
-          )}
-          {result.narrative && (
-            <div className="col-span-2"><span className="text-slate-600">Narrative</span> <span className="text-slate-300">{result.narrative}</span></div>
-          )}
-        </div>
-
-        {/* Kill criterion */}
-        {result.kill_criterion && (
-          <div className="flex items-start gap-2 p-2.5 rounded-lg border border-red-900/30 bg-red-950/20">
-            <span className="text-red-400 text-xs shrink-0 mt-px">✕</span>
-            <div>
-              <span className="font-mono text-[10px] text-red-500 uppercase tracking-wider block mb-0.5">Kill switch</span>
-              <span className="font-mono text-[11px] text-slate-400">{result.kill_criterion}</span>
+        {result.no_pick || !p ? (
+          <p className="font-mono text-[11px] text-slate-500 leading-relaxed">{result.note ?? "No Base token passes the quality filters right now."}</p>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 font-mono text-[11px]">
+              {p.price && <div><span className="text-slate-600">Price</span> <span className="text-slate-300">{p.price}</span></div>}
+              {p.change_24h && <div><span className="text-slate-600">24h</span> <span className="text-slate-300">{p.change_24h}</span></div>}
+              {p.market_cap && <div><span className="text-slate-600">Mcap</span> <span className="text-slate-300">{p.market_cap}{p.cap_tier ? ` · ${p.cap_tier}` : ""}</span></div>}
+              {p.liquidity && <div><span className="text-slate-600">Liquidity</span> <span className="text-slate-300">{p.liquidity}</span></div>}
+              {p.volume_24h && <div><span className="text-slate-600">Vol 24h</span> <span className="text-slate-300">{p.volume_24h}</span></div>}
+              {p.signal_type && <div><span className="text-slate-600">Signal</span> <span className="text-slate-300">{p.signal_type}</span></div>}
             </div>
-          </div>
+            {!!p.caution?.length && <FlagList flags={p.caution} color="#fb923c" />}
+            {!!result.near_misses?.length && (
+              <p className="font-mono text-[10px] text-slate-500">
+                Next: {result.near_misses.map(n => `${n.token} (${n.score})`).join(" · ")}
+              </p>
+            )}
+            {p.url && (
+              <a href={p.url} target="_blank" rel="noopener noreferrer" className="font-mono text-[10px] hover:underline" style={{ color: accentColor }}>
+                Pool ↗
+              </a>
+            )}
+          </>
         )}
-
-        {/* Catalysts */}
-        {!!result.catalysts?.length && (
-          <div>
-            <span className="font-mono text-[10px] text-slate-600 uppercase tracking-wider block mb-1">Catalysts</span>
-            <FlagList flags={result.catalysts} color={accentColor} />
-          </div>
-        )}
+        <p className="font-mono text-[9px] text-slate-600">Facts from live Base pools — not a recommendation to buy or sell.</p>
       </CardBody>
     </Card>
   );
