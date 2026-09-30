@@ -27,6 +27,7 @@ import { SOUL_MD } from "@/lib/soul";
 import { VIRTUALS_PRESETS } from "@/app/api/_lib/llm";
 import { buildBaseSystem, buildAgentCapabilities, buildB20Section } from "./system-prompt";
 import { normalizeWallet, resolveActingWallet } from "@/lib/acting-wallet";
+import { findByTicker as findRwaByTicker, findByContract as findRwaByContract } from "@/lib/robinhood/rwa-registry";
 
 export const runtime = "nodejs";
 // Vercel kills serverless functions at 60s by default — explicit budget so
@@ -991,8 +992,8 @@ Testnets are reachable by full id: base-sepolia, ethereum-sepolia, robinhood-tes
       type: "object",
       properties: {
         direction:     { type: "string", enum: ["buy", "sell"], description: "buy = spend ETH to receive the token; sell = spend the token to receive ETH. Default buy. Ignored when token_in is set." },
-        token:         { type: "string", description: "Token contract address (0x…) on Robinhood Chain, OR a ticker symbol (e.g. CASHDOG, HOODRAT). For token↔token this is tokenOut. Server resolves symbols via the live Robinhood Chain feed. Never invent addresses." },
-        token_in:      { type: "string", description: "OPTIONAL. When set, switches to token↔token mode. tokenIn contract address (0x…) OR ticker symbol. Never invent addresses." },
+        token:         { type: "string", description: "Token contract address (0x…) on Robinhood Chain, OR a ticker in the Robinhood Chain token registry (stock/ETF tokens such as NVDA or TSLA, plus WETH and USDG). For token↔token this is tokenOut. Any other token must be given by contract address — the server never resolves a name by search. Never invent addresses." },
+        token_in:      { type: "string", description: "OPTIONAL. When set, switches to token↔token mode. tokenIn contract address (0x…) OR a registry ticker (same rule as token). Never invent addresses." },
         slippage_bps:  { type: "number", description: "OPTIONAL. Slippage tolerance in basis points (e.g. 50 = 0.5%). Default 50. Only honoured in token↔token mode; ETH↔token uses the card's built-in picker." },
         amount:        { type: "string", description: "Human-readable amount: ETH for buy, token for sell (or tokenIn for token↔token). Optional. May ALSO be a quantity word — 'all', 'max', 'half', or a percentage like '50%' — pass it through verbatim; the card resolves it against the user's live on-chain balance (never compute the number yourself)." },
       },
@@ -1719,10 +1720,9 @@ async function callHubTool(
     };
   }
   if (toolName === "robinhood_swap") {
-    // Resolve tokens — accept either 0x addresses or symbols we look up
-    // against the LIVE Robinhood Chain feed (GeckoTerminal). No LLM fallback,
-    // no fabricated addresses: if the symbol isn't in the live index, the
-    // card renders an error inline instead of guessing.
+    // Resolve tokens — accept either 0x addresses or registry tickers. No LLM
+    // fallback, no fabricated addresses, no name search: a ticker outside the
+    // registry renders an error inline asking for the contract address.
     //
     // Two modes:
     //  - ETH↔token: only `token` is set. `direction` chooses buy/sell.
@@ -1743,6 +1743,10 @@ async function callHubTool(
     }> {
       if (!raw) return { address: "", symbol: "", name: "", note: "", error: "" };
       if (/^0x[a-fA-F0-9]{40}$/.test(raw)) {
+        // A registry address is labelled from the registry — never from an
+        // index whose token names anyone can set.
+        const known = findRwaByContract(raw);
+        if (known) return { address: raw, symbol: known.ticker, name: known.name, note: "", error: "" };
         let symbol = "", name = "";
         try {
           const r = await fetch(`https://api.geckoterminal.com/api/v2/networks/robinhood/tokens/${raw}`, {
@@ -1756,36 +1760,29 @@ async function callHubTool(
         } catch { /* leave blank; card handles it */ }
         return { address: raw, symbol, name, note: "", error: "" };
       }
-      // Symbol lookup — search GeckoTerminal's Robinhood pool index.
-      try {
-        const q = encodeURIComponent(raw);
-        const r = await fetch(
-          `https://api.geckoterminal.com/api/v2/search/pools?query=${q}&network=robinhood&page=1`,
-          { headers: { Accept: "application/json" }, cache: "no-store" },
-        );
-        if (!r.ok) return { address: "", symbol: "", name: "", note: "", error: "Couldn't reach the Robinhood token index — try again with the token contract address." };
-        const j = await r.json();
-        const pools = (j?.data ?? []) as Array<{ attributes?: { name?: string }; relationships?: { base_token?: { data?: { id?: string } }; quote_token?: { data?: { id?: string } } } }>;
-        // GeckoTerminal returns pool ids like "robinhood_0x…"; base_token is
-        // typically the non-WETH leg but we defensively check both.
-        const wanted = raw.replace(/^\$/, "").toUpperCase();
-        for (const p of pools) {
-          const poolName = (p.attributes?.name ?? "").toUpperCase();
-          if (!poolName.includes(wanted)) continue;
-          const baseId = p.relationships?.base_token?.data?.id ?? "";
-          const quoteId = p.relationships?.quote_token?.data?.id ?? "";
-          const baseAddr = baseId.startsWith("robinhood_") ? baseId.slice("robinhood_".length) : "";
-          const quoteAddr = quoteId.startsWith("robinhood_") ? quoteId.slice("robinhood_".length) : "";
-          const WETH = "0x0bd7d308f8e1639fab988df18a8011f41eacad73";
-          const cand = baseAddr.toLowerCase() === WETH ? quoteAddr : baseAddr;
-          if (/^0x[a-fA-F0-9]{40}$/.test(cand)) {
-            return { address: cand, symbol: wanted, name: "", note: `Resolved ${wanted} → ${cand} via GeckoTerminal Robinhood index`, error: "" };
-          }
-        }
-        return { address: "", symbol: "", name: "", note: "", error: `No live pool for "${raw}" found on Robinhood Chain — try the token contract address.` };
-      } catch {
-        return { address: "", symbol: "", name: "", note: "", error: "Couldn't reach the Robinhood token index — try again with the token contract address." };
+      // Symbol → address from the Robinhood Chain token REGISTRY only
+      // (lib/robinhood/rwa-registry.ts: the RHJ stock/ETF tokens plus WETH and
+      // USDG). Until 2026-09-30 this took the FIRST GeckoTerminal pool whose
+      // name merely CONTAINED the ticker — so a token named "NVDA-something"
+      // (or an impostor "NVDA") could be armed as Nvidia, the #280 failure on
+      // Robinhood Chain (plan §1 fix 1). A name is never an identity: anything
+      // not in the registry must be given by its contract address.
+      const sym = raw.replace(/^\$/, "");
+      const reg = findRwaByTicker(sym);
+      if (reg && reg.ticker.toUpperCase() === sym.toUpperCase()) {
+        const what = reg.kind === "etf" ? "ETF token (Robinhood, Jersey)"
+          : reg.kind === "stock" ? "stock token (Robinhood, Jersey)"
+          : reg.kind;
+        return {
+          address: reg.contract, symbol: reg.ticker, name: reg.name,
+          note: `Resolved ${reg.ticker} → ${reg.contract} from the Robinhood Chain token registry (${what})`,
+          error: "",
+        };
       }
+      return {
+        address: "", symbol: "", name: "", note: "",
+        error: `"${raw}" is not in the Robinhood Chain token registry — paste the token's contract address (0x…) to swap it.`,
+      };
     }
 
     // tokenOut is required. tokenIn is optional (only for token↔token mode).
