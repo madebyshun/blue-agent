@@ -248,6 +248,18 @@ check("offer ⇒ scheduled: chat never solicits an allowance for a dead keeper",
 // shows and revokes it. Deleting it would be the unsafe direction.
 check("the card + handler stay, so an existing allowance is still visible",
   /toolName === "blue_dca"/.test(ROUTE));
+// 2026-09-30: recurring buys retired. Until then the card still rendered its
+// CREATE flow in any old chat holding a blue_dca result — a fresh standing
+// allowance for a keeper that never ran — and had no revoke control despite
+// the line above. The card must now be the exit and nothing else.
+const DCA_CARD = readFileSync(path.join(WEB, "src/app/chat/components/DcaCard.tsx"), "utf8")
+  .replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+check("the DCA card never creates a schedule (no call to /api/dca/create)",
+  !/\/api\/dca\/create/.test(DCA_CARD));
+const approveArgs = [...DCA_CARD.matchAll(/functionName:\s*"approve"[\s\S]{0,80}?args:\s*\[([^\]]*)\]/g)].map((m) => m[1]);
+check("every approve the DCA card builds is a revoke — approve(keeper, 0n)",
+  approveArgs.length > 0 && approveArgs.every((a) => /,\s*0n\s*$/.test(a.trim())),
+  approveArgs.join(" | ") || "no approve found");
 
 // ── 6. No section claims a capability with no registered tool ────────────────
 console.log("\n6. no prompt section claims an unregistered integration");

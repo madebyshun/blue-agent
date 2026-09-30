@@ -135,11 +135,13 @@ const cases = [...new Set([...CARDS.matchAll(/case "([a-z0-9_]+)":/g)].map(m => 
 /** Cards deliberately kept without a registered tool. Each needs a reason and a
  *  reference — an unexplained entry here is how this guard would be defeated. */
 const ALLOWED_ORPHANS: Record<string, string> = {
-  // #92: the card requests a real approve(keeper, totalAllowance) on USDC for
+  // #92: the card requested a real approve(keeper, totalAllowance) on USDC for
   // /api/cron/dca-executor, a cron that has never existed in vercel.json. The
-  // OFFER was withdrawn 2026-09-06; the CARD stays so anyone holding an
-  // outstanding allowance can still see and revoke it.
-  blue_dca: "#92 — offer withdrawn, card kept so live allowances stay revocable",
+  // OFFER was withdrawn 2026-09-06. On 2026-09-30 recurring buys were retired
+  // and the card became EXIT-ONLY (it lists old schedules and offers
+  // approve(keeper, 0)) — until then it still rendered the create flow in old
+  // chats and had no revoke control, despite this comment's claim.
+  blue_dca: "#92 — offer withdrawn, card is revoke-only so live allowances stay revocable",
 };
 
 check("the dispatcher still renders cards at all", cases.length > 10,

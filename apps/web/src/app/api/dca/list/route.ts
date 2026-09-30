@@ -1,17 +1,23 @@
 /**
  * GET /api/dca/list?address=0x…
  *
- * List all DCA schedules for a user. Returns a lightweight view (no keeper key).
- * Public read — no auth required because schedules leak nothing sensitive
- * (keeperAddress is trivially recoverable given the user's address by
- * anyone who has KEEPER_MASTER_KEY, which only the server does).
+ * List all DCA schedules for a user. Public read — no auth required because
+ * schedules leak nothing sensitive.
+ *
+ * `keeperAddress` IS returned since 2026-09-30, when recurring buys were
+ * retired. It used to be stripped as if it were secret; it is not — it is the
+ * spender of the user's own approve(), visible to anyone in that transaction.
+ * It is also the one thing the user needs to REVOKE that approval, and the
+ * retired DcaCard's exit (approve(keeper, 0)) reads it from here, so the exit
+ * keeps working after KEEPER_MASTER_KEY is unset. The key itself never leaves
+ * the server and is not derived here.
  */
 
 import { NextResponse } from "next/server";
 import { isAddress } from "viem";
 import { kvGet, kvGetProbe } from "@/lib/kv";
 import { dcaKeys } from "@/lib/dca/kv-keys";
-import type { DcaSchedule, DcaScheduleView } from "@/lib/dca/types";
+import type { DcaSchedule } from "@/lib/dca/types";
 
 export const runtime = "nodejs";
 
@@ -38,9 +44,7 @@ export async function GET(req: Request) {
   const schedules = await Promise.all(
     ids.map((id) => kvGet<DcaSchedule>(dcaKeys.schedule(id))),
   );
-  const views: DcaScheduleView[] = schedules
-    .filter((s): s is DcaSchedule => s !== null)
-    .map(({ keeperAddress: _hidden, ...rest }) => rest);
+  const views: DcaSchedule[] = schedules.filter((s): s is DcaSchedule => s !== null);
 
   return NextResponse.json({ ok: true, schedules: views });
 }

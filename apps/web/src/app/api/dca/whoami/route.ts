@@ -1,18 +1,25 @@
 /**
  * GET /api/dca/whoami?address=0x…
  *
- * Setup/debug helper. Returns everything a user (or admin) needs to sanity
- * check a DCA environment before running a real schedule:
+ * RETIREMENT-SWEEP helper since 2026-09-30 (recurring buys retired; the
+ * executor and the create route are gone). It used to be a setup tool; it is
+ * now the read ShunTr runs, per user found in KV `dca:user:*`, BEFORE
+ * unsetting KEEPER_MASTER_KEY / GAS_TOP_UP_PRIVATE_KEY:
  *
- *   - `keeper`   — the per-user derived keeper address + current ETH/USDC balance
- *   - `gasTank`  — the shared gas top-up wallet address (if configured) + balance
+ *   - `keeper`   — the per-user derived keeper address + current ETH/USDC balance.
+ *                  The keeper pulled USDC to ITSELF before swapping, so a run
+ *                  that died mid-way would leave the user's USDC here. Any
+ *                  non-zero USDC is the user's money and goes back to them.
+ *   - `gasTank`  — the shared gas top-up wallet address (if configured) + balance.
+ *                  Project ETH; sweep it before unsetting its key.
  *   - `config`   — which env vars are set (never leaks values, just booleans)
+ *
+ * Unsetting the keys first would make both balances unrecoverable. Nothing here
+ * signs; deriving an address is not signing.
  *
  * Not sensitive: keeper addresses are trivially recoverable from the master
  * key + user address (only the server has the master). Balances are public
- * on-chain. This endpoint just saves you a Node REPL + block-explorer trip.
- *
- * Not called from the chat/card flow — this is a setup-time tool.
+ * on-chain.
  */
 
 import { NextResponse } from "next/server";
@@ -121,12 +128,13 @@ export async function GET(req: Request) {
       topUpAmountEth:      GAS_TOPUP_CONSTANTS.TOP_UP_AMOUNT_ETH,
     },
     hint: {
-      setup: [
-        "1. openssl rand -hex 32   → set as KEEPER_MASTER_KEY in .env.local",
-        "2. openssl rand -hex 32   → set as GAS_TOP_UP_PRIVATE_KEY (add 0x prefix)",
-        "3. Re-fetch /api/dca/whoami → note the gasTank.address, send ~0.01 ETH on Base to it",
-        "4. Get a free ZEROX_API_KEY at dashboard.0x.org → set as ZEROX_API_KEY",
-        "5. Set CRON_SECRET to any random string → curl /api/cron/dca-executor with 'Bearer <secret>'",
+      retired: "Recurring buys were retired on 2026-09-30 — nothing creates or runs a schedule.",
+      sweep_before_unsetting_keys: [
+        "1. For every user in KV dca:user:*, read this route with ?address=<user>.",
+        "2. keeper.usdc > 0 → that USDC is the user's; return it to them before anything else.",
+        "3. gasTank / keeper ETH is project gas; sweep it if worth the fee.",
+        "4. Only then unset KEEPER_MASTER_KEY and GAS_TOP_UP_PRIVATE_KEY in Vercel.",
+        "5. Users revoke their approve(keeper) from the chat DcaCard (Revoke) or any revoke tool.",
       ],
     },
   });

@@ -57,7 +57,7 @@ if (failures.length > 0) {
   console.log(
     "\nAn `x-vercel-cron` header is not a credential — any caller can send it.\n" +
       "Authorize cron routes with `Authorization: Bearer ${CRON_SECRET}` only, fail-closed\n" +
-      "when CRON_SECRET is unset (see api/cron/dca-executor/route.ts).",
+      "when CRON_SECRET is unset.",
   );
   process.exit(1);
 }

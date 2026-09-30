@@ -9,7 +9,12 @@
  *
  * Storage: schedules live in KV under `dca:schedule:<id>`. A user index at
  * `dca:user:<address>:schedules` (list of IDs) enables cheap per-user lookup.
- * The active set `dca:active` is the cron's work queue.
+ * The active set `dca:active` was the cron's work queue.
+ *
+ * RETIRED 2026-09-30 (docs/rebuild-5-tang-2026-09-30.md §1): no schedule is
+ * created or executed any more. The records stay in KV as evidence, and these
+ * types stay because the exit (list / logs / cancel, and the DcaCard revoke)
+ * still reads them.
  */
 
 import type { Address, Hex } from "viem";
@@ -17,14 +22,6 @@ import type { Address, Hex } from "viem";
 export type DcaStatus = "active" | "paused" | "cancelled" | "expired" | "failed";
 
 export type DcaFrequency = "hourly" | "6h" | "12h" | "daily" | "weekly";
-
-export const FREQUENCY_SECONDS: Record<DcaFrequency, number> = {
-  hourly:  60 * 60,
-  "6h":    6  * 60 * 60,
-  "12h":   12 * 60 * 60,
-  daily:   24 * 60 * 60,
-  weekly:  7  * 24 * 60 * 60,
-};
 
 export type DcaSchedule = {
   id: string;                    // uuid v4
@@ -75,40 +72,3 @@ export type DcaExecutionLog = {
   gasSpentWei: string;
   error: string | null;
 };
-
-/**
- * User-facing input to /api/dca/create.
- * All numeric values are strings to avoid JS number precision loss.
- */
-export type CreateDcaInput = {
-  userAddress: Address;
-  chainId: number;
-  sellToken: Address;
-  buyToken: Address;
-  sellAmountPerRun: string;   // human decimal string, e.g. "20" for 20 USDC
-  frequency: DcaFrequency;
-  totalRuns: number;          // 1..365
-  slippageBps: number;        // 10..1000
-};
-
-/**
- * Response from /api/dca/create — the user's card uses this to know what
- * `approve()` calldata to build and which keeper address to whitelist.
- */
-export type CreateDcaResponse = {
-  scheduleId: string;
-  keeperAddress: Address;
-  totalAllowance: string;      // bigint — the exact amount to approve
-  totalAllowanceHuman: string; // pretty decimal for display
-  sellTokenDecimals: number;
-  feeBps: number;
-  expiresAt: number;
-  nextRunAt: number;
-};
-
-/**
- * A trimmed public view of a schedule for /api/dca/list.
- * We omit `keeperAddress` because it's derived server-side and shouldn't be
- * needed by the client (the card gets it from CreateDcaResponse).
- */
-export type DcaScheduleView = Omit<DcaSchedule, "keeperAddress">;

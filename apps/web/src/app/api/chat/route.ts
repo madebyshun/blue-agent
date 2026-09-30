@@ -1103,6 +1103,14 @@ Testnets are reachable by full id: base-sepolia, ethereum-sepolia, robinhood-tes
   // real funds is not something to unilaterally rip out. Re-enabling is this
   // block plus rule 6f, once `dca-executor` is actually scheduled and its first
   // run is verified on chain.
+  //
+  // RETIRED 2026-09-30 (docs/rebuild-5-tang-2026-09-30.md §1 — execution is
+  // swap / send / bridge only). The entrances went: /api/dca/create, the
+  // executor route, lib/dca/execution and the gas top-up signer. The exit
+  // stayed: the marker handler below, DcaCard (now revoke-only, reading the
+  // keeper from /api/dca/list), and list / logs / cancel / whoami. KV schedules
+  // are kept. KEEPER_MASTER_KEY + GAS_TOP_UP_PRIVATE_KEY are unset by ShunTr
+  // only after the sweep described in /api/dca/whoami.
 ];
 
 // ─── Tools hidden from chat (ShunTr, 2026-09-30) ─────────────────────────────
@@ -1463,10 +1471,9 @@ async function callHubTool(
     };
   }
   if (toolName === "blue_dca") {
-    // Marker only — the DcaCard POSTs to /api/dca/create to persist the schedule,
-    // then walks the user through ONE approve() tx in their wallet. All actual
-    // swap execution happens off this thread on the /api/cron/dca-executor
-    // schedule. Nothing is signed or moved server-side by this handler.
+    // Marker only. Since 2026-09-30 the DcaCard it renders is EXIT-ONLY: it
+    // lists this wallet's old schedules and offers approve(keeper, 0). Nothing
+    // is created, and nothing is signed or moved server-side by this handler.
     const sellToken        = typeof args.sellToken === "string" ? args.sellToken.trim() : "";
     const buyToken         = typeof args.buyToken  === "string" ? args.buyToken.trim()  : "";
     const sellAmountPerRun = typeof args.sellAmountPerRun === "string" ? args.sellAmountPerRun.trim()

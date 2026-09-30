@@ -1,41 +1,38 @@
 "use client";
-// Chat card for the `blue_dca` tool. Sets up a recurring buy on Base.
-// Two-step flow:
-//   1. POST /api/dca/create → server persists schedule + returns { keeperAddress, totalAllowance }
-//   2. User signs ONE approve(keeperAddress, totalAllowance) tx on sellToken in their own wallet
-//   3. Cron takes over — runs each buy via 0x AllowanceHolder every `frequency` seconds
+// Chat card for the `blue_dca` tool — EXIT ONLY since 2026-09-30.
 //
-// Non-custodial: the server never holds keys for the user's funds. The keeper's
-// authority is limited to the ERC-20 allowance the user grants and to the
-// sellToken only. To revoke, the user can send approve(keeper, 0) themselves,
-// or POST /api/dca/cancel.
+// Recurring buys are retired (docs/rebuild-5-tang-2026-09-30.md §1: execution
+// is swap / send / bridge only). The offer was already withdrawn on 2026-09-06
+// (#92); what was left was worse than nothing. This card still rendered its
+// CREATE flow wherever an old chat held a `blue_dca` result, so reopening that
+// chat offered a fresh `approve(keeper, total)` — a standing USDC allowance for
+// a keeper whose cron has never been scheduled. The comment beside it said the
+// card was kept "so live allowances stay revocable", but it had no revoke
+// control at all.
+//
+// So it now does only the exit: read this wallet's schedules, read each live
+// allowance ON-CHAIN, and offer `approve(keeper, 0)` — signed by the user, in
+// their own wallet. An unread allowance is never shown as zero.
+//
+// The keeper address comes from the stored schedule (via /api/dca/list), not
+// from KEEPER_MASTER_KEY, so this exit keeps working after that env is unset.
 
-import { useEffect, useMemo, useState } from "react";
-import {
-  useAccount,
-  useSwitchChain,
-  useChainId,
-  useWriteContract,
-  useWaitForTransactionReceipt,
-  useReadContract,
-} from "wagmi";
-import { isAddress, parseUnits, formatUnits } from "viem";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useAccount, useReadContracts, useSwitchChain, useWriteContract } from "wagmi";
+import { formatUnits, isAddress } from "viem";
 import { ConnectButton } from "@/components/ConnectModal";
 
 const BASE_CHAIN_ID = 8453;
 
-const ERC20_APPROVE_ABI = [
+const ERC20_ALLOWANCE_ABI = [
   { name: "approve", type: "function", stateMutability: "nonpayable",
     inputs: [{ name: "spender", type: "address" }, { name: "amount", type: "uint256" }], outputs: [{ type: "bool" }] },
   { name: "allowance", type: "function", stateMutability: "view",
     inputs: [{ name: "owner", type: "address" }, { name: "spender", type: "address" }], outputs: [{ type: "uint256" }] },
-  { name: "symbol", type: "function", stateMutability: "view",
-    inputs: [], outputs: [{ type: "string" }] },
-  { name: "decimals", type: "function", stateMutability: "view",
-    inputs: [], outputs: [{ type: "uint8" }] },
 ] as const;
 
-/** Marker shape emitted by the /api/chat handler for `blue_dca`. */
+/** Marker shape emitted by the /api/chat handler for `blue_dca`. Kept as-is so
+ *  old stored chat messages still type-check; nothing here is used to create. */
 export interface DcaResult {
   kind:             "blue_dca";
   chainId?:         number;
@@ -48,309 +45,167 @@ export interface DcaResult {
   error?:           string;
 }
 
-const FREQ_LABEL: Record<NonNullable<DcaResult["frequency"]>, string> = {
-  hourly: "every hour",
-  "6h":   "every 6 hours",
-  "12h":  "every 12 hours",
-  daily:  "every day",
-  weekly: "every week",
-};
-
-type Step = "review" | "creating" | "approve" | "approving" | "done" | "error";
-
-interface CreateResponse {
-  ok: true;
-  scheduleId: string;
-  keeperAddress: `0x${string}`;
-  totalAllowance: string;
-  totalAllowanceHuman: string;
+interface ScheduleRow {
+  id: string;
+  chainId: number;
+  keeperAddress?: string;
+  sellToken: string;
+  sellTokenSymbol: string;
   sellTokenDecimals: number;
-  feeBps: number;
-  expiresAt: number;
-  nextRunAt: number;
+  buyTokenSymbol: string;
+  status: string;
 }
 
-export default function DcaCard({ data }: { data: DcaResult }) {
+interface Grant {
+  token: `0x${string}`;
+  keeper: `0x${string}`;
+  symbol: string;
+  decimals: number;
+  schedules: number;
+}
+
+type Load =
+  | { state: "idle" }
+  | { state: "loading" }
+  | { state: "ok"; grants: Grant[] }
+  | { state: "error"; message: string };
+
+const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export default function DcaCard({ data: _data }: { data: DcaResult }) {
   const { address, isConnected } = useAccount();
-  const chainId = useChainId();
   const { switchChainAsync } = useSwitchChain();
+  const { writeContractAsync } = useWriteContract();
+  const [load, setLoad] = useState<Load>({ state: "idle" });
+  const [busy, setBusy] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
 
-  const {
-    writeContractAsync,
-    data: approveHash,
-    error: writeError,
-    isPending: writePending,
-    reset: resetWrite,
-  } = useWriteContract();
-
-  const { isLoading: waitingReceipt, isSuccess: approveConfirmed } =
-    useWaitForTransactionReceipt({ hash: approveHash, chainId: BASE_CHAIN_ID });
-
-  const [step, setStep]       = useState<Step>("review");
-  const [errMsg, setErrMsg]   = useState<string | null>(null);
-  const [created, setCreated] = useState<CreateResponse | null>(null);
-
-  // Validate the LLM's payload — the card refuses to POST until everything is present
-  const sellToken        = (data.sellToken ?? "").trim();
-  const buyToken         = (data.buyToken  ?? "").trim();
-  const sellAmountPerRun = (data.sellAmountPerRun ?? "").trim();
-  const frequency        = data.frequency ?? "daily";
-  const totalRuns        = typeof data.totalRuns === "number" && data.totalRuns > 0
-    ? Math.min(365, Math.floor(data.totalRuns))
-    : 30;
-  const slippageBps      = typeof data.slippageBps === "number" ? data.slippageBps : 100;
-
-  const inputError = useMemo(() => {
-    if (data.error) return data.error;
-    if (!sellToken || !isAddress(sellToken)) return "Missing or invalid sellToken address.";
-    if (!buyToken || !isAddress(buyToken))   return "Missing or invalid buyToken address.";
-    if (sellToken.toLowerCase() === buyToken.toLowerCase()) return "sellToken and buyToken must differ.";
-    if (!/^\d+(\.\d+)?$/.test(sellAmountPerRun) || Number(sellAmountPerRun) <= 0) return "Missing amount per run.";
-    return null;
-  }, [data.error, sellToken, buyToken, sellAmountPerRun]);
-
-  // Preview: read sell + buy token symbols from chain so the UI shows real names
-  const { data: sellSymbol } = useReadContract({
-    address: (isAddress(sellToken) ? (sellToken as `0x${string}`) : undefined),
-    abi:     ERC20_APPROVE_ABI,
-    functionName: "symbol",
-    chainId:  BASE_CHAIN_ID,
-    query: { enabled: isAddress(sellToken) },
-  });
-  const { data: buySymbol } = useReadContract({
-    address: (isAddress(buyToken) ? (buyToken as `0x${string}`) : undefined),
-    abi:     ERC20_APPROVE_ABI,
-    functionName: "symbol",
-    chainId:  BASE_CHAIN_ID,
-    query: { enabled: isAddress(buyToken) },
-  });
-
-  async function handleCreate() {
+  const fetchGrants = useCallback(async () => {
     if (!address) return;
-    setErrMsg(null);
-    setStep("creating");
+    setLoad({ state: "loading" });
     try {
-      const res = await fetch("/api/dca/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userAddress: address,
-          chainId: 8453,
-          sellToken,
-          buyToken,
-          sellAmountPerRun,
-          frequency,
-          totalRuns,
-          slippageBps,
-        }),
-      });
-      const json = (await res.json()) as CreateResponse | { error?: string };
-      if (!res.ok || !("ok" in json) || !json.ok) {
-        throw new Error(("error" in json && json.error) || `HTTP ${res.status}`);
+      const res = await fetch(`/api/dca/list?address=${address}`);
+      const j = (await res.json()) as { ok?: boolean; schedules?: ScheduleRow[]; error?: string };
+      if (!res.ok || !j.ok) {
+        setLoad({ state: "error", message: j.error ?? `could not read your schedules (${res.status})` });
+        return;
       }
-      setCreated(json);
-      setStep("approve");
+      // One allowance per (token, keeper) pair, however many schedules share it.
+      const byPair = new Map<string, Grant>();
+      for (const s of j.schedules ?? []) {
+        if (s.chainId !== BASE_CHAIN_ID) continue;
+        if (!s.keeperAddress || !isAddress(s.keeperAddress) || !isAddress(s.sellToken)) continue;
+        const key = `${s.sellToken.toLowerCase()}:${s.keeperAddress.toLowerCase()}`;
+        const g = byPair.get(key);
+        if (g) g.schedules += 1;
+        else byPair.set(key, {
+          token: s.sellToken as `0x${string}`,
+          keeper: s.keeperAddress as `0x${string}`,
+          symbol: s.sellTokenSymbol || short(s.sellToken),
+          decimals: s.sellTokenDecimals,
+          schedules: 1,
+        });
+      }
+      setLoad({ state: "ok", grants: [...byPair.values()] });
     } catch (e) {
-      setErrMsg((e as Error).message);
-      setStep("error");
+      setLoad({ state: "error", message: (e as Error).message || "could not read your schedules" });
     }
-  }
+  }, [address]);
 
-  async function handleApprove() {
-    if (!address || !created) return;
-    setErrMsg(null);
-    resetWrite();
+  useEffect(() => { void fetchGrants(); }, [fetchGrants]);
 
+  const grants = load.state === "ok" ? load.grants : [];
+  const reads = useReadContracts({
+    contracts: grants.map((g) => ({
+      address: g.token,
+      abi: ERC20_ALLOWANCE_ABI,
+      functionName: "allowance" as const,
+      args: [address as `0x${string}`, g.keeper] as const,
+      chainId: BASE_CHAIN_ID,
+    })),
+    query: { enabled: !!address && grants.length > 0 },
+  });
+
+  const rows = useMemo(() => grants.map((g, i) => {
+    const r = reads.data?.[i];
+    const value = r?.status === "success" ? (r.result as bigint) : null;
+    return { g, value, failed: r?.status === "failure" };
+  }), [grants, reads.data]);
+
+  async function revoke(g: Grant) {
+    setBusy(g.keeper + g.token);
+    setNote(null);
     try {
-      // SANITY GUARD — recompute expected allowance client-side and refuse to
-      // sign if the server's number is off by an order of magnitude. This
-      // caught a real bug in dev where a silent RPC failure made the server
-      // return decimals=18 for USDC (6-dec), inflating a $2 request into a
-      // $2-trillion spending cap. Wagmi/MetaMask can't catch that themselves.
-      const expected = parseUnits(sellAmountPerRun, created.sellTokenDecimals)
-        * BigInt(10_000 + (created.feeBps ?? 50))
-        / 10_000n
-        * BigInt(totalRuns);
-      const actual = BigInt(created.totalAllowance);
-      if (actual > expected * 10n || actual < expected / 10n) {
-        throw new Error(
-          `Refusing to sign: server allowance (${actual}) differs from client-computed (${expected}) by >10×. ` +
-          `Likely a token-decimals mismatch — do NOT approve.`,
-        );
-      }
-
-      if (chainId !== BASE_CHAIN_ID) {
-        await switchChainAsync({ chainId: BASE_CHAIN_ID });
-      }
-      setStep("approving");
+      await switchChainAsync({ chainId: BASE_CHAIN_ID });
       await writeContractAsync({
-        address: sellToken as `0x${string}`,
-        abi: ERC20_APPROVE_ABI,
+        address: g.token,
+        abi: ERC20_ALLOWANCE_ABI,
         functionName: "approve",
-        args: [created.keeperAddress, actual],
+        args: [g.keeper, 0n],
         chainId: BASE_CHAIN_ID,
       });
-      // approveHash + receipt-wait handled by the wagmi hooks; useEffect below flips step
+      setNote(`Revoke sent for ${g.symbol}. It shows as 0 once the transaction confirms.`);
+      setTimeout(() => { void reads.refetch(); }, 4000);
     } catch (e) {
-      setErrMsg((e as Error).message);
-      setStep("error");
+      const m = (e as Error).message || String(e);
+      setNote(/user rejected|denied|cancell?ed/i.test(m) ? "Revoke cancelled." : m.slice(0, 160));
+    } finally {
+      setBusy(null);
     }
   }
 
-  // Once the approve tx is confirmed, mark done
-  useEffect(() => {
-    if (step === "approving" && approveConfirmed) setStep("done");
-  }, [step, approveConfirmed]);
-
-  // Bubble wagmi write error up
-  useEffect(() => {
-    if (writeError && step === "approving") {
-      const msg = writeError.message.includes("rejected") || writeError.message.includes("User denied")
-        ? "Signature rejected in wallet."
-        : writeError.message;
-      setErrMsg(msg);
-      setStep("error");
-    }
-  }, [writeError, step]);
-
-  const sellSymbolStr = (sellSymbol as string | undefined) ?? "TOKEN";
-  const buySymbolStr  = (buySymbol  as string | undefined) ?? "TOKEN";
-
-  // For display — parseUnits with a guess of 18 decimals until create response gives us the real one
-  const perRunDisplay = created
-    ? formatUnits(parseUnits(sellAmountPerRun, created.sellTokenDecimals), created.sellTokenDecimals)
-    : sellAmountPerRun;
-
   return (
-    <div className="rounded-2xl bg-[#0a0a0f] border border-[#1A1A2E] p-5 space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-[#4FC3F7] shadow-[0_0_6px_#4FC3F7]" />
-            <span className="font-mono text-xs text-[#4FC3F7]">DCA · Base</span>
-          </div>
-          <h3 className="font-semibold text-white mt-1 text-lg">Recurring buy</h3>
-        </div>
-        <span className="font-mono text-[10px] text-slate-500 uppercase tracking-wider">
-          {step === "done" ? "active" : step === "approve" || step === "approving" ? "approve" : "review"}
-        </span>
-      </div>
+    <div className="mt-2 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3.5">
+      <div className="font-mono text-[10px] text-slate-500 tracking-widest font-bold mb-2">RECURRING BUY · RETIRED</div>
+      <p className="font-mono text-[11px] text-slate-300 leading-relaxed mb-3">
+        Recurring buys are no longer offered and no schedule will run. If you approved a keeper
+        earlier, that approval is still live on Base — revoke it below.
+      </p>
 
-      {/* Summary */}
-      <div className="bg-[#050508] border border-[#1A1A2E] rounded-xl p-4 space-y-2">
-        <div className="flex justify-between text-xs">
-          <span className="font-mono text-slate-500">Buy</span>
-          <span className="font-mono text-slate-200">{buySymbolStr} <span className="text-slate-500">({shortAddr(buyToken)})</span></span>
+      {!isConnected || !address ? (
+        <ConnectButton />
+      ) : load.state === "loading" || load.state === "idle" ? (
+        <div className="font-mono text-[10px] text-slate-500">Reading your approvals…</div>
+      ) : load.state === "error" ? (
+        <div className="font-mono text-[10px] text-amber-400">
+          Couldn&apos;t read your schedules — this is NOT the same as having none. {load.message}{" "}
+          <button className="underline" onClick={() => void fetchGrants()}>Retry</button>
         </div>
-        <div className="flex justify-between text-xs">
-          <span className="font-mono text-slate-500">Spend per run</span>
-          <span className="font-mono text-slate-200">{perRunDisplay} {sellSymbolStr}</span>
-        </div>
-        <div className="flex justify-between text-xs">
-          <span className="font-mono text-slate-500">Frequency</span>
-          <span className="font-mono text-slate-200">{FREQ_LABEL[frequency]}</span>
-        </div>
-        <div className="flex justify-between text-xs">
-          <span className="font-mono text-slate-500">Runs planned</span>
-          <span className="font-mono text-slate-200">{totalRuns}</span>
-        </div>
-        <div className="flex justify-between text-xs">
-          <span className="font-mono text-slate-500">Slippage</span>
-          <span className="font-mono text-slate-200">{(slippageBps / 100).toFixed(2)}%</span>
-        </div>
-      </div>
-
-      {/* Total approve summary (after create) */}
-      {created && (
-        <div className="bg-[#050508] border border-[#4FC3F7]/20 rounded-xl p-4 space-y-2">
-          <div className="flex justify-between text-xs">
-            <span className="font-mono text-slate-500">Total allowance to approve</span>
-            <span className="font-mono text-[#4FC3F7]">{created.totalAllowanceHuman} {sellSymbolStr}</span>
-          </div>
-          <div className="flex justify-between text-xs">
-            <span className="font-mono text-slate-500">Keeper wallet (spender)</span>
-            <span className="font-mono text-slate-300">{shortAddr(created.keeperAddress)}</span>
-          </div>
-          <div className="flex justify-between text-xs">
-            <span className="font-mono text-slate-500">Fee (keeper gas reimb.)</span>
-            <span className="font-mono text-slate-300">{(created.feeBps / 100).toFixed(2)}%</span>
-          </div>
-          <div className="flex justify-between text-[10px] text-slate-500 pt-1 border-t border-[#1A1A2E]">
-            <span className="font-mono">Schedule ID</span>
-            <span className="font-mono">{created.scheduleId.slice(0, 8)}</span>
-          </div>
+      ) : rows.length === 0 ? (
+        <div className="font-mono text-[10px] text-slate-500">No recurring-buy approval found for this wallet.</div>
+      ) : (
+        <div className="space-y-2">
+          {rows.map(({ g, value, failed }) => (
+            <div key={g.token + g.keeper} className="flex items-center gap-2 rounded-lg border border-[#1A1A2E] px-2.5 py-2">
+              <div className="flex-1 min-w-0 font-mono text-[10px]">
+                <div className="text-slate-300">{g.symbol} → keeper {short(g.keeper)}</div>
+                <div className="text-slate-500">
+                  {value === null
+                    ? (failed ? "allowance unreadable right now" : "reading allowance…")
+                    : value === 0n
+                    ? "allowance 0 — nothing to revoke"
+                    : `allowance ${formatUnits(value, g.decimals)} ${g.symbol}`}
+                </div>
+              </div>
+              {value !== null && value > 0n && (
+                <button
+                  onClick={() => void revoke(g)}
+                  disabled={busy !== null}
+                  className="font-mono text-[10px] font-bold px-3 py-1.5 rounded-lg disabled:opacity-40"
+                  style={{ background: "#EF444412", color: "#fca5a5", border: "1px solid #EF444440" }}
+                >
+                  {busy === g.keeper + g.token ? "Confirm in wallet…" : "Revoke"}
+                </button>
+              )}
+              {failed && (
+                <button className="font-mono text-[10px] underline text-slate-400" onClick={() => void reads.refetch()}>Retry</button>
+              )}
+            </div>
+          ))}
         </div>
       )}
-
-      {/* CTA */}
-      {inputError ? (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
-          <p className="font-mono text-xs text-red-400">{inputError}</p>
-        </div>
-      ) : !isConnected ? (
-        <div className="pt-2 flex justify-center">
-          <ConnectButton />
-        </div>
-      ) : step === "review" ? (
-        <button
-          onClick={handleCreate}
-          className="w-full bg-[#4FC3F7] hover:bg-[#29ABE2] text-[#050508] font-mono font-semibold text-sm py-3 rounded-xl transition-colors"
-        >
-          Create schedule
-        </button>
-      ) : step === "creating" ? (
-        <button disabled className="w-full bg-[#4FC3F7]/40 text-[#050508] font-mono font-semibold text-sm py-3 rounded-xl flex items-center justify-center gap-2">
-          <Spinner /> Creating…
-        </button>
-      ) : step === "approve" ? (
-        <button
-          onClick={handleApprove}
-          className="w-full bg-[#4FC3F7] hover:bg-[#29ABE2] text-[#050508] font-mono font-semibold text-sm py-3 rounded-xl transition-colors"
-        >
-          Sign approve — {created?.totalAllowanceHuman} {sellSymbolStr}
-        </button>
-      ) : step === "approving" ? (
-        <button disabled className="w-full bg-[#4FC3F7]/40 text-[#050508] font-mono font-semibold text-sm py-3 rounded-xl flex items-center justify-center gap-2">
-          <Spinner /> {writePending ? "Waiting for wallet…" : waitingReceipt ? "Confirming on Base…" : "Submitting…"}
-        </button>
-      ) : step === "done" ? (
-        <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-3">
-          <div className="flex items-center gap-2 mb-1">
-            <div className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399]" />
-            <span className="font-mono text-xs text-emerald-400">Schedule active</span>
-          </div>
-          <p className="font-mono text-[11px] text-slate-400 leading-relaxed">
-            First run in ~{created ? Math.max(1, Math.ceil((created.nextRunAt - Math.floor(Date.now() / 1000)) / 60)) : "?"}min. To cancel: <code className="text-slate-300">POST /api/dca/cancel</code> with your schedule ID.
-          </p>
-        </div>
-      ) : null}
-
-      {step === "error" && errMsg && (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
-          <p className="font-mono text-xs text-red-400 leading-relaxed">{errMsg}</p>
-          <button
-            onClick={() => { setStep(created ? "approve" : "review"); setErrMsg(null); }}
-            className="mt-2 font-mono text-[10px] text-slate-400 underline hover:text-slate-200"
-          >
-            Retry
-          </button>
-        </div>
-      )}
+      {note && <div className="font-mono text-[10px] text-slate-400 mt-2">{note}</div>}
     </div>
-  );
-}
-
-function shortAddr(a?: string): string {
-  if (!a || a.length < 10) return a ?? "";
-  return `${a.slice(0, 6)}…${a.slice(-4)}`;
-}
-
-function Spinner() {
-  return (
-    <svg className="w-4 h-4 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
-      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-    </svg>
   );
 }
