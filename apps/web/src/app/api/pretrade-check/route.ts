@@ -33,8 +33,7 @@ export async function POST(req: NextRequest) {
     bridgeCostPercent: typeof body.bridge_cost_percent === "number" ? body.bridge_cost_percent : null,
   });
   // The public meter (G4) counts only what this server measured: a token
-  // refused on evidence. The bridge cost here came from the browser, so a
-  // bridge BLOCK from this door is real for that user and is not counted.
-  await recordPreTradeBlock(check, { chain, token }, { costMeasuredByServer: false });
+  // refused on evidence (lib/action-stats.ts).
+  await recordPreTradeBlock(check, { chain, token });
   return NextResponse.json(check, { headers: { "Cache-Control": "no-store" } });
 }

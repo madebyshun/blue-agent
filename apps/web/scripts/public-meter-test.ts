@@ -19,7 +19,7 @@ for (const k of ["KV_REST_API_URL", "KV_REST_API_TOKEN", "UPSTASH_REDIS_REST_URL
 import fs from "node:fs";
 import path from "node:path";
 import { encodeAbiParameters, keccak256, pad, toHex } from "viem";
-import { createAction, attachTx, listActions, receivedFromLogs } from "../src/lib/actions";
+import { createAction, attachTx, listActions, readAction, receivedFromLogs } from "../src/lib/actions";
 import { readActionStats, recordPreTradeBlock, median, SLIP_MIN_N } from "../src/lib/action-stats";
 import type { PreTradeCheck } from "../src/lib/pre-trade-check";
 import { X402_PAY_TO } from "../src/lib/x402-payee";
@@ -34,6 +34,9 @@ const ALICE = "0xa11ce00000000000000000000000000000000001";
 const BOB = "0xb0b0000000000000000000000000000000000002";
 const POOL = "0x9001000000000000000000000000000000000009";
 const TOKEN = "0x70ce000000000000000000000000000000000007"; // 6-decimals output token
+const BUNDLER = "0xbd1e000000000000000000000000000000000003";
+const ENTRY = "0x0000000071727de22e5e9d8baf0edac6f37da032";
+const USER_OP_TOPIC = keccak256(toHex("UserOperationEvent(bytes32,address,address,uint256,bool,uint256,uint256)"));
 const H = (n: number) => `0x${n.toString(16).padStart(64, "0")}`;
 const TRANSFER = keccak256(toHex("Transfer(address,address,uint256)"));
 const transfer = (token: string, from: string, to: string, value: bigint) => ({
@@ -43,13 +46,19 @@ const transfer = (token: string, from: string, to: string, value: bigint) => ({
   logIndex: "0x0",
 });
 
-const RECEIPTS: Record<string, { from: string; logs?: unknown[]; status?: string }> = {};
+// `ts` is the block timestamp (seconds, default now) — the block NUMBER is set
+// to it so eth_getBlockByNumber can answer from the number alone. `tx` is what
+// eth_getTransactionByHash returns (to / input / value).
+type Fx = { from: string; logs?: unknown[]; status?: string; ts?: number; tx?: { to: string; input?: string; value?: bigint } };
+const RECEIPTS: Record<string, Fx> = {};
 let mined = new Set<string>();
-function receipt(n: number, r: { from: string; logs?: unknown[]; status?: string }) {
-  RECEIPTS[H(n)] = r;
+const nowS = () => Math.floor(Date.now() / 1000);
+function receipt(n: number, r: Fx) {
+  RECEIPTS[H(n)] = { ts: nowS(), ...r };
   mined.add(H(n));
   return H(n);
 }
+const hex = (n: number | bigint) => `0x${n.toString(16)}`;
 
 globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
   let req: { id: number; method: string; params: unknown[] } | null = null;
@@ -61,11 +70,30 @@ globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
     const h = String(req.params[0]);
     const fx = RECEIPTS[h];
     if (!fx || !mined.has(h)) return rpc(null);
+    const bn = hex(fx.ts ?? nowS());
     return rpc({
-      blockHash: H(7), blockNumber: "0x10", contractAddress: null, cumulativeGasUsed: "0x5208",
+      blockHash: H(7), blockNumber: bn, contractAddress: null, cumulativeGasUsed: "0x5208",
       effectiveGasPrice: "0x1", from: fx.from, gasUsed: "0x5208",
-      logs: (fx.logs ?? []).map((l) => ({ ...(l as object), blockHash: H(7), blockNumber: "0x10", transactionHash: h, transactionIndex: "0x0", removed: false })),
-      logsBloom: `0x${"0".repeat(512)}`, status: fx.status ?? "0x1", to: POOL, transactionHash: h, transactionIndex: "0x0", type: "0x2",
+      logs: (fx.logs ?? []).map((l) => ({ ...(l as object), blockHash: H(7), blockNumber: bn, transactionHash: h, transactionIndex: "0x0", removed: false })),
+      logsBloom: `0x${"0".repeat(512)}`, status: fx.status ?? "0x1", to: fx.tx?.to ?? POOL, transactionHash: h, transactionIndex: "0x0", type: "0x2",
+    });
+  }
+  if (req.method === "eth_getBlockByNumber") {
+    const n = String(req.params[0]);
+    return rpc({
+      number: n, hash: H(7), parentHash: H(6), timestamp: n, nonce: "0x0000000000000000", difficulty: "0x0", gasLimit: "0x1c9c380",
+      gasUsed: "0x0", miner: POOL, extraData: "0x", logsBloom: `0x${"0".repeat(512)}`, transactionsRoot: H(1), stateRoot: H(2),
+      receiptsRoot: H(3), sha3Uncles: H(4), size: "0x1", totalDifficulty: "0x0", baseFeePerGas: "0x1", transactions: [], uncles: [],
+    });
+  }
+  if (req.method === "eth_getTransactionByHash") {
+    const h = String(req.params[0]);
+    const fx = RECEIPTS[h];
+    if (!fx || !mined.has(h)) return rpc(null);
+    return rpc({
+      hash: h, from: fx.from, to: fx.tx?.to ?? POOL, input: fx.tx?.input ?? "0x", value: hex(fx.tx?.value ?? 0n),
+      blockHash: H(7), blockNumber: hex(fx.ts ?? nowS()), transactionIndex: "0x0", nonce: "0x1", gas: "0x5208", gasPrice: "0x1",
+      type: "0x0", v: "0x1b", r: H(8), s: H(9), chainId: "0x2105",
     });
   }
   if (req.method === "eth_call") {
@@ -103,8 +131,12 @@ const swap = (quote: Parameters<typeof createAction>[0]["quote"]) =>
   r = await attachTx(a.id, receipt(4, { from: ALICE, status: "0x0" }));
   ok("a reverted swap has no realized output", r.ok && r.record.status === "reverted" && !r.record.realized);
 
-  const send = await createAction({ wallet: ALICE, kind: "send", chain: "robinhood", source: "mcp", params: { token: "ETH", amount: "1", to: BOB } });
-  await attachTx(send.id, receipt(5, { from: ALICE }));
+  // An agent's (MCP) send: its wallet is unproven, so the attached tx must be
+  // the one the builder returned — 1 ETH to Bob.
+  const send = await createAction({ wallet: ALICE, kind: "send", chain: "robinhood", source: "mcp", params: { token: "ETH", amount: "1", to: BOB },
+    built: { to: BOB, data: "0x", value: "0xde0b6b3a7640000" } });
+  r = await attachTx(send.id, receipt(5, { from: ALICE, tx: { to: BOB, value: 10n ** 18n } }));
+  ok("an MCP record attaches the transaction its builder returned", r.ok && r.record.status === "confirmed", JSON.stringify(r));
 
   console.log("\n2. each settled action counts once");
   let st = await readActionStats();
@@ -140,23 +172,55 @@ const swap = (quote: Parameters<typeof createAction>[0]["quote"]) =>
   st = await readActionStats();
   ok(`at ${SLIP_MIN_N}+ samples the median is published`, st.slippage.n === 6 && st.slippage.median_bps === median([100, -50, 0, 200, 200, 200]), JSON.stringify(st.slippage));
 
+  console.log("\n2b. the tx must be THIS action's (review 2026-10-01)");
+  const before = await readActionStats();
+  let fresh = await swap({ expected_out: "1000", unit: "base" });
+  r = await attachTx(fresh.id, receipt(20, { from: ALICE, ts: nowS() - 3600, logs: [transfer(TOKEN, POOL, ALICE, 1n)] }));
+  ok("a tx mined an hour before the action is refused (NOT_THIS_ACTION), whoever sent it", !r.ok && r.code === "NOT_THIS_ACTION", JSON.stringify(r));
+  const mcpSwap = await createAction({ wallet: ALICE, kind: "swap", chain: "base", source: "mcp", params: { tokenIn: "ETH", tokenOut: TOKEN, amountIn: "0.1" },
+    quote: { expected_out: "1000", unit: "base" }, built: { to: POOL, data: `0x12345678${"ab".repeat(64)}`, value: "0" } });
+  r = await attachTx(mcpSwap.id, receipt(21, { from: ALICE, tx: { to: POOL, input: `0x87654321${"cd".repeat(64)}` }, logs: [transfer(TOKEN, POOL, ALICE, 1n)] }));
+  ok("an MCP record refuses a tx of its wallet that is not the one it built", !r.ok && r.code === "NOT_THIS_ACTION", JSON.stringify(r));
+  const unmined = H(22);
+  RECEIPTS[unmined] = { from: ALICE, ts: nowS(), tx: { to: POOL, input: `0x12345678${"ab".repeat(64)}` } };
+  r = await attachTx(mcpSwap.id, unmined);
+  const still = await readAction(mcpSwap.id);
+  ok("an MCP record does not store an unmined hash (NOT_MINED, record untouched)",
+    !r.ok && r.code === "NOT_MINED" && still.status === "found" && still.record.status === "prepared" && !still.record.tx_hash, JSON.stringify(r));
+  let listed = await listActions(ALICE, 200);
+  ok("…and an unproven MCP record is not in the wallet's history (nor its index)", listed.status === "ok" && !listed.actions.some((x) => x.id === mcpSwap.id));
+  mined.add(unmined);
+  RECEIPTS[unmined].logs = [transfer(TOKEN, POOL, ALICE, 1000n)];
+  r = await attachTx(mcpSwap.id, unmined);
+  listed = await listActions(ALICE, 200);
+  ok("once the built tx is mined and attached, it is proven and listed", r.ok && r.record.status === "confirmed" && listed.status === "ok" && listed.actions.some((x) => x.id === mcpSwap.id), JSON.stringify(r));
+  fresh = await swap({ expected_out: "1000", unit: "base" });
+  const failedOp = {
+    address: ENTRY,
+    topics: [USER_OP_TOPIC, H(99), pad(ALICE as `0x${string}`, { size: 32 }), pad("0x0000000000000000000000000000000000000000", { size: 32 })],
+    data: encodeAbiParameters([{ type: "uint256" }, { type: "bool" }, { type: "uint256" }, { type: "uint256" }], [1n, false, 10n, 20n]),
+    logIndex: "0x0",
+  };
+  r = await attachTx(fresh.id, receipt(23, { from: BUNDLER, logs: [failedOp], tx: { to: ENTRY } }));
+  ok("a smart wallet's op that reverted inside a successful bundle → REVERTED, not confirmed", r.ok && r.record.status === "reverted", JSON.stringify(r.ok && r.record.status));
+  const after = await readActionStats();
+  ok("…and the meter counts it as reverted; the refused attaches counted nothing",
+    after.reverted === before.reverted + 1 && after.confirmed === before.confirmed + 1, JSON.stringify({ before: [before.confirmed, before.reverted], after: [after.confirmed, after.reverted] }));
+
   console.log("\n3. refusals count only on measured evidence");
   const block = (code: string, level: "BLOCK" | "WARN" = "BLOCK"): PreTradeCheck =>
     ({ verdict: level === "BLOCK" ? "BLOCK" : "WARN", asset_type: "crypto", label: "x", reasons: [{ level, code: code as never, text: "t" }], checked_at: "" });
-  await recordPreTradeBlock(block("IMPOSTOR"), { chain: "base", token: "0xAAAA000000000000000000000000000000000001" }, { costMeasuredByServer: false });
-  await recordPreTradeBlock(block("IMPOSTOR"), { chain: "base", token: "0xaaaa000000000000000000000000000000000001" }, { costMeasuredByServer: false });
-  await recordPreTradeBlock(block("HONEYPOT"), { chain: "base", token: "0xbbbb000000000000000000000000000000000002" }, { costMeasuredByServer: false });
-  await recordPreTradeBlock(block("NOT_ADDRESS"), { chain: "base", token: "NVDA" }, { costMeasuredByServer: false });
-  await recordPreTradeBlock(block("IMPOSTOR", "WARN"), { chain: "base", token: "0xcccc000000000000000000000000000000000003" }, { costMeasuredByServer: false });
+  await recordPreTradeBlock(block("IMPOSTOR"), { chain: "base", token: "0xAAAA000000000000000000000000000000000001" });
+  await recordPreTradeBlock(block("IMPOSTOR"), { chain: "base", token: "0xaaaa000000000000000000000000000000000001" });
+  await recordPreTradeBlock(block("HONEYPOT"), { chain: "base", token: "0xbbbb000000000000000000000000000000000002" });
+  await recordPreTradeBlock(block("NOT_ADDRESS"), { chain: "base", token: "NVDA" });
+  await recordPreTradeBlock(block("IMPOSTOR", "WARN"), { chain: "base", token: "0xcccc000000000000000000000000000000000003" });
   st = await readActionStats();
   ok("distinct tokens refused on evidence: the same token twice (any case) counts once; a ticker typo and a WARN do not count",
     st.blocked.tokens === 2, `tokens=${st.blocked.tokens}`);
-  await recordPreTradeBlock(block("BRIDGE_COST"), { chain: "base", token: "ETH" }, { costMeasuredByServer: false });
+  await recordPreTradeBlock(block("BRIDGE_COST"), { chain: "base", token: "ETH" });
   st = await readActionStats();
-  ok("a bridge BLOCK on a browser-reported cost is not counted", st.blocked.bridges === 0);
-  await recordPreTradeBlock(block("BRIDGE_COST"), { chain: "base", token: "ETH" }, { costMeasuredByServer: true });
-  st = await readActionStats();
-  ok("a bridge BLOCK on a cost this server read is", st.blocked.bridges === 1);
+  ok("bridge refusals are not published (no door keeps that count honest)", !("bridges" in st.blocked), JSON.stringify(st.blocked));
 
   console.log("\n4. /api/stats/public");
   const { GET } = await import("../src/app/api/stats/public/route");
@@ -165,7 +229,7 @@ const swap = (quote: Parameters<typeof createAction>[0]["quote"]) =>
     usage?: { revenueEstBasis?: string };
     settlement?: { scope?: string; verify_url?: string };
   };
-  ok("actions block published, readable", body.actions?.ok === true && body.actions.confirmed === 8, JSON.stringify(body.actions));
+  ok("actions block published, readable", body.actions?.ok === true && body.actions.confirmed === 9, JSON.stringify(body.actions));
   ok("the retired launches block is absent (not zeroed)", !("launches" in body));
   ok("revenueEst carries its basis: an estimate, not revenue", /Estimate/.test(body.usage?.revenueEstBasis ?? "") && /not revenue/.test(body.usage?.revenueEstBasis ?? ""));
   ok("settlement states its scope and where to verify", /Forward-only/.test(body.settlement?.scope ?? "") && (body.settlement?.verify_url ?? "").toLowerCase().includes(X402_PAY_TO.toLowerCase()));

@@ -16,14 +16,17 @@
  * the date, rather than presenting a young meter as an all-time total.
  *
  * REFUSALS are counted only where they are EVIDENCE the server measured:
- *   • distinct tokens refused as an impostor or a measured honeypot — a set,
- *     so re-checking one token cannot inflate it, and growing it takes a real
- *     bad contract per entry;
- *   • bridges refused on a cost THIS server read from Relay (the MCP builder).
- *     The card door is told the cost by the browser, so its bridge BLOCKs are
- *     real for that user and meaningless as a public number — not counted.
- * A ticker-instead-of-address BLOCK is an input error, not a catch — never
- * counted.
+ * distinct tokens refused as an impostor or a measured honeypot — a set, so
+ * re-checking one token cannot inflate it, and growing it takes a real bad
+ * contract per entry. A ticker-instead-of-address BLOCK is an input error, not
+ * a catch — never counted.
+ *
+ * Bridge refusals were counted too until 2026-10-01 and are not any more
+ * (review): the only door that measured the cost itself is the unauthenticated
+ * MCP builder, where the caller picks the amount and the wallet — a dust
+ * bridge repeated in a loop raised a public number by thousands an hour with
+ * no real user behind any of it. A count nobody can keep honest is not
+ * published.
  */
 import { kv, kvGetProbe, kvMutate, kvSAdd, kvSetNX } from "@/lib/kv";
 import type { ActionRecord } from "@/lib/actions";
@@ -70,16 +73,12 @@ export async function recordSettled(rec: ActionRecord): Promise<void> {
 export async function recordPreTradeBlock(
   check: PreTradeCheck,
   input: { chain: string; token: string },
-  opts: { costMeasuredByServer: boolean },
 ): Promise<void> {
   if (check.verdict !== "BLOCK") return;
   try {
     const blocks = check.reasons.filter((r) => r.level === "BLOCK");
     if (blocks.some((r) => r.code === "IMPOSTOR" || r.code === "HONEYPOT")) {
       await kvSAdd(K_BLOCKED_TOKENS, `${input.chain}:${input.token.trim().toLowerCase()}`);
-    }
-    if (opts.costMeasuredByServer && blocks.some((r) => r.code === "BRIDGE_COST")) {
-      await kv.hincrby(K_HASH, "blocked:bridge", 1);
     }
   } catch { /* bookkeeping */ }
 }
@@ -101,9 +100,8 @@ export interface ActionStats {
   /** Realized vs quoted output on confirmed swaps, in basis points; positive =
    *  received less than quoted. `median_bps` is null under SLIP_MIN_N samples. */
   slippage: { median_bps: number | null; n: number; min_n: number };
-  /** Refusals the server measured: distinct tokens (impostor / honeypot), and
-   *  bridges refused on a Relay cost this server read. */
-  blocked: { tokens: number; bridges: number };
+  /** Refusals the server measured: distinct tokens (impostor / honeypot). */
+  blocked: { tokens: number };
 }
 
 const num = (v: unknown) => {
@@ -145,6 +143,6 @@ export async function readActionStats(): Promise<ActionStats> {
     via_agent: num(h.agent),
     wallets,
     slippage: { median_bps: samples.length >= SLIP_MIN_N ? median(samples) : null, n: samples.length, min_n: SLIP_MIN_N },
-    blocked: { tokens: blockedTokens, bridges: num(h["blocked:bridge"]) },
+    blocked: { tokens: blockedTokens },
   };
 }

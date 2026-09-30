@@ -755,7 +755,7 @@ async function withPreTradeCheck(kind: ActionKind, args: Record<string, unknown>
   if (kind !== "bridge") {
     check = await preTradeCheck({ chain, kind, token });
     if (check.verdict === "BLOCK") {
-      await recordPreTradeBlock(check, { chain, token }, { costMeasuredByServer: false });
+      await recordPreTradeBlock(check, { chain, token });
       throw preTradeRefusal(check);
     }
   }
@@ -767,8 +767,7 @@ async function withPreTradeCheck(kind: ActionKind, args: Record<string, unknown>
     const cost = (parsed.meta as { totalCostPercent?: unknown } | undefined)?.totalCostPercent;
     check = await preTradeCheck({ chain, kind, token, bridgeCostPercent: typeof cost === "number" ? cost : null });
     if (check.verdict === "BLOCK") {
-      // The cost came from this server's own Relay quote — a measured refusal.
-      await recordPreTradeBlock(check, { chain, token }, { costMeasuredByServer: true });
+      await recordPreTradeBlock(check, { chain, token });
       throw preTradeRefusal(check);
     }
   }
@@ -812,10 +811,12 @@ async function withActionRecord(kind: ActionKind, args: Record<string, unknown>,
         ? { venue: s(meta.venue) ?? (chain === "robinhood" ? "RobinhoodSwapRouter" : null), expected_out: s(meta.buyAmount), min_out: s(meta.minBuyAmount) ?? s(parsed.amountOutMinimum), unit: "base" as const }
         : undefined,
       check,
+      // What the attached tx must match — this record's wallet is unproven.
+      built: (parsed.tx ?? parsed.swap ?? null) as { to?: unknown; data?: unknown; value?: unknown } | null,
     });
     parsed.action = {
       id: rec.id,
-      attach_tx: `After the user broadcasts, POST ${BASE}/api/actions/${rec.id}/tx with {"tx_hash":"0x…"}. It is verified on-chain against fromAddress — no key or session involved.`,
+      attach_tx: `Once the transaction is MINED, POST ${BASE}/api/actions/${rec.id}/tx with {"tx_hash":"0x…"} (202 NOT_MINED ⇒ retry later). It is verified on-chain: sent by fromAddress, mined after this build, and the same transaction built here — no key or session involved.`,
     };
   } catch { /* recording is best-effort; the build is the product */ }
   return JSON.stringify(parsed, null, 2);

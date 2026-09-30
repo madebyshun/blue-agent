@@ -325,7 +325,6 @@ export default function StatsView({ stats }: { stats: PublicStats }) {
     { label: "Median Slippage", sub: slipSub, color: "#4FC3F7",
       value: slip.median_bps === null ? undefined : slip.median_bps / 100, decimals: 2, suffix: "%", raw: slipRaw },
     { label: "Tokens Refused", sub: "impostors + measured honeypots · distinct", color: "#F87171", value: actions.blocked.tokens, raw: actionsRaw },
-    { label: "Bridges Refused", sub: "Relay cost over 20% · measured by us", color: "#FBBF24", value: actions.blocked.bridges, raw: actionsRaw },
   ];
 
   const activityCells: Cell[] = [
@@ -461,7 +460,7 @@ export default function StatsView({ stats }: { stats: PublicStats }) {
           </Reveal>
           <MetricGrid cells={tradeCells} cols="grid-cols-2 lg:grid-cols-4" />
           <div className="mt-px" />
-          <MetricGrid cells={guardCells} cols="grid-cols-1 sm:grid-cols-3" />
+          <MetricGrid cells={guardCells} cols="grid-cols-1 sm:grid-cols-2" />
           <p className="font-mono text-[10px] text-slate-600 mt-3 leading-relaxed">
             Every trade runs a pre-trade check first. It refuses only on evidence — a token impersonating a
             registered one, a sell tax measured at 50% or more, a bridge whose measured cost is over 20% —

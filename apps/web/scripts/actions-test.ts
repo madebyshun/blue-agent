@@ -37,12 +37,14 @@ const userOpLog = (emitter: string, sender: string) => ({
 });
 
 // tx hash → receipt fixture (absent ⇒ "not mined")
-const RECEIPTS: Record<string, { from: string; logs?: unknown[]; status?: string }> = {
+const BUILT_TO = "0xc0de000000000000000000000000000000000005";
+const BUILT_DATA = `0xa9059cbb${"0".repeat(24)}${BOB.slice(2)}${"0".repeat(63)}1`;
+const RECEIPTS: Record<string, { from: string; logs?: unknown[]; status?: string; to?: string; input?: string }> = {
   [H(1)]: { from: ALICE },                                          // EOA: Alice sent it
   [H(2)]: { from: BUNDLER, logs: [userOpLog(ENTRY, ALICE)] },        // smart wallet via EntryPoint
   [H(3)]: { from: BUNDLER, logs: [userOpLog(FAKE_ENTRY, ALICE)] },   // look-alike event, wrong emitter
   [H(4)]: { from: BOB },                                            // someone else's tx
-  [H(5)]: { from: ALICE },                                          // Alice again (MCP record)
+  [H(5)]: { from: ALICE, to: BUILT_TO, input: BUILT_DATA },        // Alice sends the tx the MCP builder returned
   [H(6)]: { from: ALICE },                                          // Alice again (attach route)
 };
 let mined = new Set(Object.keys(RECEIPTS));
@@ -55,15 +57,36 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   void input;
   if (req && typeof req.method === "string") {
     let result: unknown = null;
+    // Blocks are numbered by their timestamp (now), so every fixture tx is
+    // mined after the record that attaches it — attachTx refuses older txs.
+    const bn = `0x${Math.floor(Date.now() / 1000).toString(16)}`;
     if (req.method === "eth_getTransactionReceipt") {
       const h = String(req.params[0]);
       const fx = RECEIPTS[h];
       if (fx && mined.has(h)) {
         result = {
-          blockHash: H(7), blockNumber: "0x10", contractAddress: null, cumulativeGasUsed: "0x5208",
+          blockHash: H(7), blockNumber: bn, contractAddress: null, cumulativeGasUsed: "0x5208",
           effectiveGasPrice: "0x1", from: fx.from, gasUsed: "0x5208",
-          logs: (fx.logs ?? []).map((l) => ({ ...(l as object), blockHash: H(7), blockNumber: "0x10", transactionHash: h, transactionIndex: "0x0", removed: false })),
+          logs: (fx.logs ?? []).map((l) => ({ ...(l as object), blockHash: H(7), blockNumber: bn, transactionHash: h, transactionIndex: "0x0", removed: false })),
           logsBloom: `0x${"0".repeat(512)}`, status: fx.status ?? "0x1", to: ENTRY, transactionHash: h, transactionIndex: "0x0", type: "0x2",
+        };
+      }
+    }
+    if (req.method === "eth_getBlockByNumber") {
+      const n = String(req.params[0]);
+      result = {
+        number: n, hash: H(7), parentHash: H(6), timestamp: n, nonce: "0x0000000000000000", difficulty: "0x0", gasLimit: "0x1c9c380",
+        gasUsed: "0x0", miner: ENTRY, extraData: "0x", logsBloom: `0x${"0".repeat(512)}`, transactionsRoot: H(1), stateRoot: H(2),
+        receiptsRoot: H(3), sha3Uncles: H(4), size: "0x1", totalDifficulty: "0x0", baseFeePerGas: "0x1", transactions: [], uncles: [],
+      };
+    }
+    if (req.method === "eth_getTransactionByHash") {
+      const h = String(req.params[0]);
+      const fx = RECEIPTS[h];
+      if (fx && mined.has(h)) {
+        result = {
+          hash: h, from: fx.from, to: fx.to ?? ENTRY, input: fx.input ?? "0x", value: "0x0", blockHash: H(7), blockNumber: bn,
+          transactionIndex: "0x0", nonce: "0x1", gas: "0x5208", gasPrice: "0x1", type: "0x0", v: "0x1b", r: H(8), s: H(9), chainId: "0x2105",
         };
       }
     }
@@ -101,12 +124,14 @@ const base = { kind: "swap" as const, chain: "base" as const, params: { tokenIn:
   ok("on the owner's read, a hash another wallet sent is dropped", settled?.status === "prepared" && !settled?.tx_hash, JSON.stringify(settled));
 
   console.log("\n3. MCP records need proof before they show");
-  const mcp = await createAction({ ...base, wallet: ALICE, source: "mcp" });
+  const mcp = await createAction({ ...base, wallet: ALICE, source: "mcp", built: { to: BUILT_TO, data: BUILT_DATA, value: "0" } });
   let l = await listActions(ALICE);
   ok("an unproven MCP record is not in Alice's history", l.status === "ok" && !l.actions.some((x) => x.id === mcp.id));
+  r = await attachTx(mcp.id, H(1));
+  ok("…a tx Alice sent that is NOT the one built is refused", !r.ok && r.code === "NOT_THIS_ACTION", JSON.stringify(r));
   await attachTx(mcp.id, H(5));
   l = await listActions(ALICE);
-  ok("…until a tx Alice sent is attached", l.status === "ok" && l.actions.some((x) => x.id === mcp.id && x.status === "confirmed"));
+  ok("…until the tx the builder returned is attached", l.status === "ok" && l.actions.some((x) => x.id === mcp.id && x.status === "confirmed"));
 
   console.log("\n4. the routes");
   const { GET, POST } = await import("../src/app/api/actions/route");

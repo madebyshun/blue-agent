@@ -86,7 +86,7 @@ export default async function handler(req: Request): Promise<Response> {
     // a BLOCK refuses before any calldata exists — non-2xx, so nobody is charged.
     const check = await preTradeCheck({ chain: "robinhood", kind: "swap", token: tokenOut });
     if (check.verdict === "BLOCK") {
-      await recordPreTradeBlock(check, { chain: "robinhood", token: tokenOut }, { costMeasuredByServer: false });
+      await recordPreTradeBlock(check, { chain: "robinhood", token: tokenOut });
       return Response.json({ tool: "rh-stock-swap-prepare", ticker: token.ticker, error: "PRE_TRADE_BLOCK", check, network: RH_CHAIN, timestamp }, { status: 409 });
     }
 

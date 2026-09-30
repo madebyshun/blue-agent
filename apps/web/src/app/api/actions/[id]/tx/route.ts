@@ -17,7 +17,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const STATUS: Record<string, number> = {
-  NOT_FOUND: 404, UNAVAILABLE: 503, NOT_SENT_BY_WALLET: 403, ALREADY_ATTACHED: 409, BAD_HASH: 400, NOT_MINED: 202,
+  NOT_FOUND: 404, UNAVAILABLE: 503, NOT_SENT_BY_WALLET: 403, NOT_THIS_ACTION: 422, ALREADY_ATTACHED: 409, BAD_HASH: 400, NOT_MINED: 202,
 };
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
