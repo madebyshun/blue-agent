@@ -47,8 +47,10 @@
 // or deleting that card would silently remove a capability:
 //   • EIP-5792 — routes 5792-capable wallets through `wallet_sendCalls` to
 //     attach the ERC-8021 builder-code `dataSuffix` (attribution on base.dev)
-//     and, when the wallet exposes a paymaster, sponsor the gas. `optional:true`
-//     means a wallet that ignores it still sends. BASE ONLY, and gated on the
+//     and, when the wallet exposes a paymaster and we sponsor this wallet,
+//     sponsor the gas — a send the paymaster refuses is retried user-paid,
+//     never stranded (hooks/useSponsoredGas.ts). `optional:true` on the
+//     suffix means a wallet that ignores it still sends. BASE ONLY, and gated on the
 //     capability being present FOR THIS chainId — 4663 has no paymaster and its
 //     sends are server-prepared calldata, so offering a batch there would be a
 //     promise nothing fulfils.
@@ -312,9 +314,11 @@ export default function WalletSendCard({
       ?.[chainId]?.paymasterService?.supported,
   );
   // …and, since the paymaster was gated (2026-09-30), only when WE will
-  // sponsor this wallet: it must be the SIWE-signed-in one. Otherwise the send
-  // goes out user-paid, with no badge promising otherwise.
-  const { sponsored: gaslessSupported, freshUrl: sponsoredPaymasterUrl } =
+  // sponsor this wallet: it must be the SIWE-signed-in one, with sponsorship
+  // budget left. Otherwise the send goes out user-paid, with no badge promising
+  // otherwise — and a send the paymaster refuses anyway is retried user-paid
+  // and drops the badge (`sendSponsored`, hooks/useSponsoredGas.ts).
+  const { sponsored: gaslessSupported, sendCalls: sendSponsored } =
     useSponsoredGas("base", account, walletSupportsPaymaster);
 
   // ── B20 memo ───────────────────────────────────────────────────────────────
@@ -581,16 +585,16 @@ export default function WalletSendCard({
         // only transport that can carry the ERC-8021 builder-code suffix, and
         // the paymaster when one is exposed. `optional: true` on the suffix
         // means a wallet that ignores the capability still sends — attribution
-        // is never allowed to become a reason a transfer fails.
+        // is never allowed to become a reason a transfer fails. Sponsorship
+        // isn't either: `sendSponsored` mints a fresh token per send (they
+        // live 15 min) — none → no paymaster capability → the wallet asks the
+        // user for gas — and if the paymaster refuses the one it was handed,
+        // it retries once without it rather than failing the transfer.
         if (sendCallsReady) {
-          const dataSuffix = { value: DATA_SUFFIX, optional: true };
-          // A fresh token per send (they live 15 min). No token → no
-          // paymaster capability → the wallet asks the user for gas.
-          const pmUrl = gaslessSupported ? await sponsoredPaymasterUrl() : null;
-          const capabilities = pmUrl
-            ? { paymasterService: { url: pmUrl }, dataSuffix }
-            : { dataSuffix };
-          const res = await sendCallsAsync({ calls: [call], chainId, capabilities });
+          const res = await sendSponsored(
+            (capabilities) => sendCallsAsync({ calls: [call], chainId, capabilities }),
+            { value: DATA_SUFFIX, optional: true },
+          );
           // An id, not a tx hash — `callsStatus` above resolves the real one.
           setCallsId(typeof res === "string" ? res : res.id);
           setStep("broadcasting");

@@ -16,10 +16,18 @@
 //     nobody else;
 //   • its chainId must be the network the token was minted for;
 //   • the wallet gets PAYMASTER calls per hour (lib/rate-limit.ts), counted per
-//     wallet, not per IP.
-// A refusal is a JSON-RPC error the wallet shows. The page never hands the
-// wallet this URL without a fresh token, so an honest user who is not signed in
-// never reaches a refusal — they send with user-paid gas instead.
+//     wallet, not per IP, with an atomic INCR — parallel calls cannot all read
+//     "under the limit" — and REFUSED, not waved through, when KV errors.
+// A refusal is a JSON-RPC error, and it never strands a send. The page never
+// hands the wallet this URL without a fresh token, and /api/paymaster/token
+// mints none for a wallet that is not signed in or whose budget is spent, so
+// those users send with user-paid gas from the start. A refusal that still
+// lands mid-send (the budget ran out between mint and call, or the token
+// expired while a wallet popup sat open) makes the wallet reject the batch, and
+// the card retries it once WITHOUT the paymaster (sendWithSponsorFallback,
+// hooks/useSponsoredGas.ts) — which is what "send without sponsorship" in the
+// messages below refers to, and why every message here says "gas sponsorship":
+// that phrase is part of how the card recognises a refusal.
 //
 // Setup: create a Paymaster endpoint per network in the CDP portal
 // (portal.cdp.coinbase.com → Paymaster), allowlist the contracts BlueBank calls
@@ -96,7 +104,14 @@ export async function POST(req: Request) {
 
   const rl = await rateLimit(auth.wallet, "paymaster");
   if (!rl.success) {
-    return rpcError(body.id, -32005, "gas sponsorship limit reached for this wallet — try again later, or send without sponsorship");
+    return rpcError(
+      body.id,
+      -32005,
+      rl.unavailable
+        // KV threw: the budget is unknown, not spent — say which.
+        ? "gas sponsorship unavailable right now (its budget could not be checked) — send without sponsorship"
+        : "gas sponsorship limit reached for this wallet — try again later, or send without sponsorship",
+    );
   }
 
   try {

@@ -25,6 +25,12 @@ export type PaymasterNetwork = "base" | "baseSepolia";
 
 export const PAYMASTER_TOKEN_TTL_MS = 15 * 60 * 1000;
 
+/** Paymaster calls one sponsored send costs the wallet's hourly budget:
+ *  pm_getPaymasterStubData, then pm_getPaymasterData. /api/paymaster/token
+ *  mints nothing for a wallet with less than this left — a token good for
+ *  the stub call alone would fail the send at its data call. */
+export const PAYMASTER_CALLS_PER_SEND = 2;
+
 /** chainId each network's user operations must carry (EIP-7677 params[2]). */
 export const PAYMASTER_CHAIN_ID: Record<PaymasterNetwork, number> = {
   base: 8453,

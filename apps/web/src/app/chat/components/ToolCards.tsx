@@ -2063,11 +2063,13 @@ export function SendCard({ result, account }: { result: SendResult; account?: `0
   const net = YIELD_NETWORKS[network];
   const chainId = net.chainId;
   // Smart Wallet + paymaster present for this chain, AND the SIWE-signed-in
-  // wallet is this one (the paymaster is gated since 2026-09-30) → we sponsor.
+  // wallet is this one with sponsorship budget left (the paymaster is gated
+  // since 2026-09-30) → we sponsor. A send the paymaster refuses anyway is
+  // retried user-paid and drops the badge (`sendSponsored`, useSponsoredGas).
   const walletSupportsPaymaster = Boolean(
     (walletCapabilities as Record<number, { paymasterService?: { supported?: boolean } }> | undefined)?.[chainId]?.paymasterService?.supported,
   );
-  const { sponsored: gaslessSupported, freshUrl: sponsoredPaymasterUrl } =
+  const { sponsored: gaslessSupported, sendCalls: sendSponsored } =
     useSponsoredGas(network, account, walletSupportsPaymaster);
   // Resolve the on-chain tx hash from an EIP-5792 batch once it confirms.
   const { data: callsStatus } = useCallsStatus({
@@ -2179,18 +2181,17 @@ export function SendCard({ result, account }: { result: SendResult; account?: `0
       // builder-code `dataSuffix`. Coinbase Smart Wallet appends it to the
       // executeBatch calldata (attributed); wallets that don't support the
       // capability ignore it (optional: true → never blocks the send). The
-      // paymaster is added only when the wallet exposes one (gasless). The
-      // status hook resolves the on-chain tx hash for both.
+      // paymaster is added only when we sponsor this wallet (gasless), with a
+      // fresh token per send — none → the wallet asks for gas — and a send it
+      // refuses is retried once without it, user-paid, instead of failing.
+      // The status hook resolves the on-chain tx hash for both.
       const supportsSendCalls = !!walletCapabilities;
       if (supportsSendCalls) {
         const call = buildTransferCall(toAddress, dec);
-        const dataSuffix = { value: DATA_SUFFIX, optional: true };
-        // Fresh sponsorship token per send; none → the wallet asks for gas.
-        const pmUrl = gaslessSupported ? await sponsoredPaymasterUrl() : null;
-        const capabilities = pmUrl
-          ? { paymasterService: { url: pmUrl }, dataSuffix }
-          : { dataSuffix };
-        const res = await sendCallsAsync({ calls: [call], chainId, capabilities });
+        const res = await sendSponsored(
+          (capabilities) => sendCallsAsync({ calls: [call], chainId, capabilities }),
+          { value: DATA_SUFFIX, optional: true },
+        );
         setCallsId(typeof res === "string" ? res : res.id); // status hook → done
         return;
       }
