@@ -27,7 +27,7 @@
  */
 
 import {
-  receiptRows, classify, headingFor, matches,
+  receiptRows, classify, headingFor, matches, receiptStateFrom,
   type WalletTx, type Receipt, type Filter,
 } from "../src/app/app/bank/TransactionHistory";
 
@@ -156,6 +156,69 @@ console.log("\nrender gates — a receipt-backed row outlives its indexer");
     /all:\s*Receipt\[\]/.test(src));
   ok("the Agent empty state says UNKNOWN when the receipt store is unreachable",
     /receipts\.status === "unavailable"[\s\S]{0,160}unknown, not zero/.test(src));
+}
+
+// ── 7. Only a store we READ may say "none" ───────────────────────────────────
+//
+// Receipts went owner-only on 2026-09-30, and two new answers arrived with it:
+// "this wallet has no session" (we never asked) and the route's refusals (401
+// AUTH_REQUIRED, 503 SESSION_UNAVAILABLE). Neither carries `known` or
+// `receipts`, and the reader tested only `known === false`, so both rendered as
+// "ok, empty" — and the footnote told a signed-out user that the tool each
+// treasury payment bought "was never recorded", over receipts sitting in KV.
+console.log("\nreceipt state — refusals and signed-out are never 'ok, empty'");
+{
+  const good = { known: true, receipts: [receipt(), receipt({ tx: null, tool: "gas-tracker" })] };
+  const s = receiptStateFrom(200, good);
+  ok("a 200 with known:true is ok", s.status === "ok", `got ${s.status}`);
+  ok("…keeps every receipt in `all`", s.all.length === 2, `got ${s.all.length}`);
+  ok("…and joins by hash only the ones that have one", s.byTx.size === 1 && s.byTx.has(HASH_A.toLowerCase()));
+  ok("a 200 with known:true and NO receipts is still ok (a real zero)",
+    receiptStateFrom(200, { known: true, receipts: [] }).status === "ok");
+
+  const expired = receiptStateFrom(401, { error: "Sign in…", code: "AUTH_REQUIRED", reason: "sign_in_required" });
+  ok("401 AUTH_REQUIRED → signed-out, not ok", expired.status === "signed-out", `got ${expired.status}`);
+  ok("401 wallet_mismatch → signed-out",
+    receiptStateFrom(401, { code: "AUTH_REQUIRED", reason: "wallet_mismatch" }).status === "signed-out");
+  ok("401 with an unparseable body → signed-out", receiptStateFrom(401, null).status === "signed-out");
+
+  const blip = receiptStateFrom(503, { error: "Could not verify…", code: "SESSION_UNAVAILABLE" });
+  ok("503 SESSION_UNAVAILABLE → unavailable, not ok", blip.status === "unavailable", `got ${blip.status}`);
+  ok("a 500 with no body → unavailable", receiptStateFrom(500, null).status === "unavailable");
+  ok("a 200 carrying a refusal code → not ok",
+    receiptStateFrom(200, { code: "SESSION_UNAVAILABLE" }).status === "unavailable");
+  ok("the store-down answer (known:false) → unavailable",
+    receiptStateFrom(200, { receipts: [], known: false, error: "store unavailable" }).status === "unavailable");
+  ok("a 200 with neither field → unavailable (ok needs positive evidence)",
+    receiptStateFrom(200, {}).status === "unavailable");
+  ok("no refused state carries receipts",
+    [expired, blip].every(x => x.all.length === 0 && x.byTx.size === 0));
+
+  const src = require("node:fs").readFileSync(
+    require("node:path").join(__dirname, "../src/app/app/bank/TransactionHistory.tsx"), "utf8") as string;
+  const hook = src.slice(src.indexOf("function useSpendReceipts"), src.indexOf("export function receiptRows"));
+  ok("a wallet with no session is signed-out, not the ok-empty value",
+    /hasSession\(address\)\)\)\s*\{[^}]*noReceipts\("signed-out"\)/.test(hook));
+  ok("the fetch result goes through receiptStateFrom, status and body both",
+    /receiptStateFrom\(r\.status, j\)/.test(hook));
+  ok("the read re-runs after a sign-in anywhere on the page (session epoch)",
+    /useSessionEpoch\(\)/.test(hook) && /\[address, hasSession, epoch\]/.test(hook));
+  ok("'never recorded' is said only after the signed-out and unavailable branches",
+    /receipts\.status === "unavailable"[\s\S]{0,300}receipts\.status === "signed-out"[\s\S]{0,700}never recorded/.test(src));
+  ok("the signed-out footnote and Agent empty state offer the sign-in",
+    (src.match(/onClick=\{signInForReceipts\}/g) ?? []).length === 2);
+
+  // The epoch must move on a SIGNATURE and on nothing else. Bumping it from
+  // invalidateSessionCache — which the reader above calls after a 401 — would
+  // re-run the reader, which could be refused again, which invalidates again:
+  // a request loop against a server that disagrees with whoami.
+  const sess = require("node:fs").readFileSync(
+    require("node:path").join(__dirname, "../src/hooks/useEnsureSession.ts"), "utf8") as string;
+  const inval = sess.slice(sess.indexOf("export function invalidateSessionCache"), sess.indexOf("\n}\n", sess.indexOf("export function invalidateSessionCache")));
+  ok("the session epoch is bumped only after a sign-in",
+    /if \(signed\) await signIn\(wallet\);[\s\S]{0,80}if \(signed\) bumpEpoch\(\);/.test(sess) &&
+    (sess.match(/bumpEpoch\(\)/g) ?? []).length === 2 /* definition + the one call */ &&
+    !/bumpEpoch/.test(inval));
 }
 
 console.log(failed === 0 ? "\nPASS — agent spending survives a dead index\n" : `\nFAIL — ${failed} check(s)\n`);

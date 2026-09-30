@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useEnsureSession } from "@/hooks/useEnsureSession";
+import { useCallback, useEffect, useState } from "react";
+import { useEnsureSession, useSessionEpoch, invalidateSessionCache } from "@/hooks/useEnsureSession";
 import { useBasename, shortAddr } from "@/lib/useBasename";
 import { TOPUP_TREASURY } from "@/lib/payments";
 import { WALLET_CHAINS, type WalletChain } from "@/lib/wallet/chains";
@@ -116,12 +116,20 @@ export type Receipt = { ts: number; tool: string; name: string | null; units: nu
 /**
  * Receipts for the connected wallet, keyed by settlement tx hash.
  *
- * Three states, not two. "loading" and "unavailable" are both NOT "there are
- * none": the first is temporary, the second means the receipt store could not
- * be reached. Collapsing either into an empty map would make this component
- * tell a paying user that their payments bought nothing — which is exactly the
- * failure `getSpendLog`'s null-vs-[] contract exists to prevent, so the
- * distinction is carried all the way to the pixels rather than dropped here.
+ * Four states, and only "ok" may be read as "there are none". "loading" is
+ * temporary; "unavailable" means the receipt store could not be reached;
+ * "signed-out" means we did not ask, because receipts are private to the wallet
+ * (owner-only since 2026-09-30) and this wallet has no session. Collapsing any
+ * of the three into an empty map would make this component tell a paying user
+ * that their payments bought nothing — which is exactly the failure
+ * `getSpendLog`'s null-vs-[] contract exists to prevent, so the distinction is
+ * carried all the way to the pixels rather than dropped here.
+ *
+ * "signed-out" is kept apart from "unavailable" because the remedy differs: one
+ * is a signature, the other is waiting. Until 2026-10-01 it was not a state at
+ * all — the hook returned the "ok"-and-empty value for a wallet it never asked
+ * about, and every treasury payment on a signed-out wallet was footnoted "from
+ * before receipts existed … never recorded" over receipts sitting in KV.
  *
  * `all` is the full list and is NOT redundant with `byTx`. The map exists to
  * DECORATE rows the index returned; the list exists because a receipt is a fact
@@ -129,43 +137,78 @@ export type Receipt = { ts: number; tool: string; name: string | null; units: nu
  * the screen (see `receiptRows`). While this state carried only the map, every
  * agent payment was invisible the moment the Base indexer went quiet.
  */
-type ReceiptState = {
-  status: "loading" | "ok" | "unavailable";
+export type ReceiptStatus = "loading" | "ok" | "unavailable" | "signed-out";
+export type ReceiptState = {
+  status: ReceiptStatus;
   byTx: Map<string, Receipt>;
   all: Receipt[];
 };
 
-const NO_RECEIPTS: ReceiptState = { status: "ok", byTx: new Map(), all: [] };
+const noReceipts = (status: ReceiptStatus): ReceiptState => ({ status, byTx: new Map(), all: [] });
+
+/**
+ * One `/api/wallet/spend` answer → a receipt state. Exported for the test.
+ *
+ * "ok" needs POSITIVE evidence — a 2xx carrying `known: true` and a receipts
+ * array — because every other answer this route gives is also a JSON body with
+ * no receipts in it. The refusals from `actingWalletRefusal` (401
+ * `AUTH_REQUIRED`: the session expired inside the client's 5-minute cache, or it
+ * belongs to another wallet; 503 `SESSION_UNAVAILABLE`: KV could not verify it)
+ * carry neither `known` nor `receipts`, and the previous reader tested only
+ * `known === false`, so each of them rendered as a wallet whose receipts had
+ * been read and found empty.
+ */
+export function receiptStateFrom(httpStatus: number, body: unknown): ReceiptState {
+  const j = (body && typeof body === "object" ? body : {}) as {
+    known?: unknown; receipts?: unknown; code?: unknown;
+  };
+  if (httpStatus === 401 || j.code === "AUTH_REQUIRED") return noReceipts("signed-out");
+  if (httpStatus < 200 || httpStatus >= 300 || j.code !== undefined) return noReceipts("unavailable");
+  // `known: false` is the route saying KV was unreachable — WE DO NOT KNOW.
+  if (j.known !== true || !Array.isArray(j.receipts)) return noReceipts("unavailable");
+  const all = j.receipts as Receipt[];
+  const byTx = new Map<string, Receipt>();
+  // Only receipts that carry a settlement hash can be joined to a row.
+  // A receipt without one is real but unmatchable, and guessing which
+  // row it belongs to is the one thing this file must never do.
+  for (const r of all) if (r.tx) byTx.set(r.tx.toLowerCase(), r);
+  return { status: "ok", byTx, all };
+}
 
 function useSpendReceipts(address?: string): ReceiptState {
-  const [state, setState] = useState<ReceiptState>({ status: "loading", byTx: new Map(), all: [] });
+  const [state, setState] = useState<ReceiptState>(noReceipts("loading"));
   // Receipts are owner-only since 2026-09-30. Without a session the rows still
   // render — as the plain transfers they are on chain — just without the tool
-  // name only we know. No signature is asked for on load.
+  // name only we know, and the state says "signed-out" so the copy can say why.
+  // No signature is asked for on load; the card offers one on click.
   const { hasSession } = useEnsureSession();
+  // Re-read when a sign-in anywhere on this page creates a session — the spend
+  // card above this list has its own "Sign in to see it", and without this the
+  // list kept its signed-out answer until a reload.
+  const epoch = useSessionEpoch();
   useEffect(() => {
-    if (!address) { setState(NO_RECEIPTS); return; }
+    // No wallet, nothing to ask about and no rows to explain.
+    if (!address) { setState(noReceipts("ok")); return; }
     let alive = true;
-    setState({ status: "loading", byTx: new Map(), all: [] });
+    setState(noReceipts("loading"));
     void (async () => {
-    if (!(await hasSession(address))) { if (alive) setState(NO_RECEIPTS); return; }
-    fetch(`/api/wallet/spend?address=${address}`)
-      .then(r => r.json())
-      .then((j: { known?: boolean; receipts?: Receipt[] }) => {
+      if (!(await hasSession(address))) { if (alive) setState(noReceipts("signed-out")); return; }
+      try {
+        const r = await fetch(`/api/wallet/spend?address=${address}`);
+        const j = await r.json().catch(() => null);
         if (!alive) return;
-        if (j.known === false) { setState({ status: "unavailable", byTx: new Map(), all: [] }); return; }
-        const all = j.receipts ?? [];
-        const byTx = new Map<string, Receipt>();
-        // Only receipts that carry a settlement hash can be joined to a row.
-        // A receipt without one is real but unmatchable, and guessing which
-        // row it belongs to is the one thing this file must never do.
-        for (const r of all) if (r.tx) byTx.set(r.tx.toLowerCase(), r);
-        setState({ status: "ok", byTx, all });
-      })
-      .catch(() => { if (alive) setState({ status: "unavailable", byTx: new Map(), all: [] }); });
+        const next = receiptStateFrom(r.status, j);
+        // The server says the session is gone although the client cache said it
+        // was live — drop the cache so the next check (a sign-in click) asks
+        // again instead of trusting it for up to five more minutes.
+        if (next.status === "signed-out") invalidateSessionCache();
+        setState(next);
+      } catch {
+        if (alive) setState(noReceipts("unavailable"));
+      }
     })();
     return () => { alive = false; };
-  }, [address, hasSession]);
+  }, [address, hasSession, epoch]);
   return state;
 }
 
@@ -410,6 +453,13 @@ export default function TransactionHistory({
 }) {
   const [filter, setFilter] = useState<Filter>("All");
   const receipts = useSpendReceipts(address);
+  // The signature is asked for only when the user clicks — never on load. The
+  // re-read after it comes from `useSessionEpoch`, the same signal a sign-in in
+  // the spend card fires, so there is one refetch path and not two.
+  const { ensureSession } = useEnsureSession();
+  const signInForReceipts = useCallback(() => {
+    if (address) void ensureSession(address).catch(() => {});
+  }, [address, ensureSession]);
 
   // Two sources of rows, merged here and nowhere else: the chain indexers, and
   // our own settlement receipts for payments those indexers did not return. The
@@ -431,10 +481,11 @@ export default function TransactionHistory({
   // never mentioning the payment.
   const unplaceable = receipts.all.filter(r => !r.tx).length;
 
-  // Agent payments we could not attach a tool to. Two very different reasons,
+  // Agent payments we could not attach a tool to. Three very different reasons,
   // and the footnote must not merge them: the store was unreachable (we don't
-  // know), or the payment predates receipts (nobody wrote it down). Silently
-  // showing a bare payee for both would make an outage look like history.
+  // know), the wallet is signed out (we didn't ask — receipts are private), or
+  // the payment predates receipts (nobody wrote it down). Silently showing a
+  // bare payee for all three would make an outage look like history.
   const unexplained = rows.filter(r => r.c.group === "agent" && !r.c.receipt).length;
 
   // Partition once. Every branch below reads these — the card must never derive
@@ -559,15 +610,29 @@ export default function TransactionHistory({
             ))}
           </div>
         </div>
+      ) : filtered.length === 0 && filter === "Agent" && receipts.status === "signed-out" ? (
+        /* Its own branch because it carries a button, and because the chain
+           qualifier the branch below appends would read as if the sign-in were
+           about a chain. The index may well show no treasury payment; what it
+           cannot show is a payment it missed, which only a receipt can put
+           back — so without the receipts "none" is not a claim we can make. */
+        <p className="font-mono text-[11px] text-slate-500 py-6 text-center leading-relaxed">
+          Agent spending is unknown until you sign in — receipts are private to the wallet.{" "}
+          <button onClick={signInForReceipts} className="underline text-[#4FC3F7]">Sign in to see it</button>
+          <span className="text-slate-600"> — one signature, no transaction.</span>
+        </p>
       ) : filtered.length === 0 ? (
         <p className="font-mono text-[11px] text-slate-600 py-6 text-center">
           {filter === "Agent"
             // "None" is a claim, and it needs the receipt store to make it. With
             // the store unreachable the honest answer is that we don't know —
             // the same null-vs-[] distinction `getSpendLog` carries all the way
-            // from KV, spent here instead of being rounded down to zero.
+            // from KV, spent here instead of being rounded down to zero. Nor can
+            // it be made while the read is still in flight.
             ? receipts.status === "unavailable"
               ? "Couldn't reach the receipt store — agent spending is unknown, not zero"
+              : receipts.status === "loading"
+              ? "Reading your receipts…"
               : "No agent spending on this wallet yet"
             : `No ${filter !== "All" ? filter.toLowerCase() + " " : ""}transactions yet`}
           {/* Qualified the moment a chain is missing. "No transactions yet" is a
@@ -654,8 +719,19 @@ export default function TransactionHistory({
           )}
           {unexplained > 0 && receipts.status !== "loading" && (
             <p className="font-mono text-[9px] text-slate-600 leading-relaxed">
+              {/* "Never recorded" is a claim about our receipt store, so only a
+                  store we actually READ ("ok") may make it. A signed-out wallet
+                  was never asked about, and its receipts are usually right
+                  there in KV — telling that user nobody wrote the tool down
+                  was the defect this branch was added for. */}
               {receipts.status === "unavailable"
                 ? `${unexplained} payment${unexplained > 1 ? "s" : ""} to Blue Agent — couldn't reach the receipt store, so the tool isn't shown. Retry later.`
+                : receipts.status === "signed-out"
+                ? <>
+                    {unexplained} payment{unexplained > 1 ? "s" : ""} to Blue Agent — receipts are private to the wallet, so the tool isn&apos;t shown.{" "}
+                    <button onClick={signInForReceipts} className="underline text-[#4FC3F7]">Sign in to see which tool</button>
+                    {" "}— one signature, no transaction.
+                  </>
                 : `${unexplained} payment${unexplained > 1 ? "s" : ""} to Blue Agent from before receipts existed. The payee is on-chain; which tool it bought was never recorded, so it isn't shown.`}
             </p>
           )}
