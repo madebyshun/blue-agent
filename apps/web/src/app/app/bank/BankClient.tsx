@@ -137,6 +137,23 @@ type View = "tokens" | "stocks" | "activity" | "orders";
  *  belong to both of them and to neither of the other two. */
 const isHoldingsView = (v: View) => v === "tokens" || v === "stocks";
 
+/**
+ * Wallet side features, HIDDEN (not deleted) so the page is swap / send /
+ * bridge — ShunTr, 2026-09-30 (docs/rebuild-5-tang-2026-09-30.md §7 #2):
+ *   SHOW_SCAN_TO_PAY      — the QR scanner in Send and the payment-request
+ *                           builder (asset + amount → EIP-681 QR) in Deposit.
+ *                           Deposit still shows the plain address QR.
+ *   SHOW_ONRAMP           — the Coinbase Onramp "Buy" button and the
+ *                           empty-wallet mission that pointed at it.
+ *   SHOW_PAYMENT_REQUESTS — the "Payment requests" tab (OrdersPanel).
+ * Cash out is NOT behind a flag. It is an exit from real funds, and the rule
+ * this file already follows for yield is that closing an entrance never hides
+ * the way out.
+ */
+const SHOW_SCAN_TO_PAY = false;
+const SHOW_ONRAMP = false;
+const SHOW_PAYMENT_REQUESTS = false;
+
 // Sticky testnet unlock. Deliberately NOT the same key family as `bluebank:*`
 // user settings — this is a developer escape hatch, not a preference.
 const TESTNET_KEY = "bluebank:testnet";
@@ -1174,7 +1191,7 @@ export default function BankPage() {
     // holds — QR, card, bank — because the cash-out exit lives inside it and a
     // tab that says only "Get paid" would hide the way out.
     { id: "send",      label: "Send",      icon: "➡",  desc: "Pay anyone" },
-    { id: "receive",   label: "Deposit",   icon: "⬇",  desc: "QR · card · bank" },
+    { id: "receive",   label: "Deposit",   icon: "⬇",  desc: SHOW_ONRAMP ? "QR · card · bank" : "Address · cash out" },
     { id: "convert",   label: "Convert",   icon: "⇅",  desc: "Swap tokens" },
     // Bridge is NOT gated on `can.*`, unlike Send and Convert. Those two ask
     // "does the chain the wallet is CONNECTED to support this?"; a bridge always
@@ -1196,7 +1213,7 @@ export default function BankPage() {
     { id: "tokens",   label: "Tokens" },
     { id: "stocks",   label: "Stocks" },
     { id: "activity", label: "Activity" },
-    { id: "orders",   label: "Payment requests" },
+    ...(SHOW_PAYMENT_REQUESTS ? [{ id: "orders" as View, label: "Payment requests" }] : []),
   ];
 
   // ── Portfolio allocation (for pie chart) ─────────────────────────────────
@@ -1313,7 +1330,9 @@ export default function BankPage() {
   if (balanceRead.body === "pending" || balanceRead.body === "failed" || balanceRead.body === "partial") {
     /* nothing to advise until the balance read lands, in full */
   } else if (balanceRead.body === "empty") {
-    allMissions.push({ priority: "info", icon: "💡", text: `Add USDC to fund your wallet on ${net.short}`, action: "Add cash", onAction: addCash, color: "#F59E0B" });
+    allMissions.push(SHOW_ONRAMP
+      ? { priority: "info", icon: "💡", text: `Add USDC to fund your wallet on ${net.short}`, action: "Add cash", onAction: addCash, color: "#F59E0B" }
+      : { priority: "info", icon: "💡", text: `Add USDC to fund your wallet on ${net.short}`, action: "Deposit", onAction: () => openAction("receive"), color: "#F59E0B" });
   } else {
     // The two missions that used to sit here — "$X idle, earn ~$Y/mo" and
     // "Enable Auto Earn" — both invited a NEW supply, which is the entrance
@@ -2583,7 +2602,7 @@ export default function BankPage() {
             />
           )}
 
-          {view === "orders" && <OrdersPanel />}
+          {SHOW_PAYMENT_REQUESTS && view === "orders" && <OrdersPanel />}
 
             {/* end LEFT main (pane B) */}
             </div>
@@ -2713,12 +2732,14 @@ export default function BankPage() {
                     because the card is mainnet-Base + Robinhood only. */}
                 {panel === "send" && (
                   <div>
-                    <button onClick={() => setScanOpen(true)}
-                      className="w-full font-mono text-[11px] font-bold py-2 rounded-xl mb-3 flex items-center justify-center gap-2"
-                      style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
-                      📷 Scan to pay
-                    </button>
-                    {scanPrefill && (
+                    {SHOW_SCAN_TO_PAY && (
+                      <button onClick={() => setScanOpen(true)}
+                        className="w-full font-mono text-[11px] font-bold py-2 rounded-xl mb-3 flex items-center justify-center gap-2"
+                        style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
+                        📷 Scan to pay
+                      </button>
+                    )}
+                    {SHOW_SCAN_TO_PAY && scanPrefill && (
                       <div className="font-mono text-[9px] text-[#34D399] mb-2">
                         ✓ scanned{scanPrefill.amount ? ` · request ${scanPrefill.amount} ${scanPrefill.asset ?? "USDC"}` : ""} — confirm + sign below
                       </div>
@@ -2755,6 +2776,7 @@ export default function BankPage() {
                         (from `receiveChain`), so on 4663 it reads USDG, which is
                         what a payer would actually be sending. ETH needs no such
                         treatment: RH's nativeCurrency is Ether too. */}
+                    {SHOW_SCAN_TO_PAY && (<>
                     <Picker label="ASSET"
                       summary={
                         <span className="flex items-center gap-2 min-w-0">
@@ -2786,10 +2808,15 @@ export default function BankPage() {
                         <span className="text-[11px] text-slate-300 px-2 py-1.5 rounded-lg border border-[#1A1A2E] shrink-0">{reqSymbol}</span>
                       </div>
                     </Field>
+                    </>)}
 
                     <div className="flex flex-col items-center text-center">
                       <div className="bg-white p-2.5 rounded-xl">
-                        <QRCodeSVG value={acct ? buildPaymentUri({ to: acct, amount: reqAmount, asset: reqAsset, network: receiveChain }) : ""} size={180} bgColor="#ffffff" fgColor="#0a0a0f" level="M" />
+                        {/* With scan-to-pay hidden this is the plain address — a
+                            QR any wallet reads as "send to", with no asset or
+                            amount baked in. The EIP-681 request comes back with
+                            the flag. */}
+                        <QRCodeSVG value={!acct ? "" : SHOW_SCAN_TO_PAY ? buildPaymentUri({ to: acct, amount: reqAmount, asset: reqAsset, network: receiveChain }) : acct} size={180} bgColor="#ffffff" fgColor="#0a0a0f" level="M" />
                       </div>
                       {parseFloat(reqAmount) > 0 && (
                         <div className="text-[12px] text-[#34D399] mt-3 font-bold">requesting {reqAmount} {reqSymbol}</div>
@@ -2825,13 +2852,15 @@ export default function BankPage() {
                         only" — invisible on touch, on a wallet whose wedge is a
                         phone. */}
                     <div className="rounded-lg border border-[#1A1A2E] bg-[#0d0d12] p-3 mt-4">
-                      <div className="text-[9px] text-slate-500 tracking-widest mb-2">CASH · CARD ↔ BANK</div>
+                      <div className="text-[9px] text-slate-500 tracking-widest mb-2">{SHOW_ONRAMP ? "CASH · CARD ↔ BANK" : "CASH OUT · TO BANK"}</div>
                       <div className="flex gap-2">
-                        <button onClick={addCash} disabled={onrampBusy || !isConnected || !rcv.can.fiat}
-                          className="flex-1 text-[11px] font-bold py-2.5 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed transition-opacity hover:opacity-80"
-                          style={{ background: "#34D39910", color: "#34D399", border: "1px solid #34D39930" }}>
-                          {onrampBusy ? "opening…" : `💵 Buy ${rcv.stableSymbol}`}
-                        </button>
+                        {SHOW_ONRAMP && (
+                          <button onClick={addCash} disabled={onrampBusy || !isConnected || !rcv.can.fiat}
+                            className="flex-1 text-[11px] font-bold py-2.5 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed transition-opacity hover:opacity-80"
+                            style={{ background: "#34D39910", color: "#34D399", border: "1px solid #34D39930" }}>
+                            {onrampBusy ? "opening…" : `💵 Buy ${rcv.stableSymbol}`}
+                          </button>
+                        )}
                         <button onClick={cashOut} disabled={cashOutBusy || !isConnected || !rcv.can.fiat}
                           className="flex-1 text-[11px] py-2.5 rounded-xl text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity hover:text-white"
                           style={{ border: "1px solid #1A1A2E" }}>
@@ -2840,13 +2869,16 @@ export default function BankPage() {
                       </div>
                       {!rcv.can.fiat && (
                         <div className="text-[9px] text-slate-600 mt-2 leading-relaxed">
-                          Coinbase Onramp and Offramp settle on Base mainnet only — not {rcv.short}. Pick
-                          Base above to move cash in or out.
+                          {SHOW_ONRAMP
+                            ? <>Coinbase Onramp and Offramp settle on Base mainnet only — not {rcv.short}. Pick Base above to move cash in or out.</>
+                            : <>Coinbase Offramp settles on Base mainnet only — not {rcv.short}. Pick Base above to cash out.</>}
                         </div>
                       )}
                     </div>
                     <CardNote>
-                      {parseFloat(reqAmount) > 0
+                      {!SHOW_SCAN_TO_PAY
+                        ? <>Scan the QR or copy the address. It is the same address on every chain, so tell the payer to send on <b className="text-slate-300">{rcv.label}</b>.</>
+                        : parseFloat(reqAmount) > 0
                         ? <>Payment-request QR — a payer scanning it (Wallet <b className="text-slate-300">Scan to pay</b>, or any EIP-681 wallet) gets <b className="text-slate-300">{reqAmount} {reqSymbol}</b> prefilled.</>
                         : <>Scan the QR with any wallet, or set an amount above to make a payment request. <b className="text-slate-300">{rcv.stableSymbol} / ETH on {rcv.label}</b> only.</>}
                     </CardNote>
