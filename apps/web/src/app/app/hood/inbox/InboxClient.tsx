@@ -23,6 +23,7 @@ import ArrowBriefBlock from "../ArrowBriefBlock";
 import EnableAlertsButton from "./EnableAlertsButton";
 import ReviewSignPanel from "@/components/blue-hood/ReviewSignPanel";
 import HoodShellFrame from "../HoodShellFrame";
+import { ARROWS_FROZEN, ARROW_TRADE_ENABLED } from "@/lib/blue-hood/arrow-freeze";
 import { useHoodShellData } from "../useHoodShellData";
 
 const RH_EXPLORER = "https://robinhoodchain.blockscout.com";
@@ -198,9 +199,11 @@ function Header({ unread, onMarkAllRead }: { unread: number; onMarkAllRead: () =
         <Link href="/hood" className="hover:text-white" style={{ color: "#64748B" }}>
           ← Live board
         </Link>
-        <Link href="/hood/arrows" className="hover:text-white" style={{ color: "#64748B" }}>
-          Track record →
-        </Link>
+        {!ARROWS_FROZEN && (
+          <Link href="/hood/arrows" className="hover:text-white" style={{ color: "#64748B" }}>
+            Track record →
+          </Link>
+        )}
         <EnableAlertsButton />
         {unread > 0 && (
           <button
@@ -326,16 +329,19 @@ function InboxCardTradeRow({ arrow }: { arrow: Arrow }) {
       className="flex flex-wrap items-center gap-2 pt-1"
       onClick={(e) => e.stopPropagation()}
     >
-      <button
-        type="button"
-        onClick={(e) => { e.stopPropagation(); setOpen(true); }}
-        disabled={!arrowOpen}
-        className="rounded border px-3 py-1.5 font-mono text-[11px] font-semibold hover:bg-black/40 disabled:opacity-50 disabled:cursor-not-allowed"
-        style={{ borderColor: RH_GREEN, color: RH_GREEN }}
-        title={arrowOpen ? "Open the trade panel" : "Signal closed — read-only"}
-      >
-        {arrowOpen ? "[Review & Sign]" : "[Signal closed]"}
-      </button>
+      {/* Trading straight from a signal is off — see ARROW_TRADE_ENABLED. */}
+      {ARROW_TRADE_ENABLED && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setOpen(true); }}
+          disabled={!arrowOpen}
+          className="rounded border px-3 py-1.5 font-mono text-[11px] font-semibold hover:bg-black/40 disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{ borderColor: RH_GREEN, color: RH_GREEN }}
+          title={arrowOpen ? "Open the trade panel" : "Signal closed — read-only"}
+        >
+          {arrowOpen ? "[Review & Sign]" : "[Signal closed]"}
+        </button>
+      )}
       {tradedCount > 0 && (
         actions.length === 1 ? (
           (() => {
@@ -372,7 +378,7 @@ function InboxCardTradeRow({ arrow }: { arrow: Arrow }) {
           </span>
         )
       )}
-      {open && <ReviewSignPanel arrow={arrow} onClose={() => setOpen(false)} />}
+      {ARROW_TRADE_ENABLED && open && <ReviewSignPanel arrow={arrow} onClose={() => setOpen(false)} />}
     </div>
   );
 }

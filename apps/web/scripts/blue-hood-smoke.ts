@@ -209,7 +209,7 @@ async function main() {
   await kvSet("bh:arrow:feed", []);
   await kvSet("bh:arrow:serial", 0);
 
-  const rep = await runRuleEngine(snap);
+  const rep = await runRuleEngine(snap, { frozen: false }); // exercises firing even while arrows are frozen in prod
 
   // detectCandidate spot-checks
   must(detectCandidate(snap.tickers[0])?.type === "arb", "TSLA row → arb candidate");
@@ -243,15 +243,15 @@ async function main() {
   // sum: it is an observability tally on rows that went on to fire.
   const sum = rep.skipped_dust + rep.skipped_no_executable_pool
             + rep.skipped_dead_pool + rep.skipped_feed_stale
-            + rep.deduped + rep.fired;
+            + rep.skipped_frozen + rep.deduped + rep.fired;
   must(sum === rep.candidates_over_threshold,
-       "candidates = dust + no_pool + dead_pool + stale + deduped + fired",
+       "candidates = dust + no_pool + dead_pool + stale + frozen + deduped + fired",
        `${rep.candidates_over_threshold} vs ${sum}`);
   must(rep.candidates_over_threshold + rep.below_threshold === snap.tickers.length,
        "candidates + below = tokens_watched (excl. errored)");
 
   // Second run — dedup should trigger
-  const rep2 = await runRuleEngine(snap);
+  const rep2 = await runRuleEngine(snap, { frozen: false });
   must(rep2.deduped === 3, "second run deduped = 3 (all open)", `got ${rep2.deduped}`);
   must(rep2.fired === 0, "second run fired = 0");
 }

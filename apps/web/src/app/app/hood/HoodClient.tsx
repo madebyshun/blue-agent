@@ -46,6 +46,7 @@ import EnableAlertsButton from "./inbox/EnableAlertsButton";
 import { HealthProvider, HealthBanner } from "./HealthProvider";
 import { WatchlistProvider, useWatchlist } from "./WatchlistProvider";
 import { WATCHLIST_LIMITS } from "@/lib/blue-hood/watchlist-config";
+import { ARROWS_FROZEN, ARROW_TRADE_ENABLED } from "@/lib/blue-hood/arrow-freeze";
 
 const REFRESH_MS = 15_000;
 const RH_GREEN = "#34D399";
@@ -347,20 +348,26 @@ export default function HoodClient() {
 
           <DriftBoard rows={filtered} rowRefs={rowRefs} arrows={arrowsData?.arrows ?? null} heldTickers={heldTickers} />
 
-          <div className="h-10" />
-          <div className="mb-3 flex items-center justify-between">
-            <div className="font-mono text-[10px] uppercase tracking-widest" style={{ color: MUTED }}>
-              // HOOD · ARROWS FEED
-            </div>
-            <Link
-              href="/hood/arrows"
-              className="font-mono text-[11px] hover:text-white"
-              style={{ color: RH_GREEN }}
-            >
-              Track record →
-            </Link>
-          </div>
-          <ArrowsFeed data={arrowsData} />
+          {/* Arrows are frozen (lib/blue-hood/arrow-freeze.ts) — the feed and
+              its track-record link are hidden; the drift board above stays. */}
+          {!ARROWS_FROZEN && (
+            <>
+              <div className="h-10" />
+              <div className="mb-3 flex items-center justify-between">
+                <div className="font-mono text-[10px] uppercase tracking-widest" style={{ color: MUTED }}>
+                  // HOOD · ARROWS FEED
+                </div>
+                <Link
+                  href="/hood/arrows"
+                  className="font-mono text-[11px] hover:text-white"
+                  style={{ color: RH_GREEN }}
+                >
+                  Track record →
+                </Link>
+              </div>
+              <ArrowsFeed data={arrowsData} />
+            </>
+          )}
 
           <Footer />
         </div>
@@ -429,9 +436,11 @@ function Header({
         >
           Inbox{inboxUnread > 0 ? ` (${inboxUnread})` : ""} →
         </Link>
-        <Link href="/hood/arrows" className="hover:text-white" style={{ color: "#64748B" }}>
-          Track record →
-        </Link>
+        {!ARROWS_FROZEN && (
+          <Link href="/hood/arrows" className="hover:text-white" style={{ color: "#64748B" }}>
+            Track record →
+          </Link>
+        )}
         <EnableAlertsButton />
         <TelegramLinkButton />
         <span style={{ color: marketBadge.color }}>● {marketBadge.label}</span>
@@ -1453,16 +1462,19 @@ function ArrowFeedTradeRow({ arrow }: { arrow: Arrow }) {
       className="flex flex-wrap items-center gap-2"
       onClick={(e) => e.stopPropagation()}
     >
-      <button
-        type="button"
-        onClick={(e) => { e.stopPropagation(); setOpen(true); }}
-        disabled={!arrowOpen}
-        className="rounded border px-3 py-1.5 font-mono text-[11px] font-semibold hover:bg-black/40 disabled:opacity-50 disabled:cursor-not-allowed"
-        style={{ borderColor: RH_GREEN, color: RH_GREEN }}
-        title={arrowOpen ? "Open the trade panel" : "Signal closed — read-only"}
-      >
-        {arrowOpen ? "[Review & Sign]" : "[Signal closed]"}
-      </button>
+      {/* Trading straight from a signal is off — see ARROW_TRADE_ENABLED. */}
+      {ARROW_TRADE_ENABLED && (
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setOpen(true); }}
+          disabled={!arrowOpen}
+          className="rounded border px-3 py-1.5 font-mono text-[11px] font-semibold hover:bg-black/40 disabled:opacity-50 disabled:cursor-not-allowed"
+          style={{ borderColor: RH_GREEN, color: RH_GREEN }}
+          title={arrowOpen ? "Open the trade panel" : "Signal closed — read-only"}
+        >
+          {arrowOpen ? "[Review & Sign]" : "[Signal closed]"}
+        </button>
+      )}
       {tradedCount > 0 && (
         <YouTradedBadge
           actions={actions}
@@ -1471,7 +1483,7 @@ function ArrowFeedTradeRow({ arrow }: { arrow: Arrow }) {
           pendingCount={pendingCount}
         />
       )}
-      {open && <ReviewSignPanel arrow={arrow} onClose={() => setOpen(false)} />}
+      {ARROW_TRADE_ENABLED && open && <ReviewSignPanel arrow={arrow} onClose={() => setOpen(false)} />}
     </div>
   );
 }

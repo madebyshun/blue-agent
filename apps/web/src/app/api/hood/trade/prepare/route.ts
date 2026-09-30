@@ -26,6 +26,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { callTool } from "@/lib/blue-hood/tool-caller";
 import { rateLimit, getIdentifier } from "@/lib/rate-limit";
+import { ARROW_TRADE_ENABLED } from "@/lib/blue-hood/arrow-freeze";
+import { arrowTradeDisabledResponse } from "@/lib/blue-hood/arrow-trade-gate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -45,6 +47,7 @@ type Body = {
 const ADDR_RE = /^0x[a-fA-F0-9]{40}$/;
 
 export async function POST(req: NextRequest) {
+  if (!ARROW_TRADE_ENABLED) return arrowTradeDisabledResponse();
   const { success } = await rateLimit(getIdentifier(req), "chat");
   if (!success) {
     return NextResponse.json({ error: "rate_limited" }, { status: 429 });

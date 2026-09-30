@@ -21,6 +21,8 @@ import Navbar from "@/components/Navbar";
 import { getPublicTrackRecordProbe } from "@/lib/blue-hood/track-record-public";
 import { readCohortAnalysis } from "@/lib/blue-hood/cohort-read";
 import TrackView, { TrackUnavailable } from "./TrackView";
+import ArrowsFrozenNotice from "@/components/ArrowsFrozenNotice";
+import { ARROWS_FROZEN } from "@/lib/blue-hood/arrow-freeze";
 
 export const revalidate = 60;
 
@@ -72,6 +74,11 @@ export default async function TrackPage() {
   return (
     <div className="min-h-screen bg-[#050508] text-white">
       <Navbar />
+      {ARROWS_FROZEN && (
+        <div className="mx-auto max-w-5xl px-4 pt-8 -mb-4">
+          <ArrowsFrozenNotice />
+        </div>
+      )}
       {read.status === "ok" ? (
         <TrackView
           record={read.record}

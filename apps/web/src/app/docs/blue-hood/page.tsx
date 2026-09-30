@@ -108,8 +108,16 @@ export default function BlueHoodDoc() {
       <DocHeader
         eyebrow="Products"
         title="Blue Hood"
-        lead="Oracle-vs-DEX drift signals for tokenized stocks on Base (Coinbase B20) and Robinhood Chain — the intelligence layer nobody else on chain is building. Drift monitoring, arrow signals with a public track record where every call is graded, and a review-and-sign trade panel that keeps every private key with the user."
+        lead="Oracle-vs-DEX drift monitoring for tokenized stocks on Base (Coinbase B20) and Robinhood Chain — the intelligence layer nobody else on chain is building. A live drift board, plus the graded public track record of every arrow signal it published."
       />
+
+      <Callout title="Arrow signals are paused (2026-09-30)">
+        The engine no longer publishes new arrows, and the Review &amp; Sign
+        panel that traded straight from a signal is off. The drift board and
+        the graded track record stay up: arrows that were already open are
+        still graded, nothing new is added. Swaps happen in Wallet and Chat,
+        where you state the trade yourself.
+      </Callout>
 
       <Callout>
         <strong>Positioning.</strong> Tokenized stocks trade 24/7 onchain
@@ -138,10 +146,11 @@ export default function BlueHoodDoc() {
             no context is an arrow whose NUMBERS are still fully deterministic. */}
         <Card title="T-B · Explain">
           A4 rh-stock-agent-brief asks Virtuals (no fallback provider, no web
-          search) for a 1-line context on each fired arrow. Runs every 1 min
-          via <code>/api/cron/blue-hood/brief-worker</code>. If inference is
-          down the arrow still fires — the verdict is hard-mapped from the
-          numbers, never written by the model.
+          search) for a 1-line context on each fired arrow, via{" "}
+          <code>/api/cron/blue-hood/brief-worker</code> — unscheduled since
+          2026-09-30 with the arrow pause. If inference is down the arrow
+          still fires — the verdict is hard-mapped from the numbers, never
+          written by the model.
         </Card>
         <Card title="T-C/D · Alert">
           Drift board (<Link href="/hood" className="underline">/hood</Link>),
@@ -149,9 +158,9 @@ export default function BlueHoodDoc() {
           + Web Push fan-out. Every arrow gets a serial <code>#0001…</code>.
         </Card>
         <Card title="T-E · Act">
-          ReviewSignPanel — non-custodial, wagmi <code>useSendTransaction</code>,
-          recipient = <code>useAccount().address</code> verbatim. Two
-          signs: approve → swap.
+          Off since 2026-09-30. When on: ReviewSignPanel — non-custodial,
+          wagmi <code>useSendTransaction</code>, recipient ={" "}
+          <code>useAccount().address</code> verbatim. Two signs: approve → swap.
         </Card>
       </CardGrid>
 

@@ -21,6 +21,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Arrow, HoodSnapshot, M5Verdict, TickerSnapshot } from "@/lib/blue-hood/types";
 import { rowKey, chainOf } from "@/lib/blue-hood/types";
+import { ARROWS_FROZEN } from "@/lib/blue-hood/arrow-freeze";
 
 const RH_GREEN = "#34D399";
 const BLUE = "#4FC3F7";
@@ -153,7 +154,9 @@ export default function HoodSidebar({
       >
         <HoodNavItem href="/hood" label="Drift board" active={section === "board"} />
         <HoodNavItem href="/hood/inbox" label="Inbox" active={section === "inbox"} badge={inboxUnread} />
-        <HoodNavItem href="/hood/arrows" label="Track record" active={section === "record"} />
+        {!ARROWS_FROZEN && (
+          <HoodNavItem href="/hood/arrows" label="Track record" active={section === "record"} />
+        )}
       </nav>
 
       <div className="flex-1 min-h-0 overflow-y-auto">
@@ -241,7 +244,8 @@ export default function HoodSidebar({
 
         {/* Recent arrows — the same list that lives in the main pane's feed,
             trimmed to a strip for quick scanning without scrolling to the
-            arrows section. */}
+            arrows section. Hidden while ARROWS_FROZEN, like that feed. */}
+        {!ARROWS_FROZEN && (
         <div className="px-2 pt-3 border-t" style={{ borderColor: BORDER }}>
           <SectionLabel
             label="RECENT ARROWS"
@@ -293,6 +297,7 @@ export default function HoodSidebar({
             </ul>
           )}
         </div>
+        )}
       </div>
 
       {/* Footer — mirrors Blue Chat's sidebar credit-bar (px-5 py-3.5,

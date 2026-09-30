@@ -31,6 +31,7 @@ import {
 } from "./kv-keys";
 import { getTickerConfidence, confidenceForFire, type TickerConfidenceTable } from "./ticker-confidence";
 import { chainOf, ARB_MIN_ABS_PCT, DRIFT_MIN_ABS_PCT } from "./types";
+import { ARROWS_FROZEN } from "./arrow-freeze";
 import type { Arrow, ArrowType, HoodSnapshot, TickerSnapshot } from "./types";
 
 // ── Thresholds (from spec Block 1.2) ─────────────────────────────────────
@@ -461,7 +462,7 @@ function cryptoUuid(): string {
 // tests):
 //   candidates_over_threshold = skipped_dust + skipped_no_executable_pool
 //                             + skipped_dead_pool + skipped_feed_stale
-//                             + deduped + fired
+//                             + skipped_frozen + deduped + fired
 //   candidates_over_threshold + below_threshold = tokens_watched
 //                                                 - tokens_errored
 //   fired = fired_normal + fired_low_confidence + fired_insufficient
@@ -493,6 +494,10 @@ export interface RuleEngineReport {
    *  means the poller stopped carrying volume and the gate is inert. */
   dead_pool_vol_unknown: number;
   skipped_feed_stale: number;
+  /** A candidate that passed every gate but was not fired because arrows are
+   *  frozen (lib/blue-hood/arrow-freeze.ts, 2026-09-30). Last gate before
+   *  fireArrow, so it counts exactly the arrows that would otherwise exist. */
+  skipped_frozen: number;
   below_threshold: number;
   deduped: number;
   /** P3.1 — dedup broken out by cause so the impact of the ticker rule
@@ -513,7 +518,14 @@ export interface RuleEngineReport {
   arrows_fired: Arrow[];
 }
 
-export async function runRuleEngine(snap: HoodSnapshot): Promise<RuleEngineReport> {
+export async function runRuleEngine(
+  snap: HoodSnapshot,
+  // Defaults to the product switch. Scripts that exercise the firing logic
+  // (blue-hood-smoke) pass `{ frozen: false }` explicitly.
+  opts: { frozen?: boolean } = {},
+): Promise<RuleEngineReport> {
+  const frozen = opts.frozen ?? ARROWS_FROZEN;
+  let skipped_frozen = 0;
   let candidates_over_threshold = 0;
   let skipped_dust = 0;
   let skipped_no_executable_pool = 0;
@@ -584,6 +596,10 @@ export async function runRuleEngine(snap: HoodSnapshot): Promise<RuleEngineRepor
       skipped_feed_stale++; continue;
     }
 
+    // Frozen: every gate passed, but no new arrow is published. Counted so
+    // the report still shows what the engine WOULD have fired.
+    if (frozen) { skipped_frozen++; continue; }
+
     // Pass `row` so fire-time facts + market clock get captured on the
     // persisted arrow (task #8). brief-worker uses these to author a
     // brief from FIRE-time state, not attach-time state.
@@ -646,6 +662,7 @@ export async function runRuleEngine(snap: HoodSnapshot): Promise<RuleEngineRepor
       ` skipped_dead_pool=${skipped_dead_pool}` +
       ` dead_pool_vol_unknown=${dead_pool_vol_unknown}` +
       ` skipped_feed_stale=${skipped_feed_stale}` +
+      ` skipped_frozen=${skipped_frozen}` +
       ` below_threshold=${below_threshold}` +
       ` fired=${fired.length}` +
       ` deduped=${deduped}` +
@@ -667,6 +684,7 @@ export async function runRuleEngine(snap: HoodSnapshot): Promise<RuleEngineRepor
     skipped_dead_pool,
     dead_pool_vol_unknown,
     skipped_feed_stale,
+    skipped_frozen,
     below_threshold,
     deduped,
     skipped_dedup_ticker,

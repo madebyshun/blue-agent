@@ -16,6 +16,8 @@ import { chainOf, type Arrow } from "@/lib/blue-hood/types";
 import ArrowBriefBlock from "../ArrowBriefBlock";
 import HoodShellFrame from "../HoodShellFrame";
 import { useHoodShellData } from "../useHoodShellData";
+import ArrowsFrozenNotice from "@/components/ArrowsFrozenNotice";
+import { ARROWS_FROZEN } from "@/lib/blue-hood/arrow-freeze";
 
 const REFRESH_MS = 15_000;
 const PAGE_SIZE = 50;
@@ -138,6 +140,7 @@ export default function TrackRecordClient() {
       inboxUnread={shell.inboxUnread}
     >
         <TrackHeader />
+        {ARROWS_FROZEN && <ArrowsFrozenNotice />}
         <MetricStrip data={data} filtered={filtered} />
 
         <SectionHeader label="// HOOD · TRACK RECORD" />

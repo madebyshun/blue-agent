@@ -277,6 +277,7 @@ async function handle(req: NextRequest) {
         skipped_dead_pool: engine.skipped_dead_pool,
         dead_pool_vol_unknown: engine.dead_pool_vol_unknown,
         skipped_feed_stale: engine.skipped_feed_stale,
+        skipped_frozen: engine.skipped_frozen,
         below_threshold: engine.below_threshold,
         deduped: engine.deduped,
         fired: engine.fired,

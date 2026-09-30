@@ -21,6 +21,7 @@ import type { ChatCard } from "@/lib/blue-hood/chat-card";
 import Link from "next/link";
 import { useState } from "react";
 import ReviewSignPanel from "@/components/blue-hood/ReviewSignPanel";
+import { ARROWS_FROZEN, ARROW_TRADE_ENABLED } from "@/lib/blue-hood/arrow-freeze";
 
 const RH_GREEN = "#34D399";
 const BLUE = "#4FC3F7";
@@ -249,16 +250,19 @@ function ActionsRow({ arrow, deepLink }: { arrow: Arrow; deepLink?: { inbox: str
   return (
     <>
       <div className="flex flex-wrap items-center gap-2 px-3 pb-3">
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          disabled={!arrowOpen}
-          className="rounded border px-3 py-1.5 text-[11px] font-semibold hover:bg-black/40 disabled:opacity-50 disabled:cursor-not-allowed"
-          style={{ borderColor: RH_GREEN, color: RH_GREEN }}
-          title={arrowOpen ? "Open the trade panel" : "Signal closed — read-only"}
-        >
-          {arrowOpen ? "[Review & Sign]" : "[Signal closed]"}
-        </button>
+        {/* Trading straight from a signal is off — see ARROW_TRADE_ENABLED. */}
+        {ARROW_TRADE_ENABLED && (
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            disabled={!arrowOpen}
+            className="rounded border px-3 py-1.5 text-[11px] font-semibold hover:bg-black/40 disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{ borderColor: RH_GREEN, color: RH_GREEN }}
+            title={arrowOpen ? "Open the trade panel" : "Signal closed — read-only"}
+          >
+            {arrowOpen ? "[Review & Sign]" : "[Signal closed]"}
+          </button>
+        )}
         <button
           type="button"
           onClick={onShare}
@@ -280,15 +284,17 @@ function ActionsRow({ arrow, deepLink }: { arrow: Arrow; deepLink?: { inbox: str
             ● traded ({(arrow.user_actions ?? []).length})
           </span>
         )}
-        <Link
-          href={deepLink?.track ?? "/hood/arrows"}
-          className="ml-auto text-[10px] hover:text-white"
-          style={{ color: MUTED }}
-        >
-          track record
-        </Link>
+        {!ARROWS_FROZEN && (
+          <Link
+            href={deepLink?.track ?? "/hood/arrows"}
+            className="ml-auto text-[10px] hover:text-white"
+            style={{ color: MUTED }}
+          >
+            track record
+          </Link>
+        )}
       </div>
-      {open && (
+      {ARROW_TRADE_ENABLED && open && (
         <ReviewSignPanel arrow={arrow} onClose={() => setOpen(false)} />
       )}
     </>

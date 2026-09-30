@@ -43,6 +43,8 @@ import { kvArrow } from "@/lib/blue-hood/kv-keys";
 import { onArrowUpdated } from "@/lib/blue-hood/arrow-cache";
 import { rateLimit, getIdentifier } from "@/lib/rate-limit";
 import type { Arrow, UserAction } from "@/lib/blue-hood/types";
+import { ARROW_TRADE_ENABLED } from "@/lib/blue-hood/arrow-freeze";
+import { arrowTradeDisabledResponse } from "@/lib/blue-hood/arrow-trade-gate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -69,6 +71,7 @@ export async function POST(
   req: NextRequest,
   ctx: { params: Promise<{ id: string }> },
 ) {
+  if (!ARROW_TRADE_ENABLED) return arrowTradeDisabledResponse();
   const { success } = await rateLimit(getIdentifier(req), "chat");
   if (!success) return NextResponse.json({ error: "rate_limited" }, { status: 429 });
 
