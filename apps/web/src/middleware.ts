@@ -62,7 +62,11 @@ const APP_SEGMENTS = new Set([
   "cron",         // the wallet's scheduled tasks (CronPanel)
   "usage",        // credit balance + ledger activity (getBalance)
   "plans",        // pricing comparison → TopUpModal (CREDIT_PACKS)
-  "robinhood-router",
+  // `robinhood-router` removed 2026-09-30: a public, noindexed page that
+  // prepared the one-time contract-creation tx for RobinhoodSwapRouter. The
+  // router was deployed 2026-07-08 (ROBINHOOD_SWAP_ROUTER_ADDRESS in
+  // lib/robinhood/swap.ts), so the page and its deploy-prepare/deploy-receipt
+  // routes went with it. The URL now 404s — it was never linked publicly.
   // `rewards` is BACK in this set as of the stake retirement. It was culled in
   // 2026-07 and 301'd to `dashboard?tab=stake`; that tab no longer exists, so the
   // redirect pointed at a query param the dashboard silently ignores. It now
@@ -98,13 +102,12 @@ const APP_SEGMENTS = new Set([
   // Its main-host twin 301s the other way, near /hub and /hood below.
   "signup",
   //
-  // Reserved product URLs (0.1) — clean paths that resolve today to an
-  // in-shell "coming soon" panel (src/app/app/<seg>/page.tsx, noindex) so the
-  // canonical URL is stable before its provider ships:
-  //   radar  → WatchlistProvider (drift/arb discovery)
-  //   trade  → ExecutionProvider (guarded swap engine; absorbs robinhood-router)
-  //   bridge → bridge-flow entry (shares Wallet's bridge component)
-  //   tasks  → automation (DCA / TP-SL / recurring via scoped session keys)
+  // Reserved product URLs (0.1). They used to render an in-shell "coming
+  // soon" panel; since 2026-09-30 each src/app/app/<seg>/page.tsx redirects to
+  // the page that actually does the job (docs/rebuild-5-tang-2026-09-30.md §0):
+  //   radar  → /cron     trade  → /wallet
+  //   tasks  → /cron     bridge → /wallet
+  // Kept in this set so the clean URL still reaches that redirect.
   "radar",
   "trade",
   "bridge",

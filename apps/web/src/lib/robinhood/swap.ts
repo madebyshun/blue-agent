@@ -18,7 +18,7 @@
 //     token API: 16,941 holders, live exchange_rate ~$1770 (matching ETH).
 // Neither address is a guess — both were verified against live on-chain
 // state, not just a Blockscout name search (which is spoofable).
-import { encodeDeployData, encodeFunctionData, createPublicClient, http, getAddress } from "viem";
+import { encodeFunctionData, createPublicClient, http, getAddress } from "viem";
 import artifact from "./RobinhoodSwapRouter.artifact.json";
 import { robinhoodMainnet } from "./chains";
 
@@ -57,11 +57,6 @@ export const ROBINHOOD_TESTNET_VERIFIED_WETH9: `0x${string}` | null = null;
  */
 export const ROBINHOOD_SWAP_ROUTER_ADDRESS: `0x${string}` | null =
   "0x3bb0e9E3dB75faDC5f1f8b7D7B9D761Ef15cd23D";
-
-/** Build the raw contract-creation calldata to deploy RobinhoodSwapRouter. */
-export function buildRouterDeployData(factory: `0x${string}`, weth9: `0x${string}`): `0x${string}` {
-  return encodeDeployData({ abi: ABI, bytecode: BYTECODE, args: [factory, weth9] });
-}
 
 export interface SwapParams {
   tokenIn: `0x${string}`;

@@ -675,7 +675,14 @@ for (const f of [
 // One file left, so both floors drop by exactly one — if a future edit has to
 // move one of these floors and not the other, that asymmetry is worth reading
 // twice, because the tiers are supposed to nest.
-check(`1.4 the signer detector finds signing files (found ${signers.length})`, signers.length >= 17);
+// LOWERED 17 → 16 on 2026-09-30, and this time ONLY this floor moves — read
+// twice, as asked: `app/app/robinhood-router/RobinhoodRouterClient.tsx` was
+// retired (the one-time RobinhoodSwapRouter deploy page; the router has been
+// live since 2026-07-08). It signed a contract-creation tx and read no
+// balance, so it was a Tier B member and never a Tier A one. A signer-only
+// deletion is the one case where the floors are SUPPOSED to move apart; the
+// tiers still nest (1.5 below).
+check(`1.4 the signer detector finds signing files (found ${signers.length})`, signers.length >= 16);
 // Tier A ⊂ Tier B, by construction: a spender signs. If this ever breaks, the
 // two predicates have drifted apart and one of them is measuring the wrong
 // thing — better a loud failure than two sets that quietly stop overlapping.
