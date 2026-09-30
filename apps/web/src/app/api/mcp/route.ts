@@ -86,6 +86,7 @@ import {
   clientFor,
 } from "@/lib/tx-chains";
 import { B20_FACTORY } from "@/lib/base-stocks/registry";
+import { createAction, type ActionKind } from "@/lib/actions";
 import { FACTORY_ABI as B20_FACTORY_ABI } from "@/lib/b20/inspect-abi";
 import { ROBINHOOD_SWAP_ROUTER_ADDRESS } from "@/lib/robinhood/swap";
 import { buildBaseApprove, parseSlippageArg } from "@/lib/zerox-swap";
@@ -725,6 +726,43 @@ async function estimateRhOut(
   }
 }
 
+/**
+ * G1 (2026-09-30): every transaction these builders return is also an ACTION
+ * RECORD, and the response says how to finish it. The wallet here is only the
+ * `fromAddress` the agent passed — unproven — so the record stays out of that
+ * wallet's history until a transaction the chain proves it sent is attached
+ * (POST /api/actions/<id>/tx; see lib/actions.ts). Recording never blocks or
+ * alters the build: any failure returns the build untouched.
+ */
+async function withActionRecord(kind: ActionKind, args: Record<string, unknown>, text: string): Promise<string> {
+  let parsed: Record<string, unknown>;
+  try { parsed = JSON.parse(text) as Record<string, unknown>; } catch { return text; }
+  if (parsed.ok === false) return text;
+  const chain = parseTxChain(kind === "bridge" ? args.fromChain : args.chain);
+  const wallet = typeof args.fromAddress === "string" ? args.fromAddress.trim() : "";
+  if (!chain || !/^0x[a-fA-F0-9]{40}$/.test(wallet)) return text;
+  const s = (v: unknown) => (typeof v === "string" ? v.slice(0, 120) : typeof v === "number" ? String(v) : null);
+  const meta = (parsed.meta ?? {}) as Record<string, unknown>;
+  try {
+    const rec = await createAction({
+      wallet, kind, chain, source: "mcp",
+      params: kind === "swap"
+        ? { tokenIn: s(args.tokenIn), tokenOut: s(args.tokenOut), amountIn: s(args.amountIn) }
+        : kind === "send"
+        ? { token: s(args.token), amount: s(args.amount), to: s(args.toAddress) }
+        : { fromChain: s(args.fromChain), toChain: s(args.toChain), token: s(args.token), amount: s(args.amount), recipient: s(args.recipient) },
+      quote: kind === "swap"
+        ? { venue: s(meta.venue) ?? (chain === "robinhood" ? "RobinhoodSwapRouter" : null), expected_out: s(meta.buyAmount), min_out: s(meta.minBuyAmount) ?? s(parsed.amountOutMinimum) }
+        : undefined,
+    });
+    parsed.action = {
+      id: rec.id,
+      attach_tx: `After the user broadcasts, POST ${BASE}/api/actions/${rec.id}/tx with {"tx_hash":"0x…"}. It is verified on-chain against fromAddress — no key or session involved.`,
+    };
+  } catch { /* recording is best-effort; the build is the product */ }
+  return JSON.stringify(parsed, null, 2);
+}
+
 async function callSendTx(args: Record<string, unknown>): Promise<string> {
   const chain = requireChain(args);
   const body = {
@@ -1020,17 +1058,17 @@ export async function POST(req: NextRequest) {
       // Execution primitives — unsigned calldata, user signs. See the block above
       // `postPrepare` for why `chain` is required with no default on all of these.
       if (name === "blue_swap_tx") {
-        const text = await callSwapTx(args);
+        const text = await withActionRecord("swap", args, await callSwapTx(args));
         await recordCall(meterId, "mcp", "ok");
         return ok(id, { content: [{ type: "text", text }] }, useSse);
       }
       if (name === "blue_send_tx") {
-        const text = await callSendTx(args);
+        const text = await withActionRecord("send", args, await callSendTx(args));
         await recordCall(meterId, "mcp", "ok");
         return ok(id, { content: [{ type: "text", text }] }, useSse);
       }
       if (name === "blue_bridge_tx") {
-        const text = await callBridgeTx(args);
+        const text = await withActionRecord("bridge", args, await callBridgeTx(args));
         await recordCall(meterId, "mcp", "ok");
         return ok(id, { content: [{ type: "text", text }] }, useSse);
       }

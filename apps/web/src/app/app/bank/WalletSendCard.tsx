@@ -91,6 +91,7 @@ import { WALLET_CHAINS } from "@/lib/wallet/chains";
 import { ERC20_ABI } from "@/lib/yield-execution";
 import { DATA_SUFFIX } from "@/constants/builderCode";
 import { useSponsoredGas } from "@/hooks/useSponsoredGas";
+import { useRecordAction } from "@/hooks/useRecordAction";
 import { B20_ENABLED, B20_USDC } from "@/lib/orders";
 import { encodeTransferWithMemo, isValidMemo, MEMO_MAX_CHARS } from "@/lib/b20/encode";
 import { useSpendableBalance } from "@/lib/wallet/useSpendableBalance";
@@ -273,6 +274,12 @@ export default function WalletSendCard({
   >("idle");
   const [err, setErr] = useState("");
   const [txHash, setTxHash] = useState<`0x${string}` | "">("");
+  // G1 — the signed send becomes an action record (only with a session).
+  useRecordAction(txHash, () => ({
+    wallet: account, kind: "send", chain: network === "robinhood" ? "robinhood" : "base",
+    // `toAddress` is declared further down; the closure runs after render, when it is set.
+    params: { token: asset.address ?? "ETH", symbol: asset.symbol || null, amount: String(amount), to: toAddress ?? recipient },
+  }));
 
   const cfg = WALLET_CHAINS[network];
   const chainId = cfg.chainId;

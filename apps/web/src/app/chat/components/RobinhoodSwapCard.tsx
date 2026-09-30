@@ -17,6 +17,7 @@ import { UnverifiedBalance } from "@/components/wallet/UnverifiedBalance";
 import { useSpendableBalance } from "@/lib/wallet/useSpendableBalance";
 import { resolveSpend } from "@/lib/wallet/read-state";
 import { clampDecimals } from "@/lib/wallet/amount";
+import { useRecordAction } from "@/hooks/useRecordAction";
 
 const RH_ROUTER = "0x3bb0e9E3dB75faDC5f1f8b7D7B9D761Ef15cd23D" as const;
 const RH_CHAIN_ID = 4663;
@@ -120,6 +121,14 @@ export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
   const [step, setStep] = useState<"idle" | "approving" | "swapping" | "done" | "error">("idle");
   const [err, setErr] = useState("");
   const [txHash, setTxHash] = useState("");
+  // G1 — the signed swap becomes an action record (only with a session).
+  useRecordAction(txHash, () => ({
+    wallet: address, kind: "swap", chain: "robinhood",
+    params: isT2T
+      ? ({ tokenIn: tokenInAddr, tokenOut: token, amount } as Record<string, string>)
+      : ({ direction, token, amount } as Record<string, string>),
+    quote: { venue: "RobinhoodSwapRouter", expected_out: estimatedOut != null ? String(estimatedOut) : null, min_out: minOut != null ? String(minOut) : null },
+  }));
 
   // The balance of whatever this swap SPENDS: native ETH on a buy, the token
   // on a sell, tokenIn on a token→token. One hook, so decimals are READ rather

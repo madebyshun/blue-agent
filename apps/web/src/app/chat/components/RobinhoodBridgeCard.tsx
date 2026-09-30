@@ -19,6 +19,7 @@ import { TokenGlyph, ChainDot, ConfirmPreview, resolveQuantity } from "./Confirm
 import { UnverifiedBalance } from "@/components/wallet/UnverifiedBalance";
 import { useSpendableBalance } from "@/lib/wallet/useSpendableBalance";
 import { resolveSpend } from "@/lib/wallet/read-state";
+import { useRecordAction } from "@/hooks/useRecordAction";
 
 // Chain metadata — hard-coded rather than reused from viem, so this card has
 // no cross-file coupling to the wagmi config. Base blue vs Robinhood green
@@ -168,6 +169,12 @@ export function RobinhoodBridgeCard({ result }: { result: RobinhoodBridgeResult 
   const [err, setErr]         = useState("");
   const [approveHash, setApproveHash] = useState<`0x${string}` | "">("");
   const [txHash, setTxHash]           = useState<`0x${string}` | "">("");
+  // G1 — the signed bridge becomes an action record (only with a session). It
+  // is signed on the ORIGIN chain, so that is the chain the proof is read on.
+  useRecordAction(txHash, () => ({
+    wallet: connected, kind: "bridge", chain: fromChain,
+    params: { fromChain, toChain, token: rawToken || null, amount: initialAmt || null },
+  }));
 
   // Balance for the sender on the SOURCE chain — used to gate the signature.
   // ERC-20 for a token address, native for ETH; the chain is `fromCfg.id`,

@@ -77,6 +77,7 @@ import { ERC20_ABI } from "@/lib/yield-execution";
 import { UnverifiedBalance } from "@/components/wallet/UnverifiedBalance";
 import { Picker, PickerRow } from "@/components/wallet/Picker";
 import { WalletCard, Field, NetworkPicker, ConfirmButton, CardNote } from "@/components/wallet/CardShell";
+import { useRecordAction } from "@/hooks/useRecordAction";
 
 const RH = WALLET_CHAINS.robinhood;
 const RH_CHAIN_ID = RH.chainId; // 4663
@@ -184,6 +185,14 @@ export default function RhSwapCard({
   >("idle");
   const [err, setErr] = useState("");
   const [txHash, setTxHash] = useState<`0x${string}` | "">("");
+  // G1 — the signed swap becomes an action record (only with a session).
+  // `activeAddr` / `estimatedOut` / `minOut` are declared below; the closure
+  // runs after render, when they hold the values that were signed.
+  useRecordAction(txHash, () => ({
+    wallet: account, kind: "swap", chain: "robinhood",
+    params: { direction, token: activeAddr, amount },
+    quote: { venue: "RobinhoodSwapRouter", expected_out: estimatedOut != null ? String(estimatedOut) : null, min_out: minOut != null ? String(minOut) : null },
+  }));
 
   // Which ERC-20 sits on the non-ETH side.
   const isCustom = choice === "custom";

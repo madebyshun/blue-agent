@@ -47,6 +47,7 @@ import { formatUnits, parseUnits, isAddress, getAddress } from "viem";
 import { base } from "wagmi/chains";
 import { ERC20_ABI } from "@/lib/yield-execution";
 import { DATA_SUFFIX } from "@/constants/builderCode";
+import { useRecordAction } from "@/hooks/useRecordAction";
 import { BASE_MAJORS } from "@/lib/wallet/token-trust";
 import { useSpendableBalance } from "@/lib/wallet/useSpendableBalance";
 import { resolveSpend } from "@/lib/wallet/read-state";
@@ -221,6 +222,12 @@ export default function SwapCard({
   const [step, setStep] = useState<"idle" | "approving" | "swapping" | "done" | "error">("idle");
   const [err, setErr] = useState("");
   const [txHash, setTxHash] = useState("");
+  // G1 — the signed swap becomes an action record (only with a session).
+  useRecordAction(txHash, () => ({
+    wallet: account, kind: "swap", chain: "base",
+    params: { tokenIn: sell.addr, tokenOut: buy.addr, amountIn: amount, slippageBps },
+    quote: { venue: "0x", expected_out: quote?.buyAmount ?? null, min_out: quote?.minBuyAmount ?? null },
+  }));
 
   // Balance of the sell token — read (with its scale) through the one hook, so
   // "still reading" and "could not read" stay distinguishable. `sell.decimals`
