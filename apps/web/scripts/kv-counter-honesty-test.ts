@@ -130,7 +130,12 @@ async function main() {
     `unreadable=${healthyStats.usage.unreadable}`,
   );
   check("healthy: users.claimsOk is true", healthyStats.users.claimsOk === true, `claimsOk=${healthyStats.users.claimsOk}`);
-  check("healthy: launches.ok is true", healthyStats.launches.ok === true, `ok=${healthyStats.launches.ok}`);
+  check("healthy: actions.ok is true", healthyStats.actions.ok === true, `ok=${healthyStats.actions.ok}`);
+  check(
+    "the retired launches block is gone, not zeroed (plan §5, 2026-09-30)",
+    !("launches" in (healthyStats as unknown as Record<string, unknown>)),
+    `keys=${Object.keys(healthyStats).join(",")}`,
+  );
 
   const outageStats = await withReadFailure(() => buildPublicStats());
   check(
@@ -149,18 +154,17 @@ async function main() {
     `claimsOk=${outageStats.users.claimsOk}, claims=${outageStats.users.claims}`,
   );
   check(
-    "outage: launches.ok is false — renders \"—\", not \"0 tokens ever launched\"",
-    outageStats.launches.ok === false,
-    `ok=${outageStats.launches.ok}, total=${outageStats.launches.total}`,
+    "outage: actions.ok is false — renders \"—\", not \"nobody has traded\"",
+    outageStats.actions.ok === false,
+    `ok=${outageStats.actions.ok}, confirmed=${outageStats.actions.confirmed}`,
   );
 
-  // ── D2. The launch registry behind `launches.ok` above ────────────────────
+  // ── D2. The launch registry ────────────────────────────────────────────────
   //
-  // `launches.total` is the headline "Tokens Launched" figure. Unlike a counter
-  // sum, an unreadable registry does not shrink the number a little — it denies
-  // the product's entire history in one go. And unlike /api/b20hub/tokens (a
-  // grid, where empty and failed look identical anyway), /stats PUBLISHES this
-  // as traction, so the two states have to stay apart all the way to the view.
+  // Published on /stats as "Tokens Launched" until 2026-09-30, when that block
+  // was retired (it read 0 — the flow it counted is gone). The registry itself
+  // stays: /api/b20hub/tokens still reads it, and an unreadable registry must
+  // still never be reported as an empty one — so the probe keeps its test.
   console.log("\nD2. REAL FUNCTION — getLaunchesProbe() vs getLaunches():");
   const { getLaunchesProbe, getLaunches, recordLaunch } = await import("../src/lib/launches");
 

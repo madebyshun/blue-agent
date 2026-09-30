@@ -226,7 +226,7 @@ export default function SwapCard({
   useRecordAction(txHash, () => ({
     wallet: account, kind: "swap", chain: "base",
     params: { tokenIn: sell.addr, tokenOut: buy.addr, amountIn: amount, slippageBps, symIn: label(sell), symOut: label(buy) },
-    quote: { venue: "0x", expected_out: quote?.buyAmount ?? null, min_out: quote?.minBuyAmount ?? null },
+    quote: { venue: "0x", expected_out: quote?.buyAmount ?? null, min_out: quote?.minBuyAmount ?? null, unit: "base" },
     check: pt.check ? { verdict: pt.check.verdict, reasons: pt.check.reasons.map((r) => r.text) } : null,
   }));
 

@@ -4,10 +4,12 @@
  *
  * A public read: it reveals nothing about any wallet — only facts about a
  * token or a bridge quote — and it spends no credits. Rate-limited per caller
- * because a token check reads the chain.
+ * because a token check reads the chain. Its one write is the public meter's
+ * set of tokens refused on evidence (lib/action-stats.ts).
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { preTradeCheck } from "@/lib/pre-trade-check";
+import { recordPreTradeBlock } from "@/lib/action-stats";
 import { parseTxChain } from "@/lib/tx-chains";
 import { rateLimit, getIdentifier } from "@/lib/rate-limit";
 
@@ -23,11 +25,16 @@ export async function POST(req: NextRequest) {
   const kind = body.kind === "send" || body.kind === "bridge" ? body.kind : body.kind === "swap" ? "swap" : null;
   if (!chain) return NextResponse.json({ error: "chain must be base or robinhood" }, { status: 400 });
   if (!kind) return NextResponse.json({ error: "kind must be swap, send or bridge" }, { status: 400 });
+  const token = typeof body.token === "string" ? body.token : "";
   const check = await preTradeCheck({
     chain,
     kind,
-    token: typeof body.token === "string" ? body.token : "",
+    token,
     bridgeCostPercent: typeof body.bridge_cost_percent === "number" ? body.bridge_cost_percent : null,
   });
+  // The public meter (G4) counts only what this server measured: a token
+  // refused on evidence. The bridge cost here came from the browser, so a
+  // bridge BLOCK from this door is real for that user and is not counted.
+  await recordPreTradeBlock(check, { chain, token }, { costMeasuredByServer: false });
   return NextResponse.json(check, { headers: { "Cache-Control": "no-store" } });
 }

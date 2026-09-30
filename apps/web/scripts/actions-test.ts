@@ -42,6 +42,8 @@ const RECEIPTS: Record<string, { from: string; logs?: unknown[]; status?: string
   [H(2)]: { from: BUNDLER, logs: [userOpLog(ENTRY, ALICE)] },        // smart wallet via EntryPoint
   [H(3)]: { from: BUNDLER, logs: [userOpLog(FAKE_ENTRY, ALICE)] },   // look-alike event, wrong emitter
   [H(4)]: { from: BOB },                                            // someone else's tx
+  [H(5)]: { from: ALICE },                                          // Alice again (MCP record)
+  [H(6)]: { from: ALICE },                                          // Alice again (attach route)
 };
 let mined = new Set(Object.keys(RECEIPTS));
 
@@ -89,7 +91,7 @@ const base = { kind: "swap" as const, chain: "base" as const, params: { tokenIn:
   ok("a malformed hash is refused", !r.ok && r.code === "BAD_HASH");
 
   console.log("\n2. a just-broadcast tx is held, then settled");
-  mined = new Set([H(1), H(2), H(3)]); // H(4) not mined yet
+  mined = new Set([H(1), H(2), H(3), H(5), H(6)]); // H(4) not mined yet
   const pending = await createAction({ ...base, wallet: ALICE, source: "wallet" });
   r = await attachTx(pending.id, H(4));
   ok("unmined → submitted, unproven", r.ok && r.record.status === "submitted" && r.record.receipt === null, JSON.stringify(r));
@@ -102,7 +104,7 @@ const base = { kind: "swap" as const, chain: "base" as const, params: { tokenIn:
   const mcp = await createAction({ ...base, wallet: ALICE, source: "mcp" });
   let l = await listActions(ALICE);
   ok("an unproven MCP record is not in Alice's history", l.status === "ok" && !l.actions.some((x) => x.id === mcp.id));
-  await attachTx(mcp.id, H(1));
+  await attachTx(mcp.id, H(5));
   l = await listActions(ALICE);
   ok("…until a tx Alice sent is attached", l.status === "ok" && l.actions.some((x) => x.id === mcp.id && x.status === "confirmed"));
 
@@ -132,10 +134,17 @@ const base = { kind: "swap" as const, chain: "base" as const, params: { tokenIn:
   const fresh = await createAction({ ...base, wallet: ALICE, source: "wallet" });
   res = await ATTACH(new NextRequest(`http://localhost/api/actions/${fresh.id}/tx`, { method: "POST", body: JSON.stringify({ tx_hash: H(4) }) }), { params: Promise.resolve({ id: fresh.id }) });
   ok("attach route: someone else's tx → 403", res.status === 403);
-  res = await ATTACH(new NextRequest(`http://localhost/api/actions/${fresh.id}/tx`, { method: "POST", body: JSON.stringify({ tx_hash: H(1) }) }), { params: Promise.resolve({ id: fresh.id }) });
+  res = await ATTACH(new NextRequest(`http://localhost/api/actions/${fresh.id}/tx`, { method: "POST", body: JSON.stringify({ tx_hash: H(6) }) }), { params: Promise.resolve({ id: fresh.id }) });
   ok("attach route: the wallet's own tx → 200, no session needed", res.status === 200);
   const again = await readAction(fresh.id);
   ok("…and the record is confirmed", again.status === "found" && again.record.status === "confirmed");
+
+  console.log("\n5. one transaction backs one action (G4 — no double count)");
+  const dup = await createAction({ ...base, wallet: ALICE, source: "wallet" });
+  r = await attachTx(dup.id, H(1));
+  ok("a tx already backing another of Alice's actions is refused", !r.ok && r.code === "ALREADY_ATTACHED", JSON.stringify(r));
+  r = await attachTx(fresh.id, H(6));
+  ok("re-attaching the same tx to its own action is idempotent", r.ok && r.record.status === "confirmed", JSON.stringify(r));
 
   console.log(failures === 0 ? "\nactions-test: PASS" : `\nactions-test: FAIL — ${failures}`);
   process.exit(failures === 0 ? 0 : 1);

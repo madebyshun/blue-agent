@@ -20,7 +20,9 @@ export type RecordInput = {
   kind: "swap" | "send" | "bridge";
   chain: "base" | "robinhood";
   params: Record<string, string | number | null>;
-  quote?: { expected_out?: string | null; min_out?: string | null; venue?: string | null };
+  /** `unit`: how expected_out / min_out are written — "base" (integer base
+   *  units) or "whole" (decimal token units). See lib/actions.ts. */
+  quote?: { expected_out?: string | null; min_out?: string | null; venue?: string | null; unit?: "base" | "whole" };
   check?: { verdict: string; reasons: string[] } | null;
 };
 

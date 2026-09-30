@@ -37,7 +37,13 @@ import { HIGH_COST_PERCENT } from "@/lib/wallet/bridge-pairs";
 
 export type PreTradeVerdict = "PASS" | "WARN" | "BLOCK";
 export type AssetType = "native" | "major" | "crypto" | "rh_stock_token" | "b20_stock_token";
-export type Reason = { level: "BLOCK" | "WARN" | "INFO"; text: string };
+/** Machine-readable reason, so an agent (and the public meter) can dispatch on
+ *  WHY without reading prose. */
+export type ReasonCode =
+  | "BRIDGE_COST" | "BRIDGE_COST_HIGH" | "NOT_ADDRESS" | "IMPOSTOR" | "HONEYPOT"
+  | "SELL_LEVER" | "TAX_UNREAD" | "TAX_CLEAN" | "RH_UNREGISTERED" | "WEEKEND"
+  | "RH_ORACLE_GAP_PAUSED" | "NO_ORACLE_FEED" | "ISSUER_POLICY" | "DRIFT" | "DRIFT_UNAVAILABLE";
+export type Reason = { level: "BLOCK" | "WARN" | "INFO"; code: ReasonCode; text: string };
 
 export interface PreTradeCheck {
   verdict: PreTradeVerdict;
@@ -81,7 +87,7 @@ function impostorLevel(kind: PreTradeInput["kind"]): Reason["level"] {
 function weekendReason(now: Date): Reason | null {
   const m = nyseMarketStatus(now);
   return m.session === "weekend"
-    ? { level: "WARN", text: "US market is closed for the weekend — the oracle is frozen at Friday's close and the DEX price can drift from it." }
+    ? { level: "WARN", code: "WEEKEND", text: "US market is closed for the weekend — the oracle is frozen at Friday's close and the DEX price can drift from it." }
     : null;
 }
 
@@ -92,16 +98,16 @@ export async function preTradeCheck(input: PreTradeInput): Promise<PreTradeCheck
   // Bridge cost is measured by the route before anything else matters.
   if (input.kind === "bridge" && typeof input.bridgeCostPercent === "number" && Number.isFinite(input.bridgeCostPercent)) {
     if (input.bridgeCostPercent > BRIDGE_BLOCK_COST_PERCENT) {
-      reasons.push({ level: "BLOCK", text: `Bridge cost is ${input.bridgeCostPercent.toFixed(1)}% of the amount (limit ${BRIDGE_BLOCK_COST_PERCENT}%) — send more, or not at all.` });
+      reasons.push({ level: "BLOCK", code: "BRIDGE_COST", text: `Bridge cost is ${input.bridgeCostPercent.toFixed(1)}% of the amount (limit ${BRIDGE_BLOCK_COST_PERCENT}%) — send more, or not at all.` });
     } else if (input.bridgeCostPercent > HIGH_COST_PERCENT) {
-      reasons.push({ level: "WARN", text: `Bridge cost is ${input.bridgeCostPercent.toFixed(1)}% of the amount — above ${HIGH_COST_PERCENT}%.` });
+      reasons.push({ level: "WARN", code: "BRIDGE_COST_HIGH", text: `Bridge cost is ${input.bridgeCostPercent.toFixed(1)}% of the amount — above ${HIGH_COST_PERCENT}%.` });
     }
   }
 
   const token = (input.token ?? "").trim();
   if (!token || isNativeToken(token)) return finish("native", "ETH (native)", reasons);
   if (!ADDR.test(token)) {
-    reasons.push({ level: "BLOCK", text: "The token is not a contract address — a ticker does not identify a token." });
+    reasons.push({ level: "BLOCK", code: "NOT_ADDRESS", text: "The token is not a contract address — a ticker does not identify a token." });
     return finish("crypto", token, reasons);
   }
 
@@ -115,8 +121,8 @@ export async function preTradeCheck(input: PreTradeInput): Promise<PreTradeCheck
         if (wk) reasons.push(wk);
         // Plan §0b: the RH desk's oracle-vs-DEX data is quarantined until F6
         // is fixed, so this is said as a gap, never measured.
-        reasons.push({ level: "WARN", text: "Oracle-vs-DEX check for Robinhood Chain is paused (desk data under repair) — check the pool price against the oracle yourself." });
-        if (!rwa.chainlinkFeed) reasons.push({ level: "INFO", text: "No Chainlink feed exists for this ticker yet — there is no oracle to compare against." });
+        reasons.push({ level: "WARN", code: "RH_ORACLE_GAP_PAUSED", text: "Oracle-vs-DEX check for Robinhood Chain is paused (desk data under repair) — check the pool price against the oracle yourself." });
+        if (!rwa.chainlinkFeed) reasons.push({ level: "INFO", code: "NO_ORACLE_FEED", text: "No Chainlink feed exists for this ticker yet — there is no oracle to compare against." });
       }
       return finish("rh_stock_token", label, reasons);
     }
@@ -124,11 +130,11 @@ export async function preTradeCheck(input: PreTradeInput): Promise<PreTradeCheck
     let symbol = "";
     try { symbol = (await readTokenMeta("robinhood", token as `0x${string}`)).symbol; } catch { /* unread */ }
     if (classifyToken({ address: token, symbol, isNative: false }, "robinhood") === "impostor") {
-      reasons.push({ level: impostorLevel(input.kind), text: `This contract calls itself ${symbol} but is not the registered ${symbol} token on Robinhood Chain — an impersonator.` });
+      reasons.push({ level: impostorLevel(input.kind), code: "IMPOSTOR", text: `This contract calls itself ${symbol} but is not the registered ${symbol} token on Robinhood Chain — an impersonator.` });
       return finish("crypto", symbol || token, reasons);
     }
     if (input.kind === "swap") {
-      reasons.push({ level: "WARN", text: "Not a registered token — buy/sell tax cannot be read on Robinhood Chain. Try a small amount first." });
+      reasons.push({ level: "WARN", code: "RH_UNREGISTERED", text: "Not a registered token — buy/sell tax cannot be read on Robinhood Chain. Try a small amount first." });
     }
     return finish("crypto", symbol || token, reasons);
   }
@@ -137,7 +143,7 @@ export async function preTradeCheck(input: PreTradeInput): Promise<PreTradeCheck
   const stock = BASE_STOCKS.find((s) => s.token.toLowerCase() === token.toLowerCase());
   if (stock) {
     const label = `B20 tokenized stock (Coinbase) · tracks ${stock.ticker}`;
-    reasons.push({ level: "INFO", text: "B20 tokens can carry issuer transfer policies — a transfer the policy forbids will revert." });
+    reasons.push({ level: "INFO", code: "ISSUER_POLICY", text: "B20 tokens can carry issuer transfer policies — a transfer the policy forbids will revert." });
     if (input.kind === "swap") {
       const wk = weekendReason(now);
       if (wk) reasons.push(wk);
@@ -146,9 +152,9 @@ export async function preTradeCheck(input: PreTradeInput): Promise<PreTradeCheck
         ? snap.value.tickers.find((t) => t.chain === "base" && t.contract.toLowerCase() === token.toLowerCase())
         : undefined;
       if (!row || row.drift_pct == null) {
-        reasons.push({ level: "WARN", text: "The oracle-vs-DEX reading for this token is unavailable right now." });
+        reasons.push({ level: "WARN", code: "DRIFT_UNAVAILABLE", text: "The oracle-vs-DEX reading for this token is unavailable right now." });
       } else if (Math.abs(row.drift_pct) >= STOCK_DRIFT_WARN_PCT) {
-        reasons.push({ level: "WARN", text: `The DEX price is ${row.drift_pct > 0 ? "+" : ""}${row.drift_pct.toFixed(2)}% from the Chainlink oracle (Blue Hood desk).` });
+        reasons.push({ level: "WARN", code: "DRIFT", text: `The DEX price is ${row.drift_pct > 0 ? "+" : ""}${row.drift_pct.toFixed(2)}% from the Chainlink oracle (Blue Hood desk).` });
       }
     }
     return finish("b20_stock_token", label, reasons);
@@ -161,15 +167,15 @@ export async function preTradeCheck(input: PreTradeInput): Promise<PreTradeCheck
   // A registered B20 stock's symbol from another contract is an impostor too.
   const norm = normalizeSymbol(symbol);
   if (trust === "impostor" || (norm && BASE_STOCKS.some((s) => normalizeSymbol(s.symbol) === norm))) {
-    reasons.push({ level: impostorLevel(input.kind), text: `This contract calls itself ${symbol} but is not the verified ${symbol} on Base — an impersonator.` });
+    reasons.push({ level: impostorLevel(input.kind), code: "IMPOSTOR", text: `This contract calls itself ${symbol} but is not the verified ${symbol} on Base — an impersonator.` });
     return finish("crypto", symbol || token, reasons);
   }
   if (input.kind === "swap") {
     const hp = measuredHoneypotVerdict(await readTokenTax(token));
-    if (hp.verdict === "HONEYPOT") reasons.push({ level: "BLOCK", text: "Measured sell tax ≥ 50% — once bought, this token cannot be sold." });
-    else if (hp.verdict === "SUSPICIOUS") reasons.push({ level: "WARN", text: "Measured sell lever: a blacklist function or a sell tax ≥ 10%." });
-    else if (hp.verdict === "UNKNOWN") reasons.push({ level: "WARN", text: "Buy/sell tax could not be read from this contract — try a small amount first." });
-    else reasons.push({ level: "INFO", text: "Buy/sell tax read on-chain: clean." });
+    if (hp.verdict === "HONEYPOT") reasons.push({ level: "BLOCK", code: "HONEYPOT", text: "Measured sell tax ≥ 50% — once bought, this token cannot be sold." });
+    else if (hp.verdict === "SUSPICIOUS") reasons.push({ level: "WARN", code: "SELL_LEVER", text: "Measured sell lever: a blacklist function or a sell tax ≥ 10%." });
+    else if (hp.verdict === "UNKNOWN") reasons.push({ level: "WARN", code: "TAX_UNREAD", text: "Buy/sell tax could not be read from this contract — try a small amount first." });
+    else reasons.push({ level: "INFO", code: "TAX_CLEAN", text: "Buy/sell tax read on-chain: clean." });
   }
   return finish("crypto", symbol || token, reasons);
 }

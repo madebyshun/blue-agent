@@ -21,6 +21,7 @@ import {
   ROBINHOOD_SWAP_ROUTER_ADDRESS,
 } from "@/lib/robinhood/swap";
 import { preTradeCheck } from "@/lib/pre-trade-check";
+import { recordPreTradeBlock } from "@/lib/action-stats";
 
 const USDG_ADDR = "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168" as const;
 
@@ -85,6 +86,7 @@ export default async function handler(req: Request): Promise<Response> {
     // a BLOCK refuses before any calldata exists — non-2xx, so nobody is charged.
     const check = await preTradeCheck({ chain: "robinhood", kind: "swap", token: tokenOut });
     if (check.verdict === "BLOCK") {
+      await recordPreTradeBlock(check, { chain: "robinhood", token: tokenOut }, { costMeasuredByServer: false });
       return Response.json({ tool: "rh-stock-swap-prepare", ticker: token.ticker, error: "PRE_TRADE_BLOCK", check, network: RH_CHAIN, timestamp }, { status: 409 });
     }
 

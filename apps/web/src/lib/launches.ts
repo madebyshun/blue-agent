@@ -58,11 +58,13 @@ export type LaunchRecord = {
  * (Robinhood support didn't exist yet).
  *
  * #150 read side. `getLaunches()` below keeps the `[]`-on-failure shape because
- * its other caller (/api/b20hub/tokens) renders a grid where an empty list and
- * a failed read look the same on screen anyway. `/stats` is different: it
- * publishes `launches.total` as a headline traction number, and a 0 there is a
- * claim ("nobody has ever launched a token") we cannot make from a throttled
- * read. That surface gets this function.
+ * its caller (/api/b20hub/tokens) renders a grid where an empty list and a
+ * failed read look the same on screen anyway. This probe was the /stats read —
+ * `launches.total` was a headline traction number, and a 0 there was a claim
+ * we could not make from a throttled read. /stats retired that block on
+ * 2026-09-30 (it read 0; the flow is gone), so nothing in the app calls this
+ * now; it stays as THE read for any future public use of the registry, and
+ * kv-counter-honesty-test keeps it honest.
  */
 export async function getLaunchesProbe(
   limit = MAX_LAUNCHES,

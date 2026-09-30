@@ -9,15 +9,16 @@
  * Every field is fault-tolerant: a data-source failure never throws and never
  * fabricates. #150 sharpened what that means — a zero is NOT a safe default on
  * this page, because every number here is a public traction claim and a zero
- * reads as a measurement ("nobody launched", "nobody signed up", "no runs").
- * So each block carries an `ok` flag (`launches.ok`, `usage.ok`,
+ * reads as a measurement ("nobody traded", "nobody signed up", "no runs").
+ * So each block carries an `ok` flag (`actions.ok`, `usage.ok`,
  * `users.claimsOk`, `settlement.ok`); false ⟹ the value is a placeholder the
  * view must render as "—" or as a "≥" lower bound, never as a total.
  *
  * Sources:
- *   - Launches:  KV `bluechat:launches` (real on-chain deploys — see lib/launches.ts
- *                for who writes it; the Bankr-era writer was deleted 2026-09-06,
- *                the ROWS it wrote are deliberately kept).
+ *   - Actions:   lib/action-stats.ts — swaps, sends and bridges the CHAIN proved
+ *                a wallet signed (G4, 2026-09-30), realized slippage against the
+ *                quote, and refusals the server measured. Replaces arrow figures
+ *                as the accountability number: arrows had no traders.
  *   - Usage:     KV `usage:<toolId>` counters — lifetime tool runs of EVERY kind
  *                (aggregate sum; no wallet is ever part of the key). These counters
  *                are incremented by the x402 route, the free MCP bypass AND the Hub
@@ -42,6 +43,14 @@
  * exact at current scale and a conservative floor thereafter. Every value degrades
  * to 0 on a source failure; none is ever invented.
  *
+ * REMOVED (2026-09-30, plan §5): the `launches` block. MEASURED that day it
+ * read 0 in production: the flow it counted is gone (the Bankr launch path was
+ * deleted 2026-09-06; the B20HUB pages 404), so "Tokens Launched" and
+ * "Creators" headlined a dead product's zero as traction. `lib/launches.ts`
+ * and the rows in `bluechat:launches` are untouched — `b20hub/*` and
+ * `robinhood/receipt` still use them, and user state is evidence — only the
+ * public claim went. Same reasoning as the staking block below.
+ *
  * REMOVED: a `staking` block that read BlueMarketStaking.totalStaked() on Base and
  * published it as a headline metric. The contract is untouched and still live, but
  * the app no longer sells a stake, so quoting its TVL as traction advertised a
@@ -49,44 +58,28 @@
  * number is honest, a zero would be a false measurement.
  */
 
-import { getLaunchesProbe } from "./launches";
 import { AGENT_TOOLS } from "./agent-tools";
+import { readActionStats, type ActionStats } from "./action-stats";
+import { X402_PAY_TO } from "./x402-payee";
 import { kvGet, kvGetCounter } from "./kv";
 import { getLedgerActivity } from "./credit-ledger";
 import { getX402Settlements } from "./x402-settlements";
 import { getLlmUsage } from "./llm-usage";
 
-export interface PublicLaunchLite {
-  name:       string;
-  symbol:     string;
-  address:    string;
-  txHash:     string | null;
-  launchedAt: number;
-}
-
 export interface PublicStats {
   updatedAt: number;
-  launches: {
-    total:          number;
-    uniqueCreators: number;
-    peakPerDay:     number;
-    byDay:          { date: string; count: number }[]; // chronological, launch days only
-    recent:         PublicLaunchLite[];                 // newest first, creator stripped
-    /** #150 — false ⟹ the `bluechat:launches` registry could not be READ. Every
-     *  number in this block is then 0 as a placeholder and must render as "—".
-     *  A 0 here would state "no token has ever been launched through Blue Agent",
-     *  which is the single strongest claim on the page and the one we are least
-     *  entitled to make from a throttled read. Same convention as `usage.ok`,
-     *  `users.claimsOk` and `settlement.ok`. */
-    ok:             boolean;
-  };
+  /** G4 — real trades, from action records (see lib/action-stats.ts). */
+  actions: ActionStats;
   product: {
     tools:    number;
     commands: number;
   };
   usage: {
     totalRuns:  number;                          // Σ usage:<id> across the catalog
-    revenueEst: string;                          // "$X.XX" — Σ(runs × price)
+    revenueEst: string;                          // "$X.XX" — Σ(runs × price) — an ESTIMATE
+    /** What `revenueEst` is — published beside it so no reader takes it for
+     *  settled revenue: the counters include free and internal runs. */
+    revenueEstBasis: string;
     topTools:   { name: string; runs: number }[]; // top 5 by runs (names only, aggregate)
     /** #150 — false ⟹ at least one `usage:<id>` counter could not be READ and was
      *  left out of the sums above, making them a LOWER BOUND rather than a
@@ -112,6 +105,11 @@ export interface PublicStats {
     count:  number;    // # of confirmed on-chain settlements
     lastTx: string | null; // latest settlement tx hash (Basescan proof) — null if none
     ok:     boolean;   // false ⟹ meter unavailable → render "—", never a fake number
+    /** The meter is forward-only; the payee's full on-chain history is longer.
+     *  Said, with the address to check it against — see buildPublicStats. */
+    scope:      string;
+    payee:      string;
+    verify_url: string;
   };
   tokens: {            // aggregate LLM tokens served through the inference nets
     total: number;     // Σ total_tokens (prompt + completion) — forward-only meter
@@ -125,7 +123,6 @@ export interface PublicStats {
 
 const CORE_COMMANDS = 5; // idea · build · audit · ship · raise
 const CLAIM_CAP     = 300; // mirrors credits/claim route
-const dayKey = (ms: number) => new Date(ms).toISOString().slice(0, 10); // UTC YYYY-MM-DD
 
 /** Parse a "$0.05" price string to a number; non-numeric ⟹ 0. */
 function priceNum(price?: string): number {
@@ -135,59 +132,6 @@ function priceNum(price?: string): number {
 }
 
 export async function buildPublicStats(): Promise<PublicStats> {
-  // ── Launches (KV) ──
-  //
-  // #150. `total` is the headline "Tokens Launched" number. Reading an outage as
-  // an empty registry publishes "0 tokens have ever been launched" — a claim
-  // about the whole history of the product, made from a read that failed. The
-  // probe keeps "empty" and "unreadable" apart so the page can render "—".
-  let total = 0, uniqueCreators = 0, peakPerDay = 0;
-  let byDay: { date: string; count: number }[] = [];
-  let recent: PublicLaunchLite[] = [];
-  let launchesOk = true;
-  try {
-    const probe = await getLaunchesProbe();
-    launchesOk = probe.ok;
-    const launches = probe.launches;
-    total = launches.length;
-
-    // Unique creators: COUNT only — identity values are never surfaced.
-    const creators = new Set<string>();
-    const perDay = new Map<string, number>();
-    for (const l of launches) {
-      const id = (l.feeRecipient?.value ?? "").toLowerCase();
-      if (id) creators.add(id);
-      if (l.launchedAt) {
-        const k = dayKey(l.launchedAt);
-        perDay.set(k, (perDay.get(k) ?? 0) + 1);
-      }
-    }
-    uniqueCreators = creators.size;
-    byDay = [...perDay.entries()]
-      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-      .map(([date, count]) => ({ date, count }));
-    peakPerDay = byDay.reduce((m, d) => Math.max(m, d.count), 0);
-
-    // Recent feed — strip creator identity + private metadata.
-    recent = launches
-      .slice()
-      .sort((a, b) => (b.launchedAt ?? 0) - (a.launchedAt ?? 0))
-      .slice(0, 15)
-      .map((l) => ({
-        name:       l.tokenName ?? "",
-        symbol:     l.tokenSymbol ?? "",
-        address:    l.tokenAddress ?? "",
-        txHash:     l.txHash ?? null,
-        launchedAt: l.launchedAt ?? 0,
-      }));
-  } catch {
-    // Thrown rather than probed — same conclusion: we did not read the registry.
-    launchesOk = false;
-  }
-  if (!launchesOk) {
-    console.error(`[public-stats] launch registry unreadable — launches.* published as unknown, not as 0`);
-  }
-
   // ── Product breadth (static) ──
   const tools = Array.isArray(AGENT_TOOLS) ? AGENT_TOOLS.length : 0;
 
@@ -250,11 +194,26 @@ export async function buildPublicStats(): Promise<PublicStats> {
   // ── Onchain settlement (Coinbase CDP facilitator) ──
   // Aggregate USDC actually settled on Base via CDP /settle. Forward-only meter,
   // count/sum/lastTx only — no wallet is ever stored. Null source ⟹ ok:false → "—".
-  let settlement = { usdc: 0, count: 0, lastTx: null as string | null, ok: false };
+  //
+  // SCOPE, stated (plan §5): this meter only counts settlements THIS server
+  // recorded since it started, so it reads far lower than the payee's real
+  // history on Base (MEASURED 2026-09-30: 2 here, ~20 on-chain). The payee
+  // also receives credit top-ups and ACP flows, so its explorer page is not a
+  // settlement count either — it is published as the place to verify, not as
+  // a second number.
+  const payee = X402_PAY_TO;
+  const settleScope =
+    "Forward-only: settlements this server recorded since the meter started — lower than the payee's full on-chain history. " +
+    "The payee also receives credit top-ups, so its USDC history on Basescan is broader than x402 settlements.";
+  const verifyUrl = `https://basescan.org/token/0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913?a=${payee}`;
+  let settlement = { usdc: 0, count: 0, lastTx: null as string | null, ok: false, scope: settleScope, payee, verify_url: verifyUrl };
   try {
     const s = await getX402Settlements();
-    if (s) settlement = { usdc: s.usdc, count: s.count, lastTx: s.lastTx, ok: true };
+    if (s) settlement = { ...settlement, usdc: s.usdc, count: s.count, lastTx: s.lastTx, ok: true };
   } catch { /* leave ok:false → renders "—" */ }
+
+  // ── Actions (G4) — trades the chain proved, never a guess ──
+  const actions = await readActionStats();
 
   // ── LLM tokens served (forward-only meter — lib/llm-usage.ts) ──
   // Aggregate prompt+completion tokens across the non-streaming inference calls.
@@ -268,9 +227,13 @@ export async function buildPublicStats(): Promise<PublicStats> {
 
   return {
     updatedAt: Date.now(),
-    launches: { total, uniqueCreators, peakPerDay, byDay, recent, ok: launchesOk },
+    actions,
     product: { tools, commands: CORE_COMMANDS },
-    usage: { totalRuns, revenueEst: `$${revenueEstNum.toFixed(2)}`, topTools, ok: usageOk, unreadable: usageUnreadable },
+    usage: {
+      totalRuns, revenueEst: `$${revenueEstNum.toFixed(2)}`,
+      revenueEstBasis: "Estimate: lifetime runs × list price. The run counters include free and internal runs, so this is not revenue — settled USDC is `settlement`.",
+      topTools, ok: usageOk, unreadable: usageUnreadable,
+    },
     users: { claims, claimCap: CLAIM_CAP, total: totalUsers, claimsOk },
     credits: { spent: creditsSpent, messages: chatMessages },
     settlement,

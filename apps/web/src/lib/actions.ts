@@ -21,9 +21,10 @@
  * list, capped). Reads that fail are "unavailable", never "no actions".
  */
 import { randomUUID } from "crypto";
-import { decodeEventLog, keccak256, toHex, type Hex } from "viem";
-import { kvGetProbe, kvMutate, kvSetOrThrow } from "@/lib/kv";
-import { clientFor, type TxChain } from "@/lib/tx-chains";
+import { decodeEventLog, keccak256, parseUnits, toHex, type Hex, type Log } from "viem";
+import { kvGetProbe, kvMutate, kvSetOrThrow, kvTryLock } from "@/lib/kv";
+import { clientFor, readTokenMeta, type TxChain } from "@/lib/tx-chains";
+import { recordSettled } from "@/lib/action-stats";
 
 export type ActionKind = "swap" | "send" | "bridge";
 export type ActionSource = "chat" | "wallet" | "hood" | "mcp";
@@ -39,19 +40,44 @@ export interface ActionRecord {
   updated_at: number;
   /** What was asked — token/amount/recipient as the card or builder had them. */
   params: Record<string, string | number | null>;
-  /** What was quoted, in the output token's whole units when known. */
-  quote?: { expected_out?: string | null; min_out?: string | null; venue?: string | null };
+  /** What was quoted. `unit` says how expected_out / min_out are written —
+   *  "base" (integer base units, e.g. 0x's buyAmount) or "whole" (decimal
+   *  token units, e.g. a pool estimate). Absent ⟹ unknown, and no realized
+   *  slippage is computed against it. */
+  quote?: { expected_out?: string | null; min_out?: string | null; venue?: string | null; unit?: "base" | "whole" };
   /** The pre-trade check (G2) as it stood when the action was prepared. */
   check?: { verdict: string; reasons: string[] } | null;
   status: ActionStatus;
   tx_hash?: Hex;
   receipt?: { status: "success" | "reverted"; block: number; gas_used: string } | null;
+  /** G4 — what a confirmed swap actually delivered, read from the receipt's
+   *  own ERC-20 Transfer logs to the wallet (base units), and how far that
+   *  was from the quote. null ⟹ unmeasured (native-ETH output leaves no log;
+   *  a quote without a unit cannot be compared) — never 0. */
+  realized?: { out: string; slippage_bps: number | null } | null;
 }
 
 export const ACTION_TTL_S = 180 * 24 * 3600;
 export const ACTION_INDEX_CAP = 200;
 const recKey = (id: string) => `act:${id}`;
 const idxKey = (wallet: string) => `act:w:${wallet.toLowerCase()}`;
+const txKey = (chain: TxChain, hash: string) => `act:tx:${chain}:${hash.toLowerCase()}`;
+
+/**
+ * One transaction backs at most one action. Without this a wallet could attach
+ * the same real tx to many of its own records and every copy would count on
+ * the public meter (G4). Claimed only AFTER the chain proves the wallet sent
+ * it — claiming earlier would let anyone squat a pending hash and lock its
+ * real owner out.
+ */
+async function claimTx(chain: TxChain, hash: string, id: string): Promise<"ok" | "taken" | "error"> {
+  const lock = await kvTryLock(txKey(chain, hash), id, ACTION_TTL_S);
+  if (lock === "acquired") return "ok";
+  if (lock === "error") return "error";
+  const holder = await kvGetProbe<string>(txKey(chain, hash));
+  if (holder.status === "error") return "error";
+  return holder.status === "hit" && String(holder.value) === id ? "ok" : "taken";
+}
 
 /**
  * Canonical ERC-4337 EntryPoints (v0.7, v0.6) — the only emitters whose
@@ -133,7 +159,7 @@ export type AttachResult =
 /** Did `wallet` send this transaction? EOA / 7702: tx.from. Smart wallet: an
  *  EntryPoint's UserOperationEvent naming it as sender. */
 export async function sentByWallet(chain: TxChain, txHash: Hex, wallet: string): Promise<
-  { sent: true; receipt: NonNullable<ActionRecord["receipt"]> } | { sent: false; mined: boolean }
+  { sent: true; receipt: NonNullable<ActionRecord["receipt"]>; logs: Log[] } | { sent: false; mined: boolean }
 > {
   const client = clientFor(chain);
   let receipt;
@@ -157,7 +183,70 @@ export async function sentByWallet(chain: TxChain, txHash: Hex, wallet: string):
   return {
     sent: true,
     receipt: { status: receipt.status, block: Number(receipt.blockNumber), gas_used: receipt.gasUsed.toString() },
+    logs: receipt.logs,
   };
+}
+
+// ─── Realized output (G4) ────────────────────────────────────────────────────
+
+const TRANSFER_TOPIC = keccak256(toHex("Transfer(address,address,uint256)"));
+const ADDR = /^0x[0-9a-fA-F]{40}$/;
+const NATIVE_SENTINEL = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+
+/** Σ of `tokenOut` the wallet received in this receipt, in base units, from
+ *  the token's own Transfer logs. null ⟹ no such log (native-ETH output, or a
+ *  token that did not arrive) — unmeasured, never 0. */
+export function receivedFromLogs(logs: readonly Pick<Log, "address" | "topics" | "data">[], tokenOut: string, wallet: string): bigint | null {
+  if (!ADDR.test(tokenOut) || tokenOut.toLowerCase() === NATIVE_SENTINEL) return null;
+  const token = tokenOut.toLowerCase();
+  const w = wallet.toLowerCase();
+  let sum = 0n;
+  let seen = false;
+  for (const log of logs) {
+    if (log.address.toLowerCase() !== token || log.topics[0] !== TRANSFER_TOPIC || log.topics.length < 3) continue;
+    if (`0x${String(log.topics[2]).slice(26)}`.toLowerCase() !== w) continue;
+    try { sum += BigInt(log.data); seen = true; } catch { /* malformed — not counted */ }
+  }
+  return seen ? sum : null;
+}
+
+/** The token a swap record says it bought. */
+function swapTokenOut(p: ActionRecord["params"]): string | null {
+  if (typeof p.tokenOut === "string") return p.tokenOut;
+  if (p.direction === "buy" && typeof p.token === "string") return p.token;
+  return null; // a sell into native ETH
+}
+
+async function realizedFor(rec: ActionRecord, logs: readonly Log[]): Promise<ActionRecord["realized"]> {
+  if (rec.kind !== "swap") return null;
+  const tokenOut = swapTokenOut(rec.params);
+  if (!tokenOut) return null;
+  const got = receivedFromLogs(logs, tokenOut, rec.wallet);
+  if (got === null) return null;
+  let expected: bigint | null = null;
+  const q = rec.quote;
+  if (q?.expected_out && q.unit) {
+    try {
+      expected = q.unit === "base"
+        ? BigInt(q.expected_out)
+        : parseUnits(q.expected_out, (await readTokenMeta(rec.chain, tokenOut as Hex)).decimals);
+    } catch { expected = null; }
+  }
+  const slippage_bps = expected !== null && expected > 0n
+    ? Math.max(-10_000, Math.min(10_000, Number(((expected - got) * 10_000n) / expected)))
+    : null;
+  return { out: got.toString(), slippage_bps };
+}
+
+/** A record the chain just settled: receipt, status, realized output — and
+ *  the public meter counts it (once; see lib/action-stats.ts). */
+async function settled(rec: ActionRecord, txHash: Hex, proof: { receipt: NonNullable<ActionRecord["receipt"]>; logs: Log[] }): Promise<ActionRecord> {
+  const status: ActionStatus = proof.receipt.status === "success" ? "confirmed" : "reverted";
+  let realized: ActionRecord["realized"] = null;
+  if (status === "confirmed") {
+    try { realized = await realizedFor(rec, proof.logs); } catch { realized = null; }
+  }
+  return { ...rec, tx_hash: txHash, receipt: proof.receipt, status, realized, updated_at: Date.now() };
 }
 
 export async function attachTx(id: string, txHash: string): Promise<AttachResult> {
@@ -181,14 +270,12 @@ export async function attachTx(id: string, txHash: string): Promise<AttachResult
     await kvSetOrThrow(recKey(id), pending, ACTION_TTL_S);
     return { ok: true, record: pending };
   }
-  const updated: ActionRecord = {
-    ...rec,
-    tx_hash: txHash as Hex,
-    receipt: proof.receipt,
-    status: proof.receipt.status === "success" ? "confirmed" : "reverted",
-    updated_at: Date.now(),
-  };
+  const claim = await claimTx(rec.chain, txHash, rec.id);
+  if (claim === "taken") return { ok: false, code: "ALREADY_ATTACHED", message: "that transaction already backs another action" };
+  if (claim === "error") return { ok: false, code: "UNAVAILABLE", message: "storage unavailable — nothing was changed" };
+  const updated = await settled(rec, txHash as Hex, proof);
   await kvSetOrThrow(recKey(id), updated, ACTION_TTL_S);
+  await recordSettled(updated);
   return { ok: true, record: updated };
 }
 
@@ -201,10 +288,20 @@ export async function refreshSubmitted(rec: ActionRecord): Promise<ActionRecord>
   if (rec.status !== "submitted" || !rec.tx_hash) return rec;
   const proof = await sentByWallet(rec.chain, rec.tx_hash, rec.wallet);
   if (!proof.sent && !proof.mined) return rec; // still pending
-  const next: ActionRecord = proof.sent
-    ? { ...rec, receipt: proof.receipt, status: proof.receipt.status === "success" ? "confirmed" : "reverted", updated_at: Date.now() }
+  const claim = proof.sent ? await claimTx(rec.chain, rec.tx_hash, rec.id) : "ok";
+  if (claim === "error") return rec; // settle on a later read
+  // Sent by someone else, or already backing another of this wallet's
+  // records: the hash is dropped and the record is back to unsigned.
+  const next: ActionRecord = proof.sent && claim === "ok"
+    ? await settled(rec, rec.tx_hash, proof)
     : { ...rec, tx_hash: undefined, receipt: null, status: "prepared", updated_at: Date.now() };
-  try { await kvSetOrThrow(recKey(rec.id), next, ACTION_TTL_S); } catch { /* shown settled; saved next read */ }
+  try {
+    await kvSetOrThrow(recKey(rec.id), next, ACTION_TTL_S);
+    // Counted only once the settled record is saved — a count for a record
+    // that still reads `submitted` would be counted again by nothing, but it
+    // would describe a trade the owner's history does not yet show.
+    await recordSettled(next);
+  } catch { /* shown settled; saved (and counted) on the next read */ }
   return next;
 }
 

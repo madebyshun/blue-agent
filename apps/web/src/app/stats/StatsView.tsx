@@ -17,6 +17,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { PublicStats } from "@/lib/public-stats";
+import { ARROWS_FROZEN, ARROWS_FROZEN_SINCE } from "@/lib/blue-hood/arrow-freeze";
 
 // ─── motion primitives ───────────────────────────────────────────────────────
 
@@ -134,14 +135,16 @@ function fmtUSD(n: number): string {
  *  an empty bar instead of a 0-length bar, which would draw as a real measured
  *  drop-off in the funnel — the one shape a reader is guaranteed to read as a
  *  finding rather than as a missing input. */
-function Funnel({ claims, active, creators }: { claims: number | null; active: number; creators: number | null }) {
+function Funnel({ claims, active, traders }: { claims: number | null; active: number; traders: number | null }) {
   const { ref, inView } = useInView<HTMLDivElement>();
   const reduce = usePrefersReducedMotion();
-  const max = Math.max(claims ?? 0, active, creators ?? 0, 1);
+  const max = Math.max(claims ?? 0, active, traders ?? 0, 1);
   const rows = [
     { label: "Onboarded", sub: claims === null ? "counter unreadable" : "free-credit claims", value: claims, color: "#A78BFA" },
     { label: "Active",    sub: "wallets that spent", value: active,   color: "#4FC3F7" },
-    { label: "Creators",  sub: creators === null ? "launch registry unreadable" : "launched a token", value: creators, color: "#34D399" },
+    // Was "Creators · launched a token" — retired with the launches block
+    // (2026-09-30): the flow it counted is gone and it read 0.
+    { label: "Traders",   sub: traders === null ? "action meter unreadable" : "signed a trade the chain confirmed", value: traders, color: "#34D399" },
   ];
   return (
     <div ref={ref} className="space-y-4">
@@ -264,7 +267,7 @@ function MetricGrid({ cells, cols }: { cells: Cell[]; cols: string }) {
 // ─── main view ───────────────────────────────────────────────────────────────
 
 export default function StatsView({ stats }: { stats: PublicStats }) {
-  const { launches, product, usage, users, credits, settlement } = stats;
+  const { actions, product, usage, users, credits, settlement } = stats;
   const revenue = parseFloat((usage.revenueEst ?? "").replace(/[^0-9.]/g, "")) || 0;
 
   // #150 — `usage.ok === false` means some `usage:<id>` counters could not be
@@ -277,11 +280,17 @@ export default function StatsView({ stats }: { stats: PublicStats }) {
   // read as "nobody has ever signed up" — a far stronger claim than we can make,
   // so it renders "—" like every other unavailable source on this page.
   const claimsRaw = users.claimsOk === false ? "—" : undefined;
-  // `launches.ok === false` means the whole `bluechat:launches` registry was
-  // unreadable, so `total` and `uniqueCreators` are both placeholder zeros.
-  // "0 Tokens Launched" is the strongest claim on the page — it denies the
-  // product's entire launch history — so an unread registry says "—" instead.
-  const launchesRaw = launches.ok === false ? "—" : undefined;
+  // `actions.ok === false` means an action counter could not be READ; every
+  // figure from it is a placeholder, and "0 trades" would deny real ones.
+  const actionsRaw = actions.ok === false ? "—" : undefined;
+  // Median realized slippage is withheld below `min_n` samples: one swap's
+  // slippage is an anecdote, not a property of the router.
+  const slip = actions.slippage;
+  const slipRaw = actions.ok === false ? "—" : slip.median_bps === null ? "—" : undefined;
+  const slipSub = actions.ok === false ? "meter unreadable"
+    : slip.median_bps === null ? `insufficient data · ${slip.n} of ${slip.min_n} swaps`
+    : `realized vs quoted · median of ${slip.n} swaps`;
+  const since = actions.since ? actions.since.slice(0, 10) : null;
 
   // "BLUE Staked" used to sit in the middle of the hero. It was removed with the
   // stake surface: the staking contract is unchanged on Base, but this page is
@@ -290,18 +299,33 @@ export default function StatsView({ stats }: { stats: PublicStats }) {
   const heroCards: Cell[] = [
     { label: "Tool Runs", color: "#4FC3F7", value: usage.totalRuns, prefix: runsFloor },
     { label: "Active Users", color: "#34D399", value: users.total },
-    { label: "Tokens Launched", color: "#A78BFA", value: launches.total, raw: launchesRaw },
+    // Was "Tokens Launched" — the block read 0 and its flow is gone (2026-09-30).
+    { label: "Trades Signed", color: "#A78BFA", value: actions.confirmed, raw: actionsRaw },
   ];
 
   const usageCells: Cell[] = [
-    { label: "Total Tool Runs",   sub: usage.ok === false ? `lower bound · ${usage.unreadable} counters unreadable` : "lifetime paid x402 calls",
+    // The counters include free and internal runs — this used to say "lifetime
+    // paid x402 calls", which the file that increments them contradicts.
+    { label: "Total Tool Runs",   sub: usage.ok === false ? `lower bound · ${usage.unreadable} counters unreadable` : "lifetime runs · paid, free & internal",
       color: "#4FC3F7", value: usage.totalRuns, prefix: runsFloor },
-    { label: "Est. Revenue",      sub: usage.ok === false ? "lower bound · partial read" : "Σ runs × price (USDC)",
+    { label: "Revenue Estimate",  sub: usage.ok === false ? "lower bound · partial read" : "estimate · runs × list price · not settled",
       color: "#34D399", value: revenue, decimals: 2, prefix: `${runsFloor}$` },
     { label: "Wallets Onboarded", sub: users.claimsOk === false ? "claim counter unreadable" : `free-credit claims · cap ${users.claimCap}`,
       color: "#A78BFA", value: users.claims, raw: claimsRaw },
-    { label: "Creators",          sub: launches.ok === false ? "launch registry unreadable" : "unique token launchers",
-      color: "#FBBF24", value: launches.uniqueCreators, raw: launchesRaw },
+  ];
+
+  const tradeCells: Cell[] = [
+    { label: "Confirmed", sub: "proven sent by the wallet", color: "#34D399", value: actions.confirmed, raw: actionsRaw },
+    { label: "Base 8453", sub: "confirmed on Base", color: "#4FC3F7", value: actions.by_chain.base, raw: actionsRaw },
+    { label: "Robinhood 4663", sub: "confirmed on Robinhood Chain", color: "#A78BFA", value: actions.by_chain.robinhood, raw: actionsRaw },
+    { label: "Via Agents", sub: "built over MCP", color: "#FBBF24", value: actions.via_agent, raw: actionsRaw },
+  ];
+
+  const guardCells: Cell[] = [
+    { label: "Median Slippage", sub: slipSub, color: "#4FC3F7",
+      value: slip.median_bps === null ? undefined : slip.median_bps / 100, decimals: 2, suffix: "%", raw: slipRaw },
+    { label: "Tokens Refused", sub: "impostors + measured honeypots · distinct", color: "#F87171", value: actions.blocked.tokens, raw: actionsRaw },
+    { label: "Bridges Refused", sub: "Relay cost over 20% · measured by us", color: "#FBBF24", value: actions.blocked.bridges, raw: actionsRaw },
   ];
 
   const activityCells: Cell[] = [
@@ -350,8 +374,8 @@ export default function StatsView({ stats }: { stats: PublicStats }) {
 
           <Reveal delay={160}>
             <p className="text-slate-400 text-lg max-w-2xl mx-auto leading-relaxed mb-12">
-              Every number here is aggregate and verifiable on Basescan. No vanity metrics,
-              no per-user data — just what Blue Agent has shipped on Base.
+              Every number here is aggregate — no per-user data. A trade counts only after the
+              chain proves the wallet signed it, and settlement links to Basescan.
             </p>
           </Reveal>
 
@@ -381,13 +405,13 @@ export default function StatsView({ stats }: { stats: PublicStats }) {
           <Reveal>
             <div className="flex items-baseline justify-between mb-4">
               <h2 className="font-mono text-sm text-white">Adoption funnel</h2>
-              <span className="font-mono text-[10px] text-slate-600">onboarded → active → creators</span>
+              <span className="font-mono text-[10px] text-slate-600">onboarded → active → traders</span>
             </div>
             <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-6">
               <Funnel
                 claims={users.claimsOk === false ? null : users.claims}
                 active={users.total}
-                creators={launches.ok === false ? null : launches.uniqueCreators}
+                traders={actions.ok === false ? null : actions.wallets}
               />
             </div>
           </Reveal>
@@ -401,7 +425,7 @@ export default function StatsView({ stats }: { stats: PublicStats }) {
               <span className="font-mono text-[10px] text-slate-600">aggregate · real sources</span>
             </div>
           </Reveal>
-          <MetricGrid cells={usageCells} cols="grid-cols-2 lg:grid-cols-4" />
+          <MetricGrid cells={usageCells} cols="grid-cols-1 sm:grid-cols-3" />
           <p className="font-mono text-[10px] text-slate-600 mt-3 leading-relaxed">
             Credits are claimed free on signup, refilled daily per connected wallet, and topped up in USDC —
             then spent per Blue Chat message. Balances are per-wallet and private; only these aggregate counts are shown.
@@ -420,6 +444,29 @@ export default function StatsView({ stats }: { stats: PublicStats }) {
           <p className="font-mono text-[10px] text-slate-600 mt-3 leading-relaxed">
             Derived from the on-ledger spend history across all wallets — aggregate counts only, no wallet
             is ever exposed. Reflects real activity to date.
+          </p>
+        </section>
+
+        {/* ══ TRADES (G4, 2026-09-30) ══ — swaps, sends and bridges signed
+            through Blue Agent, counted when the chain proves the wallet sent
+            them. Replaces arrow figures: arrows had no traders. */}
+        <section className="max-w-5xl mx-auto px-6 py-6">
+          <Reveal>
+            <div className="flex items-baseline justify-between mb-4">
+              <h2 className="font-mono text-sm text-white">Trades</h2>
+              <span className="font-mono text-[10px] text-slate-600">
+                swap · send · bridge · {since ? `since ${since} · forward-only` : "meter starts with the first confirmed trade"}
+              </span>
+            </div>
+          </Reveal>
+          <MetricGrid cells={tradeCells} cols="grid-cols-2 lg:grid-cols-4" />
+          <div className="mt-px" />
+          <MetricGrid cells={guardCells} cols="grid-cols-1 sm:grid-cols-3" />
+          <p className="font-mono text-[10px] text-slate-600 mt-3 leading-relaxed">
+            Every trade runs a pre-trade check first. It refuses only on evidence — a token impersonating a
+            registered one, a sell tax measured at 50% or more, a bridge whose measured cost is over 20% —
+            and each refusal is counted once. Slippage compares what the wallet received, read from the
+            receipt, with the quote it signed against. Aggregate only; no wallet is ever shown.
           </p>
         </section>
 
@@ -459,9 +506,15 @@ export default function StatsView({ stats }: { stats: PublicStats }) {
               </div>
               <p className="font-mono text-[11px] text-slate-500 leading-relaxed mt-4">
                 Real USDC settled on Base through the Coinbase CDP x402 facilitator for paid tool
-                calls — a live, forward-only meter of confirmed on-chain settlements. Aggregate only;
-                no payer address is ever stored.
+                calls. {settlement.scope} Aggregate only; no payer address is shown.
               </p>
+              <a
+                href={settlement.verify_url}
+                target="_blank" rel="noopener noreferrer"
+                className="block font-mono text-[10px] text-[#0052FF] hover:underline mt-2"
+              >
+                Payee&apos;s USDC history on Basescan ↗
+              </a>
               {settlement.ok && settlement.lastTx && (
                 <a
                   href={`https://basescan.org/tx/${settlement.lastTx}`}
@@ -530,10 +583,21 @@ export default function StatsView({ stats }: { stats: PublicStats }) {
             Updated {new Date(stats.updatedAt).toISOString().replace("T", " ").slice(0, 16)} UTC · refreshes every 60s
           </p>
           <p className="text-center font-mono text-[10px] text-slate-500 mt-6">
-            Want the signal receipts?{" "}
-            <Link href="/track" className="text-[#4FC3F7] hover:underline">
-              Blue Hood public track record →
-            </Link>
+            {ARROWS_FROZEN ? (
+              <>
+                Blue Hood stopped publishing arrows on {ARROWS_FROZEN_SINCE}.{" "}
+                <Link href="/track" className="text-[#4FC3F7] hover:underline">
+                  The arrow record stays public, as history →
+                </Link>
+              </>
+            ) : (
+              <>
+                Want the signal receipts?{" "}
+                <Link href="/track" className="text-[#4FC3F7] hover:underline">
+                  Blue Hood public track record →
+                </Link>
+              </>
+            )}
           </p>
         </section>
       </div>

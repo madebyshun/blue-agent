@@ -237,7 +237,7 @@ async function run(input: Parameters<typeof preTradeCheck>[0]) {
   }
   const prep = read("src/app/api/x402/_handlers/rh-stock-swap-prepare.ts");
   ok("x402 rh-stock-swap-prepare: a BLOCK is a non-2xx (so it is never charged) and the check rides in the reply",
-    /check\.verdict === "BLOCK"[\s\S]{0,200}status: 409/.test(prep) && /warnings,\s*\n\s*check,/.test(prep));
+    /check\.verdict === "BLOCK"[\s\S]{0,400}status: 409/.test(prep) && /warnings,\s*\n\s*check,/.test(prep));
   ok("x402 rh-stock-swap-quote carries the same check", /check: await checkP/.test(read("src/app/api/x402/_handlers/rh-stock-swap-quote.ts")));
 
   console.log(failures === 0 ? "\npre-trade-check-test: PASS" : `\npre-trade-check-test: FAIL — ${failures}`);

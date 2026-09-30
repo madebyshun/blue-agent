@@ -128,7 +128,7 @@ export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
     params: isT2T
       ? ({ tokenIn: tokenInAddr, tokenOut: token, amount, symIn: inSym, symOut: outSym } as Record<string, string>)
       : ({ direction, token, amount, symIn: inSym, symOut: outSym } as Record<string, string>),
-    quote: { venue: "RobinhoodSwapRouter", expected_out: estimatedOut != null ? String(estimatedOut) : null, min_out: minOut != null ? String(minOut) : null },
+    quote: { venue: "RobinhoodSwapRouter", expected_out: estimatedOut != null ? String(estimatedOut) : null, min_out: minOut != null ? String(minOut) : null, unit: "whole" },
     check: pt.check ? { verdict: pt.check.verdict, reasons: pt.check.reasons.map((r) => r.text) } : null,
   }));
 

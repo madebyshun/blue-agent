@@ -88,6 +88,7 @@ import {
 import { B20_FACTORY } from "@/lib/base-stocks/registry";
 import { createAction, type ActionKind } from "@/lib/actions";
 import { preTradeCheck, type PreTradeCheck } from "@/lib/pre-trade-check";
+import { recordPreTradeBlock } from "@/lib/action-stats";
 import { FACTORY_ABI as B20_FACTORY_ABI } from "@/lib/b20/inspect-abi";
 import { ROBINHOOD_SWAP_ROUTER_ADDRESS } from "@/lib/robinhood/swap";
 import { buildBaseApprove, parseSlippageArg } from "@/lib/zerox-swap";
@@ -753,7 +754,10 @@ async function withPreTradeCheck(kind: ActionKind, args: Record<string, unknown>
   let check: PreTradeCheck | null = null;
   if (kind !== "bridge") {
     check = await preTradeCheck({ chain, kind, token });
-    if (check.verdict === "BLOCK") throw preTradeRefusal(check);
+    if (check.verdict === "BLOCK") {
+      await recordPreTradeBlock(check, { chain, token }, { costMeasuredByServer: false });
+      throw preTradeRefusal(check);
+    }
   }
   const text = await build();
   let parsed: Record<string, unknown>;
@@ -762,7 +766,11 @@ async function withPreTradeCheck(kind: ActionKind, args: Record<string, unknown>
   if (kind === "bridge") {
     const cost = (parsed.meta as { totalCostPercent?: unknown } | undefined)?.totalCostPercent;
     check = await preTradeCheck({ chain, kind, token, bridgeCostPercent: typeof cost === "number" ? cost : null });
-    if (check.verdict === "BLOCK") throw preTradeRefusal(check);
+    if (check.verdict === "BLOCK") {
+      // The cost came from this server's own Relay quote — a measured refusal.
+      await recordPreTradeBlock(check, { chain, token }, { costMeasuredByServer: true });
+      throw preTradeRefusal(check);
+    }
   }
   if (!check) return text;
   parsed.check = check.verdict === "WARN"
@@ -801,7 +809,7 @@ async function withActionRecord(kind: ActionKind, args: Record<string, unknown>,
         ? { token: s(args.token), amount: s(args.amount), to: s(args.toAddress) }
         : { fromChain: s(args.fromChain), toChain: s(args.toChain), token: s(args.token), amount: s(args.amount), recipient: s(args.recipient) },
       quote: kind === "swap"
-        ? { venue: s(meta.venue) ?? (chain === "robinhood" ? "RobinhoodSwapRouter" : null), expected_out: s(meta.buyAmount), min_out: s(meta.minBuyAmount) ?? s(parsed.amountOutMinimum) }
+        ? { venue: s(meta.venue) ?? (chain === "robinhood" ? "RobinhoodSwapRouter" : null), expected_out: s(meta.buyAmount), min_out: s(meta.minBuyAmount) ?? s(parsed.amountOutMinimum), unit: "base" as const }
         : undefined,
       check,
     });

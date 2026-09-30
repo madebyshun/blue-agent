@@ -18,8 +18,9 @@ import { useEffect, useState } from "react";
  *     measurement, so the meter doesn't throw away the history it never got to
  *     record. With the baseline seeded the sum is always real; only a 0 total
  *     (no baseline AND an empty meter) → "—", never a fabricated 0.
- *   • AI tool runs carries usage.totalRuns + usage.ok — the real all-time count
- *     of paid x402 tool runs settled in USDC on Base.
+ *   • AI tool runs carries usage.totalRuns + usage.ok — the all-time count of
+ *     tool runs of every kind (paid, free and internal; the counters cannot
+ *     tell them apart — see lib/public-stats.ts). Never labelled "paid".
  *   • Models is a compile-time constant (MODELS length, passed in as `models`) —
  *     always real, never "—".
  *
@@ -73,14 +74,15 @@ export default function LiveUsage({ models }: { models?: number }) {
   // fetch fails (meter just falls to 0); only a 0 total (no baseline) → "—".
   const tokens = tokensTotal > 0 ? fmt(tokensTotal) : "—";
 
-  // Sub-stat — paid AI tool runs, the real all-time total (x402 settlements),
-  // ok-gated: unreadable / non-positive / absent → "—".
+  // Sub-stat — AI tool runs of every kind (the counters include free and
+  // internal runs, so the label never says "paid"), ok-gated: unreadable /
+  // non-positive / absent → "—".
   const rawRuns = stats?.usage?.totalRuns;
   const runsOk = stats?.usage?.ok !== false;
   const runs =
     !failed && runsOk && typeof rawRuns === "number" && rawRuns > 0 ? fmt(rawRuns) : "—";
 
-  // Two always-real sub-stats. "Hub skills" was dropped per the ask; the paid
+  // Two always-real sub-stats. "Hub skills" was dropped per the ask; the
   // tool-run total (real, populated) takes the featured sub-slot beside Models.
   const subs: { label: string; value: string }[] = [
     { label: "AI tool runs", value: runs },

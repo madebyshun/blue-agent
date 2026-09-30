@@ -40,6 +40,15 @@ function flatParams(v: unknown): Record<string, string | number | null> {
   return out;
 }
 
+/** "base" = an integer of base units; "whole" = a plain decimal. Anything
+ *  else (exponent notation, a unit the value does not match) → no unit. */
+function quoteUnit(q: Record<string, unknown>): "base" | "whole" | null {
+  const v = typeof q.expected_out === "string" ? q.expected_out : "";
+  if (q.unit === "base" && /^\d{1,78}$/.test(v)) return "base";
+  if (q.unit === "whole" && /^\d{1,40}(\.\d{1,36})?$/.test(v)) return "whole";
+  return null;
+}
+
 export async function GET(req: NextRequest) {
   const acting = await resolveActingWallet(req, new URL(req.url).searchParams.get("address"));
   if (acting.status !== "ok") return actingWalletRefusal(acting);
@@ -80,6 +89,9 @@ export async function POST(req: NextRequest) {
         expected_out: typeof quoteIn.expected_out === "string" ? quoteIn.expected_out.slice(0, 64) : null,
         min_out: typeof quoteIn.min_out === "string" ? quoteIn.min_out.slice(0, 64) : null,
         venue: typeof quoteIn.venue === "string" ? quoteIn.venue.slice(0, 40) : null,
+        // Kept only when the number is actually written that way — a unit the
+        // value does not match would turn into a wrong realized slippage (G4).
+        ...(quoteUnit(quoteIn) ? { unit: quoteUnit(quoteIn)! } : {}),
       } : undefined,
       check: checkIn && typeof checkIn.verdict === "string"
         ? { verdict: checkIn.verdict.slice(0, 16), reasons: Array.isArray(checkIn.reasons) ? checkIn.reasons.filter((r): r is string => typeof r === "string").slice(0, 8).map((r) => r.slice(0, 200)) : [] }
