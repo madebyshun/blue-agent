@@ -13,13 +13,16 @@
  * link stores only { address, tgUserId } — never a key. The tg id is a routing
  * handle for alerts, not an authz token for funds.
  *
- * v1 trust model: the route trusts the `address` in the body (proven by the
- * wagmi connection on the client). The code is returned ONLY to this caller, so
- * to consume it an attacker would need the code value. Worst case is receiving
- * another wallet's PUBLIC track-record alerts — no funds, no private data. When
- * wallet auth (SIWE) lands, this can require a signature to harden it.
+ * Trust model — SIWE since 2026-09-30 (plan §2, W0-6). Until then the route
+ * trusted the `address` in the body, which nothing proved: the wagmi connection
+ * is a claim the browser makes about itself. Anyone could mint a code for a
+ * stranger's wallet and link it to their own Telegram, receiving that wallet's
+ * alerts. The code is now minted only for the wallet the session proves
+ * (lib/acting-wallet.ts), as this header said it would be "when wallet auth
+ * (SIWE) lands".
  */
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
+import { resolveActingWallet, actingWalletRefusal } from "@/lib/acting-wallet";
 import { issueTgLinkCode } from "@/lib/blue-hood/watchlist";
 import { botDeepLink, BOT_USERNAME } from "@/lib/telegram/bot";
 
@@ -29,18 +32,17 @@ export const dynamic = "force-dynamic";
 const NO_STORE = { "Cache-Control": "no-store, max-age=0" };
 
 /** POST /api/hood/tglink { address } → { code, link, expiresAt } */
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   let body: { address?: string };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ ok: false, error: "invalid JSON body" }, { status: 400, headers: NO_STORE });
   }
-  if (!body.address) {
-    return NextResponse.json({ ok: false, error: "address is required" }, { status: 400, headers: NO_STORE });
-  }
+  const acting = await resolveActingWallet(req, body.address);
+  if (acting.status !== "ok") return actingWalletRefusal(acting);
 
-  const res = await issueTgLinkCode(body.address);
+  const res = await issueTgLinkCode(acting.wallet);
   if ("error" in res) {
     return NextResponse.json({ ok: false, error: res.error.message, code: res.error.code }, { status: 400, headers: NO_STORE });
   }

@@ -63,6 +63,9 @@ export const maxDuration = 300;
 
 const CRON_SECRET = process.env.CRON_SECRET ?? "";
 const BASE_URL    = process.env.NEXT_PUBLIC_APP_URL ?? "https://blueagent.dev";
+// Proof this job acts for a task owner (lib/acting-wallet.ts). Without it —
+// local dev — cron/run refuses the run as unauthenticated, which is correct.
+const INTERNAL_KEY = process.env.INTERNAL_SERVICE_KEY ?? "";
 
 const LOCK_KEY = "crons:tick:lock";
 /** Comfortably longer than a full tick, short enough that a crash self-heals. */
@@ -98,16 +101,25 @@ type RunOutcome =
  * collection live there, and the browser's "Run now" button goes through the
  * same path. Two copies of that would drift the way the chat price tables did.
  *
- * The owner's wallet is forwarded as `address`, so the run is billed to the
- * person who scheduled it and paid Hub tools are authorised as them. Since
- * PR #386 that route attaches no internal key of its own, so a scheduled run
- * costs exactly what typing the same prompt would cost.
+ * The owner's wallet is forwarded — since 2026-09-30 as a PROOF (internal key
+ * + x-blue-user), no longer as a bare `address` cron/run would take on faith —
+ * so the run is billed to the person who scheduled it and paid Hub tools are
+ * authorised as them. cron/run passes the same pair on to /api/chat, which
+ * bills that wallet: the internal key only ever travels WITH a wallet, never
+ * as the free bypass PR #386 removed, so a scheduled run still costs exactly
+ * what typing the same prompt would cost.
  */
 async function runTask(task: ScheduledTask, wallet: string): Promise<RunOutcome> {
   try {
     const res = await fetch(`${BASE_URL}/api/cron/run`, {
       method:  "POST",
-      headers: { "Content-Type": "application/json" },
+      // cron/run takes the wallet from a proof, not the body (2026-09-30).
+      // This job's proof is the internal key: it read `wallet` from the owner's
+      // own task list, written only through the SIWE-gated /api/chat/schedule.
+      headers: {
+        "Content-Type": "application/json",
+        ...(INTERNAL_KEY ? { "x-blue-internal": INTERNAL_KEY, "x-blue-user": wallet } : {}),
+      },
       body:    JSON.stringify({ prompt: task.prompt, tier: task.tier, address: wallet }),
       signal:  AbortSignal.timeout(95_000),
     });

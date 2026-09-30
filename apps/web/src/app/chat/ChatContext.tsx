@@ -21,6 +21,7 @@ import { resolvePresetDispatch, VIRTUALS_PRESETS_V1 } from "./components/presets
 import { useWorkspaceSync, WORKSPACE_HYDRATED_EVENT, type UseWorkspaceSync } from "./workspace-sync";
 import { useScheduleSync, type UseScheduleSync } from "./use-schedule-sync";
 import { useSiweSignIn } from "./use-siwe-signin";
+import { useEnsureSession, invalidateSessionCache } from "@/hooks/useEnsureSession";
 import {
   creditCost, deductCredits, addCredits, getTierInfo,
   getNextRefresh, refreshCreditsIfNeeded, getDailyCr, GUEST_DAILY,
@@ -370,6 +371,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   // ── Cross-device sync ─────────────────────────────────────────────────────
   const siweSignIn = useSiweSignIn();
+  // Charging a wallet needs proof it is this wallet (SIWE, 2026-09-30).
+  const { ensureSession, hasSession, fetchWithSession } = useEnsureSession();
   const signIn     = useCallback(
     () => siweSignIn(walletAddr as string),
     [siweSignIn, walletAddr],
@@ -417,12 +420,20 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setCrons(crons.filter(c => c.id !== id));
   }, [crons]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const runCron = useCallback(async (id: string) => {
+  // `interactive` is false for the on-load auto-run below: work nobody clicked
+  // must not pop a signature request, so without a session it records why it
+  // did not run instead of asking.
+  const runCron = useCallback(async (id: string, interactive = true) => {
     const cron = crons.find(c => c.id === id);
     if (!cron) return;
     setCronRunning(id);
     try {
-      const res = await fetch("/api/cron/run", {
+      if (!walletAddr) throw new Error("Connect a wallet to run a task — a run is billed like a chat message.");
+      // cron/run bills the SIGNED-IN wallet (2026-09-30), so sign in first.
+      if (!interactive && !(await hasSession(walletAddr))) {
+        throw new Error("Not run — sign in with your wallet (Run now) so tasks can bill it.");
+      }
+      const res = await fetchWithSession(walletAddr, "/api/cron/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         // Send the wallet: a task run is a chat message and is metered like
@@ -464,7 +475,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     } finally {
       setCronRunning(null);
     }
-  }, [crons, chatTier, walletAddr]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [crons, chatTier, walletAddr, hasSession, fetchWithSession]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-run due crons — once, after wallet detection settles.
   //
@@ -483,7 +494,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     autoRanRef.current = true;
     const due = crons.filter(isDue);
     if (due.length === 0) return;
-    (async () => { for (const c of due) await runCron(c.id); })();
+    (async () => { for (const c of due) await runCron(c.id, false); })();
   }, [walletReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keep the server's copy of the background tasks in step with this one, and
@@ -560,6 +571,19 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     if (!isUnlimited && credits < cost) {
       setError(`Not enough credits. Need ${cost}, have ${credits}.`);
       return;
+    }
+
+    // A connected wallet is charged for this message, and since 2026-09-30 the
+    // server charges only a wallet that PROVED it is this one (SIWE). One
+    // signature — no transaction — covers 30 days; the free tier costs nothing
+    // and needs none. A refused signature sends nothing and says why.
+    if (walletAddr && chatTier !== "free") {
+      try {
+        await ensureSession(walletAddr);
+      } catch (e) {
+        setError(`Sign in with your wallet to use credits — ${(e as Error).message || "the signature was cancelled"}. Nothing was sent.`);
+        return;
+      }
     }
 
     setError(null);
@@ -827,6 +851,22 @@ export function ChatProvider({ children }: { children: ReactNode }) {
               // The gateway failed before producing a single token. What
               // follows in the stream is an error notice, not an answer.
               upstreamFailed = true;
+            } else if (parsed.type === "auth_required") {
+              // The server would not charge this wallet without proof (the
+              // session expired or belongs to another wallet). Nothing was
+              // charged. Forget the cached "signed in" so the next send asks
+              // for the signature, and say so in the reply bubble.
+              invalidateSessionCache();
+              const msg = (parsed as unknown as { message?: string }).message
+                ?? "Sign in with your wallet to use credits, then send again.";
+              setTasksState(prev => {
+                const task = prev.find(t => t.id === tid);
+                if (!task) return prev;
+                const msgs = [...task.messages];
+                const last = msgs[msgs.length - 1];
+                if (last?.role === "assistant") msgs[msgs.length - 1] = { ...last, content: msg };
+                return prev.map(t => t.id === tid ? { ...t, messages: msgs } : t);
+              });
             } else if (parsed.type === "insufficient_credits") {
               // Server signalled the wallet's credit ledger couldn't cover the
               // chat message or tool call. Attach the structured notice to the
@@ -948,7 +988,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, [
     streaming, activeTask, activeTaskId, chatTier, walletAddr, cost, credits,
     isUnlimited,
-    webSearch, pendingFiles,
+    webSearch, pendingFiles, ensureSession,
   ]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const stop = useCallback(() => abortRef.current?.abort(), []);

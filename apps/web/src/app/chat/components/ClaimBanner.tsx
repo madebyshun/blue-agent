@@ -8,6 +8,7 @@
 import { useEffect, useState } from "react";
 import { useChat } from "../ChatContext";
 import { WalletPickerModal } from "@/components/WalletPicker";
+import { useEnsureSession } from "@/hooks/useEnsureSession";
 
 const DISMISS_KEY = "blueagent:claim-dismissed";
 
@@ -25,6 +26,8 @@ interface Status {
 
 export default function ClaimBanner() {
   const { walletAddr, triggerWalletRefresh } = useChat();
+  // The claim goes to the SIGNED-IN wallet only (2026-09-30).
+  const { fetchWithSession } = useEnsureSession();
 
   const [status, setStatus] = useState<Status | null>(null);
   const [busy, setBusy] = useState(false);
@@ -61,7 +64,7 @@ export default function ClaimBanner() {
     if (!walletAddr) { setPicker(true); return; }
     setBusy(true); setMsg("");
     try {
-      const r = await fetch("/api/credits/claim", {
+      const r = await fetchWithSession(walletAddr, "/api/credits/claim", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ address: walletAddr }),
@@ -77,8 +80,9 @@ export default function ClaimBanner() {
       } else {
         setMsg(r.error || "Claim failed — try again.");
       }
-    } catch {
-      setMsg("Claim failed — try again.");
+    } catch (e) {
+      const why = (e as Error).message;
+      setMsg(why ? `Sign in to claim — ${why}` : "Claim failed — try again.");
     } finally {
       setBusy(false);
     }

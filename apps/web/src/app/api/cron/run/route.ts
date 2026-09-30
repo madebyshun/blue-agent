@@ -25,8 +25,19 @@
  * the operator's tool budget anonymously. Forwarding the caller's own address
  * instead makes a scheduled run cost exactly what typing the same prompt into
  * the composer costs, which is the only defensible price for it.
+ *
+ * WHO the caller is — proven since 2026-09-30 (plan §2, W0-6). Until then the
+ * "caller's own address" was just `body.address`: anyone could run a prompt
+ * billed to a stranger, and a request with no address ran as a guest — a paid
+ * model, billed to no one. Now the wallet comes from lib/acting-wallet.ts: the
+ * SIWE session (the browser's "Run now") or the internal key + x-blue-user (the
+ * user-tasks cron, acting for the owner it read from that owner's own task
+ * list). No proof, no run. The chat pipeline is then called as that wallet —
+ * internal key + x-blue-user — so it re-checks nothing it cannot and bills
+ * exactly that wallet, never a free bypass.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { resolveActingWallet, actingWalletRefusal } from "@/lib/acting-wallet";
 
 export const runtime = "nodejs";
 
@@ -126,11 +137,14 @@ export async function POST(req: NextRequest) {
     // of the tier table, drifting exactly the way the chat price tables did.
     // /api/chat already resolves tiers (and prices them); one owner is enough.
     const tier = (body.tier ?? "").trim() || "pro";
-    const address = (body.address ?? "").trim();
 
     if (!prompt) {
       return NextResponse.json({ error: "prompt required" }, { status: 400 });
     }
+
+    const acting = await resolveActingWallet(req, body.address);
+    if (acting.status !== "ok") return actingWalletRefusal(acting);
+    const internalKey = process.env.INTERNAL_SERVICE_KEY ?? "";
 
     // Route through the live chat pipeline so the model has the real-data Hub
     // tools available — as the CALLER, with no borrowed authority. Forwarding
@@ -138,13 +152,19 @@ export async function POST(req: NextRequest) {
     // tools still run and are billed to the person who asked for them.
     const res = await fetch(`${BASE_URL}/api/chat`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        // Acting FOR the proven wallet: /api/chat bills x-blue-user when the
+        // internal key vouches for it. Without a key (local dev) the caller's
+        // own cookie is forwarded instead and chat checks the session itself.
+        ...(internalKey
+          ? { "x-blue-internal": internalKey, "x-blue-user": acting.wallet }
+          : { cookie: req.headers.get("cookie") ?? "" }),
+      },
       body: JSON.stringify({
         messages: [{ role: "user", content: expandPrompt(prompt) }],
         tier,
-        // Only forward a well-formed address; junk here would be sent onward as
-        // a ledger key. Absent/invalid → the run is treated as a guest chat.
-        ...(/^0x[a-fA-F0-9]{40}$/.test(address) ? { address } : {}),
+        address: acting.wallet,
       }),
       signal: AbortSignal.timeout(90_000),
     });

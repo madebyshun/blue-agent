@@ -9,10 +9,17 @@
 // limit deters trivial scripted multi-claim WITHOUT blocking genuinely new
 // (empty) wallets — onboarding new users is the whole point, so we don't gate
 // on wallet age / balance.
+//
+// POST needs a SIWE session since 2026-09-30 (plan §2, W0-6). The "one claim
+// per wallet" lock was keyed on a body `address` with no proof behind it, so
+// anyone could claim for 300 addresses they do not own — every slot of the
+// campaign, credited to wallets nobody would ever use. The credit now goes only
+// to the wallet the session proves; the body address, when sent, must match.
 
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { kv, kvGet, kvSet, kvSetNX, kvDel, kvGetCounter, kvGetProbe } from "@/lib/kv";
 import { topup } from "@/lib/credit-ledger";
+import { resolveActingWallet, actingWalletRefusal } from "@/lib/acting-wallet";
 
 export const runtime = "nodejs";
 
@@ -75,13 +82,14 @@ export async function GET(req: Request) {
   });
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   let body: { address?: string };
   try { body = await req.json(); } catch { return NextResponse.json({ ok: false, error: "bad body" }, { status: 400 }); }
 
-  const address = (body.address ?? "").trim();
-  if (!isAddr(address)) return NextResponse.json({ ok: false, error: "invalid address" }, { status: 400 });
-  const addr = address.toLowerCase();
+  // The wallet comes from the session, never from the body (see header).
+  const acting = await resolveActingWallet(req, body.address);
+  if (acting.status !== "ok") return actingWalletRefusal(acting);
+  const addr = acting.wallet;
 
   // Already claimed → idempotent success.
   if (await kvGet(doneKey(addr))) {

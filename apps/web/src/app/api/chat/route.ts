@@ -26,6 +26,7 @@ import { mcpCallTool } from "@/lib/mcp-client";
 import { SOUL_MD } from "@/lib/soul";
 import { VIRTUALS_PRESETS } from "@/app/api/_lib/llm";
 import { buildBaseSystem, buildAgentCapabilities, buildB20Section } from "./system-prompt";
+import { normalizeWallet, resolveActingWallet } from "@/lib/acting-wallet";
 
 export const runtime = "nodejs";
 // Vercel kills serverless functions at 60s by default — explicit budget so
@@ -206,6 +207,26 @@ function creditErrorSSE(needed: number, balance: number): Response {
       "Cache-Control": "no-store",
       "Connection":    "keep-alive",
     },
+  });
+}
+
+/**
+ * The chat half of lib/acting-wallet.ts's refusal: a connected wallet asked to
+ * be charged without proving it is theirs. SSE + 200 like creditErrorSSE, so
+ * the existing reader surfaces it; the client signs in (one SIWE signature)
+ * and resends. Nothing was charged and no model was called.
+ */
+function authRequiredSSE(reason: "sign_in_required" | "wallet_mismatch" | "session_unavailable"): Response {
+  const message =
+    reason === "session_unavailable"
+      ? "Couldn't verify your sign-in right now — nothing was charged. Try again in a moment."
+      : reason === "wallet_mismatch"
+      ? "You're signed in with a different wallet than the one connected. Sign in again with this wallet to use credits."
+      : "Sign in with your wallet to use credits — one signature, no transaction, no funds moved.";
+  const payload = JSON.stringify({ type: "auth_required", reason, message });
+  return new Response(`data: ${payload}\n\ndata: [DONE]\n\n`, {
+    status: 200,
+    headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-store", "Connection": "keep-alive" },
   });
 }
 
@@ -2926,15 +2947,44 @@ export async function POST(req: NextRequest) {
   // that bargain: the handle for giving it back if the turn then produces
   // nothing at all (#193). It is a no-op for guests, zero-cost tiers, and any
   // request whose spend was skipped, so every failure path can call it blindly.
+  //
+  // ── Who pays — proven, not claimed (SIWE, 2026-09-30, plan §2 / W0-6) ─────
+  // `address` is what the CLIENT says it is connected as, and until this date
+  // it was also who got charged: anyone could put a stranger's address here and
+  // chat — and run paid Hub tools, via X-Blue-User — on that stranger's credits.
+  // Now a wallet is billed only when it is proven (lib/acting-wallet.ts): the
+  // SIWE session names it, or our own server does with the internal key (the
+  // user-tasks cron, through cron/run, for the owner it verified when the task
+  // was saved). A claimed-but-unproven wallet on a paying tier gets an
+  // `auth_required` event instead of a model call; the client signs in once and
+  // resends. The free tier costs nothing and carries no tools, so it needs no
+  // proof. `payer` is the ONLY address used below for money or wallet tools.
+  const claimedWallet = normalizeWallet(address);
+  const freeTierRequested = tier === "free" && VIRTUALS_PRESETS.some((p) => p.id === "free");
+  let payer: string | undefined;
+  if (isInternalCaller || claimedWallet) {
+    const acting = await resolveActingWallet(req, claimedWallet);
+    if (acting.status === "ok") {
+      payer = acting.wallet;
+    } else if (claimedWallet && !freeTierRequested) {
+      return authRequiredSSE(
+        acting.status === "unavailable" ? "session_unavailable"
+          : acting.status === "mismatch" ? "wallet_mismatch"
+          : "sign_in_required",
+      );
+    }
+  }
+
   let undoDebit: (() => Promise<void>) | undefined;
-  if (address && INTERNAL_KEY && /^0x[a-fA-F0-9]{40}$/.test(address)) {
-    const debit = await debitChatCredits(address, tier);
+  if (payer && INTERNAL_KEY) {
+    const billed = payer;
+    const debit = await debitChatCredits(billed, tier);
     if (debit.kind === "insufficient") {
       return creditErrorSSE(debit.needed, debit.balance);
     }
     if (debit.kind === "ok") {
       const ref = debit.ref;
-      undoDebit = () => refundChatCredits(address, ref);
+      undoDebit = () => refundChatCredits(billed, ref);
     }
     // debit.kind === "skipped" → nothing was charged, nothing to undo
   }
@@ -3110,7 +3160,7 @@ export async function POST(req: NextRequest) {
       // Force check_wallet when the user clearly asks for their wallet balance
       // and a wallet is connected, so the wallet card reliably renders.
       const forceTool =
-        address && /^0x[a-fA-F0-9]{40}$/.test(address) && wantsWalletBalance(cleanMessages)
+        payer && wantsWalletBalance(cleanMessages)
           ? "check_wallet"
           : undefined;
       // Forced tool → skip Phase 1 entirely: we already decided the tool and it
@@ -3124,7 +3174,7 @@ export async function POST(req: NextRequest) {
           );
       if (outcome.status === "tools") {
         return veniceToolStream(
-          apiKey, effModelId, openaiMsgs, outcome.toolCalls, maxTok, autoSearch, address, undefined,
+          apiKey, effModelId, openaiMsgs, outcome.toolCalls, maxTok, autoSearch, payer, undefined,
           hasConnectorTools ? mcpMap : undefined,
         );
       }
@@ -3214,7 +3264,7 @@ export async function POST(req: NextRequest) {
   // coincidence. Not currently firing; asserted by chat-tool-honesty-check.
   if (!knowledgeOnly && !freeNoTools) {
     const forceTool =
-      address && /^0x[a-fA-F0-9]{40}$/.test(address) && wantsWalletBalance(cleanMessages)
+      payer && wantsWalletBalance(cleanMessages)
         ? "check_wallet"
         : undefined;
     // Forced tool → synthesize the tool_call and skip the Phase 1 LLM round-trip
@@ -3227,7 +3277,7 @@ export async function POST(req: NextRequest) {
         );
     if (outcome.status === "tools") {
       return veniceToolStream(
-        virtualsKey, virtualsModel, openaiMsgs, outcome.toolCalls, virtualsMax, virtualsAutoSearch, address, cfg,
+        virtualsKey, virtualsModel, openaiMsgs, outcome.toolCalls, virtualsMax, virtualsAutoSearch, payer, cfg,
         hasConnectorTools ? mcpMap : undefined,
       );
     }

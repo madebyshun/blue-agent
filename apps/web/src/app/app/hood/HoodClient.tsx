@@ -47,6 +47,7 @@ import { HealthProvider, HealthBanner } from "./HealthProvider";
 import { WatchlistProvider, useWatchlist } from "./WatchlistProvider";
 import { WATCHLIST_LIMITS } from "@/lib/blue-hood/watchlist-config";
 import { ARROWS_FROZEN, ARROW_TRADE_ENABLED } from "@/lib/blue-hood/arrow-freeze";
+import { useEnsureSession } from "@/hooks/useEnsureSession";
 
 const REFRESH_MS = 15_000;
 const RH_GREEN = "#34D399";
@@ -477,15 +478,37 @@ function Header({
 function TelegramLinkButton() {
   const { address, isConnected } = useAccount();
   const [state, setState] = useState<"idle" | "busy" | "opened" | "error">("idle");
+  // The link is minted only for the SIGNED-IN wallet (SIWE, 2026-09-30). The
+  // popup pre-open below must happen synchronously inside the click, and a
+  // signature prompt would spend that gesture — so a wallet without a session
+  // signs in on one click and opens Telegram on the next.
+  const { hasSession, ensureSession, fetchWithSession } = useEnsureSession();
+  const [signedIn, setSignedIn] = useState<boolean | null>(null);
+  useEffect(() => {
+    let live = true;
+    if (address) void hasSession(address).then((ok) => { if (live) setSignedIn(ok); });
+    return () => { live = false; };
+  }, [address, hasSession]);
 
   if (!isConnected || !address) return null;
 
   async function onClick() {
-    if (state === "busy") return;
+    if (state === "busy" || !address) return;
+    if (!signedIn) {
+      setState("busy");
+      try {
+        await ensureSession(address);
+        setSignedIn(true);
+        setState("idle");
+      } catch {
+        setState("error");
+      }
+      return;
+    }
     setState("busy");
     const popup = typeof window !== "undefined" ? window.open("", "_blank") : null;
     try {
-      const res = await fetch("/api/hood/tglink", {
+      const res = await fetchWithSession(address, "/api/hood/tglink", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ address }),
@@ -508,10 +531,11 @@ function TelegramLinkButton() {
   }
 
   const label =
-    state === "busy" ? "opening…"
+    state === "busy" ? (signedIn ? "opening…" : "signing in…")
       : state === "opened" ? "check Telegram →"
         : state === "error" ? "unavailable"
-          : "Get alerts on Telegram →";
+          : signedIn ? "Get alerts on Telegram →"
+            : "Sign in for Telegram alerts →";
 
   return (
     <button

@@ -8,11 +8,13 @@
  * drain; web push (later) reads THIS shape + a delivered.webpush cursor. This
  * route is the human/inspection read — no delivery side effects.
  *
- * Public read — no secret. It only exposes a wallet's own alerts for PUBLIC RWA
- * arrows (no balances, no keys), keyed by the connected address, mirroring the
- * watchlist route's trust model.
+ * SIWE-gated since 2026-09-30, mirroring the watchlist route's trust model
+ * (plan §2, W0-6). The alerts are about PUBLIC arrows, but the list of which
+ * ones reached a wallet is that wallet's watchlist by another name, so it is
+ * read only for the wallet the session proves.
  */
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
+import { resolveActingWallet, actingWalletRefusal } from "@/lib/acting-wallet";
 import { getAlertsForAddress } from "@/lib/blue-hood/alerts";
 
 export const runtime = "nodejs";
@@ -21,12 +23,11 @@ export const dynamic = "force-dynamic";
 const NO_STORE = { "Cache-Control": "no-store, max-age=0" };
 
 /** GET /api/hood/alerts?address=0x…&limit=50 → { ok, alerts } newest-first. */
-export async function GET(req: Request) {
+export async function GET(req: NextRequest) {
   const url = new URL(req.url);
-  const address = url.searchParams.get("address");
-  if (!address) {
-    return NextResponse.json({ ok: false, error: "address query param required" }, { status: 400, headers: NO_STORE });
-  }
+  const acting = await resolveActingWallet(req, url.searchParams.get("address"));
+  if (acting.status !== "ok") return actingWalletRefusal(acting);
+  const address = acting.wallet;
   // Clamp limit to a sane window so a caller can't ask for the whole KV history.
   const rawLimit = Number(url.searchParams.get("limit") ?? 50);
   const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(100, Math.trunc(rawLimit))) : 50;

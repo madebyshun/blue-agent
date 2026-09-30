@@ -31,6 +31,7 @@ import { createContext, useCallback, useContext, useEffect, useState } from "rea
 import { useAccount } from "wagmi";
 import type { Watchlist, WatchEntry, AlertKind } from "@/lib/blue-hood/watchlist";
 import { rowKey, type HoodChain } from "@/lib/blue-hood/types";
+import { useEnsureSession } from "@/hooks/useEnsureSession";
 
 /** Result of an add/remove — carries the server's reason so the UI can show a cap/validation message. */
 export type WatchlistMutation = { ok: true } | { ok: false; error: string; code?: string };
@@ -67,6 +68,11 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
   const { address } = useAccount();
   const [watchlist, setWatchlist] = useState<Watchlist | null>(null);
   const [loading, setLoading] = useState(false);
+  // The watchlist is private to the SIGNED-IN wallet (SIWE, 2026-09-30). The
+  // on-load read never prompts — without a session the list is simply unknown
+  // (null) — and the first ★ asks for the one signature, then the server's
+  // echo fills the list in.
+  const { hasSession, fetchWithSession } = useEnsureSession();
 
   const refresh = useCallback(async () => {
     if (!address) {
@@ -75,6 +81,10 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
     }
     setLoading(true);
     try {
+      if (!(await hasSession(address))) {
+        setWatchlist(null);
+        return;
+      }
       const res = await fetch(`/api/hood/watchlist?address=${address}`, { cache: "no-store" });
       const body = (await res.json()) as { ok: boolean; watchlist?: Watchlist };
       // A failed read leaves the last-known list rather than nuking the UI to
@@ -85,7 +95,7 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [address]);
+  }, [address, hasSession]);
 
   // Fetch once per connected address. No interval — see file header.
   useEffect(() => {
@@ -96,7 +106,7 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
     async (ticker: string, chain: HoodChain, kinds?: AlertKind[]): Promise<WatchlistMutation> => {
       if (!address) return { ok: false, error: "connect a wallet first" };
       try {
-        const res = await fetch("/api/hood/watchlist", {
+        const res = await fetchWithSession(address, "/api/hood/watchlist", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ address, ticker, chain, kinds }),
@@ -109,14 +119,14 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
         return { ok: false, error: (e as Error).message };
       }
     },
-    [address],
+    [address, fetchWithSession],
   );
 
   const remove = useCallback(
     async (ticker: string, chain: HoodChain): Promise<WatchlistMutation> => {
       if (!address) return { ok: false, error: "connect a wallet first" };
       try {
-        const res = await fetch("/api/hood/watchlist", {
+        const res = await fetchWithSession(address, "/api/hood/watchlist", {
           method: "DELETE",
           headers: { "Content-Type": "application/json" },
           // Same `chain` the add sent — an asymmetric remove leaves the reverse
@@ -131,7 +141,7 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
         return { ok: false, error: (e as Error).message };
       }
     },
-    [address],
+    [address, fetchWithSession],
   );
 
   const isWatching = useCallback(

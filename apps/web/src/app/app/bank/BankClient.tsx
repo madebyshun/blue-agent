@@ -40,6 +40,7 @@ import { useBasename, shortAddr } from "@/lib/useBasename";
 import Avatar from "@/components/Avatar";
 import { useSpendSummary, scopeLabel, emptyState, creditSplit, usdc as fmtUsdcUnits, type Load as SpendLoad, type SpendSummaryDTO } from "@/components/SpendConsole";
 import QrScanner from "./QrScanner";
+import { useEnsureSession, invalidateSessionCache } from "@/hooks/useEnsureSession";
 import SwapCard, { type SellPreset } from "./SwapCard";
 // SEND is one unified, chain-in-card component now (WalletSendCard): it carries
 // its OWN Base/Robinhood selector and ports both proven money paths — a plain
@@ -174,6 +175,9 @@ export default function BankPage() {
   // page level only ever produced a comparison against a "current network" this
   // two-chain page no longer has.
   const { address, isConnected } = useAccount();
+  // The page assistant is a paid chat: the server bills only a wallet that
+  // proved it is this one (SIWE, 2026-09-30).
+  const { ensureSession } = useEnsureSession();
   const acct = address as `0x${string}` | undefined;
 
   // Cross-chain net worth — tokens + tokenized stocks on EVERY live chain, from
@@ -932,6 +936,14 @@ export default function BankPage() {
     setChatInput("");
     setChatLoading(true);
     try {
+      if (acct) {
+        try {
+          await ensureSession(acct);
+        } catch {
+          setChatMessages(prev => [...prev, { role: "assistant", content: "Sign in with your wallet to use credits — one signature, no transaction. Nothing was sent." }]);
+          return;
+        }
+      }
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1027,8 +1039,17 @@ export default function BankPage() {
           const raw = line.slice(6).trim();
           if (raw === "[DONE]") break;
           try {
-            const parsed = JSON.parse(raw) as { type?: string; delta?: { text?: string } };
-            if (parsed.delta?.text) {
+            const parsed = JSON.parse(raw) as { type?: string; message?: string; delta?: { text?: string } };
+            if (parsed.type === "auth_required") {
+              // Not charged: the session expired or is another wallet's.
+              invalidateSessionCache();
+              accumulated = parsed.message ?? "Sign in with your wallet to use credits, then send again.";
+              setChatMessages(prev => {
+                const msgs = [...prev];
+                msgs[msgs.length - 1] = { role: "assistant", content: accumulated };
+                return msgs;
+              });
+            } else if (parsed.delta?.text) {
               accumulated += parsed.delta.text;
               setChatMessages(prev => {
                 const msgs = [...prev];
