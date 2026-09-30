@@ -31,8 +31,8 @@ import { readTokenTax } from "@/lib/token-tax";
 import { measuredHoneypotVerdict } from "@/lib/honeypot-verdict";
 import { isNativeToken, readTokenMeta, type TxChain } from "@/lib/tx-chains";
 import { kvGetProbe } from "@/lib/kv";
-import { KV_SNAPSHOT_LATEST } from "@/lib/blue-hood/kv-keys";
-import type { HoodSnapshot } from "@/lib/blue-hood/types";
+import { KV_BASE_ROWS_LATEST, BASE_ROWS_MAX_AGE_MS } from "@/lib/blue-hood/kv-keys";
+import { partitionBaseRows, type BaseDeskLatest } from "@/lib/blue-hood/types";
 import { HIGH_COST_PERCENT } from "@/lib/wallet/bridge-pairs";
 
 export type PreTradeVerdict = "PASS" | "WARN" | "BLOCK";
@@ -147,9 +147,14 @@ export async function preTradeCheck(input: PreTradeInput): Promise<PreTradeCheck
     if (input.kind === "swap") {
       const wk = weekendReason(now);
       if (wk) reasons.push(wk);
-      const snap = await kvGetProbe<HoodSnapshot>(KV_SNAPSHOT_LATEST);
-      const row = snap.status === "hit"
-        ? snap.value.tickers.find((t) => t.chain === "base" && t.contract.toLowerCase() === token.toLowerCase())
+      // The Base desk's own blob — NOT `KV_SNAPSHOT_LATEST`, which is the
+      // Robinhood desk's. Rows older than the board's own freshness line are
+      // "unavailable", never a stale drift presented as the current one.
+      const desk = await kvGetProbe<BaseDeskLatest>(KV_BASE_ROWS_LATEST);
+      const fresh = desk.status === "hit" && Array.isArray(desk.value.rows)
+        && Date.now() - new Date(desk.value.started_at).getTime() <= BASE_ROWS_MAX_AGE_MS;
+      const row = fresh
+        ? partitionBaseRows(desk.value.rows).attributed.find((t) => t.contract.toLowerCase() === token.toLowerCase())
         : undefined;
       if (!row || row.drift_pct == null) {
         reasons.push({ level: "WARN", code: "DRIFT_UNAVAILABLE", text: "The oracle-vs-DEX reading for this token is unavailable right now." });

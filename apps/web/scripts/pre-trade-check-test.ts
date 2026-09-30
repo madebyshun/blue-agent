@@ -25,7 +25,7 @@ import { SEL_BUY_TAX, SEL_SELL_TAX, SEL_BLACKLISTS } from "../src/lib/token-tax"
 import { BASE_STOCKS } from "../src/lib/base-stocks/registry";
 import { RWA_TOKENS } from "../src/lib/robinhood/rwa-registry";
 import { kvSet, kvDel } from "../src/lib/kv";
-import { KV_SNAPSHOT_LATEST } from "../src/lib/blue-hood/kv-keys";
+import { KV_BASE_ROWS_LATEST, KV_SNAPSHOT_LATEST } from "../src/lib/blue-hood/kv-keys";
 
 let failures = 0;
 function ok(label: string, cond: boolean, detail = "") {
@@ -157,13 +157,21 @@ async function run(input: Parameters<typeof preTradeCheck>[0]) {
   c = await run({ chain: "robinhood", kind: "swap", token: RH_UNLISTED, now: WEEKDAY });
   ok("an unregistered RH token → WARN (its tax cannot be read on RH)", c.verdict === "WARN", texts(c));
 
-  await kvDel(KV_SNAPSHOT_LATEST);
+  await kvDel(KV_BASE_ROWS_LATEST);
   c = await run({ chain: "base", kind: "swap", token: NVDA.token, now: WEEKDAY });
-  ok("a B20 stock with no Hood snapshot → WARN: the reading is unavailable (never a guessed drift)", c.verdict === "WARN" && /unavailable/.test(texts(c)), texts(c));
-  await kvSet(KV_SNAPSHOT_LATEST, { tickers: [{ chain: "base", contract: NVDA.token, drift_pct: 3.1 }] });
+  ok("a B20 stock with no Base desk rows → WARN: the reading is unavailable (never a guessed drift)", c.verdict === "WARN" && /unavailable/.test(texts(c)), texts(c));
+  // The Robinhood desk's snapshot is NOT where Base rows live — a Base row
+  // planted there must not be read (this test once passed against that key).
+  await kvSet(KV_SNAPSHOT_LATEST, { tickers: [{ chain: "base", contract: NVDA.token, drift_pct: 9.9 }] });
+  c = await run({ chain: "base", kind: "swap", token: NVDA.token, now: WEEKDAY });
+  ok("…a Base-looking row in the RH desk's snapshot is ignored", /unavailable/.test(texts(c)) && !/9\.90%/.test(texts(c)), texts(c));
+  await kvSet(KV_BASE_ROWS_LATEST, { started_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(), rows: [{ chain: "base", contract: NVDA.token, drift_pct: 3.1 }] });
+  c = await run({ chain: "base", kind: "swap", token: NVDA.token, now: WEEKDAY });
+  ok("an hour-old Base desk → unavailable, not a stale drift", /unavailable/.test(texts(c)) && !/3\.10%/.test(texts(c)), texts(c));
+  await kvSet(KV_BASE_ROWS_LATEST, { started_at: new Date().toISOString(), rows: [{ chain: "base", contract: NVDA.token, drift_pct: 3.1 }] });
   c = await run({ chain: "base", kind: "swap", token: NVDA.token, now: WEEKDAY });
   ok("a measured +3.10% drift → WARN naming the number and its source", c.verdict === "WARN" && /\+3\.10%/.test(texts(c)) && /Blue Hood/.test(texts(c)), texts(c));
-  await kvSet(KV_SNAPSHOT_LATEST, { tickers: [{ chain: "base", contract: NVDA.token, drift_pct: 0.4 }] });
+  await kvSet(KV_BASE_ROWS_LATEST, { started_at: new Date().toISOString(), rows: [{ chain: "base", contract: NVDA.token, drift_pct: 0.4 }] });
   c = await run({ chain: "base", kind: "swap", token: NVDA.token, now: WEEKDAY });
   ok("a 0.4% drift on a weekday → PASS (the issuer-policy line is INFO)", c.verdict === "PASS" && /INFO:B20 tokens can carry issuer transfer policies/.test(texts(c)), texts(c));
   c = await run({ chain: "base", kind: "swap", token: NVDA.token, now: SATURDAY });
