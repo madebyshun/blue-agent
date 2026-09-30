@@ -21,11 +21,25 @@ import { useSpendableBalance } from "@/lib/wallet/useSpendableBalance";
 import { resolveSpend } from "@/lib/wallet/read-state";
 import { UnverifiedBalance } from "@/components/wallet/UnverifiedBalance";
 import { RobinhoodSwapCard, type RobinhoodSwapResult } from "./RobinhoodSwapCard";
-// Type-only: the RobinhoodSendCard COMPONENT is no longer mounted here (chat
-// sends through the wallet's own WalletSendCard, below). Only the result shape
-// is still read, at the `robinhood_send` marker branch. The file itself stays —
-// it has four other importers.
-import { type RobinhoodSendResult } from "./RobinhoodSendCard";
+// Result shape of the `robinhood_send` marker. The RobinhoodSendCard component
+// that used to declare it is DELETED (2026-09-30): chat sends through the
+// wallet's own WalletSendCard, below, and by then this type-only import was the
+// file's last importer. The shape lives here, the one place that reads it.
+interface RobinhoodSendResult {
+  kind: "robinhood_send";
+  fromAddress?: string;
+  toAddress?: string;
+  /** ERC-20 contract 0x…, or "ETH" / "NATIVE" for native ETH. */
+  token?: string;
+  /** Human-readable amount (decimal string). */
+  amount?: string | number;
+  /** Optional display hint from the LLM. Server verifies via the token contract. */
+  tokenSymbol?: string;
+  /** Server-side note, e.g. "resolved via …". */
+  note?: string;
+  /** Server-side error to display inline (e.g. unresolved token). */
+  error?: string;
+}
 import { RobinhoodBridgeCard, type RobinhoodBridgeResult } from "./RobinhoodBridgeCard";
 // ─── The wallet's own money cards, mounted in chat (#256/#257, 2026-09-12) ────
 //
@@ -50,8 +64,8 @@ import { RobinhoodBridgeCard, type RobinhoodBridgeResult } from "./RobinhoodBrid
 // Retirement status, MEASURED 2026-09-17 (the commit above promised one commit;
 // it took two, and the second could only take part of the list):
 //   • bank/RhSendCard      DELETED. Zero importers.
-//   • RobinhoodSendCard    component no longer imported here (type-only, above).
-//                          The FILE stays — four other importers.
+//   • RobinhoodSendCard    DELETED 2026-09-30. Its last importer was the
+//                          type-only import here; the shape moved above.
 //   • local SendCard       ALIVE, one real consumer: /pay/[address], a public
 //                          payment surface. Not retirable without replacing it.
 //   • local SwapCard       orphaned export, zero consumers — but it is ~200

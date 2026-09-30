@@ -646,14 +646,17 @@ check(
   `1.2 every spender found is in scope (in scope ${spenders.length}/${allSpenders.length})`,
   spenders.length >= 6,
 );
-// The six files money actually moves through, named so a rename or a deletion
+// The five files money actually moves through, named so a rename or a deletion
 // is visible rather than silently shrinking the set. Full paths relative to
 // `src/`, not basenames: once the walk is repo-wide, `SwapCard.tsx` is
 // ambiguous between the bank and the chat surfaces.
 // (Was seven until #416 retired app/app/launches/LaunchesClient.tsx — see the
-// floor comment above for why removal, not preservation, was the only option.)
+// floor comment above for why removal, not preservation, was the only option.
+// Was six until 2026-09-30, when app/chat/components/RobinhoodSendCard.tsx was
+// deleted: no file mounted it any more — chat sends through WalletSendCard — and
+// its last importer was a type-only import in ToolCards. The detected-spender
+// floor above still holds with it gone, so the floor is unchanged.)
 for (const f of [
-  "app/chat/components/RobinhoodSendCard.tsx",
   "app/chat/components/RobinhoodSwapCard.tsx",
   "app/chat/components/RobinhoodBridgeCard.tsx",
   "app/chat/components/ToolCards.tsx",
