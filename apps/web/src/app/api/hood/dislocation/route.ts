@@ -72,6 +72,7 @@
 import { NextResponse } from "next/server";
 import { kvGetProbe } from "@/lib/kv";
 import { KV_SNAPSHOT_LATEST, KV_BASE_ROWS_LATEST } from "@/lib/blue-hood/kv-keys";
+import { publishDeskRow } from "@/lib/blue-hood/quarantine";
 import {
   ARB_MIN_ABS_PCT,
   DRIFT_MIN_ABS_PCT,
@@ -257,8 +258,8 @@ export async function GET(req: Request): Promise<NextResponse> {
     snapshotAt = probe.value.started_at;
   }
 
-  const row = rows.find((r) => r.ticker.toUpperCase() === ticker);
-  if (!row) {
+  const found = rows.find((r) => r.ticker.toUpperCase() === ticker);
+  if (!found) {
     void recordDislocationCall(keyHash, chain, "rejected");
     return NextResponse.json(
       {
@@ -274,6 +275,11 @@ export async function GET(req: Request): Promise<NextResponse> {
       { status: 404, headers: NO_STORE },
     );
   }
+
+  // F6 — published through the quarantine: on the Robinhood desk the DEX
+  // price and the drift derived from it are withheld (null, with the reason),
+  // because that leg is GT's token-level figure, not the pool's rate.
+  const row = publishDeskRow(found);
 
   // ── Freshness. Reported on EVERY response, stale or not. ────────────────
   const startedMs = new Date(snapshotAt).getTime();
@@ -358,6 +364,8 @@ export async function GET(req: Request): Promise<NextResponse> {
       // make the number look cleaner than it is.
       warnings: row.warnings,
       no_data_reason: row.no_data_reason,
+      provenance: row.provenance,
+      ...(row.provenance_note ? { provenance_note: row.provenance_note } : {}),
     },
     { headers: NO_STORE },
   );

@@ -12,6 +12,7 @@
  */
 import { kvGet } from "@/lib/kv";
 import { KV_SNAPSHOT_LATEST } from "@/lib/blue-hood/kv-keys";
+import { publishDeskRows } from "@/lib/blue-hood/quarantine";
 import type { HoodSnapshot, TickerSnapshot } from "@/lib/blue-hood/types";
 import { acpEnvelope, clientIp, corsHeaders, preflight, rateLimit } from "@/lib/acp";
 
@@ -29,6 +30,9 @@ interface ACPRow {
   oracle_usd: number | null;
   dex_usd: number | null;
   drift_pct: number | null;
+  /** F6 — "quarantined" ⟹ dex_usd / drift_pct / verdict withheld; see note. */
+  provenance: "measured" | "quarantined";
+  provenance_note?: string;
   /** Deprecated alias for `primary_pool_tvl_usd`. Kept for downstream
    *  ACP consumers that already read `tvl_usd`. New consumers should
    *  read `primary_pool_tvl_usd` + `total_tvl_usd` and pick whichever
@@ -68,7 +72,10 @@ export async function GET(req: Request) {
     );
   }
 
-  const rows: ACPRow[] = snap.tickers.map((r: TickerSnapshot) => ({
+  // F6 — published through the quarantine (lib/blue-hood/quarantine.ts): an
+  // agent paying for drift must not be sold a number derived from a DEX leg
+  // that is not the pool's price.
+  const rows: ACPRow[] = publishDeskRows(snap.tickers).map((r: TickerSnapshot & { provenance: "measured" | "quarantined"; provenance_note?: string }) => ({
     ticker: r.ticker,
     name: r.name,
     contract: r.contract,
@@ -76,6 +83,8 @@ export async function GET(req: Request) {
     oracle_usd: r.oracle_usd,
     dex_usd: r.dex_usd,
     drift_pct: r.drift_pct,
+    provenance: r.provenance,
+    ...(r.provenance_note ? { provenance_note: r.provenance_note } : {}),
     // `tvl_usd` = deprecated alias for primary. Populated verbatim to
     // avoid breaking existing ACP consumers. New fields spell out the
     // semantics unambiguously so downstream agents don't guess.

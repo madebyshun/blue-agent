@@ -71,6 +71,7 @@ import { HEALTHY_MAX_AGE_S, POLL_INTERVAL_S } from "../src/lib/blue-hood/health"
 // Imported rather than re-typed: group 8 asserts the meter's stored field, and a
 // test carrying its own SHA-256 would keep passing after the real hash changed.
 import { hashApiKey, ANON_KEY_HASH } from "../src/lib/blue-hood/dislocation-usage";
+import { withQuarantineLiftedForTest } from "../src/lib/blue-hood/quarantine";
 import type {
   BaseDeskLatest,
   BaseTickerSnapshot,
@@ -771,7 +772,11 @@ function skewIsNotStale(r: { body: Body }): boolean {
   );
 }
 
-main().catch((e) => {
+// The Robinhood desk is quarantined (F6, lib/blue-hood/quarantine.ts), which
+// withholds exactly the RH numbers these guards pin. They run with it lifted so
+// the arithmetic stays tested for the day it lifts for real; the quarantine
+// itself is guarded by rh-quarantine-check.ts.
+withQuarantineLiftedForTest(main).catch((e) => {
   console.error(e);
   process.exit(1);
 });

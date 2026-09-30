@@ -75,6 +75,7 @@ import {
   type TickerSnapshot,
 } from "@/lib/blue-hood/types";
 import { TX_CHAINS } from "@/lib/tx-chains";
+import { publishDeskRow } from "@/lib/blue-hood/quarantine";
 
 /** Same 15-min threshold the /hood header banner uses. */
 const STALE_AFTER_S = 15 * 60;
@@ -83,7 +84,11 @@ const STALE_AFTER_S = 15 * 60;
  * Per-row shape. `polled_at_ms` is dropped (a UI-internal offset from cycle
  * start) exactly as `/api/acp/drift` drops it.
  */
-function shapeRow(r: TickerSnapshot) {
+function shapeRow(raw: TickerSnapshot) {
+  // F6 — every row is published through the quarantine: on the Robinhood desk
+  // dex_usd / drift_pct / verdict are withheld (the DEX leg is GT's token-level
+  // figure, not the pool's rate), with the reason in `provenance_note`.
+  const r = publishDeskRow(raw);
   const chain: HoodChain = chainOf(r);
   const meta = TX_CHAINS[chain];
   return {
@@ -120,6 +125,8 @@ function shapeRow(r: TickerSnapshot) {
     data_age_basis: chain === "base" ? "chainlink_round_age" : "dex_cache_age",
     oracle_updated_at: r.oracle_updated_at ?? null,
     warnings: r.warnings,
+    provenance: r.provenance,
+    ...(r.provenance_note ? { provenance_note: r.provenance_note } : {}),
     ...(r.error ? { error: r.error } : {}),
   };
 }

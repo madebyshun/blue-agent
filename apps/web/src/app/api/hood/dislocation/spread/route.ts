@@ -70,6 +70,7 @@ import { matchesChain, partitionBaseRows } from "@/lib/blue-hood/types";
 import type { BaseDeskLatest, HoodSnapshot, TickerSnapshot } from "@/lib/blue-hood/types";
 import { HEALTHY_MAX_AGE_S } from "@/lib/blue-hood/health";
 import { callerKeyHash, recordDislocationCall } from "@/lib/blue-hood/dislocation-usage";
+import { publishDeskRows, RH_DESK_QUARANTINE } from "@/lib/blue-hood/quarantine";
 
 export const runtime = "nodejs";
 
@@ -88,7 +89,9 @@ type SpreadUnavailable =
   /** The ticker is not watched on one of the two venues. */
   | "not_on_both_venues"
   /** Watched on both, but a venue had no DEX price to compare. */
-  | "no_dex_price";
+  | "no_dex_price"
+  /** A venue's DEX leg is quarantined (F6 — lib/blue-hood/quarantine.ts). */
+  | "quarantined";
 
 /**
  * Why a desk could not be read. Deliberately the SAME two codes the sibling
@@ -137,8 +140,10 @@ async function readRhDesk(): Promise<DeskRead> {
   }
   // `matchesChain` applies the absent-row default, correct HERE on the row and
   // never on a query. Same split as the sibling route.
+  // F6 — published through the quarantine, so a withheld RH DEX price can
+  // never reach the subtraction below.
   return {
-    rows: probe.value.tickers.filter((r) => matchesChain(r, "robinhood")),
+    rows: publishDeskRows(probe.value.tickers.filter((r) => matchesChain(r, "robinhood"))),
     snapshotAt: probe.value.started_at,
     error: null,
     errorDetail: null,
@@ -173,6 +178,8 @@ function venueBlock(desk: DeskRead, ticker: string) {
     snapshot_at: desk.snapshotAt,
     warnings: row.warnings,
     no_data_reason: row.no_data_reason,
+    provenance: row.provenance ?? "measured",
+    ...(row.provenance_note ? { provenance_note: row.provenance_note } : {}),
   };
 }
 
@@ -285,6 +292,10 @@ export async function GET(req: Request): Promise<NextResponse> {
     reason = "desk_unreadable";
   } else if (!baseRow || !rhRow) {
     reason = "not_on_both_venues";
+  } else if (baseRow.provenance === "quarantined" || rhRow.provenance === "quarantined") {
+    // Before the cycle and price checks: a quarantined leg is not "missing a
+    // price", it is a price we decline to publish, and the reason must say so.
+    reason = "quarantined";
   } else if (sameCycle !== true) {
     // See the header: computed-with-a-warning is not an option, because a
     // number that is present is a number that gets used.
@@ -331,6 +342,7 @@ export async function GET(req: Request): Promise<NextResponse> {
       // Shipped in the response so the sign convention is never inferred.
       spread_basis: "(base.dex_price_usd - robinhood.dex_price_usd) / robinhood.dex_price_usd * 100",
       spread_unavailable_reason: reason,
+      ...(reason === "quarantined" ? { spread_unavailable_note: RH_DESK_QUARANTINE.note } : {}),
       spread_wider_than_either_oracle_drift: widerThanEitherDrift,
 
       same_cycle: sameCycle,

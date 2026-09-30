@@ -20,6 +20,7 @@ import {
   BASE_ROWS_MAX_AGE_MS,
 } from "@/lib/blue-hood/kv-keys";
 import { partitionBaseRows } from "@/lib/blue-hood/types";
+import { publishDeskRows, RH_DESK_QUARANTINE } from "@/lib/blue-hood/quarantine";
 import type { BaseDeskLatest, HoodSnapshot } from "@/lib/blue-hood/types";
 
 export const runtime = "nodejs";
@@ -117,10 +118,14 @@ export async function GET() {
   // the rule engine, so the board shows exactly the row set the engine graded.
   // Metrics MUST be bumped alongside `tickers` or the header strip's
   // "N tokens watched" stops describing the rows underneath it.
+  // F6 — every row is published through the quarantine: RH rows lose the
+  // numbers derived from the unverified DEX leg (lib/blue-hood/quarantine.ts),
+  // Base rows are marked measured. The engine's in-memory merge is unaffected.
+  const rhTickers = publishDeskRows(rh.tickers);
   const snapshot: HoodSnapshot = baseRows.length
     ? {
         ...rh,
-        tickers: [...rh.tickers, ...baseRows],
+        tickers: [...rhTickers, ...publishDeskRows(baseRows)],
         metrics: {
           ...rh.metrics,
           tokens_watched: rh.metrics.tokens_watched + baseRows.length,
@@ -128,7 +133,7 @@ export async function GET() {
             rh.metrics.tokens_errored + baseRows.filter((r) => r.verdict === "ERROR").length,
         },
       }
-    : rh;
+    : { ...rh, tickers: rhTickers };
 
   return NextResponse.json(
     {
@@ -147,6 +152,9 @@ export async function GET() {
         // the archive watchdog reports `empty` instead of going quiet.
         unattributed: baseUnattributed,
       },
+      rh_desk: RH_DESK_QUARANTINE.active
+        ? { provenance: "quarantined", code: RH_DESK_QUARANTINE.code, note: RH_DESK_QUARANTINE.note }
+        : { provenance: "measured" },
     },
     // CDN-cached on the SUCCESS PATH ONLY — the placement is the guarantee,
     // exactly as it is for the Base merge above. Both 503 branches returned

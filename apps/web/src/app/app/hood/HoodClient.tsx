@@ -46,7 +46,7 @@ import EnableAlertsButton from "./inbox/EnableAlertsButton";
 import { HealthProvider, HealthBanner } from "./HealthProvider";
 import { WatchlistProvider, useWatchlist } from "./WatchlistProvider";
 import { WATCHLIST_LIMITS } from "@/lib/blue-hood/watchlist-config";
-import { ARROWS_FROZEN, ARROW_TRADE_ENABLED } from "@/lib/blue-hood/arrow-freeze";
+import { ARROWS_FROZEN, ARROWS_FROZEN_SINCE, ARROW_TRADE_ENABLED } from "@/lib/blue-hood/arrow-freeze";
 import { useEnsureSession } from "@/hooks/useEnsureSession";
 import HoodSwap from "./HoodSwap";
 
@@ -106,8 +106,10 @@ function isFrozenLike(v: TickerSnapshot["verdict"]): boolean {
  *  deployment (or a cached response) degrades to "unknown" rather than
  *  crashing on a missing field. */
 type BaseDeskState = { status: "live" | "stale" | "offline"; count: number };
+/** F6 — the Robinhood desk's publishing state (lib/blue-hood/quarantine.ts). */
+type RhDeskState = { provenance: "measured" | "quarantined"; code?: string; note?: string };
 type SnapshotRes =
-  | { ok: true; snapshot: HoodSnapshot; base_desk?: BaseDeskState }
+  | { ok: true; snapshot: HoodSnapshot; base_desk?: BaseDeskState; rh_desk?: RhDeskState }
   | { ok: false; error: string };
 type PerTypeStat = {
   ready: boolean;
@@ -136,6 +138,7 @@ export default function HoodClient() {
    *  in the response (older deploy / never fetched), which is NOT the same as
    *  "offline" and must not be rendered as a failure. */
   const [baseDesk, setBaseDesk] = useState<BaseDeskState | null>(null);
+  const [rhDesk, setRhDesk] = useState<RhDeskState | null>(null);
   const [arrowsData, setArrowsData] = useState<Extract<ArrowsRes, { ok: true }> | null>(null);
   // P2.4 (2026-07-24): positions read at the top-level so BOTH the
   // PositionsStrip and the drift-board rows can see the "held" set.
@@ -182,6 +185,7 @@ export default function HoodClient() {
       if (s.ok) {
         setSnap(s.snapshot);
         setBaseDesk(s.base_desk ?? null);
+        setRhDesk(s.rh_desk ?? null);
       }
       if (a.ok) setArrowsData(a);
       if (lr.ok) setInboxLastRead(lr.last_read_at);
@@ -347,6 +351,17 @@ export default function HoodClient() {
           </div>
 
           <BaseDeskNote desk={baseDesk} marketOpen={snap?.metrics.market_is_open ?? false} />
+          {rhDesk?.provenance === "quarantined" && chainFilter !== "base" && (
+            <div
+              className="mb-3 rounded border px-3 py-2 text-[11px] leading-relaxed"
+              style={{ borderColor: BORDER, backgroundColor: SURFACE, color: "#9aa1ac" }}
+            >
+              <span className="mr-2 font-mono text-[10px] uppercase tracking-widest" style={{ color: AMBER }}>
+                robinhood desk
+              </span>
+              {rhDesk.note ?? "DEX price and drift are withheld while the price source is repaired."}
+            </div>
+          )}
 
           <DriftBoard rows={filtered} rowRefs={rowRefs} arrows={arrowsData?.arrows ?? null} heldTickers={heldTickers} />
 
@@ -767,7 +782,16 @@ function BaseDeskNote({
 
   let body: React.ReactNode;
   let accent = BASE_BLUE_TEXT;
-  if (desk.status === "live") {
+  if (desk.status === "live" && ARROWS_FROZEN) {
+    // Arrows are frozen (arrow-freeze.ts): saying "arrows fire past ±X%" here
+    // would promise a feed that no longer publishes.
+    body = (
+      <>
+        Watching <span className="font-mono tabular-nums">{desk.count}</span> Base B20 stock
+        {desk.count === 1 ? "" : "s"} — oracle vs DEX, live. Arrows stopped publishing on {ARROWS_FROZEN_SINCE}.
+      </>
+    );
+  } else if (desk.status === "live") {
     body = (
       <>
         Watching <span className="font-mono tabular-nums">{desk.count}</span> Base B20 stock

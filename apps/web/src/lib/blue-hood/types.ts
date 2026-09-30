@@ -166,6 +166,11 @@ export interface TickerSnapshot {
   volume_24h_usd: number | null;
   /** dex/oracle drift as a percentage. Positive = DEX above oracle. */
   drift_pct: number | null;
+  /** Set by the PUBLISHING readers (lib/blue-hood/quarantine.ts), never by the
+   *  recorder: "quarantined" ⟹ this desk's DEX leg is under repair (F6), and
+   *  `dex_usd` / `drift_pct` / the verdict were withheld — see the note. */
+  provenance?: "measured" | "quarantined";
+  provenance_note?: string;
   /** Reference to the primary pool (address or v4 pool id). */
   pool_ref: string | null;
   /** Whether pool_ref is a Uniswap v4 poolId (bytes32) vs a v3 pool address. */

@@ -36,6 +36,7 @@ import {
   removeFromBroadcast,
 } from "@/lib/blue-hood/watchlist";
 import { KV_SNAPSHOT_LATEST } from "@/lib/blue-hood/kv-keys";
+import { publishDeskRow } from "@/lib/blue-hood/quarantine";
 import type { HoodSnapshot } from "@/lib/blue-hood/types";
 import { readPublicArrows } from "@/lib/blue-hood/public-feed";
 import { computeHitRate } from "@/lib/blue-hood/hit-rate-gate";
@@ -210,9 +211,23 @@ async function handleDrift(rest: string): Promise<string> {
   }
 
   const snap = probe.value;
-  const row = snap.tickers.find((t) => t.ticker.toUpperCase() === ticker);
-  if (!row) {
+  const found = snap.tickers.find((t) => t.ticker.toUpperCase() === ticker);
+  if (!found) {
     return `No live data for <b>${esc(ticker)}</b> in the latest cycle.`;
+  }
+  // F6 — published through the quarantine: the RH desk's DEX price and drift
+  // are withheld with the reason, and the oracle price still answers.
+  const row = publishDeskRow(found);
+  if (row.provenance === "quarantined" && row.verdict !== "ERROR") {
+    return [
+      `📊 <b>${esc(row.ticker)}</b> — ${esc(row.name)}`,
+      ``,
+      `Oracle: <b>${usd(row.oracle_usd)}</b>`,
+      `DEX / drift: <i>withheld</i>`,
+      `<i>${esc(row.provenance_note ?? "")}</i>`,
+      ``,
+      `<i>as of ${nyTime(snap.finished_at)}</i>`,
+    ].join("\n");
   }
   if (row.verdict === "ERROR" || row.no_data_reason || row.dex_usd == null) {
     const why =
