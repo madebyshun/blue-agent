@@ -461,19 +461,17 @@ async function main() {
   const mcpSrc = readFileSync(new URL("../src/app/api/mcp/route.ts", import.meta.url), "utf8");
   const rhStart = mcpSrc.indexOf("// Robinhood Chain 4663 — Blue Agent's deployed");
   const rhBranch = mcpSrc.slice(rhStart, mcpSrc.indexOf("async function callSendTx", rhStart));
-  ok("6.20 the RH branch refuses an explicit slippageBps",
-    /args\.slippageBps !== undefined/.test(rhBranch) && /throw new Error/.test(rhBranch));
-  // Ordering matters: refuse BEFORE the router-config check, so a caller asking
-  // for protection hears "not enforceable here", not "not configured".
-  ok("6.21 …and refuses before the router-config check",
-    rhBranch.indexOf("args.slippageBps !== undefined") < rhBranch.indexOf("ROBINHOOD_SWAP_ROUTER_ADDRESS"));
-  // Matches a KEY assignment, not the word — the branch's comment and error
-  // text both say "amountOutMinimum" on purpose, and an assertion that a fix
-  // cannot be described in prose is an assertion that punishes documenting it.
-  // The day this goes red is the day RH gained a real minimum, and §6.20's
-  // refusal should be reconsidered rather than this check relaxed.
-  ok("6.22 the RH branch still sends no amountOutMinimum (the reason it refuses)",
-    !/amountOutMinimum\s*:/.test(rhBranch));
+  // 2026-09-30 — the day §6.22 said would come: RH gained a real minimum (plan
+  // §1 fix 2), so the refusal was reconsidered rather than this check relaxed.
+  // The branch now floors every RH swap from the same estimate the app's RH
+  // swap cards already bound their trades with, and refuses (NO_QUOTE) when
+  // there is no estimate — it never builds an unbounded trade.
+  ok("6.20 the RH branch derives its floor from an estimate",
+    /estimateRhOut\(/.test(rhBranch) && /1 - rhSlippageBps \/ 10_000/.test(rhBranch));
+  ok("6.21 …and with no estimate refuses (NO_QUOTE) before any body is built",
+    rhBranch.indexOf("NO_QUOTE") > 0 && rhBranch.indexOf("NO_QUOTE") < rhBranch.search(/\bamountOutMinimum\s*[,:]/));
+  ok("6.22 the RH branch sends amountOutMinimum (the floor the old body lacked)",
+    /\bamountOutMinimum\s*[,:]/.test(rhBranch));
   // The schema is the only thing an agent reads before calling. It promised
   // "Default 100" on both chains; on RH that default was 0.
   const swapTool = MCP_TOOLS.find((t) => t.name === "blue_swap_tx");
@@ -482,9 +480,9 @@ async function main() {
       .slippageBps?.description ?? "",
   );
   ok("6.23 blue_swap_tx still declares slippageBps", slipDesc.length > 0);
-  ok("6.24 …scoped to Base 8453", /BASE 8453 ONLY/.test(slipDesc));
-  ok("6.25 …and states the RH behaviour it used to hide",
-    /Robinhood/i.test(slipDesc) && /amountOutMinimum = 0/.test(slipDesc));
+  ok("6.24 …covering both chains", /Base 8453/.test(slipDesc) && /Robinhood Chain 4663/.test(slipDesc));
+  ok("6.25 …and stating the RH floor and its refusal",
+    /amountOutMinimum/.test(slipDesc) && /NO_QUOTE/.test(slipDesc) && !/amountOutMinimum = 0/.test(slipDesc));
 
   console.log("\n§7 negative controls for §6 — the defect, re-implemented");
   // Control E: the pre-fix querystring. Five named keys, built fresh, with the
@@ -526,8 +524,8 @@ async function main() {
   };
   ok("control: the old RH body carried no amountOutMinimum", !("amountOutMinimum" in oldRhBody));
   ok("control: …so swap-prepare's own \"0\" default applied", (oldRhBody.amountOutMinimum ?? "0") === "0");
-  ok("control: §6.20's refusal is what now prevents that claim",
-    /args\.slippageBps !== undefined/.test(rhBranch));
+  ok("control: §6.22 now requires the key that old body lacked",
+    /\bamountOutMinimum\s*[,:]/.test(rhBranch) && !("amountOutMinimum" in oldRhBody));
 
   // Control J: Control H's root cause, one layer up — in the REFUSAL message.
   // The fix replaced the echo with a throw, but the throw quoted the value via

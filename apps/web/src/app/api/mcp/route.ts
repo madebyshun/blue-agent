@@ -618,34 +618,45 @@ async function callSwapTx(args: Record<string, unknown>): Promise<string> {
 
   // Robinhood Chain 4663 — Blue Agent's deployed RobinhoodSwapRouter over Uniswap V3.
   //
-  // ⚠️ NO SLIPPAGE PROTECTION ON THIS PATH, and that is why an explicit
-  // `slippageBps` is REFUSED here rather than ignored. `swap-prepare` defaults
-  // `amountOutMinimum` to "0" and this branch has never sent one, so every RH
-  // swap this tool builds is an unbounded-output trade. Accepting a bps value
-  // and dropping it would tell the caller they are protected at 1% while the
-  // calldata they sign accepts any output at all — the worst possible version
-  // of the Base echo bug fixed above, because here the number is binding
-  // on-chain. Deriving a real minimum is NOT a bug fix: the only RH price
-  // source is GeckoTerminal via /api/robinhood/swap/quote, whose own header
-  // calls the figure display-only, and turning a display-only estimate into a
-  // binding revert threshold is a design decision, not a patch.
-  if (args.slippageBps !== undefined && args.slippageBps !== null) {
-    throw new Error(
-      `slippageBps is not enforceable on Robinhood Chain 4663 through this tool: the router ` +
-      `call is built with amountOutMinimum = 0, so the swap accepts ANY output. Refusing ` +
-      `rather than silently ignoring it. Omit slippageBps to build the trade anyway ` +
-      `(and size it accordingly), or swap on Base 8453 where 0x enforces the bound.`,
-    );
-  }
+  // SLIPPAGE FLOOR, since 2026-09-30 (plan §1 fix 2). This path used to build
+  // every RH swap with amountOutMinimum = 0 — an unbounded-output trade — and
+  // refused an explicit slippageBps rather than pretend to honour it. Its
+  // reason was that the only RH price is a GeckoTerminal estimate, "display
+  // only". But both RH swap cards in the app already bound the signed trade
+  // with exactly that estimate (RhSwapCard: estimate × (1 − 3%); the chat card:
+  // the user's picked slippage), so the product had already decided that an
+  // estimate-derived floor beats none — and it is strictly safer: a wrong
+  // estimate makes the swap REVERT (gas lost), where a zero floor lets a
+  // sandwich take the output. Same sources as those cards:
+  //   ETH↔token   → /api/robinhood/swap/quote (pool + GeckoTerminal estimate)
+  //   token↔token → GeckoTerminal USD prices of both legs
+  // No estimate → no trade: refused rather than built unbounded.
   if (!ROBINHOOD_SWAP_ROUTER_ADDRESS) {
     throw new Error("Robinhood Chain 4663 swap router is not configured in this deployment.");
   }
   const outIsNative = isNativeToken(tokenOut);
   if (inIsNative && outIsNative) throw new Error("tokenIn and tokenOut cannot both be native ETH");
+  // 3% unless the caller says otherwise — the RhSwapCard default, because an
+  // estimate is looser than 0x's firm quote (whose default here is 1%).
+  const rhSlippageBps = args.slippageBps === undefined || args.slippageBps === null ? 300 : slippageBps;
+  const estimatedOut = await estimateRhOut(tokenIn, tokenOut, inIsNative, outIsNative, amountIn);
+  if (estimatedOut === null || !(estimatedOut > 0)) {
+    return JSON.stringify({
+      ok: false, chain: "robinhood", chainId: TX_CHAINS.robinhood.chainId,
+      error: {
+        code: "NO_QUOTE",
+        message: "No price for this pair on Robinhood Chain 4663, so no slippage floor can be set — refusing to build an unbounded swap. Do NOT invent a price.",
+      },
+    }, null, 2);
+  }
+  const outDecimals = outIsNative ? 18 : (await readTokenMeta(chain, reqAddr(tokenOut, "tokenOut") as `0x${string}`)).decimals;
+  const minOut = estimatedOut * (1 - rhSlippageBps / 10_000);
+  const amountOutMinimum = parseUnits(minOut.toFixed(Math.min(outDecimals, 18)), outDecimals).toString();
   const body: Record<string, unknown> = {
     router:    ROBINHOOD_SWAP_ROUTER_ADDRESS,
     recipient: fromAddress,
     amountIn:  amountInBase,
+    amountOutMinimum,
     // The route's own three modes: buy = ETH→token, sell = token→ETH, and
     // tokenIn present = token→token. `token` carries tokenOut except on sell.
     ...(inIsNative
@@ -655,6 +666,40 @@ async function callSwapTx(args: Record<string, unknown>): Promise<string> {
         : { tokenIn, token: tokenOut }),
   };
   return postPrepare(`${BASE}/api/robinhood/router/swap-prepare`, body, "Robinhood Chain 4663 swap-prepare");
+}
+
+/**
+ * The output estimate RH swaps are floored from — the same two sources the
+ * app's RH swap cards use (see the note in the RH branch above). Human units
+ * of the OUTPUT token, or null when no price is available.
+ */
+async function estimateRhOut(
+  tokenIn: string, tokenOut: string, inIsNative: boolean, outIsNative: boolean, amountIn: string,
+): Promise<number | null> {
+  try {
+    if (inIsNative || outIsNative) {
+      const token = inIsNative ? tokenOut : tokenIn;
+      const qs = new URLSearchParams({ token, direction: inIsNative ? "buy" : "sell", amount: amountIn });
+      const r = await fetch(`${BASE}/api/robinhood/swap/quote?${qs}`, { signal: AbortSignal.timeout(20_000) });
+      const j = (await r.json().catch(() => ({}))) as { hasPool?: boolean; estimate?: { amountOut?: number | null } };
+      const out = j?.estimate?.amountOut;
+      return j?.hasPool && typeof out === "number" && Number.isFinite(out) ? out : null;
+    }
+    const price = async (t: string) => {
+      const r = await fetch(`https://api.geckoterminal.com/api/v2/networks/robinhood/tokens/${t}`, {
+        headers: { Accept: "application/json" }, signal: AbortSignal.timeout(15_000),
+      });
+      if (!r.ok) return null;
+      const j = (await r.json().catch(() => null)) as { data?: { attributes?: { price_usd?: string } } } | null;
+      const p = j?.data?.attributes?.price_usd ? parseFloat(j.data.attributes.price_usd) : NaN;
+      return Number.isFinite(p) && p > 0 ? p : null;
+    };
+    const [pIn, pOut] = await Promise.all([price(tokenIn), price(tokenOut)]);
+    if (pIn === null || pOut === null) return null;
+    return (Number(amountIn) * pIn) / pOut;
+  } catch {
+    return null;
+  }
 }
 
 async function callSendTx(args: Record<string, unknown>): Promise<string> {
