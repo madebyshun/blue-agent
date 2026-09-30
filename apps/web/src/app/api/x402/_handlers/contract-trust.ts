@@ -1,7 +1,14 @@
 // x402/contract-trust/index.ts
 // Contract Trust — on-chain identity + Basescan verification + a security pass
 // and a community-signal pass
-// Price: $0.15 — SAFE / CAUTION / RED_FLAG verdict before swapping into a contract
+// Price: $0.15 — SAFE / CAUTION / RED_FLAG / UNKNOWN verdict before swapping into a contract
+//
+// 🔴 THE VERDICT IS ARITHMETIC (W0-19, 2026-09-30). A third model call — "final
+// arbiter" — used to CHOOSE SAFE/CAUTION/RED_FLAG from the other two model
+// passes' made-up security_score and "recognition". It is gone.
+// `measuredTrustVerdict` decides from what was read: Basescan verification
+// (and whether Basescan answered at all), the proxy flag, and — for a token —
+// the measured honeypot read. The two model passes still write prose, labelled.
 // The community pass still opens "You are MiroShark" on purpose even though the
 // persona is retired from all copy — that prefix is load-bearing. See the 🔴
 // CANONICAL NOTE in api/_lib/llm.ts before renaming it.
@@ -9,6 +16,53 @@
 import { getTokenIdentity, tokenIdentityToPrompt } from "@/lib/onchain";
 import { getBasescanSource } from "@/lib/moralis";
 import { callLLM } from "@/app/api/_lib/llm";
+import { readTokenTax } from "@/lib/token-tax";
+import { measuredHoneypotVerdict, type HoneypotVerdict } from "./honeypot-check";
+
+export type TrustVerdict = "SAFE" | "CAUTION" | "RED_FLAG" | "UNKNOWN";
+
+export interface TrustFacts {
+  /** Basescan answered. False ⇒ verification is UNKNOWN, not "unverified". */
+  basescanAvailable: boolean;
+  verified: boolean;
+  isProxy: boolean;
+  /** For a token contract; null otherwise. */
+  honeypot: HoneypotVerdict | null;
+}
+
+/** THE verdict (W0-19). Every branch names the measured fact that decided it. */
+export function measuredTrustVerdict(f: TrustFacts): { verdict: TrustVerdict; reasons: string[] } {
+  if (f.honeypot === "HONEYPOT") {
+    return { verdict: "RED_FLAG", reasons: ["the token measures as a honeypot (sell tax ≥ 50%) — holders cannot exit"] };
+  }
+  if (f.honeypot === "SUSPICIOUS") {
+    return { verdict: "CAUTION", reasons: ["the token has a measured sell lever (a blacklist function, or a sell tax ≥ 10%)"] };
+  }
+  if (!f.basescanAvailable) {
+    return { verdict: "UNKNOWN", reasons: ["Basescan did not answer — whether the source is verified is unknown, not false"] };
+  }
+  if (f.isProxy && !f.verified) {
+    return { verdict: "CAUTION", reasons: ["an upgradeable proxy with unverified source — its logic can change and cannot be read"] };
+  }
+  if (!f.verified) {
+    return { verdict: "UNKNOWN", reasons: ["source not verified on Basescan — the code cannot be read, and nothing measured is wrong with it"] };
+  }
+  return {
+    verdict: "SAFE",
+    reasons: [
+      "source verified on Basescan",
+      ...(f.isProxy ? ["upgradeable proxy — the owner can change the logic later"] : []),
+      ...(f.honeypot === "SAFE" ? ["buy/sell tax read on-chain and no blacklist lever"] : []),
+    ],
+  };
+}
+
+const TRUST_ACTION: Record<TrustVerdict, string> = {
+  SAFE: "PROCEED", CAUTION: "PROCEED_WITH_CAUTION", RED_FLAG: "ABORT", UNKNOWN: "VERIFY_FIRST",
+};
+const TRUST_CONFIDENCE: Record<TrustVerdict, number | null> = {
+  SAFE: 80, CAUTION: 70, RED_FLAG: 90, UNKNOWN: null,
+};
 
 type Msg = { role: string; content: string };
 
@@ -29,6 +83,8 @@ function parseJson(t: string): Record<string, unknown> | null {
 
 // Basescan lookup — verification + source info
 async function basescanLookup(address: string): Promise<{
+  /** False when the lookup itself failed — `verified` is then unknown. */
+  available: boolean;
   verified: boolean;
   contractName: string | null;
   compilerVersion: string | null;
@@ -38,6 +94,7 @@ async function basescanLookup(address: string): Promise<{
   raw: string;
 }> {
   const defaultResult = {
+    available: false,
     verified: false,
     contractName: null,
     compilerVersion: null,
@@ -60,6 +117,7 @@ async function basescanLookup(address: string): Promise<{
     };
     const verified = !!info.SourceCode && info.SourceCode.length > 0;
     return {
+      available: true,
       verified,
       contractName: info.ContractName ?? null,
       compilerVersion: info.CompilerVersion ?? null,
@@ -210,40 +268,20 @@ Schema: {
       community_verdict: "Community signal unavailable.",
     };
 
-    // Step 4: Blue Agent final verdict synthesis
-    const verdictRaw = await llm(
-      `You are Blue Agent — final arbiter for contract trust on Base.
-Given security analysis + community signal, issue a final verdict.
-CRITICAL: Return ONLY raw JSON. No markdown.
-Schema: {
-  "verdict": "SAFE|CAUTION|RED_FLAG",
-  "confidence": <0-100>,
-  "headline": "<one punchy verdict sentence>",
-  "action": "PROCEED|PROCEED_WITH_CAUTION|ABORT",
-  "summary": "<2-3 sentences — what matters, what to watch>",
-  "checklist": ["<item to verify before interacting>"]
-}
-
-Rules (weight CONCRETE signals; do NOT punish a token merely for unverified source):
-- RED_FLAG if: security_score < 40, OR 2+ concrete red_flags, OR proxy_risk=high, OR recognition=suspicious, OR a known rug/honeypot pattern
-- CAUTION if: proxy_risk=medium, OR community_trust=low, OR (unverified source AND little/no DEX liquidity AND unrecognized)
-- SAFE if: security_score >= 70 AND no red_flags AND (verified OR recognized OR has healthy DEX liquidity)
-- Unverified source on its own, when the token has real liquidity/volume, is at most a minor caution note — never an automatic RED_FLAG.`,
-      `Address: ${address}
-Blue security: ${JSON.stringify(blue)}
-MiroShark community: ${JSON.stringify(ms)}
-Basescan: ${basescan.raw}`,
-      0.2,
-      600
-    );
-
-    const verdict = parseJson(verdictRaw) ?? {
-      verdict: "CAUTION",
-      confidence: 50,
-      headline: "Insufficient data — treat as unverified",
-      action: "PROCEED_WITH_CAUTION",
-      summary: "Could not fully analyze this contract. Verify on Basescan before interacting.",
-      checklist: ["Check Basescan for source verification", "Confirm contract is not a honeypot"],
+    // Step 4: the verdict — arithmetic on what was measured (W0-19). For a
+    // token, the same tax read honeypot-check uses.
+    const honeypot = identity?.isToken ? measuredHoneypotVerdict(await readTokenTax(address)).verdict : null;
+    const measured = measuredTrustVerdict({
+      basescanAvailable: basescan.available,
+      verified: basescan.verified,
+      isProxy: basescan.isProxy,
+      honeypot,
+    });
+    const HEADLINE: Record<TrustVerdict, string> = {
+      SAFE: "Verified source and no measured risk lever",
+      CAUTION: "A measured risk lever — review before interacting",
+      RED_FLAG: "Measured honeypot — do not buy",
+      UNKNOWN: "Cannot assess — the contract's code or safety could not be read",
     };
 
     return Response.json({
@@ -262,7 +300,10 @@ Basescan: ${basescan.raw}`,
         url: `https://basescan.org/address/${address}`,
       },
       security: {
-        score: blue.security_score ?? 50,
+        // The model's own score, kept for display and labelled; the verdict
+        // above does not read it.
+        score: typeof blue.security_score === "number" ? blue.security_score : null,
+        score_model_generated: true,
         verified: blue.verified ?? basescan.verified,
         proxy_risk: blue.proxy_risk ?? "unknown",
         red_flags: blue.red_flags ?? [],
@@ -277,12 +318,20 @@ Basescan: ${basescan.raw}`,
         degen_flags: ms.degen_flags ?? [],
         verdict: ms.community_verdict ?? "",
       },
-      verdict: verdict.verdict ?? "CAUTION",
-      confidence: verdict.confidence ?? 50,
-      headline: verdict.headline ?? "",
-      action: verdict.action ?? "PROCEED_WITH_CAUTION",
-      summary: verdict.summary ?? "",
-      checklist: verdict.checklist ?? [],
+      verdict: measured.verdict,
+      confidence: TRUST_CONFIDENCE[measured.verdict],
+      headline: HEADLINE[measured.verdict],
+      action: TRUST_ACTION[measured.verdict],
+      verdict_basis: measured.reasons,
+      token_honeypot: honeypot,
+      // The model passes' prose, labelled — no longer a verdict input.
+      summary: typeof blue.blue_assessment === "string" ? blue.blue_assessment : "",
+      summary_model_generated: true,
+      checklist: [
+        ...(basescan.isProxy ? ["Read the CURRENT implementation contract, not only the proxy"] : []),
+        ...(!basescan.verified ? ["Ask the team for verified source before trusting unread code"] : []),
+        ...(honeypot === "UNKNOWN" ? ["Tax could not be read — make a small test sell first"] : []),
+      ],
     });
   } catch (error) {
     console.error("[ContractTrust]", error);

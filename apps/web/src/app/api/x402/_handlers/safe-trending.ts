@@ -45,7 +45,7 @@ import { getBaseTrending, type Pool } from "@/lib/market-data";
 import { readTokenTax, type TaxRead, TAX_UNREAD } from "@/lib/token-tax";
 import { classifyToken } from "@/lib/wallet/token-trust";
 import { dedupeBySubject, type SubjectToken } from "./pool-scan";
-import { HONEYPOT_SELL_TAX_BPS, honeypotAction } from "./honeypot-check";
+import { honeypotAction, measuredHoneypotVerdict, type HoneypotVerdict } from "./honeypot-check";
 import { slippagePct, exitRiskFor } from "./liquidity-depth";
 
 /** Base mainnet only. Stated on every row — CLAUDE.md hard rule #1. */
@@ -80,7 +80,7 @@ export type SafeTrendingFlag =
   | "IMPERSONATION_CHECK";
 
 export type HoneypotSummary = {
-  verdict: "SAFE" | "SUSPICIOUS" | "HONEYPOT";
+  verdict: HoneypotVerdict;
   /** Mirrors `honeypot-check`'s clamp: 90 is unreachable without a tax read. */
   confidence: number;
   action: string;
@@ -145,16 +145,11 @@ export function batchConfidence(tax: TaxRead, isHoneypot: boolean): number {
 }
 
 export function summarizeHoneypot(tax: TaxRead): HoneypotSummary {
-  const isHoneypot = tax.sell_tax != null && tax.sell_tax >= HONEYPOT_SELL_TAX_BPS;
-  const confidence = batchConfidence(tax, isHoneypot);
-  // Same shape as honeypot-check: HONEYPOT when measured, SAFE only once the
-  // tax read succeeded, SUSPICIOUS otherwise. An unread tax can never reach
-  // SAFE here, which is the whole point of the tool's name.
-  const verdict: HoneypotSummary["verdict"] = isHoneypot
-    ? "HONEYPOT"
-    : confidence >= 70
-      ? "SAFE"
-      : "SUSPICIOUS";
+  // The SAME function honeypot-check's verdict comes from (W0-19): HONEYPOT
+  // when measured, UNKNOWN when the tax was not read, SUSPICIOUS on a measured
+  // lever, SAFE otherwise. An unread tax can never reach SAFE here, which is
+  // the whole point of the tool's name.
+  const { verdict, confidence } = measuredHoneypotVerdict(tax);
   return {
     verdict,
     confidence,

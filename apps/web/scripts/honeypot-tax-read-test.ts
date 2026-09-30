@@ -273,8 +273,10 @@ async function callTool(id: string, body: Json): Promise<Json> {
     check("tax_units names the unit", r.tax_units === "basis_points", `got ${JSON.stringify(r.tax_units)}`);
     check("display strings are formatted in code", r.buy_tax_estimate === "1%" && r.sell_tax_estimate === "1%",
       `got ${JSON.stringify(r.buy_tax_estimate)} / ${JSON.stringify(r.sell_tax_estimate)}`);
-    // THE point of case 1: a real read must NOT be capped.
-    check("confidence 97 survives — the clamp is not a constant", r.confidence === 97, `got ${JSON.stringify(r.confidence)}`);
+    // W0-19 (2026-09-30): a real read is not capped — and the number is the
+    // code's own for a clean read (85), never the model's (97 here).
+    check("confidence is the code's 85 for a clean read, not the model's 97", r.confidence === 85, `got ${JSON.stringify(r.confidence)}`);
+    check("verdict SAFE comes from the read (1% tax, no blacklist lever)", r.verdict === "SAFE", `got ${JSON.stringify(r.verdict)}`);
     check("confidence_capped is false", r.confidence_capped === false, `got ${JSON.stringify(r.confidence_capped)}`);
     check("action is SAFE_TO_TRADE", r.action === "SAFE_TO_TRADE", `got ${JSON.stringify(r.action)}`);
     check("template identified by selector, not by ContractName",
@@ -301,9 +303,11 @@ async function callTool(id: string, body: Json): Promise<Json> {
     check("has_blacklist is null — nothing answered, so nothing is known",
       r.has_blacklist === null, `got ${JSON.stringify(r.has_blacklist)}`);
     check("tax_source is null", r.tax_source === null, `got ${JSON.stringify(r.tax_source)}`);
-    // THE clamp.
-    check("confidence is capped at 70 despite the model saying 97",
-      r.confidence === 70, `got ${JSON.stringify(r.confidence)}`);
+    // W0-19 (2026-09-30): confidence is set in CODE from what was measured —
+    // 50 for an unread tax — whatever the model said (97 here).
+    check("confidence is the code's 50 for an unread tax, not the model's 97",
+      r.confidence === 50, `got ${JSON.stringify(r.confidence)}`);
+    check("verdict is UNKNOWN — nothing measured, nothing to call", r.verdict === "UNKNOWN", `got ${JSON.stringify(r.verdict)}`);
     check("confidence_capped flags that it bit", r.confidence_capped === true, `got ${JSON.stringify(r.confidence_capped)}`);
     check("action is TRADEABLE_TAX_UNVERIFIED, not SAFE_TO_TRADE",
       r.action === "TRADEABLE_TAX_UNVERIFIED", `got ${JSON.stringify(r.action)}`);
@@ -332,6 +336,20 @@ async function callTool(id: string, body: Json): Promise<Json> {
     check("the measured sell tax is a code-written red flag",
       reds.some((f) => /90%/.test(f)), `got ${JSON.stringify(reds)}`);
   }
+
+  // ── 3b. the model calls a clean-read token a honeypot → it is NOT one ────
+  // W0-19: `is_honeypot` from the model used to OR straight into HONEYPOT.
+  console.log("\n3b. model says is_honeypot:true on a token that measures clean");
+  llmConfidence = 99; llmIsHoneypot = true;
+  {
+    const r = await callTool("honeypot-check", { token: TIBBIR });
+    check("the verdict stays SAFE — measurements decide", r.verdict === "SAFE", `got ${JSON.stringify(r.verdict)}`);
+    check("is_honeypot is false", r.is_honeypot === false, `got ${JSON.stringify(r.is_honeypot)}`);
+    const op = r.model_opinion as Json | undefined;
+    check("the model's view is returned, labelled, apart from the verdict",
+      op?.is_honeypot === true && typeof op?.note === "string", `got ${JSON.stringify(op)}`);
+  }
+  llmIsHoneypot = false;
 
   // ── 4. Base miss + code on RH 4663 → a hint, and only a hint ─────────────
   console.log("\n4. VEX — no Base code, live on Robinhood Chain 4663");

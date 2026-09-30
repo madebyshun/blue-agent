@@ -214,6 +214,8 @@ const HONEYPOT_COLORS: Record<string, { bg: string; text: string; icon: string }
   SUSPICIOUS:  { bg: "#d9770615", text: "#fb923c", icon: "⚠" },
   HONEYPOT:    { bg: "#dc262615", text: "#f87171", icon: "✕" },
   NOT_A_TOKEN: { bg: "#1E1E3215", text: "#94a3b8", icon: "·" },
+  // The tax could not be read: no measured basis to call it safe or not (W0-19).
+  UNKNOWN:     { bg: "#1E1E3215", text: "#cbd5e1", icon: "?" },
 };
 
 export function HoneypotCard({ result }: { result: HoneypotResult }) {
@@ -320,7 +322,10 @@ export function HoneypotCard({ result }: { result: HoneypotResult }) {
 interface RiskGateResult {
   verdict?: string;
   action?: string;
-  risk_score?: number;
+  /** Measured reasons the verdict had (W0-19). */
+  verdict_basis?: string[];
+  /** A bucket of the verdict; null when nothing was measured. */
+  risk_score?: number | null;
   risk_level?: string;
   red_flags?: string[];
   aml_signals?: string[];
@@ -334,12 +339,14 @@ const RISKGATE_COLORS: Record<string, { bg: string; text: string; icon: string }
   PROCEED: { bg: "#16a34a15", text: "#4ade80", icon: "✓" },
   CAUTION: { bg: "#d9770615", text: "#fb923c", icon: "⚠" },
   ABORT:   { bg: "#dc262615", text: "#f87171", icon: "✕" },
+  // Nothing was measured that could decide it (W0-19).
+  UNKNOWN: { bg: "#1E1E3215", text: "#cbd5e1", icon: "?" },
 };
 
 export function RiskGateCard({ result }: { result: RiskGateResult }) {
-  const verdict     = result.verdict ?? "CAUTION";
-  const score       = result.risk_score ?? 50;
-  const accentColor = verdict === "PROCEED" ? "#4ade80" : verdict === "ABORT" ? "#f87171" : "#fb923c";
+  const verdict     = result.verdict ?? "UNKNOWN";
+  const score       = typeof result.risk_score === "number" ? result.risk_score : null;
+  const accentColor = verdict === "PROCEED" ? "#4ade80" : verdict === "ABORT" ? "#f87171" : verdict === "UNKNOWN" ? "#cbd5e1" : "#fb923c";
   const url         = result.target?.url;
 
   return (
@@ -365,26 +372,20 @@ export function RiskGateCard({ result }: { result: RiskGateResult }) {
           )}
         </div>
 
-        {/* Risk score bar */}
+        {/* Risk level — a bucket of the measured verdict; no bar when nothing
+            was measured, because a middling bar would read as a measurement. */}
         <div className="space-y-1">
           <div className="flex justify-between font-mono text-[10px] text-slate-600">
-            <span>Risk score</span>
-            <span style={{ color: accentColor }}>{result.risk_level ?? "medium"}</span>
+            <span>Risk</span>
+            <span style={{ color: accentColor }}>{result.risk_level ?? "unknown"}</span>
           </div>
-          <ScoreBar score={score} color={accentColor} />
+          {score !== null && <ScoreBar score={score} color={accentColor} />}
         </div>
 
-        {/* Drainer / phishing badges */}
-        {(result.community?.known_drainer || result.community?.known_phishing) && (
-          <div className="flex gap-2 flex-wrap">
-            {result.community.known_drainer && (
-              <span className="font-mono text-[10px] px-2 py-0.5 rounded-full bg-red-950/40 text-red-400 border border-red-900/40">Known drainer</span>
-            )}
-            {result.community.known_phishing && (
-              <span className="font-mono text-[10px] px-2 py-0.5 rounded-full bg-red-950/40 text-red-400 border border-red-900/40">Phishing</span>
-            )}
-          </div>
-        )}
+        {/* Why — the measured facts the verdict came from. The old "Known
+            drainer" / "Phishing" badges were a model's guess with no list behind
+            it, rendered as a finding; they are gone (W0-19). */}
+        {!!result.verdict_basis?.length && <FlagList flags={result.verdict_basis} color={accentColor} />}
 
         {/* Flags */}
         {!!result.red_flags?.length && <FlagList flags={result.red_flags} color="#f87171" />}
@@ -666,14 +667,16 @@ export function TokenPickCard({ result }: { result: TokenPickResult }) {
 
 interface ContractTrustResult {
   verdict?: string;
-  confidence?: number;
+  confidence?: number | null;
+  /** Measured reasons the verdict had (W0-19). */
+  verdict_basis?: string[];
   headline?: string;
   action?: string;
   summary?: string;
   checklist?: string[];
   address?: string;
   basescan?: { verified?: boolean; contractName?: string; isProxy?: boolean; url?: string };
-  security?: { score?: number; red_flags?: string[]; green_flags?: string[]; assessment?: string };
+  security?: { score?: number | null; red_flags?: string[]; green_flags?: string[]; assessment?: string };
   community?: { trust?: string; recognition?: string; verdict?: string };
 }
 
@@ -681,11 +684,11 @@ const TRUST_COLORS: Record<string, { bg: string; text: string; icon: string }> =
   SAFE:     { bg: "#16a34a15", text: "#4ade80", icon: "✓" },
   CAUTION:  { bg: "#d9770615", text: "#fb923c", icon: "⚠" },
   RED_FLAG: { bg: "#dc262615", text: "#f87171", icon: "✕" },
+  UNKNOWN:  { bg: "#1E1E3215", text: "#cbd5e1", icon: "?" },
 };
 
 export function ContractTrustCard({ result }: { result: ContractTrustResult }) {
-  const verdict     = result.verdict ?? "CAUTION";
-  const score       = result.security?.score ?? 50;
+  const verdict     = result.verdict ?? "UNKNOWN";
   const accentColor = TRUST_COLORS[verdict]?.text ?? "#94a3b8";
   const url         = result.basescan?.url ?? (result.address ? `https://basescan.org/address/${result.address}` : undefined);
 
@@ -703,7 +706,7 @@ export function ContractTrustCard({ result }: { result: ContractTrustResult }) {
         </div>
         <div className="flex flex-col items-end gap-1">
           <VerdictBadge verdict={verdict} colorMap={TRUST_COLORS} />
-          {result.confidence !== undefined && (
+          {typeof result.confidence === "number" && (
             <span className="font-mono text-[10px] text-slate-600">{result.confidence}% confidence</span>
           )}
         </div>
@@ -713,11 +716,10 @@ export function ContractTrustCard({ result }: { result: ContractTrustResult }) {
           <p className="font-mono text-[12px] text-slate-200 font-medium">{result.headline}</p>
         )}
 
-        {/* Security score */}
-        <div className="space-y-1">
-          <div className="font-mono text-[10px] text-slate-600">Security score</div>
-          <ScoreBar score={score} color={accentColor} />
-        </div>
+        {/* Why — the measured facts behind the verdict (W0-19). The model's
+            "security score" bar is gone: it was the model's own number, drawn
+            as if it had been measured. */}
+        {!!result.verdict_basis?.length && <FlagList flags={result.verdict_basis} color={accentColor} />}
 
         {/* Tags */}
         <div className="flex flex-wrap gap-1.5">

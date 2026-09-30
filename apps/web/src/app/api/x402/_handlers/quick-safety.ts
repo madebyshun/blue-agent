@@ -1,10 +1,57 @@
 // x402/quick-safety — fast contract safety check (DexScreener liquidity +
-// Basescan verification + LLM read). Price: $0.05
-import { callLLM, extractJsonObject } from "@/app/api/_lib/llm";
+// Basescan verification + an on-chain tax read). Price: $0.05
+//
+// 🔴 NO MODEL IN THIS TOOL SINCE 2026-09-30 (W0-19). It used to hand its three
+// facts to an LLM and take back a `risk_score`, a verdict word — which it fell
+// back to verbatim when the score was missing — and even `buy_tax_pct` /
+// `sell_tax_pct`, numbers the model could only have invented. With three
+// inputs there was nothing for a model to add except those things it must not
+// produce. The verdict, flags and confidence are now arithmetic on what was
+// read, and a tax is reported only when it was read on-chain (lib/token-tax).
 import { getBasescanSource } from "@/lib/moralis";
 import { sideOf } from "@/lib/dex-side";
+import { readTokenTax } from "@/lib/token-tax";
+import { measuredHoneypotVerdict, type HoneypotVerdict } from "./honeypot-check";
 
 const DS = "https://api.dexscreener.com/latest/dex";
+
+/** Below this, a small trade moves the price a lot and exits are thin. */
+export const THIN_LIQUIDITY_USD = 10_000;
+
+export type QuickVerdict = "SAFE" | "CAUTION" | "DANGER" | "UNKNOWN";
+
+export interface QuickFacts {
+  /** null ⇒ DexScreener did not answer — liquidity unknown, not zero. */
+  liquidityUsd: number | null;
+  /** null ⇒ DexScreener did not answer. */
+  basePairs: number | null;
+  /** null ⇒ Basescan did not answer — verification unknown, not false. */
+  verified: boolean | null;
+  honeypot: HoneypotVerdict;
+}
+
+/** THE verdict. Every flag is a measured fact; absence of data is never one. */
+export function quickVerdict(f: QuickFacts): { verdict: QuickVerdict; flags: string[] } {
+  const flags: string[] = [];
+  if (f.honeypot === "HONEYPOT") flags.push("measured sell tax ≥ 50% — holders cannot exit");
+  if (f.honeypot === "SUSPICIOUS") flags.push("measured sell lever (blacklist function or sell tax ≥ 10%)");
+  if (f.basePairs === 0) flags.push("no Base DEX pair — there is no market to exit into");
+  if (f.liquidityUsd != null && f.basePairs !== 0 && f.liquidityUsd < THIN_LIQUIDITY_USD) {
+    flags.push(`thin liquidity ($${Math.round(f.liquidityUsd).toLocaleString("en-US")}) — small trades move the price`);
+  }
+  if (f.verified === false) flags.push("source not verified on Basescan — the code cannot be read");
+  if (f.honeypot === "UNKNOWN") flags.push("buy/sell tax not readable on this contract — make a small test sell first");
+
+  if (f.honeypot === "HONEYPOT") return { verdict: "DANGER", flags };
+  if (f.honeypot === "SUSPICIOUS" || f.basePairs === 0 || (f.liquidityUsd != null && f.liquidityUsd < THIN_LIQUIDITY_USD)) {
+    return { verdict: "CAUTION", flags };
+  }
+  if (f.verified === true && f.liquidityUsd != null) return { verdict: "SAFE", flags };
+  return { verdict: "UNKNOWN", flags };
+}
+
+const CONFIDENCE: Record<QuickVerdict, number | null> = { DANGER: 90, CAUTION: 70, SAFE: 75, UNKNOWN: null };
+const RISK_BUCKET: Record<QuickVerdict, number | null> = { DANGER: 90, CAUTION: 50, SAFE: 15, UNKNOWN: null };
 
 export default async function handler(req: Request): Promise<Response> {
   try {
@@ -20,10 +67,12 @@ export default async function handler(req: Request): Promise<Response> {
       quoteToken?: { symbol?: string; address?: string };
       liquidity?: { usd?: number };
     };
-    const [dsRes, src] = await Promise.all([
+    const [dsRes, src, tax] = await Promise.all([
       fetch(`${DS}/tokens/${contract}`, { signal: AbortSignal.timeout(8000) }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
-      getBasescanSource(contract),
+      getBasescanSource(contract).catch(() => null),
+      readTokenTax(contract),
     ]);
+    const dsAnswered = dsRes != null;
     const pairs = (((dsRes as { pairs?: Pair[] } | null)?.pairs ?? []).filter((p) => p.chainId === "base")).sort((a, b) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0));
     const top = pairs[0];
     // `liquidity.usd` is whole-pool TVL, so the deepest pair is the right read
@@ -31,35 +80,37 @@ export default async function handler(req: Request): Promise<Response> {
     // baseToken.symbol unconditionally labelled a USDC scan "AERO", because the
     // 6 deepest of USDC's 30 Base pairs all hold it as the quote (see lib/dex-side).
     // This tool reports no price, so the pair is kept rather than rejected.
-    const liquidity = top?.liquidity?.usd ?? null;
+    const liquidity = top?.liquidity?.usd ?? (dsAnswered && pairs.length === 0 ? 0 : null);
     const symbol = top ? sideOf(top, contract).symbol : null;
-    const verified = !!(src && src.SourceCode && String(src.SourceCode).length > 0);
+    // `getBasescanSource` answers null when Basescan did not — that is
+    // "unknown", and must not become "unverified".
+    const verified = src == null ? null : !!(src.SourceCode && String(src.SourceCode).length > 0);
+    const honeypot = measuredHoneypotVerdict(tax);
 
-    const data = { contract, symbol, liquidity_usd: liquidity, source_verified: verified, base_pairs: pairs.length };
-    const system = `You are a Base chain analyst. Use ONLY the data provided. NEVER invent numbers, addresses, or token names not in the data. Return ONLY raw JSON starting with {. No markdown. If data unavailable, return field as null — never estimate.
-Assess a token contract's safety from the real DexScreener liquidity + Basescan source verification. Risk rises with: unverified source, liquidity < $10k, zero Base pairs. Only state buy/sell tax if evident in the data, else null.
-Schema: {"safe":boolean,"buy_tax_pct":number|null,"sell_tax_pct":number|null,"risk_score":<0-100>,"verdict":"SAFE|CAUTION|DANGER","flags":string[],"confidence":<0-100>}`;
+    const { verdict, flags } = quickVerdict({
+      liquidityUsd: dsAnswered ? liquidity : null,
+      basePairs: dsAnswered ? pairs.length : null,
+      verified,
+      honeypot: honeypot.verdict,
+    });
 
-    let r: Record<string, unknown> = {};
-    try { r = extractJsonObject((await callLLM({ system, user: JSON.stringify(data, null, 2), temperature: 0.2, maxTokens: 500 })).text) ?? {}; }
-    catch { /* degrade below */ }
-
-    const rs = typeof r.risk_score === "number" ? r.risk_score : null;
-    const verdict = rs == null ? (typeof r.verdict === "string" ? r.verdict : "CAUTION") : rs >= 66 ? "DANGER" : rs >= 33 ? "CAUTION" : "SAFE";
     return Response.json({
       tool: "quick-safety",
       contract,
       symbol,
-      safe: typeof r.safe === "boolean" ? r.safe : rs != null ? rs < 33 : null,
-      buy_tax_pct: typeof r.buy_tax_pct === "number" ? r.buy_tax_pct : null,
-      sell_tax_pct: typeof r.sell_tax_pct === "number" ? r.sell_tax_pct : null,
-      risk_score: rs,
+      safe: verdict === "UNKNOWN" ? null : verdict === "SAFE",
+      // Measured on-chain or null — never estimated.
+      buy_tax_pct: tax.buy_tax != null ? tax.buy_tax / 100 : null,
+      sell_tax_pct: tax.sell_tax != null ? tax.sell_tax / 100 : null,
+      tax_read: tax.tax_read,
+      risk_score: RISK_BUCKET[verdict],
       verdict,
-      flags: Array.isArray(r.flags) ? r.flags : [],
-      liquidity_usd: liquidity,
+      flags,
+      liquidity_usd: dsAnswered ? liquidity : null,
+      base_pairs: dsAnswered ? pairs.length : null,
       verified,
-      confidence: typeof r.confidence === "number" ? r.confidence : rs,
-      data_source: "DexScreener + Basescan (live)",
+      confidence: CONFIDENCE[verdict],
+      data_source: "DexScreener + Basescan + on-chain tax read (live)",
       timestamp: new Date().toISOString(),
     });
   } catch (e) {

@@ -93,7 +93,9 @@ const noFlagInputs = {
 
 console.log("\n§1 an unread tax can never be called SAFE");
 const unread = summarizeHoneypot(TAX_UNREAD);
-ok("unread tax → verdict SUSPICIOUS",     unread.verdict === "SUSPICIOUS");
+// UNKNOWN, not SUSPICIOUS, since W0-19 (2026-09-30): nothing was measured,
+// so there is no suspicion to report — only a gap.
+ok("unread tax → verdict UNKNOWN",        unread.verdict === "UNKNOWN");
 ok("unread tax → confidence below 70",    unread.confidence < 70);
 ok("unread tax → action names the gap",   unread.action === "TRADEABLE_TAX_UNVERIFIED");
 ok("unread tax → buy/sell are null",      unread.buy_tax === null && unread.sell_tax === null);

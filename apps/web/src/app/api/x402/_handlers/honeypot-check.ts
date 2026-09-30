@@ -1,6 +1,6 @@
 // x402/honeypot-check
 // Honeypot token detection — checks if a token can be bought but not sold on Base
-// Price: $0.10 — verdict: SAFE / HONEYPOT / SUSPICIOUS
+// Price: $0.10 — verdict: SAFE / SUSPICIOUS / HONEYPOT / UNKNOWN (code-mapped, W0-19)
 //
 // 🔴 CONFIDENCE IS EARNED BY A TAX READ, IN CODE. Read `clampConfidence` below
 // before touching anything that produces `confidence`.
@@ -53,6 +53,39 @@ export function clampConfidence(raw: unknown, taxRead: TaxRead["tax_read"] | "no
   const n = typeof raw === "number" && Number.isFinite(raw) ? Math.round(raw) : 50;
   const bounded = Math.max(0, Math.min(100, n));
   return taxRead === "template" ? bounded : Math.min(bounded, TAX_UNVERIFIED_CONFIDENCE_CAP);
+}
+
+/** A MEASURED sell tax at/above this is a real exit cost short of a trap. */
+export const SUSPICIOUS_SELL_TAX_BPS = 1_000; // 10%
+
+export type HoneypotVerdict = "SAFE" | "SUSPICIOUS" | "HONEYPOT" | "UNKNOWN";
+
+/**
+ * THE verdict — arithmetic on measured signals only (W0-19, 2026-09-30), and
+ * shared with `safe-trending` so the two tools can never disagree on a token.
+ *
+ * Until then `is_honeypot` from the model — and `known_rug` from a second model
+ * pass — ORed straight into HONEYPOT, and SAFE came from a model-chosen
+ * `confidence`. A verdict a model picks flips between runs on the same input
+ * (CLAUDE.md), and a model's "is_honeypot: true" on a token nobody measured is
+ * exactly the negative-from-absent-data this repo forbids. Now:
+ *   HONEYPOT   — a measured sell tax ≥ 50%: the holder cannot get out
+ *   UNKNOWN    — the tax could not be read: no measured basis either way
+ *   SUSPICIOUS — read, and a measured lever is there (blacklists(address), or
+ *                a sell tax ≥ 10%)
+ *   SAFE       — read, and neither
+ * `confidence` is set here too, so no model number reaches the caller.
+ */
+export function measuredHoneypotVerdict(
+  tax: Pick<TaxRead, "tax_read" | "sell_tax" | "has_blacklist">,
+): { verdict: HoneypotVerdict; confidence: number; isHoneypot: boolean } {
+  const isHoneypot = tax.sell_tax != null && tax.sell_tax >= HONEYPOT_SELL_TAX_BPS;
+  if (isHoneypot) return { verdict: "HONEYPOT", confidence: 95, isHoneypot };
+  if (tax.tax_read !== "template") return { verdict: "UNKNOWN", confidence: 50, isHoneypot };
+  const risky = tax.has_blacklist === true || (tax.sell_tax != null && tax.sell_tax >= SUSPICIOUS_SELL_TAX_BPS);
+  return risky
+    ? { verdict: "SUSPICIOUS", confidence: 70, isHoneypot }
+    : { verdict: "SAFE", confidence: 85, isHoneypot };
 }
 
 /**
@@ -322,16 +355,17 @@ Schema: {
     // holder cannot get their money out. This is the one place a successful tax
     // read feeds the verdict rather than merely decorating it. An UNREAD tax
     // never contributes here — absence of a reading is not evidence of a trap.
-    const measuredHoneypot = tax.sell_tax != null && tax.sell_tax >= HONEYPOT_SELL_TAX_BPS;
-    const isHoneypot = Boolean(blue.is_honeypot) || Boolean(ms.known_rug) || measuredHoneypot;
-
-    // The clamp. `confidence` can only clear 90 when `tax_read === "template"`.
-    const confidence = clampConfidence(blue.confidence, tax.tax_read);
-    // Did the clamp actually bite? Compare against what the same input would
-    // have produced had the tax been read — that difference IS the cap.
-    const confidenceCapped = confidence !== clampConfidence(blue.confidence, "template");
-
-    const verdict = isHoneypot ? "HONEYPOT" : confidence >= 70 ? "SAFE" : "SUSPICIOUS";
+    // W0-19: verdict, confidence and is_honeypot are all arithmetic on what
+    // was measured — see `measuredHoneypotVerdict`. The two model passes keep
+    // writing prose and flags, and their booleans are returned as a labelled
+    // opinion below, never as a verdict input.
+    const measured = measuredHoneypotVerdict(tax);
+    const measuredHoneypot = measured.isHoneypot;
+    const isHoneypot = measured.isHoneypot;
+    const confidence = measured.confidence;
+    // "Capped" now means: limited because the tax was never read.
+    const confidenceCapped = tax.tax_read !== "template";
+    const verdict = measured.verdict;
     const action = honeypotAction(verdict, tax.tax_read);
 
     // Code-derived flags. These are measurements, so they are appended in code
@@ -398,6 +432,14 @@ Schema: {
         known_rug: ms.known_rug ?? false,
         rug_patterns: ms.rug_patterns ?? [],
         signal:  ms.community_signal ?? "",
+        model_generated: true,
+      },
+      // What the two model passes THOUGHT. Labelled and kept apart from the
+      // verdict fields above, which only measurements decide (W0-19).
+      model_opinion: {
+        is_honeypot: Boolean(blue.is_honeypot),
+        known_rug:   Boolean(ms.known_rug),
+        note: "model-generated opinion — not an input to verdict, action or confidence",
       },
       assessment: `${typeof blue.assessment === "string" ? blue.assessment : ""}${taxCaveat}`,
     });
