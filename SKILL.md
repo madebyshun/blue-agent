@@ -181,7 +181,7 @@ transfer to make.
 | `protocol-health` | $0.10 | `protocol`* | Protocol TVL health, trend and risk signals (DefiLlama). |
 | `token-alpha` | $0.15 | `token`* | Token trade signal — entry, whale confirmation, momentum and risk. |
 | `token-launch-readiness` | $0.30 | `name`* `project`* `description` | Go/no-go signal on whether your project is ready to launch a token. |
-| `token-pick-signal` | $0.20 | `chain` `context` | The highest-conviction asymmetric setup on Base, picked from live liquidity, turnover and momentum scores. |
+| `token-pick-signal` | $0.20 | `chain` `context` | The top Base token by an on-chain quality score (liquidity, turnover, momentum) — facts from live pools, no buy/sell call. |
 
 ### builder (29)
 
