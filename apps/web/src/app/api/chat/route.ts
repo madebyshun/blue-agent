@@ -374,8 +374,10 @@ function veniceMaxTokens(modelId: string): number {
 // which is what kept it out of reach of the guard in the first place.
 
 // ─── Hub tool definitions (Anthropic tool format) ─────────────────────────────
+// Every definition chat has ever offered. What the model is actually SHOWN is
+// `HUB_TOOLS` below: this list minus `CHAT_HIDDEN_TOOLS`.
 
-const HUB_TOOLS = [
+const ALL_HUB_TOOLS = [
   {
     name: "prepare_yield",
     description: "Open the MOVE-TO-YIELD card so the user can supply idle USDC into Aave v3 on Base (earn lending yield) or withdraw it back — NON-custodial, the user SIGNS in their own wallet; Blue Agent never holds keys or funds. Use when the user wants to: 'earn yield', 'put my USDC to work', 'deposit/supply to Aave', 'move idle USDC to yield', 'stake my USDC for interest', OR 'withdraw/pull my USDC out of Aave'. The CARD collects and edits amount, network (Base Sepolia testnet by DEFAULT — safe to test — or Base mainnet), and the action (supply/withdraw); the user reviews and signs.\n\nCRITICAL — NEVER INVENT AN AMOUNT: pass `amount` ONLY if the user explicitly stated a number in THIS request; otherwise omit it and let the card collect it. Pass action='withdraw' only if the user explicitly asked to withdraw/pull out. Network defaults to testnet; pass network='base' ONLY if the user explicitly asked for mainnet / real funds.\n\nThis tool NEVER moves funds by itself — only the user's signature in the card executes anything. After calling, reply with ONE short line telling the user to review and sign in the card above; never claim funds were moved and never quote an APY figure you weren't given.",
@@ -1103,6 +1105,33 @@ Testnets are reachable by full id: base-sepolia, ethereum-sepolia, robinhood-tes
   // run is verified on chain.
 ];
 
+// ─── Tools hidden from chat (ShunTr, 2026-09-30) ─────────────────────────────
+// docs/rebuild-5-tang-2026-09-30.md: "chỉ cần những tool hữu ích". Chat keeps the
+// tools inside its loop (discover → evaluate → check → swap/send/bridge) plus
+// catalog lookup. Hidden, not deleted: every id below stays in the catalog and
+// is still callable over x402 and via `blue_call`; the definitions stay in
+// ALL_HUB_TOOLS so a tool comes back by deleting one line here.
+// Also blocked at dispatch (callHubTool), so a name the model invents or
+// remembers still cannot run.
+const CHAT_HIDDEN_TOOLS: ReadonlySet<string> = new Set([
+  // Builder/founder tools — the old founder console, outside the trading loop.
+  "hub_competitor_scan", "hub_market_fit", "hub_repo_health", "hub_agent_score",
+  "hub_token_readiness", "blue_deploy", "blue_simulate", "hub_pitch_intel",
+  "hub_fundraise_timing", "hub_gtm", "hub_stack", "hub_investor_memo",
+  "hub_builder_dd", "hub_multi_agent", "hub_base_grant",
+  // DeFi/yield research — outside swap/send/bridge.
+  "hub_defi_opportunity", "hub_protocol_compare",
+  // Temporarily out: Moralis-backed (halted in lib/tool-halts.ts) and
+  // key-exposure (Etherscan account endpoints are not on the free tier for
+  // Base). Back when the Blockscout replacement lands.
+  "hub_airdrop", "hub_aml", "hub_whale_signal", "hub_whale_tracker", "hub_key_exposure",
+  // Execution cards outside the basic set (swap/send/bridge on Base + RH):
+  // the yield card shows another vault's APY; B20 management is not a basic trade.
+  "prepare_yield", "hub_b20_manage",
+]);
+
+const HUB_TOOLS = ALL_HUB_TOOLS.filter((t) => !CHAT_HIDDEN_TOOLS.has(t.name));
+
 // ─── Venice tools (OpenAI function-calling format) ───────────────────────────
 // Mirrors HUB_TOOLS but wrapped in { type: "function", function: {...} }
 const VENICE_TOOLS = HUB_TOOLS.map(t => ({
@@ -1372,6 +1401,12 @@ async function callHubTool(
   // proven by the internal key. Lets paid tools free-bypass for cron only.
   isInternal = false,
 ): Promise<ToolCallResult> {
+  // Hidden tools are not offered to the model (HUB_TOOLS filters them), but a
+  // name it invents or remembers must not run either.
+  if (CHAT_HIDDEN_TOOLS.has(toolName)) {
+    return { text: `[${toolName} is not available in chat. Answer from the tools you were given, or say you cannot.]` };
+  }
+
   // Client-rendered marker tools — no server endpoint. The chat UI reads the
   // result.kind and renders an interactive card.
   if (toolName === "prepare_yield") {

@@ -43,6 +43,31 @@ if (handleStart < 0 || haltInHandle < 0 || debitBranch < 0) {
   failures.push("3 the POST halt check runs AFTER the credit-debit branch — a chat user could be debited for a halted id");
 }
 
+// 4. Chat must not OFFER a halted id. Parsed from the route's source because
+//    api/chat/route.ts cannot be imported standalone (route-module exports).
+const CHAT = path.resolve(SCRIPTS_DIR, "..", "src", "app", "api", "chat", "route.ts");
+const chat = readFileSync(CHAT, "utf8");
+const listStart = chat.indexOf("const ALL_HUB_TOOLS = [");
+const listEnd = chat.indexOf("\n];", listStart);
+const hiddenStart = chat.indexOf("const CHAT_HIDDEN_TOOLS");
+const hiddenEnd = chat.indexOf("const HUB_TOOLS = ALL_HUB_TOOLS", hiddenStart);
+const endpointStart = chat.indexOf("const TOOL_ENDPOINT: Record<string, string> = {");
+const endpointEnd = chat.indexOf("\n};", endpointStart);
+if ([listStart, listEnd, hiddenStart, hiddenEnd, endpointStart, endpointEnd].some((i) => i < 0)) {
+  failures.push("4 could not locate ALL_HUB_TOOLS / CHAT_HIDDEN_TOOLS / TOOL_ENDPOINT in api/chat/route.ts");
+} else {
+  const offered = [...chat.slice(listStart, listEnd).matchAll(/^\s{4}name:\s*"([^"]+)"/gm)].map((m) => m[1]);
+  const hidden = new Set([...chat.slice(hiddenStart, hiddenEnd).matchAll(/"([a-z0-9_]+)"/g)].map((m) => m[1]));
+  const endpoint = new Map(
+    [...chat.slice(endpointStart, endpointEnd).matchAll(/^\s*"?([A-Za-z0-9_]+)"?\s*:\s*"([^"]+)"/gm)].map((m) => [m[1], m[2]]),
+  );
+  for (const name of offered) {
+    if (hidden.has(name)) continue;
+    const id = endpoint.get(name);
+    if (id && HALTED_TOOLS[id]) failures.push(`4 chat offers ${name} → ${id}, which is halted — add ${name} to CHAT_HIDDEN_TOOLS`);
+  }
+}
+
 console.log(`tool-halts-check — ${ids.length} halted ids`);
 if (failures.length > 0) {
   console.log(`\n${failures.length} problem(s):`);

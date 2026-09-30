@@ -18,8 +18,8 @@ const DATA_HONESTY = `
 Data honesty: you do NOT have live market data in this command. Never present
 specific figures for price, TVL, market cap, volume, or holder counts as if
 verified. If a number matters, frame it as an assumption to validate, or point
-the user to the matching live-data tool (e.g. hub_market_fit, hub_ecosystem,
-deep_analysis). Never invent or guess a contract address. Base only (chain 8453).`;
+the user to the matching live-data tool (e.g. hub_token_price, hub_ecosystem,
+hub_deep_analysis). Never invent or guess a contract address. Base only (chain 8453).`;
 
 const SYSTEMS = {
   idea: `You are Blue Agent running the 'blue idea' command.

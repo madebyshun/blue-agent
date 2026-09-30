@@ -202,44 +202,34 @@ export const AGENT_SKILLS: AgentSkill[] = [
   {
     id:          "bundle-token-safety",
     name:        "Token Safety",
-    description: "Full safety sweep — risk score, honeypot, contract trust, key exposure — run all four together",
+    description: "Safety sweep — risk score, honeypot, contract trust",
     provider:    "Bundled",
     status:      "active",
     trigger:     "Check if this token/contract is safe: ",
-    badge:       "Bundle · 4 tools",
-    tools:       ["hub_risk_gate", "hub_honeypot", "hub_contract_trust", "hub_key_exposure"],
-    author:      BLUE_AUTHOR,
-    meterIds:    ["risk-gate", "honeypot-check", "contract-trust", "key-exposure"],
-  },
-  {
-    id:          "bundle-base-builder",
-    name:        "Base Builder",
-    // Was "Bundle · 4 tools" listing `hub_builder_score`, which exists in
-    // NEITHER `HANDLERS` nor `AGENT_TOOLS` — the badge advertised a fourth tool
-    // that no surface can run. Same dead id as the 7 stale ones in the published
-    // @blueagent/skill package (see CLAUDE.md). Dropped rather than substituted:
-    // no other catalog tool scores a builder, and picking a near-miss would make
-    // the bundle quietly do something different from what its name says.
-    description: "Builder intelligence — repo health, grant eligibility, deep due diligence",
-    provider:    "Bundled",
-    status:      "active",
-    trigger:     "Evaluate this Base builder/project: ",
+    // Was 4 tools with hub_key_exposure, which left chat 2026-09-30 (Etherscan
+    // account endpoints are not on the free tier for Base).
     badge:       "Bundle · 3 tools",
-    tools:       ["hub_repo_health", "hub_base_grant", "hub_builder_dd"],
+    tools:       ["hub_risk_gate", "hub_honeypot", "hub_contract_trust"],
     author:      BLUE_AUTHOR,
-    meterIds:    ["repo-health", "base-grant-finder", "builder-deep-dd"],
+    meterIds:    ["risk-gate", "honeypot-check", "contract-trust"],
   },
+  // `bundle-base-builder` retired 2026-09-30 with every tool it named
+  // (hub_repo_health, hub_base_grant, hub_builder_dd left chat —
+  // docs/rebuild-5-tang-2026-09-30.md). The same pack is retired in
+  // chat/integrations.ts.
   {
     id:          "bundle-trader-intel",
     name:        "Trader Intel",
-    description: "Market edge — token pick, whale signals, narrative pulse, momentum, DEX flow",
+    description: "Market facts — token pick, narrative pulse, momentum, DEX flow",
     provider:    "Bundled",
     status:      "active",
     trigger:     "Give me full trader intel on: ",
-    badge:       "Bundle · 5 tools",
-    tools:       ["hub_token_pick", "hub_whale_signal", "hub_narrative_pulse", "hub_token_momentum", "hub_dex_flow"],
+    // Was 5 tools with hub_whale_signal, which left chat 2026-09-30 (Moralis
+    // upstream paused; the id is halted in lib/tool-halts.ts).
+    badge:       "Bundle · 4 tools",
+    tools:       ["hub_token_pick", "hub_narrative_pulse", "hub_token_momentum", "hub_dex_flow"],
     author:      BLUE_AUTHOR,
-    meterIds:    ["token-pick-signal", "whale-copy-signal", "narrative-pulse", "token-momentum-scanner", "dex-flow"],
+    meterIds:    ["token-pick-signal", "narrative-pulse", "token-momentum-scanner", "dex-flow"],
   },
 
   {

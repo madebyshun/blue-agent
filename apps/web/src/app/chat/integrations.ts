@@ -26,6 +26,14 @@ const isClient   = typeof window !== "undefined";
 
 function emit() { if (isClient) window.dispatchEvent(new Event(EVENT)); }
 
+/**
+ * Default packs we shipped once and have since retired. loadSkills() drops a
+ * stored `default` copy of any of these; without that, a retired pack would
+ * keep being injected into every prompt from localStorage.
+ * - base-builder-bundle (2026-09-30): every tool it named left chat.
+ */
+const RETIRED_DEFAULT_PACKS: ReadonlySet<string> = new Set(["base-builder-bundle"]);
+
 // Pre-installed default skills (no /skill install needed).
 const DEFAULT_SKILLS: InstalledSkill[] = [
   {
@@ -50,16 +58,17 @@ const DEFAULT_SKILLS: InstalledSkill[] = [
   //
   // COST NOTE, and why none of these say "run ALL of them" any more.
   //
-  // These three are default:true — injected into every user's localStorage and
+  // These two are default:true — injected into every user's localStorage and
   // merged forward on load — so their text sits in EVERY system prompt whether
   // or not the user ever opted in. Each Hub tool they name is separately
   // metered and debited from the user's ledger (X-Credits-Debited, set by
   // api/x402/[tool]). The old text ordered a full sweep. Priced out against
-  // agent-tools.ts at CREDIT_USD = 0.0005:
+  // agent-tools.ts at CREDIT_USD = 0.0005 (re-priced 2026-09-30, after
+  // hub_key_exposure and hub_whale_signal left chat and the base-builder pack
+  // was retired — see RETIRED_DEFAULT_PACKS):
   //
-  //   token-safety  4 tools  $0.95  = 1,900 credits
-  //   base-builder  4 tools  $0.75  = 1,500 credits
-  //   trader-intel  5 tools  $0.90  = 1,800 credits
+  //   token-safety  3 tools  $0.45  =   900 credits
+  //   trader-intel  4 tools  $0.65  = 1,300 credits
   //
   // A connected wallet gets WALLET_DAILY = 500 credits/day and a guest gets
   // GUEST_DAILY = 100 (lib/credits.ts). So one obeyed sweep is ~3-4x a member's
@@ -79,45 +88,32 @@ const DEFAULT_SKILLS: InstalledSkill[] = [
   // pack, re-price the comment above — the tools are not free.
   {
     name: "token-safety-bundle",
-    description: "Token Safety — hub_risk_gate · hub_honeypot · hub_contract_trust · hub_key_exposure",
+    description: "Token Safety — hub_risk_gate · hub_honeypot · hub_contract_trust",
     url: "",
     content: `## Token Safety Bundle (active)
-For token or contract safety questions, these four tools are available. All take a contract address:
+For token or contract safety questions, these three tools are available. All take a contract address:
 - hub_risk_gate: overall risk score and critical flags
 - hub_honeypot: buy/sell trap detection and tax analysis
-- hub_contract_trust: verification status and trust signals
-- hub_key_exposure: backdoor, private key, and ownership risk
-Start with hub_risk_gate — it is the broadest single read. Add the others only when the question calls for them (a trade → hub_honeypot; "can the dev rug me?" → hub_key_exposure), or when the user explicitly asks for a full sweep. Each tool is separately charged to the user, so do not run all four by reflex.
+- hub_contract_trust: verification status, ownership and trust signals
+Start with hub_risk_gate — it is the broadest single read. Add the others only when the question calls for them (a trade → hub_honeypot; "can the dev rug me?" → hub_contract_trust), or when the user explicitly asks for a full sweep. Each tool is separately charged to the user, so do not run all three by reflex.
 Say which checks you ran and which you skipped, and never state a verdict a tool did not return.`,
     enabled: true, installedAt: 0, default: true,
   },
-  {
-    name: "base-builder-bundle",
-    description: "Base Builder — hub_repo_health · hub_builder_score · hub_base_grant · hub_builder_dd",
-    url: "",
-    content: `## Base Builder Bundle (active)
-For evaluating a Base builder, project, or team:
-- hub_repo_health: GitHub activity, commit frequency, contributor count — needs a repo URL
-- hub_builder_score: credibility and onchain builder signals — needs an X/Twitter handle
-- hub_base_grant: grant eligibility and Base ecosystem alignment
-- hub_builder_dd: full due diligence — takes a handle OR a 0x address
-Run only the tools whose input the user actually gave you. If they named a handle but no repo, do not guess a repo URL — skip hub_repo_health and say so. hub_builder_dd is the deep one; reach for it when the user wants a real verdict, not as a warm-up.
-When you do have several reads, combine them into an INVEST / WATCH / PASS assessment and state which inputs were missing.`,
-    enabled: true, installedAt: 0, default: true,
-  },
+  // `base-builder-bundle` was retired 2026-09-30 with every tool it named
+  // (hub_repo_health, hub_base_grant, hub_builder_dd left chat). Removing it
+  // here is not enough on its own — see RETIRED_DEFAULT_PACKS in loadSkills().
   {
     name: "trader-intel-bundle",
-    description: "Trader Intel — hub_token_pick · hub_whale_signal · hub_narrative_pulse · hub_token_momentum · hub_dex_flow",
+    description: "Trader Intel — hub_token_pick · hub_narrative_pulse · hub_token_momentum · hub_dex_flow",
     url: "",
     content: `## Trader Intel Bundle (active)
-For trading decisions and market edge:
-- hub_token_pick: AI-generated token selection signal — no input needed
+For market questions:
+- hub_token_pick: scored token candidates from live data — no input needed
 - hub_token_momentum: what is breaking out right now — no input needed
-- hub_narrative_pulse: which narratives are running and whether the entry window is still open
-- hub_whale_signal: what one wallet is doing on-chain — REQUIRES a 0x address
+- hub_narrative_pulse: which narratives are running
 - hub_dex_flow: buy/sell pressure for one token — REQUIRES a token address
-Match the tool to the question. "What should I buy?" / "what's moving?" needs no address — use hub_token_pick or hub_token_momentum. Only call hub_whale_signal or hub_dex_flow when the user actually supplied an address; NEVER invent one to complete a set.
-Run the full stack only when the user explicitly asks for a full thesis — it bills five tools. When you do, synthesize into BUY / WATCH / AVOID with a confidence score, and name the tools that fed it.`,
+Match the tool to the question. "What's moving?" needs no address — use hub_token_momentum or hub_token_pick. Only call hub_dex_flow when the user actually supplied a token address; NEVER invent one to complete a set.
+Run several only when the user explicitly asks for a full picture — each is billed. Report what each tool returned as facts, name the tools that fed the answer, and do not turn them into a buy/sell call.`,
     enabled: true, installedAt: 0, default: true,
   },
 ];
@@ -151,7 +147,15 @@ export function loadSkills(): InstalledSkill[] {
     const byName = new Map(DEFAULT_SKILLS.map(d => [d.name, d]));
     let changed  = false;
 
-    const refreshed = list.map(s => {
+    // (0) DROP default packs we retired. Refresh (1) only rewrites packs that
+    //     still exist in DEFAULT_SKILLS, so a retired default already sitting in
+    //     storage would otherwise keep being injected into every prompt forever,
+    //     naming tools chat no longer offers. Only `default` copies are dropped —
+    //     a pack the user installed themselves is their data and stays.
+    const kept = list.filter(s => !(s.default && RETIRED_DEFAULT_PACKS.has(s.name)));
+    if (kept.length !== list.length) changed = true;
+
+    const refreshed = kept.map(s => {
       const def = s.default ? byName.get(s.name) : undefined;
       if (!def) return s;
       if (def.content === s.content && def.description === s.description) return s;

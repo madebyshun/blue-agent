@@ -394,9 +394,11 @@ const MODEL_COLORS: Record<string, string> = {
 
 // ── Empty-state hero ────────────────────────────────────────────────────────
 // Onchain quick-starts. Each chip PREFILLS the composer (never auto-sends): the
-// first four seed a natural-language prompt the router turns into a signable
-// card (prepare_swap / prepare_send / robinhood_bridge / prepare_yield); the
-// last seeds the `blue audit ` agent-skill trigger. The user reviews, then sends
+// first three seed a natural-language prompt the router turns into a signable
+// card (prepare_swap / prepare_send / robinhood_bridge); the last seeds the
+// `blue audit ` agent-skill trigger. ("Find yield" / prepare_yield left with
+// the yield card on 2026-09-30: chat executes swap, send and bridge only.)
+// The user reviews, then sends
 // — same seed-not-send philosophy as ChatClient's ?prefill deep-link.
 //
 // Not sends: earlier this was four "starter" cards that fired `send(text)` on
@@ -407,7 +409,6 @@ const ONCHAIN_CHIPS: { label: string; prefill: string }[] = [
   { label: "Swap a token",        prefill: "Swap 0.1 ETH to USDC on Base" },             // prepare_swap
   { label: "Send USDC",           prefill: "Send USDC on Base" },                        // prepare_send
   { label: "Bridge to Robinhood", prefill: "Bridge USDC from Base to Robinhood Chain" }, // robinhood_bridge
-  { label: "Find yield",          prefill: "Earn yield on my idle USDC on Base" },       // prepare_yield
   { label: "Audit a contract",    prefill: "blue audit " },                              // blue-audit skill
 ];
 
