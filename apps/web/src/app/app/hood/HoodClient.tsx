@@ -48,6 +48,7 @@ import { WatchlistProvider, useWatchlist } from "./WatchlistProvider";
 import { WATCHLIST_LIMITS } from "@/lib/blue-hood/watchlist-config";
 import { ARROWS_FROZEN, ARROW_TRADE_ENABLED } from "@/lib/blue-hood/arrow-freeze";
 import { useEnsureSession } from "@/hooks/useEnsureSession";
+import HoodSwap from "./HoodSwap";
 
 const REFRESH_MS = 15_000;
 const RH_GREEN = "#34D399";
@@ -1172,6 +1173,8 @@ function DriftRow({
               a differently-derived one, or the two would disagree on the same
               screen. Kept as `??` and not `||` so a real 0 survives: "$0 of
               depth" and "no reading" are separate states downstream. */}
+          {/* G0 — a neutral Swap for this row: its chain and contract. */}
+          <HoodSwap ticker={r.ticker} chain={chainOf(r)} contract={r.contract} />
           <TickerDetailPanel
             ticker={r.ticker}
             chain={chainOf(r)}

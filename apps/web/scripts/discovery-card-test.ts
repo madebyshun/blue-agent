@@ -90,5 +90,16 @@ ok("safe-trending: the tax verdict is shown as a fact", /tax check SAFE/.test(tr
 
 ok("any other tool is not a discovery card", discoveryRows("hub_token_price", {}) === null);
 
+console.log("\n3. the Hood board's neutral Swap");
+const HOOD = readFileSync(join(ROOT, "src/app/app/hood/HoodClient.tsx"), "utf8");
+const HSWAP = readFileSync(join(ROOT, "src/app/app/hood/HoodSwap.tsx"), "utf8");
+ok("every expanded board row mounts HoodSwap with its chain and contract",
+  /<HoodSwap ticker=\{r\.ticker\} chain=\{chainOf\(r\)\} contract=\{r\.contract\} \/>/.test(HOOD));
+ok("the swap is armed with the contract, never the ticker",
+  /initialBuy=\{contract\}/.test(HSWAP) && /token_address: contract/.test(HSWAP));
+ok("it is not the arrow's Review & Sign", !/ReviewSignPanel/.test(HSWAP));
+ok("labels say B20 (Coinbase) / Stock token (Robinhood, Jersey), never shares",
+  /B20 tokenized stock \(Coinbase\)/.test(HSWAP) && /Stock token \(Robinhood, Jersey\)/.test(HSWAP) && !/\bshares?\b/i.test(HSWAP.replace(/never "shares"/, "")));
+
 console.log(failures === 0 ? "\ndiscovery-card-test: PASS" : `\ndiscovery-card-test: FAIL — ${failures}`);
 process.exit(failures === 0 ? 0 : 1);
