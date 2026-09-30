@@ -131,12 +131,21 @@ const label = (t: Token) => t.sym || truncAddr(t.addr);
  *  whether `decimals` on the row is an asserted fact or an empty field. */
 const inMajors = (t: Token) => TOKENS.some(x => x.addr.toLowerCase() === t.addr.toLowerCase());
 
+type FeeLeg = { amount?: string; token?: string; type?: string } | null;
 type Quote = {
   needsKey?: boolean; error?: string;
   buyAmount?: string; minBuyAmount?: string;
   transaction?: { to: `0x${string}`; data: `0x${string}`; value?: string };
   issues?: { allowance?: { spender: `0x${string}` } | null };
+  /** 0x v2 itemises what it takes. `zeroExFee` is 0x's own cut (0.15% on the
+   *  standard plan); it was never shown, so the rate read as all-in when it
+   *  was not (plan §1 fix 4). Read from the quote, never assumed. */
+  fees?: { zeroExFee?: FeeLeg; integratorFee?: FeeLeg };
 };
+
+/** Slippage the user picks (plan §1 fix 4: the card sent none, so every
+ *  Convert silently took 0x's 1% default). 1% stays the default. */
+const SLIPPAGE_CHOICES = [50, 100, 300] as const;
 
 export default function SwapCard({
   account, preset, onChain, initialSell, initialBuy, initialAmount,
@@ -203,6 +212,12 @@ export default function SwapCard({
   });
   const [quote, setQuote] = useState<Quote | null>(null);
   const [loading, setLoading] = useState(false);
+  const [slippageBps, setSlippageBps] = useState<number>(100);
+  // A token outside the four BlueAgent holds a canonical address for is
+  // swappable, but only after the user says they checked it — the address is
+  // all we know about it (plan §1 fix 4: the card accepted any address with no
+  // word said). Reset whenever either side changes.
+  const [ackUnverified, setAckUnverified] = useState(false);
   const [step, setStep] = useState<"idle" | "approving" | "swapping" | "done" | "error">("idle");
   const [err, setErr] = useState("");
   const [txHash, setTxHash] = useState("");
@@ -259,14 +274,16 @@ export default function SwapCard({
     const id = ++reqId.current;
     setLoading(true);
     const t = setTimeout(() => {
-      const qs = new URLSearchParams({ sellToken: sell.addr, buyToken: buy.addr, sellAmount: sellBase, ...(account ? { taker: account } : {}) });
+      const qs = new URLSearchParams({ sellToken: sell.addr, buyToken: buy.addr, sellAmount: sellBase, slippageBps: String(slippageBps), ...(account ? { taker: account } : {}) });
       fetch(`/api/swap/quote?${qs}`).then(r => r.json()).then((j: Quote) => {
         if (id !== reqId.current) return;
         setQuote(j); setLoading(false);
       }).catch(() => { if (id === reqId.current) { setQuote({ error: "quote failed" }); setLoading(false); } });
     }, 450);
     return () => clearTimeout(t);
-  }, [sellBase, sell.addr, buy.addr, account]);
+  }, [sellBase, sell.addr, buy.addr, account, slippageBps]);
+
+  useEffect(() => { setAckUnverified(false); }, [sell.addr, buy.addr]);
 
   // Apply a quick-sell pre-fill from the token table: set the (possibly
   // non-major) sell token + amount and default the buy side to USDC — but sell
@@ -300,6 +317,17 @@ export default function SwapCard({
   const buyAmount = quote?.buyAmount && buyDec != null ? Number(formatUnits(BigInt(quote.buyAmount), buyDec)) : null;
   const minBuy = quote?.minBuyAmount && buyDec != null ? Number(formatUnits(BigInt(quote.minBuyAmount), buyDec)) : null;
   const rate = buyAmount != null && amt > 0 ? buyAmount / amt : null;
+  // 0x's fee, in the token it is taken in — formatted only when we hold that
+  // token's scale (one of the two sides), otherwise shown as raw base units.
+  const zeroExFee = (() => {
+    const f = quote?.fees?.zeroExFee;
+    if (!f?.amount || !f.token) return null;
+    const tok = f.token.toLowerCase();
+    if (tok === buy.addr.toLowerCase() && buyDec != null) return `${fmt(Number(formatUnits(BigInt(f.amount), buyDec)))} ${label(buy)}`;
+    if (tok === sell.addr.toLowerCase() && bal.decimals != null) return `${fmt(Number(formatUnits(BigInt(f.amount), bal.decimals)))} ${label(sell)}`;
+    return `${f.amount} (base units of ${truncAddr(f.token)})`;
+  })();
+  const unverified = [sell, buy].filter(t => !t.native && !inMajors(t));
 
   function flip() { setSell(buy); setBuy(sell); setAmount(""); setQuote(null); setPendingWord(""); }
   // The percentage buttons and the quantity WORDS are one calculation, in BASE
@@ -336,7 +364,8 @@ export default function SwapCard({
   // major the user never asked for.
   const optionsFor = (t: Token) => (inMajors(t) ? TOKENS : [t, ...TOKENS]);
 
-  const canSwap = !!account && !!quote?.transaction && amt > 0 && gate === "ok" && !loading && buyDec != null;
+  const canSwap = !!account && !!quote?.transaction && amt > 0 && gate === "ok" && !loading && buyDec != null
+    && (unverified.length === 0 || ackUnverified);
   const busy = step === "approving" || step === "swapping";
 
   async function swap() {
@@ -497,6 +526,33 @@ export default function SwapCard({
         </div>
       )}
 
+      {/* Slippage the user chose — sent to 0x and enforced as minBuyAmount. */}
+      <div className="text-[9px] text-slate-500 mb-2 flex items-center gap-1.5">
+        <span>Max slippage</span>
+        {SLIPPAGE_CHOICES.map(bps => (
+          <button key={bps} type="button" disabled={busy} onClick={() => setSlippageBps(bps)}
+            className="px-1.5 py-0.5 rounded border"
+            style={slippageBps === bps
+              ? { borderColor: "#4FC3F760", color: "#4FC3F7" }
+              : { borderColor: "#1A1A2E", color: "#64748b" }}>
+            {bps / 100}%
+          </button>
+        ))}
+        {zeroExFee && <span className="ml-auto text-slate-600" title="0x's own fee, itemised in the quote">0x fee {zeroExFee}</span>}
+      </div>
+
+      {/* A token outside the verified four: said out loud, and the swap waits
+          for an explicit "I checked it". */}
+      {unverified.length > 0 && (
+        <label className="flex items-start gap-2 rounded-lg border border-amber-500/25 bg-amber-500/5 px-2.5 py-2 mb-3 cursor-pointer">
+          <input type="checkbox" checked={ackUnverified} onChange={e => setAckUnverified(e.target.checked)} className="mt-0.5" />
+          <span className="text-[9px] text-amber-300/90 leading-relaxed">
+            {unverified.map(t => truncAddr(t.addr)).join(" / ")} is not one of the tokens BlueAgent verifies on Base — only its
+            address is known. I checked this contract myself before swapping.
+          </span>
+        </label>
+      )}
+
       {quote?.needsKey && <p className="text-[9px] text-amber-400 mb-2">Convert needs a free 0x API key — set <span className="text-slate-300">ZEROX_API_KEY</span>.</p>}
       {step === "error" && <p className="text-[10px] text-amber-400 mb-2">{err}</p>}
 
@@ -510,9 +566,10 @@ export default function SwapCard({
           : overBalance ? "Insufficient balance"
           : gate === "unverified" ? "Balance unread — held"
           : buyDec == null ? "Token scale unread — held"
+          : unverified.length > 0 && !ackUnverified ? "Confirm you checked the token"
           : `Convert ${amt > 0 ? fmt(amt) : ""} ${label(sell)} → ${label(buy)}`}
       </ConfirmButton>
-      <CardNote>Best route via 0x · you sign · non-custodial · Base mainnet.</CardNote>
+      <CardNote>Best route via 0x · 0x fee shown when quoted · you sign · non-custodial · Base mainnet.</CardNote>
     </WalletCard>
   );
 }
