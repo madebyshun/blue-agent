@@ -72,6 +72,7 @@ const DECIMALS: Record<string, number> = {
   [TOKEN18]: 18,
   [TOKEN6]:  6,
   [TOKEN8]:  8,
+  ["0x2222222222222222222222222222222222222226"]: 6,
 };
 const SYMBOLS: Record<string, string> = {
   [TOKEN18]: "BLUE",
@@ -81,6 +82,19 @@ const SYMBOLS: Record<string, string> = {
 
 const SEL_DECIMALS = "0x313ce567"; // decimals()
 const SEL_SYMBOL   = "0x95d89b41"; // symbol()
+
+// The B20 factory (2026-09-30, plan §1 fix 5): b20_encode_payment now asks it
+// whether the token IS a B20 before encoding a transferWithMemo. The three
+// decimal fixtures answer yes, so the decimals cases below still exercise the
+// decimals logic; NOT_B20 answers no, and case 9 asserts the refusal.
+const B20_FACTORY_ADDR = "0xb20f000000000000000000000000000000000000";
+const SEL_IS_B20 = encodeFunctionData({
+  abi: [{ type: "function", name: "isB20", stateMutability: "view", inputs: [{ name: "token", type: "address" }], outputs: [{ type: "bool" }] }],
+  functionName: "isB20",
+  args: ["0x0000000000000000000000000000000000000000"],
+}).slice(0, 10);
+const NOT_B20 = "0x2222222222222222222222222222222222222226"; // 6 decimals, not a B20
+const IS_B20 = new Set([TOKEN18, TOKEN6, TOKEN8]);
 
 const realFetch = globalThis.fetch;
 
@@ -94,6 +108,12 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const call = (rpc.params?.[0] ?? {}) as { to?: string; data?: string };
     const to = (call.to ?? "").toLowerCase();
     const sel = (call.data ?? "").slice(0, 10);
+    if (to === B20_FACTORY_ADDR && sel === SEL_IS_B20) {
+      const asked = ("0x" + (call.data ?? "").slice(-40)).toLowerCase();
+      return new Response(JSON.stringify({ jsonrpc: "2.0", id: rpc.id, result: encodeAbiParameters([{ type: "bool" }], [IS_B20.has(asked)]) }), {
+        status: 200, headers: { "content-type": "application/json" },
+      });
+    }
     const dec = DECIMALS[to];
     if (dec === undefined) {
       return new Response(JSON.stringify({ jsonrpc: "2.0", id: rpc.id, error: { code: -32000, message: `no stub for token ${to}` } }), { status: 200 });
@@ -286,6 +306,13 @@ function expectedCalldata(to: string, amount: string, decimals: number, memo: st
       /byte/i.test(memoDoc) && !/31/.test(memoDoc), memoDoc);
     check("the description no longer claims a 31-character cap",
       !/31 characters/i.test(tool?.description ?? ""), (tool?.description ?? "").slice(-90));
+  }
+
+  console.log("\n9. only a B20 token gets a transferWithMemo");
+  {
+    const r = await callTool({ tokenAddress: NOT_B20, to: TO, amount: "1", memo: "order-9" });
+    check("a token the B20 factory does not recognise is refused", r.isError && /not a Coinbase B20 token/.test(r.text), r.text.slice(0, 160));
+    check("…and no calldata is returned for it", r.json === null || !("data" in (r.json ?? {})));
   }
 
   globalThis.fetch = realFetch;

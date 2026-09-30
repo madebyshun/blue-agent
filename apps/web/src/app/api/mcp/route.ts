@@ -83,7 +83,10 @@ import {
   toNativeSentinel,
   isPositiveDecimal,
   readTokenMeta,
+  clientFor,
 } from "@/lib/tx-chains";
+import { B20_FACTORY } from "@/lib/base-stocks/registry";
+import { FACTORY_ABI as B20_FACTORY_ABI } from "@/lib/b20/inspect-abi";
 import { ROBINHOOD_SWAP_ROUTER_ADDRESS } from "@/lib/robinhood/swap";
 import { buildBaseApprove, parseSlippageArg } from "@/lib/zerox-swap";
 
@@ -346,6 +349,26 @@ async function callB20Native(name: string, args: Record<string, unknown>): Promi
       // UTF-8 BYTES, so a single emoji memo failed a length check it passed.
       if (!isValidMemo(memo)) {
         throw new Error(`memo must be 1-32 BYTES when UTF-8 encoded (got ${new TextEncoder().encode(memo).length}); it fills one bytes32 slot`);
+      }
+
+      // The token must BE a B20 (plan §1 fix 5). `transferWithMemo` exists only
+      // on Coinbase B20 tokens; on anything else this calldata reverts at best,
+      // and at worst lands in a fallback that does something else. Asked of the
+      // B20 factory on Base, fail-closed: an unreadable answer is not a yes.
+      let isB20: boolean;
+      try {
+        isB20 = Boolean(await clientFor("base").readContract({
+          address: B20_FACTORY, abi: B20_FACTORY_ABI, functionName: "isB20",
+          args: [tokenAddress as `0x${string}`],
+        }));
+      } catch (e) {
+        throw new Error(`Could not verify ${tokenAddress} is a B20 token on Base 8453 (${(e as Error).message}) — not encoding a transferWithMemo against an unverified token.`);
+      }
+      if (!isB20) {
+        throw new Error(
+          `${tokenAddress} is not a Coinbase B20 token on Base 8453 (isB20 = false on the B20 factory). ` +
+          `transferWithMemo only exists on B20 tokens — use blue_send_tx for a plain transfer.`,
+        );
       }
 
       // 🔴 decimals is READ FROM THE CHAIN, never defaulted.
@@ -713,6 +736,15 @@ async function callSendTx(args: Record<string, unknown>): Promise<string> {
   if (!body.token)  throw new Error("token is required (0x… address, or \"ETH\"/\"NATIVE\")");
   if (!isPositiveDecimal(body.amount)) {
     throw new Error("amount must be a positive decimal string in WHOLE units, e.g. \"25.5\" — not base units");
+  }
+  // A send to yourself on one chain moves nothing and still costs gas — and in
+  // an agent's hands it is far more often two fields swapped than an intent
+  // (plan §1 fix 5). Said, not built.
+  if (body.fromAddress.toLowerCase() === body.toAddress.toLowerCase()) {
+    throw new Error(
+      `fromAddress and toAddress are the same wallet (${body.toAddress}) — a send to yourself on ${TX_CHAINS[chain].label} moves nothing and costs gas. ` +
+      `Check which address is the recipient; to move funds between chains use blue_bridge_tx.`,
+    );
   }
   // Two routes, one shape — the Base one was written to mirror the RH one field
   // for field precisely so this switch is a URL and nothing else. If you change
