@@ -5,7 +5,7 @@
 // The output is labelled accordingly (data_source + disclaimer). Resilient: never 500.
 // Price: $0.20
 
-import { getAeonOutput, formatAeonForLLM } from "@/app/api/_lib/aeon-kv";
+import { getAeonOutput, formatAeonForLLM, AEON_NONE_PROMPT, aeonStatus } from "@/app/api/_lib/aeon-kv";
 import { callLLM, STATIC_KNOWLEDGE_DISCLAIMER } from "@/app/api/_lib/llm";
 
 // No live web search (Virtuals-only). Sentiment is an estimate from Aeon
@@ -73,7 +73,7 @@ Schema: {
   "fud_level":"high|medium|low",
   "sentiment_summary":"<1 sentence>"
 }`,
-      `Project: ${project}\nDescription: ${description}\nNarratives: ${narrativeRaw ?? "Base ecosystem"}`, 0.5, 800);
+      `Project: ${project}\nDescription: ${description}\nNarratives: ${narrativeRaw ?? AEON_NONE_PROMPT}`, 0.5, 800);
     // 🔴 Fell back to `{ bull: 40, bear: 30, neutral: 30, community_temperature:
     // "neutral" }` until 2026-09-28 — invented percentages shipped under the
     // `miroshark` key whenever the sentiment pass failed to parse. Three things
@@ -105,7 +105,7 @@ Schema: {
   "recommended_actions": ["<action>"],
   "summary": "<2 sentences>"
 }`,
-      `Project: ${project}\nNarratives: ${narrativeRaw ?? "Base"}\nConsensus: ${consensusForPrompt}`, 0.3, 700);
+      `Project: ${project}\nNarratives: ${narrativeRaw ?? AEON_NONE_PROMPT}\nConsensus: ${consensusForPrompt}`, 0.3, 700);
 
     let result = parseJson(resultRaw);
     if (!result) {
@@ -124,6 +124,7 @@ Schema: {
 
     return Response.json({
       tool: "community-sentiment",
+      aeon_data: aeonStatus({ "narrative-tracker": narrativeRaw }),
       timestamp: new Date().toISOString(),
       data_source: "AI estimate (no live social data — model-generated, not measured)",
       disclaimer: DISCLAIMER,

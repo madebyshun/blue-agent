@@ -69,7 +69,6 @@ async function loadSkillFile(url: string): Promise<string | null> {
 // ─── Real skill URLs ──────────────────────────────────────────────────────────
 
 const GITHUB_BASE = "https://raw.githubusercontent.com/madebyshun/blue-agent/main";
-const AEON_BASE   = "https://raw.githubusercontent.com/aaronjmars/aeon/main";
 
 const SKILL_URLS = {
   miroshark:    `${GITHUB_BASE}/collab/miroshark-blueagent.prompt.md`,
@@ -1257,40 +1256,22 @@ function repairTruncatedJson(raw: string): string {
   return fixed;
 }
 
-// ─── Aeon skill runner — prefer REAL KV output; LLM is a labelled fallback ───
+// ─── Aeon skill runner — REAL KV output, or nothing ───────────────────────────
 //
 // Per CLAUDE.md: Aeon facts must come from the research-loop KV (getAeonOutput),
-// NOT from "synthesize from training knowledge" — that fabricates. So we try KV
-// first and return the real output. Only if KV is missing/stale do we produce a
-// model-generated DRAFT, and we (a) instruct the model not to invent measured
-// numbers and (b) LABEL the result so nothing downstream mistakes it for real
-// Aeon data.
+// NOT from "synthesize from training knowledge" — that fabricates.
+//
+// Until 2026-09-30 a missing KV entry fell through to fetching the skill's
+// SKILL.md from GitHub and asking the model to draft "a MODEL-GENERATED
+// ESTIMATE in the style of the Aeon skill". Labelled, but still the exact
+// pattern the rule forbids: a skill-shaped answer with no data behind it,
+// which a downstream prompt then reads as research. With the Aeon job off
+// (rebuild plan §4 #4) that branch would have become the ONLY one. Now a miss
+// is `null`, and callers say "no Aeon data" (see AEON_NONE_PROMPT in aeon-kv).
 
-export async function runAeonSkill(skill: string, varInput = ""): Promise<string | null> {
-  // 1. Real Aeon output from KV (fed by the research-loop cron).
+export async function runAeonSkill(skill: string, _varInput = ""): Promise<string | null> {
   const real = await getAeonOutput(skill);
-  if (real) return formatAeonForLLM(real);
-
-  // 2. Fallback: model-generated estimate, explicitly labelled — not real data.
-  try {
-    const skillPrompt = await loadSkillFile(`${AEON_BASE}/skills/${skill}/SKILL.md`);
-    if (!skillPrompt) return null;
-    const today   = new Date().toISOString().split("T")[0];
-    const varLine = varInput ? `\nFocus on: ${varInput}` : "";
-    // `model: "claude-haiku-4-5"` used to be passed here. callBankrLLM DROPS
-    // opts.model (Virtuals picks a catalog-validated model), so that argument
-    // only ever claimed a model choice this code does not make. Removed rather
-    // than left as decoration — a dead argument reads like a live one.
-    const draft = await callBankrLLM({
-      system: `You are drafting a MODEL-GENERATED ESTIMATE in the style of the Aeon skill below. You do NOT have live data. Produce a plausible framework only — NEVER invent specific prices, market caps, volumes, or on-chain figures as if measured. Today is ${today}.`,
-      messages: [{ role: "user", content: `Follow this skill template. Where a real figure would go, write "unknown" instead of inventing one.\n\nSkill:\n${skillPrompt}${varLine}\n\nReturn only the skill output, no preamble.` }],
-      temperature: 0.2,
-      maxTokens: 1200,
-      _skipEnhance: true, // Aeon has its own identity
-    });
-    if (!draft) return null;
-    return `=== MODEL-GENERATED ESTIMATE (no live Aeon data for "${skill}") ===\n${draft}`;
-  } catch (e) { console.error("[llm] skill error:", (e as Error).message); return null; }
+  return real ? formatAeonForLLM(real) : null;
 }
 
 // ─── MiroShark skill runner (uses real collab prompt) ────────────────────────

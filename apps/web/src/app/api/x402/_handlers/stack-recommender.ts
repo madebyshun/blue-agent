@@ -3,7 +3,7 @@
 // Price: $0.20
 // Fully self-contained
 
-import { getAeonOutput, formatAeonForLLM } from "@/app/api/_lib/aeon-kv";
+import { getAeonOutput, formatAeonForLLM, AEON_NONE_PROMPT, aeonStatus } from "@/app/api/_lib/aeon-kv";
 import { callLLM } from "@/app/api/_lib/llm";
 
 async function llm(system: string, user: string, temp = 0.4, tokens = 1000): Promise<string> {
@@ -55,7 +55,7 @@ Schema: {
 Review this stack recommendation for a Base project.
 CRITICAL: Return ONLY raw JSON.
 Schema: {"confidence":<0-100>,"risks":["<tech risk>"],"ecosystem_fit":"strong|moderate|weak","battle_tested":<boolean>,"analyst_note":"<1-2 sentences>"}`,
-      `Project: ${project}\nStack: ${JSON.stringify(buildRecommendation)}\nEcosystem context: ${ecosystemRaw ?? "Base ecosystem"}`, 0.3, 500);
+      `Project: ${project}\nStack: ${JSON.stringify(buildRecommendation)}\nEcosystem context: ${ecosystemRaw ?? AEON_NONE_PROMPT}`, 0.3, 500);
     const analystTake = parseJson(msRaw) ?? {};
 
     const resultRaw = await llm(`You are Blue Agent — stack recommendation engine for Base builders.
@@ -70,12 +70,12 @@ Schema: {
   "week_1_setup": ["<setup step>"],
   "avoid": ["<antipattern>"]
 }`,
-      `Project: ${project}\nBuild: ${JSON.stringify(buildRecommendation)}\nEcosystem: ${ecosystemRaw ?? "Base"}\nAnalyst: ${JSON.stringify(analystTake)}`, 0.3, 900);
+      `Project: ${project}\nBuild: ${JSON.stringify(buildRecommendation)}\nEcosystem: ${ecosystemRaw ?? AEON_NONE_PROMPT}\nAnalyst: ${JSON.stringify(analystTake)}`, 0.3, 900);
 
     let result = parseJson(resultRaw);
     if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
-    return Response.json({ tool: "stack-recommender", timestamp: new Date().toISOString(), project, team_size, timeline, analyst: analystTake, ...result, disclaimer: "AI-generated stack advisory from model knowledge — recommendations and any confidence score are estimates, not a guarantee. Validate against your own constraints." });
+    return Response.json({ tool: "stack-recommender", aeon_data: aeonStatus({ "deep-research": ecosystemRaw }), timestamp: new Date().toISOString(), project, team_size, timeline, analyst: analystTake, ...result, disclaimer: "AI-generated stack advisory from model knowledge — recommendations and any confidence score are estimates, not a guarantee. Validate against your own constraints." });
   } catch (e) {
     return Response.json({ error: "Stack recommender failed", message: (e as Error).message }, { status: 500 });
   }

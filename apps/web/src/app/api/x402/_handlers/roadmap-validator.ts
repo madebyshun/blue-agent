@@ -3,7 +3,7 @@
 // Price: $0.25 — validate roadmap against current market + ecosystem
 // Fully self-contained
 
-import { getAeonOutput, formatAeonForLLM } from "@/app/api/_lib/aeon-kv";
+import { getAeonOutput, formatAeonForLLM, AEON_NONE_PROMPT, aeonStatus } from "@/app/api/_lib/aeon-kv";
 import { callLLM } from "@/app/api/_lib/llm";
 
 async function llm(system: string, user: string, temp = 0.4, tokens = 1000): Promise<string> {
@@ -45,7 +45,7 @@ Personas: Analyst(1.8x), Influencer(2.8x), Retail(1.0x), Observer(0.5x).
 Evaluate this roadmap's market timing and community reception.
 CRITICAL: Return ONLY raw JSON.
 Schema: {"personas":{"analyst":{"stance":"bull|bear|neutral","weight":1.8,"rationale":"<1 sentence>"},"influencer":{"stance":"bull|bear|neutral","weight":2.8,"rationale":"<1 sentence>"},"retail":{"stance":"bull|bear|neutral","weight":1.0,"rationale":"<1 sentence>"},"observer":{"stance":"bull|bear|neutral","weight":0.5,"rationale":"<1 sentence>"}},"bull":<0-100>,"bear":<0-100>,"neutral":<0-100>,"sentiment_summary":"<1 sentence>"}`,
-      `Project: ${project}\nRoadmap: ${roadmap}\nEcosystem: ${narrativeRaw ?? "Base ecosystem"}`, 0.2, 800);
+      `Project: ${project}\nRoadmap: ${roadmap}\nEcosystem: ${narrativeRaw ?? AEON_NONE_PROMPT}`, 0.2, 800);
     // 🔴 Fell back to `{ bull: 45, bear: 25, neutral: 30 }` until 2026-09-28.
     // Worse here than in community-sentiment, because the invented triple did not
     // just get returned — it was fed to the verdict prompt below, where the score
@@ -71,14 +71,14 @@ Schema: {"personas":{"analyst":{"stance":"bull|bear|neutral","weight":1.8,"ratio
     const verdictRaw = await llm(`You are Blue Agent — roadmap validation engine.
 CRITICAL: Return ONLY raw JSON.
 Schema: {"score":<0-100>,"narrative_alignment":{"score":<0-10>,"aligned":<boolean>,"note":"<1 sentence>"},"timeline_assessment":"realistic|aggressive|too_slow","consensus":{"bull":<0-100>,"bear":<0-100>,"neutral":<0-100>},"strengths":["<strength>"],"gaps":["<gap>"],"recommended_changes":["<change>"],"builder_note":"<1 sentence>"}`,
-      `Project: ${project}\nRoadmap: ${roadmap}\nBuild analysis: ${JSON.stringify(buildAnalysis)}\nNarratives: ${narrativeRaw ?? "Base ecosystem"}\nConsensus: ${consensusForPrompt}`, 0, 1000);
+      `Project: ${project}\nRoadmap: ${roadmap}\nBuild analysis: ${JSON.stringify(buildAnalysis)}\nNarratives: ${narrativeRaw ?? AEON_NONE_PROMPT}\nConsensus: ${consensusForPrompt}`, 0, 1000);
 
     const verdict = parseJson(verdictRaw);
     if (!verdict) throw new Error("Failed to parse verdict");
     const _sc = typeof verdict.score === "number" ? verdict.score : 50;
     verdict.verdict = _sc >= 65 ? "SHIP" : _sc >= 45 ? "REVISE" : "PIVOT";
 
-    return Response.json({ tool: "roadmap-validator", timestamp: new Date().toISOString(), project, timeline, build_analysis: buildAnalysis, miroshark: consensusOut, ...verdict, disclaimer: "AI-generated advisory from model knowledge — scores and the bull/bear consensus are model estimates, not measured community sentiment or a guarantee. Verify independently." });
+    return Response.json({ tool: "roadmap-validator", aeon_data: aeonStatus({ "narrative-tracker": narrativeRaw }), timestamp: new Date().toISOString(), project, timeline, build_analysis: buildAnalysis, miroshark: consensusOut, ...verdict, disclaimer: "AI-generated advisory from model knowledge — scores and the bull/bear consensus are model estimates, not measured community sentiment or a guarantee. Verify independently." });
   } catch (e) {
     return Response.json({ error: "Roadmap validation failed", message: (e as Error).message }, { status: 500 });
   }

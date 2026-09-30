@@ -3,7 +3,7 @@
 // Price: $0.20
 // Fully self-contained
 
-import { getAeonOutput, formatAeonForLLM } from "@/app/api/_lib/aeon-kv";
+import { getAeonOutput, formatAeonForLLM, AEON_NONE_PROMPT, aeonStatus } from "@/app/api/_lib/aeon-kv";
 import { callLLM } from "@/app/api/_lib/llm";
 
 async function llm(system: string, user: string, temp = 0.4, tokens = 1000): Promise<string> {
@@ -39,7 +39,7 @@ export default async function handler(req: Request): Promise<Response> {
 Assess investor sentiment and fundraising climate right now.
 CRITICAL: Return ONLY raw JSON.
 Schema: {"investor_appetite":"hot|warm|neutral|cold","raise_momentum":"building|peak|fading","best_narrative_angle":"<1 sentence>","timing_verdict":"<1 sentence>"}`,
-      `Market: ${moversRaw ?? "Base market"}\nNarratives: ${narrativeRaw ?? "Base ecosystem"}`, 0.4, 400);
+      `Market: ${moversRaw ?? AEON_NONE_PROMPT}\nNarratives: ${narrativeRaw ?? AEON_NONE_PROMPT}`, 0.4, 400);
     const influencerTake = parseJson(msRaw) ?? { investor_appetite: "neutral", raise_momentum: "neutral", best_narrative_angle: "Base-native focus", timing_verdict: "Mixed signals" };
 
     const resultRaw = await llm(`You are Blue Agent — fundraise timing engine.
@@ -56,12 +56,12 @@ Schema: {
   "risk_of_waiting": "<1 sentence>",
   "risk_of_rushing": "<1 sentence>"
 }`,
-      `Project: ${project}\nDescription: ${description}\nAsk: ${ask}\nStage: ${stage}\nMarket: ${moversRaw ?? "Base"}\nNarratives: ${narrativeRaw ?? "Base"}\nInfluencer: ${JSON.stringify(influencerTake)}`, 0.3, 900);
+      `Project: ${project}\nDescription: ${description}\nAsk: ${ask}\nStage: ${stage}\nMarket: ${moversRaw ?? AEON_NONE_PROMPT}\nNarratives: ${narrativeRaw ?? AEON_NONE_PROMPT}\nInfluencer: ${JSON.stringify(influencerTake)}`, 0.3, 900);
 
     let result = parseJson(resultRaw);
     if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
-    return Response.json({ tool: "fundraise-timing", timestamp: new Date().toISOString(), project, stage, influencer: influencerTake, ...result, disclaimer: "AI estimate of the fundraising climate from model knowledge — investor appetite is NOT measured from a live data feed. Treat as directional guidance, not market data." });
+    return Response.json({ tool: "fundraise-timing", aeon_data: aeonStatus({ "token-movers": moversRaw, "narrative-tracker": narrativeRaw }), timestamp: new Date().toISOString(), project, stage, influencer: influencerTake, ...result, disclaimer: "AI estimate of the fundraising climate from model knowledge — investor appetite is NOT measured from a live data feed. Treat as directional guidance, not market data." });
   } catch (e) {
     return Response.json({ error: "Fundraise timing failed", message: (e as Error).message }, { status: 500 });
   }

@@ -103,6 +103,12 @@ how good the prompt is. **Prompts do not prevent hallucination; data sources do.
   not a regression: the five paid x402 readers lose Aeon context, they do not invent it. Do not "fix" an
   empty Aeon key by generating one — re-run the route with CRON_SECRET, or re-add the schedule to
   `apps/web/vercel.json` after reading the route header.
+  **Null path, made explicit 2026-09-30** (the off-repo Aeon job is being turned off, so a miss is now the
+  only state): an Aeon slot in a prompt reads `AEON_NONE_PROMPT` ("NONE — no Aeon data…"), never a
+  placeholder like `?? "Base ecosystem"` or `?? target` that the model read as research; every reader's
+  response ships `aeon_data` (`aeonStatus` in `aeon-kv.ts`); and `runAeonSkill` in `llm.ts` returns KV
+  output or `null` — its GitHub-SKILL.md "model-generated estimate" branch is gone. Locked by
+  `apps/web/scripts/aeon-null-path-check.ts`.
 
 ## Retiring a surface (luật chống-bỏ-rơi)
 
@@ -384,7 +390,8 @@ Deleting it would remove the notice, not the dependency.
 
 ⚠️ **The Aeon KV pipeline is a DIFFERENT THING and was not touched.**
 `aeon:<skill>` keys in `api/_lib/aeon-kv.ts`, written by `/api/cron/research-loop`,
-read by 15 paid x402 handlers. It shares only the word "Aeon" with the five
+read by 14 paid x402 handlers (15 until 2026-09-30, when `base-grant-finder`'s
+read — which no prompt used — was removed). It shares only the word "Aeon" with the five
 deleted `skills/aeon-*.md` files, which were vendored from BankrBot/skills. The
 KV pipeline has nothing to do with Bankr. See the Aeon-data bullet above for its
 own (unrelated) caveat about the unscheduled cron.

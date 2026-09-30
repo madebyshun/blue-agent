@@ -140,8 +140,9 @@ export async function POST(req: NextRequest) {
       scenario: `Agent registry audit: ${fullName}`,
       context: {
         repo_data: realData.slice(0, 600),
-        aeon: aeonRaw ?? "",
-        narrative: narrativeRaw ?? "",
+        // A miss is said, never left as an empty string a model can fill.
+        aeon: aeonRaw ?? "NONE — no Aeon data",
+        narrative: narrativeRaw ?? "NONE — no Aeon data",
       },
       persona: "analyst — evaluates agent quality, ecosystem fit, and collab potential",
       outputSchema: `{"agent_type":"trading|builder|content|defi|general|infra","skills":["<from repo>"],"collab_fit":"<who would want to collab>","trust":"high|medium|low","standout":"<what makes this agent unique>"}`,
@@ -169,7 +170,7 @@ Schema: {
   "recommendation": "<specific next step for this agent>"
 }`,
       skillFiles: ["base-ecosystem.md"],
-      input: `${realData}\n\nAeon:\n${(aeonRaw ?? "").slice(0, 600)}\n\nNarrative:\n${(narrativeRaw ?? "").slice(0, 400)}\n\nMiroShark:\n${JSON.stringify(msSignal).slice(0, 400)}`,
+      input: `${realData}\n\nAeon:\n${(aeonRaw ?? "NONE — no Aeon data").slice(0, 600)}\n\nNarrative:\n${(narrativeRaw ?? "NONE — no Aeon data").slice(0, 400)}\n\nMiroShark:\n${JSON.stringify(msSignal).slice(0, 400)}`,
       maxTokens: 900,
     });
 

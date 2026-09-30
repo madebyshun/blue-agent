@@ -81,3 +81,38 @@ export async function listAeonSkills(): Promise<string[]> {
     return keys.map(k => k.replace("aeon:", ""));
   } catch { return []; }
 }
+
+// ─── The null path (rebuild plan §4 #4, 2026-09-30) ──────────────────────────
+//
+// The Aeon job is being turned off, so every read above returns null. Fifteen
+// paid x402 tools read it, and until today most of them filled the gap with a
+// placeholder the model could not tell from data — `Research: ${x ?? target}`
+// handed the project's own name over as "research", `Narratives: ${x ?? "Base
+// ecosystem"}` handed two words over as the narrative feed. A model given a
+// slot labelled "Narratives" writes narratives. Now the slot says, in words,
+// that there is nothing in it, and the response says the same to the caller.
+
+/** What a prompt receives in place of a missing Aeon output. */
+export const AEON_NONE_PROMPT =
+  "NONE — no Aeon data is available for this run. Do not invent research, narratives, trends, market moves, metrics or sources; where you would have needed them, say they are unknown.";
+
+/** What the caller is told when an Aeon read came back empty. */
+export const AEON_NONE_NOTE =
+  "No Aeon data: the Aeon research feed is not running, so no part of this answer comes from it — it is model-generated from your input alone.";
+
+export type AeonStatus = {
+  status: "fresh" | "partial" | "none";
+  skills: Record<string, "fresh" | "none">;
+  note?: string;
+};
+
+/** The `aeon_data` field every Aeon-reading tool ships: which skills were
+ *  read, and — whenever any was missing — the plain statement of it. */
+export function aeonStatus(read: Record<string, string | null | undefined>): AeonStatus {
+  const skills: Record<string, "fresh" | "none"> = {};
+  for (const [k, v] of Object.entries(read)) skills[k] = v ? "fresh" : "none";
+  const n = Object.values(skills).filter((s) => s === "fresh").length;
+  const total = Object.keys(skills).length;
+  const status = n === 0 ? "none" : n === total ? "fresh" : "partial";
+  return { status, skills, ...(status === "fresh" ? {} : { note: AEON_NONE_NOTE }) };
+}

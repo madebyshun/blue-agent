@@ -6,7 +6,7 @@
 // Output is labelled accordingly. Resilient: never 500.
 // Price: $0.20
 
-import { getAeonOutput, formatAeonForLLM } from "@/app/api/_lib/aeon-kv";
+import { getAeonOutput, formatAeonForLLM, AEON_NONE_PROMPT, aeonStatus } from "@/app/api/_lib/aeon-kv";
 import { NO_FABRICATION_RULE, callLLM } from "@/app/api/_lib/llm";
 
 // Delegates to `callLLM`, which calls VIRTUALS AND NOTHING ELSE. This said
@@ -96,6 +96,7 @@ Schema: {
 
     return Response.json({
       tool: "thread-intelligence",
+      aeon_data: aeonStatus({ "narrative-tracker": narrativeRaw }),
       timestamp: new Date().toISOString(),
       data_source: "AI estimate (no live social data — model-generated, not measured)",
       disclaimer: DISCLAIMER,

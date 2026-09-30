@@ -1,5 +1,5 @@
 // x402/launch-simulator-3 — Launch Simulator Tier 3: Full Simulation with risk matrix and timeline
-import { getAeonOutput, formatAeonForLLM } from "@/app/api/_lib/aeon-kv";
+import { getAeonOutput, formatAeonForLLM, AEON_NONE_PROMPT, aeonStatus } from "@/app/api/_lib/aeon-kv";
 import { callLLM } from "@/app/api/_lib/llm";
 import { pickBaseSidePair, QUOTE_SIDE_ONLY_NOTE } from "@/lib/dex-side";
 // Price: $0.50 — Fully self-contained, no external workspace imports
@@ -249,6 +249,7 @@ Rules: ${miroShark ? "copy miroshark values EXACTLY. " : ""}${verdictRule} Never
 
     return Response.json({
       tier, project, ticker: ticker || null, contract: contract || null,
+      aeon_data: aeonStatus({ "token-movers": tokenMovers, "digest": digest }),
       timestamp: new Date().toISOString(),
       market_data: marketData,
       ...result,

@@ -5,7 +5,7 @@
 
 import { slugifyRepo, fetchRepo, scoreRepoActivity, repoFactsPrompt } from "@/lib/github";
 
-import { getAeonOutput, formatAeonForLLM } from "@/app/api/_lib/aeon-kv";
+import { getAeonOutput, formatAeonForLLM, AEON_NONE_PROMPT, aeonStatus } from "@/app/api/_lib/aeon-kv";
 import { callLLM } from "@/app/api/_lib/llm";
 
 // The 5th param used to be `model = "claude-haiku-4-5"`, and one call site below
@@ -71,7 +71,7 @@ Schema: {
   "open_source": <boolean>,
   "audit_verdict": "<1-2 sentences>"
 }`,
-      `Target: ${target}\nType: ${type}\nContext: ${context}\nResearch: ${projectResearch ?? target}`, 0.3, 700);
+      `Target: ${target}\nType: ${type}\nContext: ${context}\nResearch: ${projectResearch ?? AEON_NONE_PROMPT}`, 0.3, 700);
     const audit = parseJson(auditRaw) ?? {};
 
     // Step 4: MiroShark analyst — investment/collaboration grade
@@ -90,7 +90,7 @@ Schema: {
   "comparable": "<similar project or builder>",
   "analyst_verdict": "<2-3 sentences>"
 }`,
-      `Target: ${target}\nProject research: ${projectResearch ?? target}\nAudit: ${JSON.stringify(audit)}`, 0.3, 800);
+      `Target: ${target}\nProject research: ${projectResearch ?? AEON_NONE_PROMPT}\nAudit: ${JSON.stringify(audit)}`, 0.3, 800);
     const analyst = parseJson(msRaw) ?? {};
 
     // Step 5: Blue Agent final DD synthesis
@@ -111,7 +111,7 @@ Schema: {
   "recommended_action": "<specific next step>",
   "open_questions": ["<question to answer before deciding>"]
 }`,
-      `Target: ${target}\nType: ${type}\nProject: ${projectResearch ?? target}\nAudit: ${JSON.stringify(audit)}\nAnalyst: ${JSON.stringify(analyst)}`,  0, 1500);
+      `Target: ${target}\nType: ${type}\nProject: ${projectResearch ?? AEON_NONE_PROMPT}\nAudit: ${JSON.stringify(audit)}\nAnalyst: ${JSON.stringify(analyst)}`,  0, 1500);
 
     let result = parseJson(resultRaw);
     // HARDMAP verdict from dd_score (deterministic, no LLM flip)
@@ -123,6 +123,7 @@ Schema: {
 
     return Response.json({
       tool: "builder-deep-dd",
+      aeon_data: aeonStatus({ "deep-research": projectResearch }),
       timestamp: new Date().toISOString(),
       target,
       type,

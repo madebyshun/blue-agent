@@ -3,7 +3,7 @@
 // Price: $0.30
 // Fully self-contained
 
-import { getAeonOutput, formatAeonForLLM } from "@/app/api/_lib/aeon-kv";
+import { getAeonOutput, formatAeonForLLM, AEON_NONE_PROMPT, aeonStatus } from "@/app/api/_lib/aeon-kv";
 import { callLLM } from "@/app/api/_lib/llm";
 
 async function llm(system: string, user: string, temp = 0.4, tokens = 1000): Promise<string> {
@@ -49,7 +49,7 @@ Schema: {"market_framing":"<1-2 sentences>","why_this_wins":"<1-2 sentences>","w
 Evaluate this pitch from an influencer/KOL perspective. Would you hype this?
 CRITICAL: Return ONLY raw JSON.
 Schema: {"would_hype":<boolean>,"hype_score":<0-10>,"narrative_hooks":["<hook>"],"weak_points":["<weak point>"],"suggested_angle":"<best narrative angle>","influencer_verdict":"<1 sentence>"}`,
-        `Project: ${project}\nDescription: ${description}\nNarratives: ${narrativeRaw ?? "Base ecosystem"}\nPitch: ${JSON.stringify(raisePitch)}`, 0.5, 600);
+        `Project: ${project}\nDescription: ${description}\nNarratives: ${narrativeRaw ?? AEON_NONE_PROMPT}\nPitch: ${JSON.stringify(raisePitch)}`, 0.5, 600);
     // 🔴 Fell back to `{ would_hype: false, hype_score: 5, suggested_angle:
     // "Focus on Base-native angle", influencer_verdict: "Needs stronger
     // narrative" }` until 2026-09-28. A canned opinion wearing a persona's name:
@@ -78,12 +78,12 @@ Schema: {
   "avoid": ["<what not to say>"],
   "best_investor_type": "<specific profile>"
 }`,
-      `Project: ${project}\nDescription: ${description}\nAsk: ${ask}\nStage: ${stage}\nPitch: ${JSON.stringify(raisePitch)}\nNarratives: ${narrativeRaw ?? "Base"}\nInfluencer: ${JSON.stringify(influencerTake)}`, 0.3, 1000);
+      `Project: ${project}\nDescription: ${description}\nAsk: ${ask}\nStage: ${stage}\nPitch: ${JSON.stringify(raisePitch)}\nNarratives: ${narrativeRaw ?? AEON_NONE_PROMPT}\nInfluencer: ${JSON.stringify(influencerTake)}`, 0.3, 1000);
 
     let result = parseJson(resultRaw);
     if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
-    return Response.json({ tool: "pitch-intelligence", timestamp: new Date().toISOString(), project, stage, raise_pitch: raisePitch, influencer: influencerTake, ...result, disclaimer: "Pitch scores (hype_score, verdict) are AI estimates from model knowledge, not measured from live investor or social data." });
+    return Response.json({ tool: "pitch-intelligence", aeon_data: aeonStatus({ "narrative-tracker": narrativeRaw }), timestamp: new Date().toISOString(), project, stage, raise_pitch: raisePitch, influencer: influencerTake, ...result, disclaimer: "Pitch scores (hype_score, verdict) are AI estimates from model knowledge, not measured from live investor or social data." });
   } catch (e) {
     return Response.json({ error: "Pitch intelligence failed", message: (e as Error).message }, { status: 500 });
   }

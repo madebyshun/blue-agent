@@ -28,7 +28,7 @@
 // claim about EXTERNAL callers only and has never been tested. Recorded because
 // it is the stated reason for a deferral, and an untested reason ages into a
 // fact if nobody writes down which half was measured.
-import { getAeonOutput, formatAeonForLLM } from "@/app/api/_lib/aeon-kv";
+import { getAeonOutput, formatAeonForLLM, AEON_NONE_PROMPT, aeonStatus } from "@/app/api/_lib/aeon-kv";
 import { callLLM } from "@/app/api/_lib/llm";
 
 type BankrMessage = { role: string; content: string };
@@ -234,6 +234,7 @@ Rules: ${miroShark ? "copy miroshark values EXACTLY. " : ""}${verdictRule} Exact
 
     return Response.json({
       tier, project, ticker: ticker || null,
+      aeon_data: aeonStatus({ "digest": digest }),
       timestamp: new Date().toISOString(),
       ...result,
     });

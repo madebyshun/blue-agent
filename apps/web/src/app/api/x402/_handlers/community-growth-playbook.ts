@@ -2,7 +2,7 @@
 // Community Growth Playbook — Aeon narrative-tracker + MiroShark 4-persona + Blue idea
 // Price: $0.25
 
-import { getAeonOutput, formatAeonForLLM } from "@/app/api/_lib/aeon-kv";
+import { getAeonOutput, formatAeonForLLM, AEON_NONE_PROMPT, aeonStatus } from "@/app/api/_lib/aeon-kv";
 import { callLLM } from "@/app/api/_lib/llm";
 
 async function llm(system: string, user: string, temp = 0.4, tokens = 1000): Promise<string> {
@@ -49,7 +49,7 @@ Schema: {
   "growth_lever": "<highest impact lever>",
   "consensus_strategy": "<1-2 sentences>"
 }`,
-      `Project: ${project}\nDescription: ${description}\nCurrent size: ${current_size}\nGoal: ${goal}\nNarratives: ${narrativeRaw ?? "Base ecosystem"}`, 0.5, 700);
+      `Project: ${project}\nDescription: ${description}\nCurrent size: ${current_size}\nGoal: ${goal}\nNarratives: ${narrativeRaw ?? AEON_NONE_PROMPT}`, 0.5, 700);
     const consensus = parseJson(msRaw) ?? {};
 
     const resultRaw = await llm(`You are Blue Agent — community growth strategist for Base builders.
@@ -65,12 +65,12 @@ Schema: {
   "avoid": ["<common mistake>"],
   "summary": "<2 sentences>"
 }`,
-      `Project: ${project}\nCurrent: ${current_size}\nGoal: ${goal}\nNarratives: ${narrativeRaw ?? "Base"}\nConsensus: ${JSON.stringify(consensus)}`, 0.3, 1200);
+      `Project: ${project}\nCurrent: ${current_size}\nGoal: ${goal}\nNarratives: ${narrativeRaw ?? AEON_NONE_PROMPT}\nConsensus: ${JSON.stringify(consensus)}`, 0.3, 1200);
 
     let result = parseJson(resultRaw);
     if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
-    return Response.json({ tool: "community-growth-playbook", timestamp: new Date().toISOString(), project, current_size, goal, miroshark: consensus, ...result, disclaimer: "AI-generated growth advisory from model knowledge — scores and persona 'consensus' are model estimates, not measured audience research or a guarantee. Verify independently." });
+    return Response.json({ tool: "community-growth-playbook", aeon_data: aeonStatus({ "narrative-tracker": narrativeRaw }), timestamp: new Date().toISOString(), project, current_size, goal, miroshark: consensus, ...result, disclaimer: "AI-generated growth advisory from model knowledge — scores and persona 'consensus' are model estimates, not measured audience research or a guarantee. Verify independently." });
   } catch (e) {
     return Response.json({ error: "Community growth playbook failed", message: (e as Error).message }, { status: 500 });
   }

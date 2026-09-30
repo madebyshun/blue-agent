@@ -3,7 +3,7 @@
 // Price: $0.35
 // Fully self-contained
 
-import { getAeonOutput, formatAeonForLLM } from "@/app/api/_lib/aeon-kv";
+import { getAeonOutput, formatAeonForLLM, AEON_NONE_PROMPT, aeonStatus } from "@/app/api/_lib/aeon-kv";
 import { callLLM } from "@/app/api/_lib/llm";
 
 // Virtuals-only synthesis (no web search). TAM / market figures are
@@ -54,7 +54,7 @@ Schema: {
       llm(`You are MiroShark analyst persona. Evaluate investment thesis critically.
 CRITICAL: Return ONLY raw JSON.
 Schema: {"investment_grade":"A|B|C|D","key_risks":["<risk>"],"key_strengths":["<strength>"],"comparable":"<similar funded project>","analyst_verdict":"<1-2 sentences>"}`,
-        `Project: ${project}\nDescription: ${description}\nMarket: ${marketResearch ?? "Base ecosystem"}\nNarrative: ${JSON.stringify(narrative)}`, 0.3, 600),
+        `Project: ${project}\nDescription: ${description}\nMarket: ${marketResearch ?? AEON_NONE_PROMPT}\nNarrative: ${JSON.stringify(narrative)}`, 0.3, 600),
       llm(`You are MiroShark influencer persona. Would this get crypto Twitter excited?
 CRITICAL: Return ONLY raw JSON.
 Schema: {"hype_potential":<0-10>,"viral_angle":"<best angle>","community_thesis":"<1 sentence>","influencer_verdict":"<1 sentence>"}`,
@@ -82,12 +82,12 @@ Schema: {
   "strongest_angle": "<1 sentence>",
   "cold_outreach_subject": "<email subject line>"
 }`,
-      `Project: ${project}\nNarrative: ${JSON.stringify(narrative)}\nMarket: ${marketResearch ?? "Base"}\nAnalyst: ${JSON.stringify(analyst)}\nInfluencer: ${JSON.stringify(influencer)}`, 0.3, 1000);
+      `Project: ${project}\nNarrative: ${JSON.stringify(narrative)}\nMarket: ${marketResearch ?? AEON_NONE_PROMPT}\nAnalyst: ${JSON.stringify(analyst)}\nInfluencer: ${JSON.stringify(influencer)}`, 0.3, 1000);
 
     let result = parseJson(resultRaw);
     if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
-    return Response.json({ tool: "investor-memo", timestamp: new Date().toISOString(), project, stage, narrative, analyst, influencer, ...result, disclaimer: "AI-generated memo from model knowledge — the investment grade, scores, and any TAM/market figures are estimates, NOT investment advice, due diligence, or verified data. Verify independently." });
+    return Response.json({ tool: "investor-memo", aeon_data: aeonStatus({ "deep-research": marketResearch }), timestamp: new Date().toISOString(), project, stage, narrative, analyst, influencer, ...result, disclaimer: "AI-generated memo from model knowledge — the investment grade, scores, and any TAM/market figures are estimates, NOT investment advice, due diligence, or verified data. Verify independently." });
   } catch (e) {
     return Response.json({ error: "Investor memo failed", message: (e as Error).message }, { status: 500 });
   }

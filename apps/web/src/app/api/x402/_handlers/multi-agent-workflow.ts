@@ -3,7 +3,7 @@
 // Price: $0.25
 
 type Msg = { role: string; content: string };
-import { getAeonOutput, formatAeonForLLM } from "@/app/api/_lib/aeon-kv";
+import { getAeonOutput, formatAeonForLLM, AEON_NONE_PROMPT, aeonStatus } from "@/app/api/_lib/aeon-kv";
 import { callLLM } from "@/app/api/_lib/llm";
 
 // Bankr LLM (llm.bankr.bot) was 403-banned 2026-07-20 → route through callLLM
@@ -47,7 +47,7 @@ Schema: {
   "cost_estimate": "<per workflow run in USD>",
   "analyst_verdict": "<1-2 sentences>"
 }`,
-      `Goal: ${goal}\nAgents available: ${agents || "Blue Agent"}\nConstraints: ${constraints || "none"}\nResearch: ${researchRaw ?? "multi-agent systems"}`, 0.3, 500);
+      `Goal: ${goal}\nAgents available: ${agents || "Blue Agent"}\nConstraints: ${constraints || "none"}\nResearch: ${researchRaw ?? AEON_NONE_PROMPT}`, 0.3, 500);
     const analyst = parseJson(msRaw) ?? {};
 
     const resultRaw = await llm(`You are Blue Agent — multi-agent workflow architect for Base ecosystem.
@@ -65,12 +65,12 @@ Schema: {
   "implementation_notes": ["<key implementation detail>"],
   "summary": "<2 sentences>"
 }`,
-      `Goal: ${goal}\nAgents: ${agents || "Blue Agent"}\nConstraints: ${constraints || "none"}\nResearch: ${researchRaw ?? "multi-agent"}\nAnalyst: ${JSON.stringify(analyst)}`, 0.3, 1400);
+      `Goal: ${goal}\nAgents: ${agents || "Blue Agent"}\nConstraints: ${constraints || "none"}\nResearch: ${researchRaw ?? AEON_NONE_PROMPT}\nAnalyst: ${JSON.stringify(analyst)}`, 0.3, 1400);
 
     let result = parseJson(resultRaw);
     if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
-    return Response.json({ tool: "multi-agent-workflow", timestamp: new Date().toISOString(), goal, agents, analyst, ...result, disclaimer: "AI-generated workflow advisory — any cost, latency, and score figures are rough estimates, not measured benchmarks or a guarantee. Validate before relying on them." });
+    return Response.json({ tool: "multi-agent-workflow", aeon_data: aeonStatus({ "deep-research": researchRaw }), timestamp: new Date().toISOString(), goal, agents, analyst, ...result, disclaimer: "AI-generated workflow advisory — any cost, latency, and score figures are rough estimates, not measured benchmarks or a guarantee. Validate before relying on them." });
   } catch (e) {
     return Response.json({ error: "Multi-agent workflow failed", message: (e as Error).message }, { status: 500 });
   }

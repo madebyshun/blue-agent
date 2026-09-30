@@ -3,7 +3,7 @@
 // Price: $0.25
 // Fully self-contained
 
-import { getAeonOutput, formatAeonForLLM } from "@/app/api/_lib/aeon-kv";
+import { getAeonOutput, formatAeonForLLM, AEON_NONE_PROMPT, aeonStatus } from "@/app/api/_lib/aeon-kv";
 import { callLLM } from "@/app/api/_lib/llm";
 
 // Virtuals-only synthesis (no web search). Market/metric framing is
@@ -49,7 +49,7 @@ Schema: {"target_user":"<who>","pain_point":"<specific pain>","entry_wedge":"<sm
 Evaluate GTM strategy from distribution perspective.
 CRITICAL: Return ONLY raw JSON.
 Schema: {"viral_potential":<0-10>,"distribution_fit":"strong|moderate|weak","best_channel":"<channel>","community_hooks":["<hook>"],"retail_pull":"<1 sentence>","influencer_appeal":"<1 sentence>","gtm_verdict":"<1 sentence>"}`,
-      `Project: ${project}\nDescription: ${description}\nBrief: ${JSON.stringify(brief)}\nNarratives: ${narrativeRaw ?? "Base ecosystem"}`, 0.5, 600);
+      `Project: ${project}\nDescription: ${description}\nBrief: ${JSON.stringify(brief)}\nNarratives: ${narrativeRaw ?? AEON_NONE_PROMPT}`, 0.5, 600);
     const distribution = parseJson(msRaw) ?? {};
 
     const resultRaw = await llm(`You are Blue Agent — GTM brief engine for Base builders.
@@ -66,12 +66,12 @@ Schema: {
   "community_strategy": "<1-2 sentences>",
   "avoid": ["<common GTM mistake>"]
 }`,
-      `Project: ${project}\nBrief: ${JSON.stringify(brief)}\nNarratives: ${narrativeRaw ?? "Base"}\nDistribution: ${JSON.stringify(distribution)}`, 0.3, 1000);
+      `Project: ${project}\nBrief: ${JSON.stringify(brief)}\nNarratives: ${narrativeRaw ?? AEON_NONE_PROMPT}\nDistribution: ${JSON.stringify(distribution)}`, 0.3, 1000);
 
     let result = parseJson(resultRaw);
     if (!result) result = { degraded: true, note: "Synthesis briefly unavailable - please retry." };
 
-    return Response.json({ tool: "gtm-brief", timestamp: new Date().toISOString(), project, brief, distribution, ...result, disclaimer: "AI-generated GTM advisory from model knowledge — scores and projections are estimates, not measured market data or a guarantee. Adapt to your own research." });
+    return Response.json({ tool: "gtm-brief", aeon_data: aeonStatus({ "narrative-tracker": narrativeRaw }), timestamp: new Date().toISOString(), project, brief, distribution, ...result, disclaimer: "AI-generated GTM advisory from model knowledge — scores and projections are estimates, not measured market data or a guarantee. Adapt to your own research." });
   } catch (e) {
     return Response.json({ error: "GTM brief failed", message: (e as Error).message }, { status: 500 });
   }

@@ -1,8 +1,11 @@
 // x402/base-grant-finder/index.ts
-// Base Grant Finder — Aeon deep-research + MiroShark analyst + Blue raise
+// Base Grant Finder — curated grant list + MiroShark analyst + Blue raise
 // Price: $0.20
+//
+// Read `aeon:deep-research` until 2026-09-30 and never used the result — no
+// prompt referenced it. Removed rather than reported: an `aeon_data` field on
+// a tool whose answer never depended on Aeon would be a receipt for nothing.
 
-import { getAeonOutput, formatAeonForLLM } from "@/app/api/_lib/aeon-kv";
 import { callLLM } from "@/app/api/_lib/llm";
 
 async function llm(system: string, user: string, temp = 0.4, tokens = 1000): Promise<string> {
@@ -58,13 +61,6 @@ function parseJson(t: string): Record<string, unknown> | null {
   if (i >= 0 && j > i) s = s.slice(i, j + 1);
   try { return JSON.parse(s); } catch { try { return JSON.parse(s.replace(/[\x00-\x1F]/g, " ")); } catch { return null; } }
 }
-async function aeon(skill: string): Promise<string | null> {
-  try {
-    const fresh = await getAeonOutput(skill);
-    if (fresh) return formatAeonForLLM(fresh);
-  } catch {}
-  return null;
-}
 
 export default async function handler(req: Request): Promise<Response> {
   try {
@@ -82,7 +78,6 @@ export default async function handler(req: Request): Promise<Response> {
     // Compute once and reuse (CURATED list, no-result fallback, and final grants).
     const fallback = fallbackGrants(stage);
     const CURATED = fallback.grants;
-    const researchRaw = await aeon("deep-research");
 
     // Analyst pass — non-fatal: a hiccup here shouldn't sink the whole call.
     let analyst: Record<string, unknown> = {};
