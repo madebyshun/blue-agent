@@ -20,6 +20,17 @@
 //
 // Credits are derived in CODE from the on-chain USDC amount (CREDITS_PER_USDC),
 // never from anything the client sends.
+//
+//   4. ONLY A TOP-UP counts (fixed 2026-09-30, plan §2 fix 2). TOPUP_TREASURY
+//      is the same address as the x402 payee, and an x402 settlement is an
+//      EIP-3009 `transferWithAuthorization` — which emits exactly the Transfer
+//      rule 2 looks for (from = the payer, to = treasury, token = USDC). So a
+//      caller could pay for a Hub tool, then post that settlement hash here and
+//      be credited the same USDC a second time. A real top-up is the plain
+//      `transfer` TopUpModal sends; EIP-3009 always also emits USDC's
+//      `AuthorizationUsed(authorizer, nonce)`, so any tx where the caller
+//      authorized one is refused. Credit is never minted for a payment that
+//      already bought something.
 
 import { NextRequest, NextResponse } from "next/server";
 import {
@@ -51,6 +62,19 @@ const TRANSFER_EVENT = [
       { indexed: true, name: "from", type: "address" },
       { indexed: true, name: "to", type: "address" },
       { indexed: false, name: "value", type: "uint256" },
+    ],
+  },
+] as const;
+
+// EIP-3009: emitted by USDC on every transferWithAuthorization — i.e. on every
+// x402 settlement, and never on the plain transfer a top-up is.
+const AUTHORIZATION_USED_EVENT = [
+  {
+    type: "event",
+    name: "AuthorizationUsed",
+    inputs: [
+      { indexed: true, name: "authorizer", type: "address" },
+      { indexed: true, name: "nonce", type: "bytes32" },
     ],
   },
 ] as const;
@@ -140,6 +164,34 @@ export async function POST(req: NextRequest) {
     if (receipt.status !== "success") {
       await kvDel(lockKey);
       return NextResponse.json({ ok: false, error: "Transaction reverted on-chain." }, { status: 400 });
+    }
+
+    // Rule 4: an EIP-3009 authorization by the caller means this is a payment
+    // (x402 settlement), not a top-up. Checked before any Transfer is summed.
+    let authorizations: Array<{ address: string; args: { authorizer?: string } }> = [];
+    try {
+      authorizations = parseEventLogs({ abi: AUTHORIZATION_USED_EVENT, logs: receipt.logs }) as typeof authorizations;
+    } catch {
+      authorizations = [];
+    }
+    const authorizedByCaller = authorizations.some((a) => {
+      try {
+        return getAddress(a.address) === USDC_BASE && a.args.authorizer != null && getAddress(a.args.authorizer) === caller;
+      } catch {
+        return false;
+      }
+    });
+    if (authorizedByCaller) {
+      await kvDel(lockKey);
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "This transaction is a signed USDC authorization (an x402 payment), not a top-up — it already paid for something. " +
+            "Top up with a direct USDC transfer from the Credits screen.",
+        },
+        { status: 400 },
+      );
     }
 
     // Decode Transfer logs; keep only USDC → treasury FROM this caller.
