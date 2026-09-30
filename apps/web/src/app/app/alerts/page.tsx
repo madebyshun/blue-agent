@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 
-// Alerts CRUD is deferred (to be rebuilt later). The legacy route lands on
-// the dashboard overview so existing links don't 404.
+// Alert deliveries land in the Hood inbox. This used to point at /dashboard,
+// which is no longer in the nav. Redirect rather than delete so existing links
+// keep resolving (link-liveness-check). docs/rebuild-5-tang-2026-09-30.md.
 export default function AlertsRedirect() {
-  redirect("/dashboard");
+  redirect("/hood/inbox");
 }

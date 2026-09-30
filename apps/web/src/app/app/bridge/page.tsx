@@ -1,21 +1,8 @@
-import type { Metadata } from "next";
-import ComingSoon from "../_ComingSoon";
+import { redirect } from "next/navigation";
 
-// Reserved URL — clean entry point into the bridge flow. Per the shell
-// blueprint Bridge is a component within Wallet + onboarding, but the clean
-// /bridge URL is worth reserving as a deep-link target (shares the component).
-// Noindex until it ships.
-export const metadata: Metadata = {
-  title: "Bridge — BlueAgent",
-  robots: { index: false, follow: false },
-};
-
+// Was a "Coming Soon" placeholder. The Base <-> Robinhood Chain bridge card
+// lives in Wallet. Redirect rather than delete so the published URL keeps
+// resolving (link-liveness-check). docs/rebuild-5-tang-2026-09-30.md.
 export default function Page() {
-  return (
-    <ComingSoon
-      label="BRIDGE"
-      title="Bridge"
-      blurb="Move USDC/USDG between Base and Robinhood Chain."
-    />
-  );
+  redirect("/wallet");
 }

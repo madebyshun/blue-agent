@@ -1,19 +1,8 @@
-import type { Metadata } from "next";
-import ComingSoon from "../_ComingSoon";
+import { redirect } from "next/navigation";
 
-// Reserved URL — the ExecutionProvider surface (guarded swap engine). Absorbs
-// the old /robinhood-router flow. Noindex until it ships.
-export const metadata: Metadata = {
-  title: "Trade — BlueAgent",
-  robots: { index: false, follow: false },
-};
-
+// Was a "Coming Soon" placeholder. Swap/send/bridge on Base and Robinhood Chain
+// live in Wallet. Redirect rather than delete so the published URL keeps
+// resolving (link-liveness-check). docs/rebuild-5-tang-2026-09-30.md.
 export default function Page() {
-  return (
-    <ComingSoon
-      label="TRADE"
-      title="Trade"
-      blurb="Execute drift & arbitrage arrows with the same guarded engine Blue Hood grades in public."
-    />
-  );
+  redirect("/wallet");
 }

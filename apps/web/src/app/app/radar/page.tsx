@@ -1,19 +1,7 @@
-import type { Metadata } from "next";
-import ComingSoon from "../_ComingSoon";
+import { redirect } from "next/navigation";
 
-// Reserved URL — the WatchlistProvider surface (drift/arbitrage discovery)
-// lands here. Noindex until it ships.
-export const metadata: Metadata = {
-  title: "Radar — BlueAgent",
-  robots: { index: false, follow: false },
-};
-
+// Was a "Coming Soon" placeholder. Redirect rather than delete so the published
+// URL keeps resolving (link-liveness-check). docs/rebuild-5-tang-2026-09-30.md.
 export default function Page() {
-  return (
-    <ComingSoon
-      label="RADAR"
-      title="Radar"
-      blurb="Live watchlist + drift/arbitrage discovery across tokenized stocks on Base and Robinhood Chain."
-    />
-  );
+  redirect("/cron");
 }

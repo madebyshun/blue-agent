@@ -1,19 +1,8 @@
-import type { Metadata } from "next";
-import ComingSoon from "../_ComingSoon";
+import { redirect } from "next/navigation";
 
-// Reserved URL — the automation surface (DCA, TP/SL, recurring buys via scoped
-// session keys). Noindex until it ships.
-export const metadata: Metadata = {
-  title: "Tasks — BlueAgent",
-  robots: { index: false, follow: false },
-};
-
+// Was a "Coming Soon" placeholder. Scheduled tasks live at /cron. Redirect
+// rather than delete so the published URL keeps resolving (link-liveness-check).
+// docs/rebuild-5-tang-2026-09-30.md.
 export default function Page() {
-  return (
-    <ComingSoon
-      label="TASKS"
-      title="Tasks"
-      blurb="Automated strategies — DCA, TP/SL, recurring buys — via scoped session keys."
-    />
-  );
+  redirect("/cron");
 }
