@@ -9,12 +9,24 @@
  *   (unavailable) → says so, and does NOT block: a check that could not run
  *                   is not evidence against the trade (§7 #14: BLOCK only on
  *                   evidence), but the user is told it did not run.
+ *   (throttled)   → OUR OWN rate limit answered 429. That is not "the check
+ *                   could not run", it is "we declined to run it", and it used
+ *                   to be read as unavailable — so a throttle spent by unrelated
+ *                   traffic from the same IP turned a measured HONEYPOT/IMPOSTOR
+ *                   BLOCK into an enabled sign button. It HOLDS signing, retries
+ *                   on its own with backoff, and offers a manual retry.
+ *
+ * A 429, a 5xx or a network error is retried with backoff (RETRY_DELAYS_MS)
+ * before any of the above is shown; the card stays held ("loading") meanwhile.
  *
  * `usePreTradeCheck` fetches /api/pretrade-check whenever the chain, kind,
  * token or bridge cost changes; `cleared` is what a card gates its sign
  * button on — false while the answer for the CURRENT input is loading.
  */
 import { useEffect, useState } from "react";
+
+/** Backoff between attempts after a transient failure (429 / 5xx / network). */
+const RETRY_DELAYS_MS = [1_000, 3_000, 8_000];
 
 export type PreTradeResult = {
   verdict: "PASS" | "WARN" | "BLOCK";
@@ -38,47 +50,82 @@ export function usePreTradeCheck(input: {
   // Derived rather than reset in an effect, so there is no render in which an
   // old PASS (or an old tick) stands in for a new trade.
   const key = JSON.stringify([chain, kind, token ?? "", cost, enabled]);
-  const [res, setRes] = useState<{ key: string; state: "ok" | "unavailable"; check: PreTradeResult | null } | null>(null);
+  // A manual retry (after a 429) re-runs the fetch for the SAME input. It is
+  // part of the fetch identity, not of `key`, so a tick on a WARN survives it.
+  const [nonce, setNonce] = useState(0);
+  const fetchKey = `${key}#${nonce}`;
+  const [res, setRes] = useState<{ key: string; state: "ok" | "unavailable" | "throttled"; check: PreTradeResult | null } | null>(null);
   const [ackKey, setAckKey] = useState("");
 
   useEffect(() => {
     if (!enabled || !token) return;
     let live = true;
-    fetch("/api/pretrade-check", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chain, kind, token, ...(cost != null ? { bridge_cost_percent: cost } : {}) }),
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j: PreTradeResult | null) => {
-        if (!live) return;
-        if (j && (j.verdict === "PASS" || j.verdict === "WARN" || j.verdict === "BLOCK")) setRes({ key, state: "ok", check: j });
-        else setRes({ key, state: "unavailable", check: null });
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const attempt = (n: number) => {
+      const retry = () => {
+        if (!live || n >= RETRY_DELAYS_MS.length) return false;
+        timer = setTimeout(() => attempt(n + 1), RETRY_DELAYS_MS[n]);
+        return true;
+      };
+      fetch("/api/pretrade-check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chain, kind, token, ...(cost != null ? { bridge_cost_percent: cost } : {}) }),
       })
-      .catch(() => { if (live) setRes({ key, state: "unavailable", check: null }); });
-    return () => { live = false; };
-    // `key` encodes every input above.
+        .then(async (r) => {
+          if (!live) return;
+          if (!r.ok) {
+            // Transient — throttled, or the server failed: try again before
+            // saying anything. Still held ("loading") while we wait.
+            if ((r.status === 429 || r.status >= 500) && retry()) return;
+            // Our own throttle is never "the check could not run": hold.
+            setRes({ key: fetchKey, state: r.status === 429 ? "throttled" : "unavailable", check: null });
+            return;
+          }
+          const j = (await r.json().catch(() => null)) as PreTradeResult | null;
+          if (!live) return;
+          if (j && (j.verdict === "PASS" || j.verdict === "WARN" || j.verdict === "BLOCK")) setRes({ key: fetchKey, state: "ok", check: j });
+          else setRes({ key: fetchKey, state: "unavailable", check: null });
+        })
+        .catch(() => {
+          if (!live || retry()) return;
+          setRes({ key: fetchKey, state: "unavailable", check: null });
+        });
+    };
+    attempt(0);
+    return () => { live = false; if (timer) clearTimeout(timer); };
+    // `fetchKey` encodes every input above, plus the manual-retry nonce.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+  }, [fetchKey]);
 
   const idle = !enabled || !token;
-  const current = !idle && res?.key === key ? res : null;
-  const state: "idle" | "loading" | "ok" | "unavailable" = idle ? "idle" : current ? current.state : "loading";
+  const current = !idle && res?.key === fetchKey ? res : null;
+  const state: "idle" | "loading" | "ok" | "unavailable" | "throttled" = idle ? "idle" : current ? current.state : "loading";
   const check = current?.check ?? null;
   const ack = ackKey === key;
   const setAck = (v: boolean) => setAckKey(v ? key : "");
-  // Held while the answer for THIS input is still on its way. An unavailable
-  // check does not hold (§7 #14: BLOCK only on evidence) — the banner says so.
-  const cleared = state !== "loading"
+  const retry = () => setNonce((n) => n + 1);
+  // Held while the answer for THIS input is still on its way, and while our
+  // own rate limit refuses to give one. An unavailable check does not hold
+  // (§7 #14: BLOCK only on evidence) — the banner says so.
+  const cleared = state !== "loading" && state !== "throttled"
     && (!check || check.verdict === "PASS" || (check.verdict === "WARN" && ack));
   const blocked = check?.verdict === "BLOCK";
-  return { check, state, ack, setAck, cleared, blocked };
+  return { check, state, ack, setAck, cleared, blocked, retry };
 }
 
 export function PreTradeBanner({ pt }: { pt: ReturnType<typeof usePreTradeCheck> }) {
-  const { check, state, ack, setAck } = pt;
+  const { check, state, ack, setAck, retry } = pt;
   if (state === "idle") return null;
   if (state === "loading") return <p className="text-[9px] text-slate-600 mb-2">Checking this trade…</p>;
+  if (state === "throttled") {
+    return (
+      <p className="text-[9px] text-amber-400 mb-2">
+        Too many checks from this connection — the pre-trade check did not run, so signing is held.{" "}
+        <button type="button" onClick={retry} className="underline text-[#4FC3F7]">Retry</button>
+      </p>
+    );
+  }
   if (state === "unavailable" || !check) {
     return <p className="text-[9px] text-slate-500 mb-2">Pre-trade check unavailable right now — it did not run, so nothing was checked.</p>;
   }

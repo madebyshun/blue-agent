@@ -4,7 +4,10 @@
  *
  * A public read: it reveals nothing about any wallet — only facts about a
  * token or a bridge quote — and it spends no credits. Rate-limited per caller
- * because a token check reads the chain. Its one write is the public meter's
+ * because a token check reads the chain — in its OWN `pretrade` bucket, never
+ * the shared `api` one: unrelated traffic from the same IP must not be able to
+ * throttle the check the cards gate signing on (and a 429 here holds signing,
+ * it does not clear it — see components/wallet/PreTradeBanner.tsx). Its one write is the public meter's
  * set of tokens refused on evidence (lib/action-stats.ts).
  */
 import { NextResponse, type NextRequest } from "next/server";
@@ -17,7 +20,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
-  const rl = await rateLimit(getIdentifier(req), "api");
+  const rl = await rateLimit(getIdentifier(req), "pretrade");
   if (!rl.success) return NextResponse.json({ error: "rate_limited" }, { status: 429 });
   let body: Record<string, unknown> = {};
   try { body = await req.json(); } catch { return NextResponse.json({ error: "invalid JSON body" }, { status: 400 }); }

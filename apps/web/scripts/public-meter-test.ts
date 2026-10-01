@@ -3,7 +3,8 @@
  * from action records the chain settled, and nothing it cannot back.
  *
  *   §1  realized slippage comes from the receipt's own Transfer logs, against
- *       the quote in its stated unit; unmeasurable → null, never 0
+ *       a FIRM quote only (Base 0x — an RH estimate is not slippage);
+ *       unmeasurable → null, never 0
  *   §2  each settled action counts ONCE (retries, second readers, one tx
  *       attached twice)
  *   §3  refusals count only on evidence the server measured
@@ -19,7 +20,7 @@ for (const k of ["KV_REST_API_URL", "KV_REST_API_TOKEN", "UPSTASH_REDIS_REST_URL
 import fs from "node:fs";
 import path from "node:path";
 import { encodeAbiParameters, keccak256, pad, toHex } from "viem";
-import { createAction, attachTx, listActions, readAction, receivedFromLogs } from "../src/lib/actions";
+import { createAction, attachTx, listActions, readAction, receivedFromLogs, isFirmQuote } from "../src/lib/actions";
 import { readActionStats, recordPreTradeBlock, median, SLIP_MIN_N } from "../src/lib/action-stats";
 import type { PreTradeCheck } from "../src/lib/pre-trade-check";
 import { X402_PAY_TO } from "../src/lib/x402-payee";
@@ -104,8 +105,10 @@ globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
   return rpc(null, { code: 3, message: "execution reverted" });
 }) as typeof fetch;
 
-const swap = (quote: Parameters<typeof createAction>[0]["quote"]) =>
-  createAction({ wallet: ALICE, kind: "swap", chain: "base", source: "wallet", params: { tokenIn: "ETH", tokenOut: TOKEN, amountIn: "0.1" }, quote });
+// A Base swap signed against a 0x quote — the one FIRM quote (isFirmQuote),
+// unless the test overrides venue/chain to show what is NOT one.
+const swap = (quote: Parameters<typeof createAction>[0]["quote"], chain: "base" | "robinhood" = "base") =>
+  createAction({ wallet: ALICE, kind: "swap", chain, source: "wallet", params: { tokenIn: "ETH", tokenOut: TOKEN, amountIn: "0.1" }, quote: quote ? { venue: "0x", ...quote } : quote });
 
 (async () => {
   console.log("\n1. realized slippage — from the receipt, against the quote's own unit");
@@ -118,10 +121,21 @@ const swap = (quote: Parameters<typeof createAction>[0]["quote"]) =>
   let r = await attachTx(a.id, receipt(1, { from: ALICE, logs: [transfer(TOKEN, POOL, ALICE, 990n)] }));
   ok("base-unit quote 1000, received 990 → 100 bps", r.ok && r.record.realized?.slippage_bps === 100 && r.record.realized?.out === "990", JSON.stringify(r.ok && r.record.realized));
 
-  a = await swap({ expected_out: "10.0", unit: "whole" });
+  // What both Robinhood Chain cards record: a GeckoTerminal ESTIMATE in whole
+  // units. Received-vs-estimate there is the price source's error (it read
+  // −50 bps here, "better than quoted", on a swap with no slippage at all), so
+  // it is recorded as what the user saw and never published as slippage.
+  a = await swap({ expected_out: "10.0", unit: "whole", venue: "RobinhoodSwapRouter" });
   r = await attachTx(a.id, receipt(2, { from: ALICE, logs: [transfer(TOKEN, POOL, ALICE, 10_050_000n)] }));
-  ok("whole-unit quote 10.0 (decimals read on-chain: 6), received 10.05 → −50 bps (better than quoted)",
-    r.ok && r.record.realized?.slippage_bps === -50, JSON.stringify(r.ok && r.record.realized));
+  ok("an RH-style display-only estimate → the output is recorded, the slippage is null (not a firm quote)",
+    r.ok && r.record.realized?.out === "10050000" && r.record.realized?.slippage_bps === null, JSON.stringify(r.ok && r.record.realized));
+  ok("isFirmQuote: only Base + 0x + base units",
+    isFirmQuote({ chain: "base", quote: { venue: "0x", unit: "base" } })
+    && isFirmQuote({ chain: "base", quote: { venue: "0x AllowanceHolder", unit: "base" } })
+    && !isFirmQuote({ chain: "robinhood", quote: { venue: "RobinhoodSwapRouter", unit: "base" } })
+    && !isFirmQuote({ chain: "robinhood", quote: { venue: "RobinhoodSwapRouter", unit: "whole" } })
+    && !isFirmQuote({ chain: "base", quote: { venue: "0x", unit: "whole" } })
+    && !isFirmQuote({ chain: "base", quote: { venue: "0xdeadbeef", unit: "base" } }));
 
   a = await swap({ expected_out: "1000" });
   r = await attachTx(a.id, receipt(3, { from: ALICE, logs: [transfer(TOKEN, POOL, ALICE, 990n)] }));
@@ -143,7 +157,7 @@ const swap = (quote: Parameters<typeof createAction>[0]["quote"]) =>
   ok("confirmed 4 (3 swaps + 1 send), reverted 1", st.confirmed === 4 && st.reverted === 1, JSON.stringify({ c: st.confirmed, r: st.reverted }));
   ok("by kind / chain / agent", st.by_kind.swap === 3 && st.by_kind.send === 1 && st.by_chain.base === 3 && st.by_chain.robinhood === 1 && st.via_agent === 1, JSON.stringify(st));
   ok("distinct wallets is a count (1)", st.wallets === 1);
-  ok(`two measured samples (< ${SLIP_MIN_N}) → the median is withheld, n is said`, st.slippage.n === 2 && st.slippage.median_bps === null, JSON.stringify(st.slippage));
+  ok(`one measured sample (< ${SLIP_MIN_N}) → the median is withheld, n is said`, st.slippage.n === 1 && st.slippage.median_bps === null, JSON.stringify(st.slippage));
   ok("the meter says when it started (forward-only)", typeof st.since === "string" && st.since.length >= 10);
 
   await attachTx(a.id, H(4));
@@ -163,14 +177,14 @@ const swap = (quote: Parameters<typeof createAction>[0]["quote"]) =>
   await listActions(ALICE);
   await listActions(ALICE);
   st = await readActionStats();
-  ok("settled on read, twice → counted once", st.confirmed === 5 && st.slippage.n === 3, JSON.stringify({ c: st.confirmed, n: st.slippage.n }));
+  ok("settled on read, twice → counted once", st.confirmed === 5 && st.slippage.n === 2, JSON.stringify({ c: st.confirmed, n: st.slippage.n }));
 
   for (let i = 0; i < 3; i++) {
     const x = await swap({ expected_out: "1000", unit: "base" });
     await attachTx(x.id, receipt(10 + i, { from: ALICE, logs: [transfer(TOKEN, POOL, ALICE, 980n)] }));
   }
   st = await readActionStats();
-  ok(`at ${SLIP_MIN_N}+ samples the median is published`, st.slippage.n === 6 && st.slippage.median_bps === median([100, -50, 0, 200, 200, 200]), JSON.stringify(st.slippage));
+  ok(`at ${SLIP_MIN_N}+ samples the median is published`, st.slippage.n === 5 && st.slippage.median_bps === median([100, 0, 200, 200, 200]), JSON.stringify(st.slippage));
 
   console.log("\n2b. the tx must be THIS action's (review 2026-10-01)");
   const before = await readActionStats();

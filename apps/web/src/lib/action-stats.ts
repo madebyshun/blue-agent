@@ -11,6 +11,12 @@
  * WHAT IS KEPT is counts, a list of realized-slippage samples, and a set of
  * wallets used only for its SIZE. No address is ever emitted by the reader.
  *
+ * SLIPPAGE SAMPLES come only from swaps signed against a FIRM quote — the Base
+ * 0x quote (`isFirmQuote` in lib/actions.ts). A Robinhood Chain swap is floored
+ * from a display-only GeckoTerminal estimate, so "received vs estimate" there
+ * measures the price source's error, not slippage; those records carry
+ * `slippage_bps: null` and add no sample (they still count as swaps).
+ *
  * FORWARD-ONLY: the meter starts with the first settled action
  * (`actions:stats:since`) and is never backfilled — the reader says so, with
  * the date, rather than presenting a young meter as an all-time total.
@@ -97,8 +103,9 @@ export interface ActionStats {
   via_agent: number;
   /** Distinct wallets with ≥ 1 confirmed action — a count, never a list. */
   wallets: number;
-  /** Realized vs quoted output on confirmed swaps, in basis points; positive =
-   *  received less than quoted. `median_bps` is null under SLIP_MIN_N samples. */
+  /** Realized vs quoted output on confirmed swaps signed against a FIRM quote
+   *  (Base 0x only — see the header), in basis points; positive = received
+   *  less than quoted. `median_bps` is null under SLIP_MIN_N samples. */
   slippage: { median_bps: number | null; n: number; min_n: number };
   /** Refusals the server measured: distinct tokens (impostor / honeypot). */
   blocked: { tokens: number };

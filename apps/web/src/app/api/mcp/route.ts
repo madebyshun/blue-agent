@@ -657,6 +657,12 @@ async function callSwapTx(args: Record<string, unknown>): Promise<string> {
   //   ETH↔token   → /api/robinhood/swap/quote (pool + GeckoTerminal estimate)
   //   token↔token → GeckoTerminal USD prices of both legs
   // No estimate → no trade: refused rather than built unbounded.
+  //
+  // The ETH↔token quote is ALSO where the pool's fee tier comes from, and
+  // swap-prepare's buy/sell modes 400 "fee tier required" without one. This
+  // branch used to read the estimate and throw the fee away, so every ETH↔token
+  // build died at prepare after the floor had been computed — only token↔token
+  // (which resolves its own pool) ever worked. No fee → NO_ROUTE, same as no pool.
   if (!ROBINHOOD_SWAP_ROUTER_ADDRESS) {
     throw new Error("Robinhood Chain 4663 swap router is not configured in this deployment.");
   }
@@ -665,7 +671,17 @@ async function callSwapTx(args: Record<string, unknown>): Promise<string> {
   // 3% unless the caller says otherwise — the RhSwapCard default, because an
   // estimate is looser than 0x's firm quote (whose default here is 1%).
   const rhSlippageBps = args.slippageBps === undefined || args.slippageBps === null ? 300 : slippageBps;
-  const estimatedOut = await estimateRhOut(tokenIn, tokenOut, inIsNative, outIsNative, amountIn);
+  const est = await estimateRhOut(tokenIn, tokenOut, inIsNative, outIsNative, amountIn);
+  if ((inIsNative || outIsNative) && est.fee === null) {
+    return JSON.stringify({
+      ok: false, chain: "robinhood", chainId: TX_CHAINS.robinhood.chainId,
+      error: {
+        code: "NO_ROUTE",
+        message: "No Uniswap V3 WETH pool (fee tier) found for this token on Robinhood Chain 4663, so there is nothing to route an ETH swap through. Do NOT invent a price — tell the user there is no pool.",
+      },
+    }, null, 2);
+  }
+  const estimatedOut = est.amountOut;
   if (estimatedOut === null || !(estimatedOut > 0)) {
     return JSON.stringify({
       ok: false, chain: "robinhood", chainId: TX_CHAINS.robinhood.chainId,
@@ -685,10 +701,11 @@ async function callSwapTx(args: Record<string, unknown>): Promise<string> {
     amountOutMinimum,
     // The route's own three modes: buy = ETH→token, sell = token→ETH, and
     // tokenIn present = token→token. `token` carries tokenOut except on sell.
+    // The ETH↔token modes also carry the pool's fee tier (non-null, checked above).
     ...(inIsNative
-      ? { direction: "buy",  token: tokenOut }
+      ? { direction: "buy",  token: tokenOut, fee: est.fee }
       : outIsNative
-        ? { direction: "sell", token: tokenIn }
+        ? { direction: "sell", token: tokenIn, fee: est.fee }
         : { tokenIn, token: tokenOut }),
   };
   return postPrepare(`${BASE}/api/robinhood/router/swap-prepare`, body, "Robinhood Chain 4663 swap-prepare");
@@ -696,20 +713,27 @@ async function callSwapTx(args: Record<string, unknown>): Promise<string> {
 
 /**
  * The output estimate RH swaps are floored from — the same two sources the
- * app's RH swap cards use (see the note in the RH branch above). Human units
- * of the OUTPUT token, or null when no price is available.
+ * app's RH swap cards use (see the note in the RH branch above). `amountOut`
+ * is in human units of the OUTPUT token, or null when no price is available.
+ * `fee` is the deepest WETH pool's fee tier, read from the same quote, for the
+ * ETH↔token modes only (token↔token resolves its own pool in swap-prepare, so
+ * it is null there); it is also null whenever the quote found no pool.
  */
 async function estimateRhOut(
   tokenIn: string, tokenOut: string, inIsNative: boolean, outIsNative: boolean, amountIn: string,
-): Promise<number | null> {
+): Promise<{ amountOut: number | null; fee: number | null }> {
   try {
     if (inIsNative || outIsNative) {
       const token = inIsNative ? tokenOut : tokenIn;
       const qs = new URLSearchParams({ token, direction: inIsNative ? "buy" : "sell", amount: amountIn });
       const r = await fetch(`${BASE}/api/robinhood/swap/quote?${qs}`, { signal: AbortSignal.timeout(20_000) });
-      const j = (await r.json().catch(() => ({}))) as { hasPool?: boolean; estimate?: { amountOut?: number | null } };
+      const j = (await r.json().catch(() => ({}))) as {
+        hasPool?: boolean; pool?: { fee?: unknown }; estimate?: { amountOut?: number | null };
+      };
+      const f = j?.pool?.fee;
+      const fee = j?.hasPool && typeof f === "number" && Number.isInteger(f) && f > 0 ? f : null;
       const out = j?.estimate?.amountOut;
-      return j?.hasPool && typeof out === "number" && Number.isFinite(out) ? out : null;
+      return { amountOut: fee !== null && typeof out === "number" && Number.isFinite(out) ? out : null, fee };
     }
     const price = async (t: string) => {
       const r = await fetch(`https://api.geckoterminal.com/api/v2/networks/robinhood/tokens/${t}`, {
@@ -721,10 +745,10 @@ async function estimateRhOut(
       return Number.isFinite(p) && p > 0 ? p : null;
     };
     const [pIn, pOut] = await Promise.all([price(tokenIn), price(tokenOut)]);
-    if (pIn === null || pOut === null) return null;
-    return (Number(amountIn) * pIn) / pOut;
+    if (pIn === null || pOut === null) return { amountOut: null, fee: null };
+    return { amountOut: (Number(amountIn) * pIn) / pOut, fee: null };
   } catch {
-    return null;
+    return { amountOut: null, fee: null };
   }
 }
 

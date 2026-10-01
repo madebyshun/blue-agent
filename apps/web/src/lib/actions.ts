@@ -30,9 +30,9 @@
  * Reads that fail are "unavailable", never "no actions".
  */
 import { randomUUID } from "crypto";
-import { decodeEventLog, keccak256, parseUnits, toHex, type Hex, type Log } from "viem";
+import { decodeEventLog, keccak256, toHex, type Hex, type Log } from "viem";
 import { kvGetProbe, kvMutate, kvSetOrThrow, kvTryLock } from "@/lib/kv";
-import { clientFor, readTokenMeta, type TxChain } from "@/lib/tx-chains";
+import { clientFor, type TxChain } from "@/lib/tx-chains";
 import { recordSettled } from "@/lib/action-stats";
 
 export type ActionKind = "swap" | "send" | "bridge";
@@ -51,8 +51,9 @@ export interface ActionRecord {
   params: Record<string, string | number | null>;
   /** What was quoted. `unit` says how expected_out / min_out are written —
    *  "base" (integer base units, e.g. 0x's buyAmount) or "whole" (decimal
-   *  token units, e.g. a pool estimate). Absent ⟹ unknown, and no realized
-   *  slippage is computed against it. */
+   *  token units, e.g. a pool estimate). Realized slippage is computed only
+   *  against a FIRM quote (`isFirmQuote`); anything else is kept as a receipt
+   *  of what the user was shown, never measured against. */
   quote?: { expected_out?: string | null; min_out?: string | null; venue?: string | null; unit?: "base" | "whole" };
   /** The pre-trade check (G2) as it stood when the action was prepared. */
   check?: { verdict: string; reasons: string[] } | null;
@@ -61,8 +62,8 @@ export interface ActionRecord {
   receipt?: { status: "success" | "reverted"; block: number; gas_used: string } | null;
   /** G4 — what a confirmed swap actually delivered, read from the receipt's
    *  own ERC-20 Transfer logs to the wallet (base units), and how far that
-   *  was from the quote. null ⟹ unmeasured (native-ETH output leaves no log;
-   *  a quote without a unit cannot be compared) — never 0. */
+   *  was from the quote. null ⟹ unmeasured (native-ETH output leaves no log)
+   *  — never 0. `slippage_bps` is null unless the quote was firm. */
   realized?: { out: string; slippage_bps: number | null } | null;
   /** MCP only: the transaction the builder returned, which an attached tx
    *  must match (see the header). `data_head` is the first 68 bytes of the
@@ -280,6 +281,25 @@ export function receivedFromLogs(logs: readonly Pick<Log, "address" | "topics" |
   return seen ? sum : null;
 }
 
+/**
+ * Is this record's quote one the trade was actually executed against — so
+ * that "received vs quoted" is SLIPPAGE?
+ *
+ * Only the Base 0x quote: `buyAmount` is the aggregator's firm output for the
+ * exact calldata signed, in base units. Both Robinhood Chain cards record an
+ * `estimatedOut` from /api/robinhood/swap/quote — whose own header calls it
+ * display-only — or from GeckoTerminal token prices for token↔token: a
+ * token-level price ratio, not the pool's rate (the F6 diagnosis found the
+ * two disagree for most RH tickers). Measuring a receipt against that records
+ * the price source's error, in either direction, and the public /stats median
+ * used to publish it as "slippage". It is still recorded (`quote`) — as what
+ * the user was shown — just never measured against.
+ */
+export function isFirmQuote(rec: Pick<ActionRecord, "chain" | "quote">): boolean {
+  const q = rec.quote;
+  return rec.chain === "base" && q?.unit === "base" && typeof q.venue === "string" && /^0x(\s|$)/.test(q.venue);
+}
+
 /** The token a swap record says it bought. */
 function swapTokenOut(p: ActionRecord["params"]): string | null {
   if (typeof p.tokenOut === "string") return p.tokenOut;
@@ -295,12 +315,9 @@ async function realizedFor(rec: ActionRecord, logs: readonly Log[]): Promise<Act
   if (got === null) return null;
   let expected: bigint | null = null;
   const q = rec.quote;
-  if (q?.expected_out && q.unit) {
-    try {
-      expected = q.unit === "base"
-        ? BigInt(q.expected_out)
-        : parseUnits(q.expected_out, (await readTokenMeta(rec.chain, tokenOut as Hex)).decimals);
-    } catch { expected = null; }
+  // Firm quotes only (see `isFirmQuote`) — and a firm quote is in base units.
+  if (q?.expected_out && isFirmQuote(rec)) {
+    try { expected = BigInt(q.expected_out); } catch { expected = null; }
   }
   const slippage_bps = expected !== null && expected > 0n
     ? Math.max(-10_000, Math.min(10_000, Number(((expected - got) * 10_000n) / expected)))

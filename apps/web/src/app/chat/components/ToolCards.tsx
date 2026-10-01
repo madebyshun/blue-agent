@@ -2477,7 +2477,9 @@ function ConvertPanel({
  * never its ticker. Base rows open the Convert card buying that token; a
  * Robinhood Chain row opens the card for its pool's quote asset — USDG → token
  * for a dollar-anchored pool (the norm for stock tokens), ETH → token when the
- * tool read a WETH pool.
+ * tool read a WETH pool. No amount is passed on any path — a row states none —
+ * so every card here renders its own amount field (RobinhoodSwapCard does so
+ * exactly when it is given no amount; see its `editableAmount`).
  */
 function DiscoverySwap({ row, account }: { row: DiscoveryRow; account?: `0x${string}` }) {
   if (!row.address) return null;

@@ -564,6 +564,7 @@ export default function SwapCard({
           : buyDec == null ? "Token scale unread — held"
           : pt.blocked ? "Blocked — see the check above"
           : pt.state === "loading" ? "Checking this trade…"
+          : pt.state === "throttled" ? "Check held — retry above"
           : !pt.cleared ? "Confirm the check above"
           : `Convert ${amt > 0 ? fmt(amt) : ""} ${label(sell)} → ${label(buy)}`}
       </ConfirmButton>

@@ -19,13 +19,15 @@ for (const k of ["KV_REST_API_URL", "KV_REST_API_TOKEN", "UPSTASH_REDIS_REST_URL
 import fs from "node:fs";
 import path from "node:path";
 import { NextRequest } from "next/server";
-import { encodeAbiParameters } from "viem";
+import { decodeFunctionData, encodeAbiParameters } from "viem";
 import { preTradeCheck, BRIDGE_BLOCK_COST_PERCENT, type PreTradeCheck } from "../src/lib/pre-trade-check";
 import { SEL_BUY_TAX, SEL_SELL_TAX, SEL_BLACKLISTS } from "../src/lib/token-tax";
 import { BASE_STOCKS } from "../src/lib/base-stocks/registry";
 import { RWA_TOKENS } from "../src/lib/robinhood/rwa-registry";
 import { kvSet, kvDel } from "../src/lib/kv";
 import { KV_BASE_ROWS_LATEST, KV_SNAPSHOT_LATEST } from "../src/lib/blue-hood/kv-keys";
+import { POST as rhPreparePOST } from "../src/app/api/robinhood/router/swap-prepare/route";
+import { ROBINHOOD_SWAP_ROUTER_ABI } from "../src/lib/robinhood/swap";
 
 let failures = 0;
 function ok(label: string, cond: boolean, detail = "") {
@@ -41,6 +43,7 @@ const HONEYPOT = A(0x1003);          // Base: sell tax 60%
 const SUSPICIOUS = A(0x1004);        // Base: sell tax 15%
 const CLEAN = A(0x1005);             // Base: 0/0, no blacklist
 const UNREAD = A(0x1006);            // Base: no tax selectors at all
+const IMPOSTOR_CBBTC = A(0x1007);    // Base: calls itself cbBTC, clean template tax
 const RH_IMPOSTOR = A(0x2001);       // RH: wears a registered RHJ ticker
 const RH_UNLISTED = A(0x2002);       // RH: an ordinary unregistered token
 
@@ -56,6 +59,11 @@ const CONTRACTS: Record<string, Fixture> = {
   [SUSPICIOUS]: { symbol: "MEH", decimals: 18, buyTax: 0, sellTax: 1500 },
   [CLEAN]: { symbol: "FINE", decimals: 18, buyTax: 0, sellTax: 0 },
   [UNREAD]: { symbol: "WHO", decimals: 18 },
+  // Mixed case on purpose: BASE_MAJORS spells it "cbBTC", and the protected
+  // set used to store it that way while being probed with "CBBTC" — so this
+  // exact impostor classified as merely "unverified" and, with a readable 0%
+  // tax, cleared as PASS.
+  [IMPOSTOR_CBBTC]: { symbol: "cbBTC", decimals: 8, buyTax: 0, sellTax: 0 },
   [RH_IMPOSTOR]: { symbol: RH_STOCK.ticker, decimals: 18 },
   [RH_UNLISTED]: { symbol: "NEWT", decimals: 18 },
 };
@@ -63,6 +71,9 @@ const CONTRACTS: Record<string, Fixture> = {
 const word = (n: number) => encodeAbiParameters([{ type: "uint256" }], [BigInt(n)]);
 const outbound: string[] = [];
 let bridgeCost = 1;
+// What /api/robinhood/swap/quote answers in §5 — the real route's shape.
+let rhQuote: Record<string, unknown> = {};
+let rhPrepareBodies: Record<string, unknown>[] = [];
 
 globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = String(input instanceof Request ? input.url : input);
@@ -87,6 +98,16 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   outbound.push(url);
   if (url.includes("/bridge-prepare")) {
     return Response.json({ tx: { to: A(0x9), data: "0x", value: "0" }, meta: { totalCostPercent: bridgeCost, totalCostUsd: 1 } });
+  }
+  if (url.includes("/api/robinhood/swap/quote")) return Response.json(rhQuote);
+  if (url.includes("/api/robinhood/router/swap-prepare")) {
+    // The REAL prepare route: its ETH↔token modes are pure calldata encoders,
+    // so what the MCP builder sends is judged by the code that would judge it.
+    const b = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+    rhPrepareBodies.push(b);
+    return rhPreparePOST(new NextRequest("https://blueagent.dev/api/robinhood/router/swap-prepare", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(b),
+    }));
   }
   if (url.includes("/send-prepare")) {
     return Response.json({ tx: { to: IMPOSTOR_USDC, data: "0xa9059cbb", value: "0" }, meta: {} });
@@ -123,6 +144,9 @@ async function run(input: Parameters<typeof preTradeCheck>[0]) {
   ok("a ticker instead of an address → BLOCK (a ticker does not identify a token)", c.verdict === "BLOCK", texts(c));
   c = await run({ chain: "base", kind: "swap", token: IMPOSTOR_USDC, now: WEEKDAY });
   ok("buying a Base contract that calls itself USDC → BLOCK", c.verdict === "BLOCK" && /impersonator/.test(texts(c)), texts(c));
+  c = await run({ chain: "base", kind: "swap", token: IMPOSTOR_CBBTC, now: WEEKDAY });
+  ok("buying a Base contract that calls itself cbBTC (mixed-case pinned symbol, 0% tax) → BLOCK",
+    c.verdict === "BLOCK" && c.reasons.some((r) => r.code === "IMPOSTOR"), texts(c));
   c = await run({ chain: "base", kind: "swap", token: IMPOSTOR_B20, now: WEEKDAY });
   ok(`buying a contract wearing ${NVDA.symbol} from another address → BLOCK`, c.verdict === "BLOCK", texts(c));
   c = await run({ chain: "robinhood", kind: "swap", token: RH_IMPOSTOR, now: WEEKDAY });
@@ -212,6 +236,37 @@ async function run(input: Parameters<typeof preTradeCheck>[0]) {
     ok("…whose record keeps what the check said", rec.status === "found" && rec.record.check?.verdict === "WARN" && (rec.record.check?.reasons.length ?? 0) > 0);
   }
 
+  // blue_swap_tx on Robinhood Chain, ETH → token. swap-prepare's buy/sell modes
+  // 400 "fee tier required" without the pool's fee; the builder used to read the
+  // quote's estimate and drop its `pool.fee`, so every ETH↔token build failed.
+  rhQuote = { ok: true, hasPool: true, pool: { address: A(0x3001), fee: 3000 }, estimate: { amountOut: 2, direction: "buy" } };
+  rhPrepareBodies = [];
+  r = await call("blue_swap_tx", { chain: "robinhood", fromAddress: W, tokenIn: "ETH", tokenOut: RH_UNLISTED, amountIn: "0.01" });
+  try { body = JSON.parse(r.text); } catch { body = {}; }
+  const rhSwap = (body as { swap?: { data?: `0x${string}` } }).swap;
+  let decoded: { functionName?: string; args?: readonly unknown[] } = {};
+  try { decoded = rhSwap?.data ? decodeFunctionData({ abi: ROBINHOOD_SWAP_ROUTER_ABI, data: rhSwap.data }) : {}; } catch { decoded = {}; }
+  // swapExactInputSingleETH(tokenOut, fee, amountOutMinimum, recipient, deadline)
+  const params = { fee: decoded.args?.[1] as number | undefined, amountOutMinimum: decoded.args?.[2] as bigint | undefined };
+  ok("blue_swap_tx RH ETH→token: the quote's fee tier reaches swap-prepare and the swap BUILDS",
+    !r.isError && rhPrepareBodies[0]?.fee === 3000 && params.fee === 3000, r.text.slice(0, 200));
+  ok("…floored from the estimate (3% default), never amountOutMinimum 0",
+    typeof params.amountOutMinimum === "bigint" && params.amountOutMinimum > 193n * 10n ** 16n && params.amountOutMinimum < 195n * 10n ** 16n,
+    String(params.amountOutMinimum));
+  rhQuote = { ok: true, hasPool: true, pool: { address: A(0x3001), fee: 3000 }, estimate: { amountOut: 1500, direction: "sell" } };
+  rhPrepareBodies = [];
+  r = await call("blue_swap_tx", { chain: "robinhood", fromAddress: W, tokenIn: RH_UNLISTED, tokenOut: "ETH", amountIn: "5" });
+  ok("blue_swap_tx RH token→ETH: built with the fee tier too",
+    !r.isError && rhPrepareBodies[0]?.fee === 3000 && r.text.includes('"ok": true'), r.text.slice(0, 200));
+  rhQuote = { ok: true, hasPool: false, note: "No Uniswap V3 WETH pool exists for this token on Robinhood Chain yet." };
+  rhPrepareBodies = [];
+  r = await call("blue_swap_tx", { chain: "robinhood", fromAddress: W, tokenIn: "ETH", tokenOut: RH_UNLISTED, amountIn: "0.01" });
+  ok("…no pool → NO_ROUTE, and swap-prepare is never asked", r.text.includes("NO_ROUTE") && rhPrepareBodies.length === 0, r.text.slice(0, 200));
+  rhQuote = { ok: true, hasPool: true, pool: { address: A(0x3001), fee: 3000 }, estimate: { amountOut: null, direction: "buy" } };
+  rhPrepareBodies = [];
+  r = await call("blue_swap_tx", { chain: "robinhood", fromAddress: W, tokenIn: "ETH", tokenOut: RH_UNLISTED, amountIn: "0.01" });
+  ok("…a pool but no price → NO_QUOTE, never an unbounded build", r.text.includes("NO_QUOTE") && rhPrepareBodies.length === 0, r.text.slice(0, 200));
+
   bridgeCost = BRIDGE_BLOCK_COST_PERCENT + 10;
   r = await call("blue_bridge_tx", { fromChain: "base", toChain: "robinhood", fromAddress: W, token: "ETH", amount: "0.001" });
   ok("blue_bridge_tx whose measured cost is over the limit → [PRE_TRADE_BLOCK], no tx in the reply",
@@ -236,9 +291,43 @@ async function run(input: Parameters<typeof preTradeCheck>[0]) {
     ok(`${path.basename(file)}: runs the check, shows the banner, and gates signing on it`,
       /usePreTradeCheck\(/.test(src) && /<PreTradeBanner pt=\{pt\} \/>/.test(src) && gate.test(src));
   }
+  // Both RH cards floor the signed swap from a GeckoTerminal estimate. When the
+  // quote has a pool but no price, they used to sign amountOutMinimum 0 — the
+  // unbounded trade blue_swap_tx refuses as NO_QUOTE. No price ⇒ no button, and
+  // no `0n` fallback at the signature.
+  for (const [file, gate] of [
+    ["src/app/app/bank/RhSwapCard.tsx", /const valid = [^;]*!noFloor\b/],
+    ["src/app/chat/components/RobinhoodSwapCard.tsx", /const canSwap = [^;]*!noFloor\b/],
+  ] as [string, RegExp][]) {
+    const src = read(file);
+    ok(`${path.basename(file)}: signing needs a priced floor, and there is no amountOutMinimum 0 fallback`,
+      gate.test(src) && /const noFloor = estimatedOut == null[^;]*minOut == null[^;]*!\(minOut > 0\)/.test(src) && !/minOut[^;\n]*:\s*0n/.test(src));
+  }
   const hook = read("src/components/wallet/PreTradeBanner.tsx");
   ok("the hook holds signing while the CURRENT input's answer is loading", /const cleared = state !== "loading"/.test(hook));
-  ok("…and a result or a tick only counts for the input it was given", /res\?\.key === key/.test(hook) && /ackKey === key/.test(hook));
+  // A result is tagged with `fetchKey` = the input key + a manual-retry nonce,
+  // so it still only ever counts for the input it was fetched for.
+  ok("…and a result or a tick only counts for the input it was given",
+    /res\?\.key === fetchKey/.test(hook) && /const fetchKey = `\$\{key\}#\$\{nonce\}`/.test(hook) && /ackKey === key/.test(hook));
+  ok("…and a 429 HOLDS signing (throttled), retried with backoff, never read as 'unavailable → cleared'",
+    /const cleared = state !== "loading" && state !== "throttled"/.test(hook)
+    && /r\.status === 429 \? "throttled"/.test(hook) && /r\.status === 429 \|\| r\.status >= 500\) && retry\(\)/.test(hook));
+
+  // /api/pretrade-check runs in its OWN bucket: a caller IP that has spent the
+  // shared `api` tier (MCP, signal, hub, pledge) still gets its check.
+  const { rateLimit, RATE_LIMITS } = await import("../src/lib/rate-limit");
+  const { POST: pretradePOST } = await import("../src/app/api/pretrade-check/route");
+  const IP = "203.0.113.77";
+  for (let i = 0; i < RATE_LIMITS.api.limit; i++) await rateLimit(IP, "api");
+  ok("control: that IP's shared `api` bucket is spent", !(await rateLimit(IP, "api")).success);
+  const pre = await pretradePOST(new NextRequest("https://blueagent.dev/api/pretrade-check", {
+    method: "POST", headers: { "content-type": "application/json", "x-forwarded-for": IP },
+    body: JSON.stringify({ chain: "base", kind: "swap", token: HONEYPOT }),
+  }));
+  const preBody = (await pre.json().catch(() => ({}))) as { verdict?: string };
+  ok("/api/pretrade-check still answers (its own tier) — and the honeypot is still a BLOCK",
+    pre.status === 200 && preBody.verdict === "BLOCK", `${pre.status} ${JSON.stringify(preBody).slice(0, 120)}`);
+
   const mcp = read("src/app/api/mcp/route.ts");
   for (const [tool, fn] of [["swap", "callSwapTx"], ["send", "callSendTx"], ["bridge", "callBridgeTx"]]) {
     ok(`MCP ${tool} builds only through the check`, new RegExp(`withPreTradeCheck\\("${tool}", args, \\(\\) => ${fn}\\(args\\)\\)`).test(mcp));

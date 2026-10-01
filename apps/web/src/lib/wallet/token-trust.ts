@@ -88,10 +88,20 @@ export const BASE_MAJORS: MajorToken[] = [
  */
 export type TrustNetwork = "base" | "baseSepolia" | "robinhood";
 
-/** address(lowercased) → canonical symbol, per network. */
+/**
+ * address(lowercased) → canonical symbol in `normalizeSymbol` form, per network.
+ *
+ * The value is normalized HERE, at insertion, because its only reader is the
+ * PROTECTED set below, which `classifyToken` probes with
+ * `normalizeSymbol(t.symbol)`. Storing the symbol as written broke that for
+ * every pinned symbol that is not already upper-case alphanumeric: BASE_MAJORS
+ * spells it "cbBTC", the probe spells it "CBBTC", and a contract calling itself
+ * cbBTC from any address classified as "unverified" instead of "impostor" —
+ * which is the one verdict the pre-trade BLOCK (G2) keys on.
+ */
 function verifiedMap(network: TrustNetwork): Map<string, string> {
   const m = new Map<string, string>();
-  const put = (addr: string, sym: string) => m.set(addr.toLowerCase(), sym);
+  const put = (addr: string, sym: string) => m.set(addr.toLowerCase(), normalizeSymbol(sym));
 
   put(NATIVE_SENTINEL, "ETH");
 
@@ -103,7 +113,7 @@ function verifiedMap(network: TrustNetwork): Map<string, string> {
   // USDG) are pinned by the same registry with different issuers, and both are
   // worth protecting: USDG is what this chain calls cash.
   if (network === "robinhood") {
-    for (const t of RWA_TOKENS) put(t.contract, normalizeSymbol(t.ticker));
+    for (const t of RWA_TOKENS) put(t.contract, t.ticker);
     return m;
   }
 

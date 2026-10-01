@@ -288,8 +288,8 @@ export default function StatsView({ stats }: { stats: PublicStats }) {
   const slip = actions.slippage;
   const slipRaw = actions.ok === false ? "—" : slip.median_bps === null ? "—" : undefined;
   const slipSub = actions.ok === false ? "meter unreadable"
-    : slip.median_bps === null ? `insufficient data · ${slip.n} of ${slip.min_n} swaps`
-    : `realized vs quoted · median of ${slip.n} swaps`;
+    : slip.median_bps === null ? `insufficient data · ${slip.n} of ${slip.min_n} Base swaps`
+    : `realized vs firm quote · median of ${slip.n} Base swaps`;
   const since = actions.since ? actions.since.slice(0, 10) : null;
 
   // "BLUE Staked" used to sit in the middle of the hero. It was removed with the
@@ -465,7 +465,9 @@ export default function StatsView({ stats }: { stats: PublicStats }) {
             Every trade runs a pre-trade check first. It refuses only on evidence — a token impersonating a
             registered one, a sell tax measured at 50% or more, a bridge whose measured cost is over 20% —
             and each refusal is counted once. Slippage compares what the wallet received, read from the
-            receipt, with the quote it signed against. Aggregate only; no wallet is ever shown.
+            receipt, with the firm quote it signed against — Base 0x quotes only; a Robinhood Chain swap is
+            floored from a price estimate, which is not a quote, so it adds no sample. Aggregate only; no
+            wallet is ever shown.
           </p>
         </section>
 

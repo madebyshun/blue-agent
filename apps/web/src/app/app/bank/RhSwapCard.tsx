@@ -37,8 +37,9 @@
 // to be widened here first.
 //
 // The server only builds calldata + a display estimate; the real output is
-// bounded on-chain by amountOutMinimum (a 3% slippage floor off that estimate),
-// and the user signs from their own wallet. No keys server-side, no funds
+// bounded on-chain by amountOutMinimum (a 3% slippage floor off that estimate —
+// so no estimate means no swap, never a zero floor), and the user signs from
+// their own wallet. No keys server-side, no funds
 // touched. Balances fail CLOSED via useSpendableBalance + resolveSpend, and each
 // token's own decimals are READ on-chain (never assumed) on BOTH sides — USDG is
 // 6 decimals, and assuming 18 is the exact bug the shared hook was written to
@@ -266,6 +267,16 @@ export default function RhSwapCard({
   const estimatedOut = quote?.estimate?.amountOut ?? null;
   const rate = estimatedOut != null && amt > 0 ? estimatedOut / amt : null;
   const minOut = estimatedOut != null ? estimatedOut * (1 - SLIPPAGE_PCT / 100) : null;
+  // The 3% floor needs a price. The quote route answers hasPool:true with
+  // estimate.amountOut:null whenever GeckoTerminal has no price for the token,
+  // and `valid` used to need only the pool — so that swap signed with
+  // amountOutMinimum 0, an unbounded trade a sandwich can take in full. Same
+  // rule as blue_swap_tx's NO_QUOTE: no estimate, no swap.
+  // Written in the BLOCKING polarity on purpose: a null estimate or floor is
+  // itself the reason not to sign, so it can never read as "nothing blocking".
+  const noFloor = estimatedOut == null || !Number.isFinite(estimatedOut) || !(estimatedOut > 0)
+    || minOut == null || !(minOut > 0);
+  const unpriced = hasPool && !quoting && amt > 0 && noFloor;
 
   // FAIL-CLOSED. `over` alone is false on an unread balance; resolveSpend
   // supplies the half that refuses to sign when the balance is merely unknown.
@@ -277,7 +288,7 @@ export default function RhSwapCard({
   const busy = step === "switching" || step === "preparing" || step === "approving" || step === "swapping" || step === "broadcasting";
   // G2 — checked on what this swap BUYS: the token on a buy, ETH on a sell.
   const pt = usePreTradeCheck({ chain: "robinhood", kind: "swap", token: direction === "buy" ? (tokenReady ? activeAddr : null) : "ETH" });
-  const valid = tokenReady && hasPool && amt > 0 && gate === "ok" && !quoting && pt.cleared && !pt.blocked;
+  const valid = tokenReady && hasPool && !noFloor && amt > 0 && gate === "ok" && !quoting && pt.cleared && !pt.blocked;
 
   // Max and the quantity WORDS are ONE calculation, in BASE UNITS. Computing it
   // on `balance` (a float) is how "100%" lands a hair above the real holding
@@ -327,6 +338,8 @@ export default function RhSwapCard({
     if (!tokenReady) { setErr("Pick a token or paste a valid 0x address"); setStep("error"); return; }
     if (!(amt > 0)) { setErr("Enter an amount"); setStep("error"); return; }
     if (!hasPool || !quote?.pool) { setErr("No pool for this pair on Robinhood Chain yet"); setStep("error"); return; }
+    // `valid` guards the click on a price too; this guards the signature.
+    if (minOut == null || !(minOut > 0)) { setErr("No price for this pair — refusing to sign a swap with no minimum output"); setStep("error"); return; }
     // `valid` guards the CLICK; this guards the SIGNATURE. Same gate on purpose
     // — a stale render or keyboard submit must not reach a wallet prompt on an
     // unread or insufficient balance.
@@ -367,7 +380,9 @@ export default function RhSwapCard({
       }
 
       const amountInWei = parseUnits(clampDecimals(amount, inDec), inDec);
-      const minOutBase = minOut != null ? parseUnits(minOut.toFixed(outDec), outDec) : 0n;
+      // Never a `0n` fallback — `minOut` is non-null and positive (checked above).
+      const minOutBase = parseUnits(minOut.toFixed(outDec), outDec);
+      if (minOutBase <= 0n) throw new Error("Minimum output rounds to zero at this size — refusing to sign an unbounded swap.");
 
       setStep("preparing");
       const r = await fetch("/api/robinhood/router/swap-prepare", {
@@ -575,6 +590,11 @@ export default function RhSwapCard({
         <p className="text-[10px] text-amber-400 mb-2">No Uniswap V3 pool for {tokenSym}/WETH on Robinhood Chain yet.</p>
       )}
       {quote?.error && <p className="text-[10px] text-amber-400 mb-2">Quote error: {quote.error}</p>}
+      {unpriced && (
+        <p className="text-[10px] text-amber-400 mb-2">
+          No price for {tokenSym} right now, so no minimum output can be set. Not offering an unbounded swap.
+        </p>
+      )}
       {step === "broadcasting" && <p className="text-[10px] text-slate-400 mb-2">Broadcasting… waiting for the block.</p>}
       {step === "error" && <p className="text-[10px] text-amber-400 mb-2">{err}</p>}
 
@@ -592,8 +612,10 @@ export default function RhSwapCard({
             : quoting ? "Quoting…"
             : quote?.ok && quote.hasPool === false ? "No pool yet"
             : overBalance ? "Insufficient balance"
+            : unpriced ? "No price — can't set a minimum"
             : pt.blocked ? "Blocked — see the check above"
             : pt.state === "loading" ? "Checking this trade…"
+            : pt.state === "throttled" ? "Check held — retry above"
             : !pt.cleared ? "Confirm the check above"
             : `Swap ${amt > 0 ? fmt(amt) : ""} ${inSym}`}
       </ConfirmButton>

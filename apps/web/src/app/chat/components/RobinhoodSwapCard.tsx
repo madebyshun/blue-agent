@@ -90,7 +90,15 @@ export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
   const direction = result.direction === "sell" ? "sell" : "buy";
   const token = (result.token_address || "").trim() as `0x${string}` | "";
   const tokenSym = (result.token_symbol || "").replace(/^\$/, "") || "TOKEN";
-  const initialAmt = result.amount != null ? String(result.amount) : "";
+  // Confirm-only (#107) applies to an amount the CALLER stated: the card shows
+  // that number and nothing can drift it. A caller that states none — a
+  // discovery row's Swap, a Hood board row (G0) — used to get the same
+  // confirm-only layout with nothing in it: amount "" → NaN → `canSwap` false
+  // forever, a "Confirm · 0.0 USDG" button no user action could enable. With
+  // no stated amount there is nothing to drift FROM, so the card owns the field.
+  const editableAmount = result.amount == null || String(result.amount).trim() === "";
+  const [typedAmt, setTypedAmt] = useState("");
+  const initialAmt = editableAmount ? typedAmt.trim() : String(result.amount);
 
   // Token→token mode: activated when the caller passes a `token_in_address`.
   // Confirm-only (#107) — the tokenIn comes from the LLM, never edited in-card.
@@ -101,7 +109,8 @@ export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
 
   // Amount comes from the LLM marker and may be a quantity word ("all"/"max"/
   // "half"/"N%") — resolved against the live balance below (once we've read it).
-  // Display-only either way: no in-card edit = no drift (Issue 1, #107).
+  // Display-only when the caller stated one: no in-card edit = no drift (Issue
+  // 1, #107). With none stated, the user types it (`editableAmount` above).
   //
   // Slippage is shown as small text now, not an editable control. ETH↔token
   // uses a 3% default; token→token honours the trader's persisted bps pref.
@@ -210,7 +219,12 @@ export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
         const pIn = inJ?.data?.attributes?.price_usd ? parseFloat(inJ.data.attributes.price_usd) : null;
         const pOut = outJ?.data?.attributes?.price_usd ? parseFloat(outJ.data.attributes.price_usd) : null;
         const amountOut = pIn && pOut ? (amt * pIn) / pOut : null;
-        setT2tQuote({ ok: true, routeHint: "unknown", priceInUsd: pIn, priceOutUsd: pOut, amountOut });
+        // `ok` only with BOTH prices. It used to be `true` unconditionally, so a
+        // pair GeckoTerminal had not priced read as "route probably exists"
+        // (`hasPool` below) with no estimate — and the swap signed with
+        // amountOutMinimum 0. No price is a refusal, not a soft signal.
+        const unpricedPair = amountOut == null || !Number.isFinite(amountOut) || !(amountOut > 0);
+        setT2tQuote({ ok: !unpricedPair, routeHint: "unknown", priceInUsd: pIn, priceOutUsd: pOut, amountOut: unpricedPair ? null : amountOut });
         setLoadingT2T(false);
       }).catch(() => {
         if (id === t2tReqId.current) { setT2tQuote({ error: "quote failed" }); setLoadingT2T(false); }
@@ -222,7 +236,8 @@ export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
   const hasPool = isT2T
     // For T2T we can't cheaply verify pool existence client-side; the actual
     // route is decided at prepare-time (server-side, on-chain). Treat "has a
-    // GeckoTerminal price" as a soft signal that a route probably exists.
+    // GeckoTerminal price for BOTH legs" as a soft signal that a route probably
+    // exists (`ok` is false without both — see the T2T quote above).
     ? (t2tQuote?.ok === true)
     : (quote?.ok && quote?.hasPool);
   const estimatedOut = isT2T ? (t2tQuote?.amountOut ?? null) : (quote?.estimate?.amountOut ?? null);
@@ -234,11 +249,24 @@ export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
   const slippageFrac = isT2T ? slippageBps / 10000 : slippagePct / 100;
   const minOut = estimatedOut != null ? estimatedOut * (1 - slippageFrac) : null;
   const anyLoading = isT2T ? loadingT2T : loadingQuote;
+  // The floor needs a price. /api/robinhood/swap/quote answers hasPool:true
+  // with estimate.amountOut:null whenever GeckoTerminal has no price for the
+  // token, and this card used to sign that with amountOutMinimum 0 — an
+  // unbounded trade a sandwich can take in full. Same rule as blue_swap_tx's
+  // NO_QUOTE: no estimate, no swap.
+  // Written in the BLOCKING polarity on purpose: a null estimate or floor is
+  // itself the reason not to sign, so it can never read as "nothing blocking".
+  const noFloor = estimatedOut == null || !Number.isFinite(estimatedOut) || !(estimatedOut > 0)
+    || minOut == null || !(minOut > 0);
+  // "A quote came back and it carries no price" — the T2T quote now reports
+  // that as ok:false (so `hasPool` is false there), hence the separate test.
+  const quoted = isT2T ? (t2tQuote != null && !t2tQuote.error) : !!(quote?.ok && quote?.hasPool);
+  const unpriced = quoted && !anyLoading && Number.isFinite(amt) && amt > 0 && noFloor;
   // `gate === "ok"` replaces `!overBalance` — it additionally requires that the
   // balance was actually READ, so an unread balance blocks instead of passing.
   // G2 — checked on what this swap BUYS: tokenOut, or ETH on an ETH-mode sell.
   const pt = usePreTradeCheck({ chain: "robinhood", kind: "swap", token: isT2T || direction === "buy" ? (token || null) : "ETH" });
-  const canSwap = !!address && hasPool && amt > 0 && gate === "ok" && !anyLoading && step !== "approving" && step !== "swapping"
+  const canSwap = !!address && hasPool && !noFloor && amt > 0 && gate === "ok" && !anyLoading && step !== "approving" && step !== "swapping"
     && pt.cleared && !pt.blocked;
   const busy = step === "approving" || step === "swapping";
 
@@ -298,7 +326,16 @@ export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
       // Clamp minOut precision to token's decimals (parseUnits throws on more
       // decimals than the token supports, e.g. parseUnits("0.014925", 6) is
       // fine but parseUnits("0.0000000000000000149", 6) is not).
-      const minOutBase = minOut != null ? parseUnits(minOut.toFixed(outDec), outDec) : 0n;
+      //
+      // NEVER a `0n` fallback: `canSwap` already requires a price, and this is
+      // the same refusal at the signature, for a stale render or keyboard submit.
+      if (minOut == null || !(minOut > 0)) {
+        throw new Error("No price for this pair — refusing to sign a swap with no minimum output.");
+      }
+      const minOutBase = parseUnits(minOut.toFixed(outDec), outDec);
+      if (minOutBase <= 0n) {
+        throw new Error("Minimum output rounds to zero at this size — refusing to sign an unbounded swap.");
+      }
 
       // ── Token→token branch ────────────────────────────────────────────────
       if (isT2T) {
@@ -466,7 +503,25 @@ export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
         </div>
       ) : (
         <>
-          {/* Confirm-only preview: pay → receive (est). No editable field (#107). */}
+          {/* The caller's own route note (a discovery row, the Hood board) —
+              it tells the user to review the amount, so it must be on screen. */}
+          {result.note && (
+            <p className="text-[9px] text-slate-500 leading-relaxed mb-2 break-all">{result.note}</p>
+          )}
+
+          {/* Only when the caller stated NO amount — see `editableAmount`. A
+              stated amount stays confirm-only (#107). */}
+          {editableAmount && (
+            <div className="mb-2">
+              <div className="text-[9px] text-slate-500 mb-1">YOU PAY ({inSym})</div>
+              <input type="number" min="0" inputMode="decimal" value={typedAmt}
+                onChange={e => setTypedAmt(e.target.value)} disabled={busy} placeholder="0.0"
+                aria-label={`Amount of ${inSym} to pay`}
+                className="w-full bg-[#050508] border border-[#1A1A2E] rounded-md px-2 py-1.5 text-[14px] text-white outline-none placeholder:text-slate-700 focus:border-[#4FC3F740]" />
+            </div>
+          )}
+
+          {/* Confirm-only preview: pay → receive (est). */}
           <ConfirmPreview
             left={{ glyph: <TokenGlyph symbol={inSym} />, top: amtLabel, bottom: inSym }}
             right={{ glyph: <TokenGlyph symbol={outSym} />, top: previewOut, bottom: outSym }}
@@ -513,6 +568,11 @@ export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
           )}
 
           {anyLoading && <p className="text-[9px] text-slate-600 mb-2">Checking pools + prices…</p>}
+          {unpriced && (
+            <p className="text-[10px] text-amber-400 mb-2">
+              No price for {inSym} → {outSym} right now, so no minimum output can be set. Not offering an unbounded swap.
+            </p>
+          )}
           {overBalance && <p className="text-[10px] text-red-500 mb-2">Exceeds your {inSym} balance</p>}
           {!isT2T && quote?.ok && quote.hasPool === false && (
             <p className="text-[10px] text-amber-400 mb-2">
@@ -547,8 +607,11 @@ export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
               : !isT2T && quote?.hasPool === false ? "No pool yet"
               : prepRoute === "none" ? "No route"
               : overBalance ? "Insufficient balance"
+              : editableAmount && !(amt > 0) ? "Enter an amount"
+              : unpriced ? "No price — can't set a minimum"
               : pt.blocked ? "Blocked — see the check above"
               : pt.state === "loading" ? "Checking this trade…"
+              : pt.state === "throttled" ? "Check held — retry above"
               : !pt.cleared ? "Confirm the check above"
               : `Confirm · ${usdLabel || `${amtLabel} ${inSym}`}`}
           </button>

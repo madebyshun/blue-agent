@@ -12,12 +12,15 @@
  *
  * What a row may NOT do is look like advice. Rows state facts from the tool;
  * the Swap button is the same neutral control the wallet has. A token the tool
- * itself measured as a honeypot gets no Swap button, and a factory deployment
+ * itself measured as a honeypot gets no Swap button, nor one safe-trending
+ * flagged as wearing a pinned token's symbol (IMPERSONATION_CHECK — the same
+ * `classifyToken` rule the pre-trade check BLOCKs on), and a factory deployment
  * our registry has not admitted yet gets none either (the pre-trade check, G2,
  * refuses stock tokens outside the registry — offering the button would only
  * lead to that refusal).
  */
 import { useState, type ReactNode } from "react";
+import { findByContract } from "@/lib/robinhood/rwa-registry";
 
 export type DiscoveryRow = {
   key: string;
@@ -53,27 +56,57 @@ const pct = (v: unknown) => {
 const ADDR = /^0x[a-fA-F0-9]{40}$/;
 const addrOrNull = (v: unknown) => (typeof v === "string" && ADDR.test(v) ? v : null);
 
-/** Robinhood Chain stock/ETF tokens are Robinhood Assets (Jersey) debt
- *  securities that track a US share — the label says exactly that. */
-function rhLabel(kind: unknown, ticker: string): string {
-  return `${kind === "etf" ? "ETF token" : "Stock token"} (Robinhood, Jersey) · tracks ${ticker}`;
+/**
+ * What a Robinhood Chain row IS, decided by the REGISTRY entry for its contract
+ * — never by the tool payload. The payload's `kind` is absent from rh-stock-quote
+ * and rh-stock-new-listings, and every tool can return the chain's two utility
+ * rows (WETH, USDG); labelling from it called USDG a "Stock token (Robinhood,
+ * Jersey)" and gave it a Swap that opened USDG → USDG. Only RHJ stock/ETF
+ * tokens are Robinhood Assets (Jersey) debt securities that track a US share —
+ * the label says exactly that, and only for them (same rule as pre-trade-check).
+ */
+function rhIdentity(address: string | null): { label: string; swappable: boolean; noSwapReason?: string } {
+  if (!address) return { label: "Oracle feed only · no token contract on Robinhood Chain", swappable: false, noSwapReason: "no token contract yet (oracle feed only)" };
+  const reg = findByContract(address);
+  if (!reg) return { label: "Not in BlueAgent's token registry · kind unverified", swappable: true };
+  if (reg.kind === "stock" || reg.kind === "etf") {
+    return { label: `${reg.kind === "etf" ? "ETF token" : "Stock token"} (Robinhood, Jersey) · tracks ${reg.ticker}`, swappable: true };
+  }
+  if (reg.kind === "stable") {
+    return { label: `Stablecoin (${reg.issuer}) · the chain's cash leg, not a stock token`, swappable: false, noSwapReason: "it is the cash every swap here pays with" };
+  }
+  return { label: `${reg.name} · not a stock token`, swappable: false, noSwapReason: "wrapped ETH — swap ETH itself" };
 }
 
 function rhRow(r: Json, extra: string[] = [], quoteVia: "USDG" | "ETH" = "USDG"): DiscoveryRow {
   const ticker = str(r.ticker) || "?";
   const address = addrOrNull(r.contract);
+  const id = rhIdentity(address);
   return {
     key: `rh:${address ?? ticker}`,
     chain: "robinhood",
     address,
     symbol: ticker,
-    label: rhLabel(r.kind, ticker),
+    label: id.label,
     facts: [str(r.name), ...extra].filter(Boolean),
-    swappable: !!address,
-    noSwapReason: address ? undefined : "no token contract yet (oracle feed only)",
+    swappable: id.swappable,
+    noSwapReason: id.noSwapReason,
     quoteVia,
   };
 }
+
+/** safe-trending's measured flags, in words. Unknown flags pass through raw. */
+const TRENDING_FLAG_TEXT: Record<string, string> = {
+  IMPERSONATION_CHECK: "⚠ wears a pinned token's symbol from another contract",
+  TAX_UNVERIFIED: "tax unverified",
+  HIGH_TAX: "sell tax over 5%",
+  BLACKLIST_CAPABLE: "has a blacklist function",
+  UNLOCK_OVERHANG: "large unlock overhang",
+  MICRO_CAP: "micro cap",
+  DUMPING: "dumping",
+  CHURN: "high churn",
+  ARB_FLOW: "arb flow",
+};
 
 /** The rows for one discovery tool's result, or null for any other tool. */
 export function discoveryRows(tool: string, r: Json): { title: string; rows: DiscoveryRow[]; more: number; note?: string } | null {
@@ -109,7 +142,9 @@ export function discoveryRows(tool: string, r: Json): { title: string; rows: Dis
     }
     case "hub_rh_quote": {
       if (!r.ticker) return { title: "Robinhood Chain quote", rows: [], more: 0, note: str(r.error) || undefined };
-      const stale = r.stale === true ? "oracle STALE" : "";
+      // The handler ships `is_stale` (top level, and on `chainlink`) — never a
+      // `stale` field, which this used to read, so STALE was never shown.
+      const stale = r.is_stale === true || (r.chainlink as Json | null)?.is_stale === true ? "oracle STALE" : "";
       return {
         title: "Robinhood Chain oracle quote",
         rows: [rhRow(r, [usd(r.price_usd) ? `oracle ${usd(r.price_usd)}` : "", stale].filter(Boolean))],
@@ -135,6 +170,10 @@ export function discoveryRows(tool: string, r: Json): { title: string; rows: Dis
           const address = addrOrNull(x.address);
           const hp = (x.honeypot as Json | null)?.verdict;
           const honeypot = hp === "HONEYPOT";
+          const flags = (Array.isArray(x.flags) ? x.flags : []).filter((f): f is string => typeof f === "string");
+          // The tool's own classifyToken verdict: the pre-trade check BLOCKs
+          // this swap, so offering the button would only lead to that refusal.
+          const impostor = flags.includes("IMPERSONATION_CHECK");
           return {
             key: `base:${address ?? str(x.symbol)}`,
             chain: "base" as const,
@@ -146,9 +185,12 @@ export function discoveryRows(tool: string, r: Json): { title: string; rows: Dis
               usd(x.liquidity_usd) ? `liquidity ${usd(x.liquidity_usd)}` : "",
               typeof hp === "string" ? `tax check ${hp}` : "",
               typeof x.exit_risk === "string" ? `exit risk ${x.exit_risk}` : "",
+              flags.length > 0 ? `flags: ${flags.map((f) => TRENDING_FLAG_TEXT[f] ?? f).join(", ")}` : "",
             ].filter(Boolean),
-            swappable: !!address && !honeypot,
-            noSwapReason: honeypot ? "measured as a honeypot" : address ? undefined : "no contract",
+            swappable: !!address && !honeypot && !impostor,
+            noSwapReason: honeypot ? "measured as a honeypot"
+              : impostor ? "impersonates a pinned token (same contract check as the pre-trade BLOCK)"
+              : address ? undefined : "no contract",
           };
         });
       return { title: "Trending on Base · tax measured", rows, more: 0 };

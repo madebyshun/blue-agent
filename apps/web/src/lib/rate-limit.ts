@@ -39,6 +39,12 @@ export const RATE_LIMITS = {
   console: { limit: 10,  windowSeconds: 60  }, // 10 commands/min
   api:     { limit: 100, windowSeconds: 60  }, // 100 req/min for public API
   default: { limit: 60,  windowSeconds: 60  }, // 60 req/min default
+  // /api/pretrade-check ONLY, in its own bucket. It used to share `api`
+  // (`rl:api:<ip>`) with /api/mcp, /api/signal, the hub routes and /api/pledge,
+  // so an MCP agent on the same machine (or a shared NAT) could spend the
+  // budget the wallet cards' safety check runs on. A throttled check is not a
+  // check that ran — see usePreTradeCheck, which holds signing on a 429.
+  pretrade: { limit: 120, windowSeconds: 60 },
   // Per SIWE WALLET, not per IP: sponsored gas is the project's money. A send
   // makes two paymaster calls (stub, then data), so this is ~20 sponsored
   // sends an hour. Past it the wallet still SENDS, user-paid: /api/paymaster/

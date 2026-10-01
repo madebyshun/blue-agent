@@ -11,6 +11,10 @@
  *   Robinhood Ch. 4663 → USDG → token. The RH desk prices stock tokens only
  *                        from dollar-anchored pools (#231), so USDG is the
  *                        quote their liquidity actually sits against.
+ *
+ * Neither branch passes an amount: a board row states none, so both cards
+ * render their own amount field (RobinhoodSwapCard does so exactly when no
+ * amount is given — see its `editableAmount`).
  */
 import { useState } from "react";
 import { useAccount } from "wagmi";

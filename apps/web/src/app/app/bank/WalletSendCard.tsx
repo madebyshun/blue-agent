@@ -899,6 +899,7 @@ export default function WalletSendCard({
             : overBalance ? "Insufficient balance"
             : pt.blocked ? "Blocked — see the check above"
             : pt.state === "loading" ? "Checking this trade…"
+            : pt.state === "throttled" ? "Check held — retry above"
             : !pt.cleared ? "Confirm the check above"
             : `Send ${amt > 0 ? fmt(amt) : ""} ${symbol}${toAddress ? ` → ${recipIsName ? recip : truncAddr(toAddress)}` : ""}`}
       </ConfirmButton>
