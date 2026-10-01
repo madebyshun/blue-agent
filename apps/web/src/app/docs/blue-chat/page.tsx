@@ -113,8 +113,9 @@ export default function BlueChatDoc() {
         <Card title="Pick your network" color="#4FC3F7">Base Sepolia (84532) by default so you can rehearse; switch the card to Base mainnet (8453) for the real thing.</Card>
       </CardGrid>
       <Callout color="#fbbf24" title="Plan before you launch">
-        The <strong className="text-slate-200">Launch</strong> Hub tools below (readiness, launch advisor, distribution plan) help you
-        prepare — then the B20 card ships it for real.
+        The launch-planning tools (launch readiness, token distribution) are on the{" "}
+        <Link href="/docs/blue-hub" className="text-[#4FC3F7] underline">Blue Hub</Link>, not in chat — use them to
+        prepare, then the B20 card ships it for real.
       </Callout>
       <Callout color="#94a3b8" title="The Bankr launchpad is gone">
         A second flow used to deploy through Bankr&apos;s launchpad (100B supply, sponsored gas, creator-fee split). Bankr

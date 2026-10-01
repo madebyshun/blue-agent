@@ -35,6 +35,13 @@
  *    is never made.
  * 4. Guard-the-guard: both regexes are formatting-dependent, so a reindent that
  *    empties either list must fail loudly rather than pass vacuously.
+ * 5. No chip offers a tool chat HIDES (2026-10-01). lib/chat-hidden-tools.ts
+ *    takes a tool away from the model and dispatch refuses it, but checks 2–3
+ *    only asked whether a tool is wired, so fourteen chips for hidden tools
+ *    passed while every click got a refusal. Each CURATED entry now names its
+ *    `tool`; this verifies the name really reaches the entry's id through
+ *    TOOL_ENDPOINT (so the filter in hub-skills.ts reads the right tool) and
+ *    that no rendered chip's tool is hidden.
  *
  * WHAT IT DOES NOT CHECK, DELIBERATELY
  * ------------------------------------
@@ -51,6 +58,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { HUB_SKILLS } from "../src/app/chat/hub-skills";
+import { CHAT_HIDDEN_TOOLS } from "../src/lib/chat-hidden-tools";
 
 const WEB       = path.resolve(path.dirname(path.resolve(process.argv[1])), "..");
 const ROUTE     = readFileSync(path.join(WEB, "src/app/api/chat/route.ts"), "utf8");
@@ -118,7 +126,16 @@ const renderedIds = new Set(HUB_SKILLS.map((s) => s.id));
 check("CURATED ids parsed out of hub-skills.ts",
   curatedIds.length >= 20, `${curatedIds.length} entries`);
 
-const unrendered = curatedIds.filter((id) => !renderedIds.has(id));
+// `tool` per entry, read the same way. A hidden tool's chip is dropped on
+// purpose (check 5), so it is not "unrendered" in the sense below.
+const curatedTool = new Map(
+  [...HUB_SRC.matchAll(/^\s+\{\s*id:\s*"([a-z0-9][a-z0-9-]*)",\s*tool:\s*"([a-z0-9_]+)",/gm)].map((m) => [m[1], m[2]] as const),
+);
+check("every CURATED entry names its chat tool",
+  curatedTool.size === curatedIds.length, `${curatedTool.size} of ${curatedIds.length}`);
+
+const hiddenChips = curatedIds.filter((id) => CHAT_HIDDEN_TOOLS.has(curatedTool.get(id) ?? ""));
+const unrendered = curatedIds.filter((id) => !renderedIds.has(id) && !hiddenChips.includes(id));
 const backedByTool = (id: string) => (reachedBy.get(id) ?? []).some((t) => declared.has(t));
 const deadConfig = unrendered.filter((id) => !backedByTool(id));
 const outliers   = unrendered.filter(backedByTool);
@@ -147,6 +164,25 @@ check("every chat skill chip reaches a chat tool",
 check("every tool behind a chip is declared in HUB_TOOLS",
   undeclared.length === 0,
   undeclared.length ? `routed but never offered to the model: ${undeclared.join(", ")}` : "all schemas present");
+
+// ── 5. No chip for a hidden tool, and each entry's `tool` is the real one ────
+check("the hidden-tools set is loaded (check 5 is alive)",
+  CHAT_HIDDEN_TOOLS.has("hub_market_fit"), `${CHAT_HIDDEN_TOOLS.size} hidden`);
+const misnamed = curatedIds.filter((id) => {
+  const t = curatedTool.get(id);
+  return !t || endpointOf.get(t) !== id || !declared.has(t);
+});
+check("each CURATED `tool` is the declared chat tool that reaches its id",
+  misnamed.length === 0,
+  misnamed.length
+    ? `the hidden-tool filter would read the wrong tool: ${misnamed.map((id) => `${id} ← ${curatedTool.get(id) ?? "?"}`).join(", ")}`
+    : `${curatedTool.size} pairs match TOOL_ENDPOINT`);
+const advertisedHidden = HUB_SKILLS.filter((s) => CHAT_HIDDEN_TOOLS.has(s.tool));
+check("no rendered chip offers a tool chat hides",
+  advertisedHidden.length === 0,
+  advertisedHidden.length
+    ? `chat refuses these, the Tools tab and /docs/blue-chat still list them: ${advertisedHidden.map((s) => s.id).join(", ")}`
+    : `${hiddenChips.length} chips held back for hidden tools`);
 
 console.log(
   failures === 0

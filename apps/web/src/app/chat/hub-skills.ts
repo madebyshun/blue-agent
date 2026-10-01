@@ -11,6 +11,7 @@
 // the rest.
 
 import { AGENT_TOOLS } from "@/lib/agent-tools";
+import { CHAT_HIDDEN_TOOLS } from "@/lib/chat-hidden-tools";
 
 export type SkillCategory =
   | "Market Intel"
@@ -25,6 +26,7 @@ export type SkillCategory =
 
 export interface HubSkill {
   id:          string;
+  tool:        string;   // the chat tool (api/chat/route.ts) behind the chip
   name:        string;
   description: string;
   trigger:     string;   // inserted into chat input on click
@@ -93,29 +95,39 @@ const CATEGORY_ORDER: SkillCategory[] = [
 //
 // Enforced by scripts/curated-trigger-check.ts, which runs in CI and carries a
 // self-justifying allowance for exactly this case.
-const CURATED: { id: string; category: SkillCategory; trigger: string }[] = [
+//
+// HIDDEN TOOLS DROP THEIR CHIP (2026-10-01). Since 2026-09-30 chat hides most of
+// the builder/fundraise/DeFi-research tools (lib/chat-hidden-tools.ts): the
+// model is not offered them and dispatch refuses them. This list kept all
+// fourteen, so the Tools tab and /docs/blue-chat ("The model can call N curated
+// Hub tools") advertised chips whose click got a refusal or an answer from the
+// model's weights — the exact broken promise described above. Each entry now
+// names its chat `tool` (the TOOL_ENDPOINT key that reaches `id`; the check
+// verifies the pair), and HUB_SKILLS drops any entry whose tool is hidden. The
+// entries stay so un-hiding a tool brings its chip back with no second edit.
+const CURATED: { id: string; tool: string; category: SkillCategory; trigger: string }[] = [
   // Market Intel
-  { id: "token-pick-signal",       category: "Market Intel",  trigger: "/pick" },
-  { id: "narrative-position",      category: "Market Intel",  trigger: "What narratives are running on Base right now?" },
-  { id: "whale-copy-signal",       category: "Market Intel",  trigger: "Show me whale signals for " },
-  { id: "token-momentum-scanner",  category: "Market Intel",  trigger: "Scan top momentum tokens on Base" },
+  { id: "token-pick-signal",       tool: "hub_token_pick",       category: "Market Intel",  trigger: "/pick" },
+  { id: "narrative-position",      tool: "hub_narrative",        category: "Market Intel",  trigger: "What narratives are running on Base right now?" },
+  { id: "whale-copy-signal",       tool: "hub_whale_signal",     category: "Market Intel",  trigger: "Show me whale signals for " },
+  { id: "token-momentum-scanner",  tool: "hub_token_momentum",   category: "Market Intel",  trigger: "Scan top momentum tokens on Base" },
   // Due Diligence
-  { id: "deep-analysis",           category: "Due Diligence", trigger: "/audit " },
-  { id: "honeypot-check",          category: "Due Diligence", trigger: "/scan " },
-  { id: "risk-gate",               category: "Due Diligence", trigger: "Run a risk gate on " },
-  { id: "contract-trust",          category: "Due Diligence", trigger: "What's the trust score for contract " },
-  { id: "protocol-risk-monitor",   category: "Due Diligence", trigger: "Monitor risks for " },
+  { id: "deep-analysis",           tool: "hub_deep_analysis",    category: "Due Diligence", trigger: "/audit " },
+  { id: "honeypot-check",          tool: "hub_honeypot",         category: "Due Diligence", trigger: "/scan " },
+  { id: "risk-gate",               tool: "hub_risk_gate",        category: "Due Diligence", trigger: "Run a risk gate on " },
+  { id: "contract-trust",          tool: "hub_contract_trust",   category: "Due Diligence", trigger: "What's the trust score for contract " },
+  { id: "protocol-risk-monitor",   tool: "hub_protocol_risk",    category: "Due Diligence", trigger: "Monitor risks for " },
   // Builder Tools
-  { id: "market-fit",              category: "Builder Tools", trigger: "/idea " },
-  { id: "competitor-scan",         category: "Builder Tools", trigger: "Who are the competitors for " },
-  { id: "gtm-brief",               category: "Builder Tools", trigger: "/ship " },
-  { id: "stack-recommender",       category: "Builder Tools", trigger: "/build " },
-  { id: "repo-health",             category: "Builder Tools", trigger: "Check repo health for " },
+  { id: "market-fit",              tool: "hub_market_fit",       category: "Builder Tools", trigger: "/idea " },
+  { id: "competitor-scan",         tool: "hub_competitor_scan",  category: "Builder Tools", trigger: "Who are the competitors for " },
+  { id: "gtm-brief",               tool: "hub_gtm",              category: "Builder Tools", trigger: "/ship " },
+  { id: "stack-recommender",       tool: "hub_stack",            category: "Builder Tools", trigger: "/build " },
+  { id: "repo-health",             tool: "hub_repo_health",      category: "Builder Tools", trigger: "Check repo health for " },
   // Does not render — see the `builder-score` note above. Left in place on purpose.
-  { id: "builder-score",           category: "Builder Tools", trigger: "What's the builder score for " },
+  { id: "builder-score",           tool: "hub_builder_score",    category: "Builder Tools", trigger: "What's the builder score for " },
   // Fundraise
-  { id: "investor-memo",           category: "Fundraise",     trigger: "/raise " },
-  { id: "fundraise-timing",        category: "Fundraise",     trigger: "Is now a good time to raise for " },
+  { id: "investor-memo",           tool: "hub_investor_memo",    category: "Fundraise",     trigger: "/raise " },
+  { id: "fundraise-timing",        tool: "hub_fundraise_timing", category: "Fundraise",     trigger: "Is now a good time to raise for " },
   // Trigger reworded 2026-09-23. The old one — "What are investors funding on
   // Base right now?" — MEASURED as routing to `hub_ecosystem`, not to this chip's
   // own tool, and the model was right: that sentence asks what the ecosystem is
@@ -123,16 +135,16 @@ const CURATED: { id: string; category: SkillCategory; trigger: string }[] = [
   // "Transform your deck into investor-grade pitch intelligence". The tool returns
   // pitch_angles / one_liner / investor_thesis for ONE project, so the trigger now
   // names a project the way the other Fundraise chips do.
-  { id: "pitch-intelligence",      category: "Fundraise",     trigger: "What's the strongest pitch angle for " },
-  { id: "base-grant-finder",       category: "Fundraise",     trigger: "Find Base grants for " },
+  { id: "pitch-intelligence",      tool: "hub_pitch_intel",      category: "Fundraise",     trigger: "What's the strongest pitch angle for " },
+  { id: "base-grant-finder",       tool: "hub_base_grant",       category: "Fundraise",     trigger: "Find Base grants for " },
   // Launch
-  { id: "token-launch-readiness",  category: "Launch",        trigger: "Is my token ready to launch? " },
+  { id: "token-launch-readiness",  tool: "hub_token_readiness",  category: "Launch",        trigger: "Is my token ready to launch? " },
   // Agent Network
-  { id: "multi-agent-workflow",    category: "Agent Network", trigger: "Design a multi-agent workflow for " },
+  { id: "multi-agent-workflow",    tool: "hub_multi_agent",      category: "Agent Network", trigger: "Design a multi-agent workflow for " },
   // Ecosystem
-  { id: "ecosystem-digest",        category: "Ecosystem",     trigger: "What happened on Base today?" },
-  { id: "base-protocol-comparison",category: "Ecosystem",     trigger: "Compare these Base protocols: " },
-  { id: "defi-opportunity",        category: "Ecosystem",     trigger: "Find DeFi opportunities on Base" },
+  { id: "ecosystem-digest",        tool: "hub_ecosystem",        category: "Ecosystem",     trigger: "What happened on Base today?" },
+  { id: "base-protocol-comparison",tool: "hub_protocol_compare", category: "Ecosystem",     trigger: "Compare these Base protocols: " },
+  { id: "defi-opportunity",        tool: "hub_defi_opportunity", category: "Ecosystem",     trigger: "Find DeFi opportunities on Base" },
 ];
 
 const toolById = new Map(AGENT_TOOLS.map(t => [t.id, t]));
@@ -140,12 +152,15 @@ const toolById = new Map(AGENT_TOOLS.map(t => [t.id, t]));
 // Blue Chat surfaces ONLY this curated subset — tools with a hand-tuned trigger
 // that actually do something useful in chat. The full Hub tool catalog still
 // lives on the Hub page (/hub). Name + description come from AGENT_TOOLS so the
-// two stay in sync; entries whose id isn't in AGENT_TOOLS are skipped.
+// two stay in sync; entries whose id isn't in AGENT_TOOLS are skipped, and so
+// are entries whose chat tool is hidden (see the note above CURATED).
 export const HUB_SKILLS: HubSkill[] = CURATED.flatMap((c) => {
+  if (CHAT_HIDDEN_TOOLS.has(c.tool)) return [];
   const tool = toolById.get(c.id);
   if (!tool) return [];
   return [{
     id:          c.id,
+    tool:        c.tool,
     name:        tool.name,
     description: tool.description,
     category:    c.category,

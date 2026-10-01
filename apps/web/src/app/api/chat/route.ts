@@ -29,6 +29,7 @@ import { VIRTUALS_PRESETS } from "@/app/api/_lib/llm";
 import { buildBaseSystem, buildAgentCapabilities, buildB20Section } from "./system-prompt";
 import { normalizeWallet, resolveActingWallet } from "@/lib/acting-wallet";
 import { findByTicker as findRwaByTicker, findByContract as findRwaByContract } from "@/lib/robinhood/rwa-registry";
+import { CHAT_HIDDEN_TOOLS } from "@/lib/chat-hidden-tools";
 
 export const runtime = "nodejs";
 // Vercel kills serverless functions at 60s by default — explicit budget so
@@ -398,7 +399,7 @@ function veniceMaxTokens(modelId: string): number {
 
 // ─── Hub tool definitions (Anthropic tool format) ─────────────────────────────
 // Every definition chat has ever offered. What the model is actually SHOWN is
-// `HUB_TOOLS` below: this list minus `CHAT_HIDDEN_TOOLS`.
+// `HUB_TOOLS` below: this list minus `CHAT_HIDDEN_TOOLS` (lib/chat-hidden-tools.ts).
 
 const ALL_HUB_TOOLS = [
   {
@@ -711,6 +712,10 @@ const ALL_HUB_TOOLS = [
   // ask for measured facts no upstream can supply, so their chips were removed
   // instead. `scripts/curated-trigger-check.ts` now fails CI if a chip is ever
   // shipped without a tool again.
+  //
+  // Since 2026-09-30 most of these are in CHAT_HIDDEN_TOOLS, and since
+  // 2026-10-01 a hidden tool's chip is dropped from the Tools tab too (the same
+  // check fails if one is shown) — so "renders every one" above is history.
   //
   // Names match what /api/mcp already exposes for the same handlers, so one
   // handler is not called two different things on two surfaces.
@@ -1203,30 +1208,9 @@ Testnets are reachable by full id: base-sepolia, ethereum-sepolia, robinhood-tes
 ];
 
 // ─── Tools hidden from chat (ShunTr, 2026-09-30) ─────────────────────────────
-// docs/rebuild-5-tang-2026-09-30.md: "chỉ cần những tool hữu ích". Chat keeps the
-// tools inside its loop (discover → evaluate → check → swap/send/bridge) plus
-// catalog lookup. Hidden, not deleted: every id below stays in the catalog and
-// is still callable over x402 and via `blue_call`; the definitions stay in
-// ALL_HUB_TOOLS so a tool comes back by deleting one line here.
-// Also blocked at dispatch (callHubTool), so a name the model invents or
-// remembers still cannot run.
-const CHAT_HIDDEN_TOOLS: ReadonlySet<string> = new Set([
-  // Builder/founder tools — the old founder console, outside the trading loop.
-  "hub_competitor_scan", "hub_market_fit", "hub_repo_health", "hub_agent_score",
-  "hub_token_readiness", "blue_deploy", "blue_simulate", "hub_pitch_intel",
-  "hub_fundraise_timing", "hub_gtm", "hub_stack", "hub_investor_memo",
-  "hub_builder_dd", "hub_multi_agent", "hub_base_grant",
-  // DeFi/yield research — outside swap/send/bridge.
-  "hub_defi_opportunity", "hub_protocol_compare",
-  // Temporarily out: Moralis-backed (halted in lib/tool-halts.ts) and
-  // key-exposure (Etherscan account endpoints are not on the free tier for
-  // Base). Back when the Blockscout replacement lands.
-  "hub_airdrop", "hub_aml", "hub_whale_signal", "hub_whale_tracker", "hub_key_exposure",
-  // Execution cards outside the basic set (swap/send/bridge on Base + RH):
-  // the yield card shows another vault's APY; B20 management is not a basic trade.
-  "prepare_yield", "hub_b20_manage",
-]);
-
+// The set lives in lib/chat-hidden-tools.ts (read its header): hub-skills.ts
+// needs it too, and a route file cannot export it. Filtered here, and blocked
+// again at dispatch in callHubTool.
 const HUB_TOOLS = ALL_HUB_TOOLS.filter((t) => !CHAT_HIDDEN_TOOLS.has(t.name));
 
 // ─── Venice tools (OpenAI function-calling format) ───────────────────────────

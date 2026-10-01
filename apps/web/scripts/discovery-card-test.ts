@@ -14,6 +14,7 @@ import { join } from "node:path";
 import { discoveryRows } from "../src/app/chat/components/DiscoveryCard";
 import { haltReason } from "../src/lib/tool-halts";
 import { RWA_TOKENS } from "../src/lib/robinhood/rwa-registry";
+import { CHAT_HIDDEN_TOOLS } from "../src/lib/chat-hidden-tools";
 
 let failures = 0;
 function ok(label: string, cond: boolean, detail = "") {
@@ -34,13 +35,15 @@ const TOOLS: Record<string, string> = {
 };
 
 console.log("\n1. wiring");
-const hidStart = ROUTE.search(/const CHAT_HIDDEN_TOOLS[^=]*= new Set\(\[/);
-const hidden = ROUTE.slice(hidStart, ROUTE.indexOf("]);", hidStart));
-ok("the hidden-tools set was found (the check is alive)", hidStart > 0 && hidden.includes("hub_market_fit"));
+// The set lives in lib/chat-hidden-tools.ts since 2026-10-01; the route must
+// still be the one filtering by it, or "not hidden" here would prove nothing.
+ok("the hidden-tools set was found (the check is alive)", CHAT_HIDDEN_TOOLS.has("hub_market_fit"));
+ok("the chat route filters its tools by that set",
+  ROUTE.includes(`from "@/lib/chat-hidden-tools"`) && ROUTE.includes("ALL_HUB_TOOLS.filter((t) => !CHAT_HIDDEN_TOOLS.has(t.name))"));
 for (const [name, id] of Object.entries(TOOLS)) {
   ok(`${name}: schema offered`, ROUTE.includes(`name: "${name}"`));
   ok(`${name}: → ${id}`, new RegExp(`${name}:\\s*"${id}"`).test(ROUTE));
-  ok(`${name}: not hidden from chat`, !hidden.includes(`"${name}"`));
+  ok(`${name}: not hidden from chat`, !CHAT_HIDDEN_TOOLS.has(name));
   ok(`${name}: ${id} is not halted`, haltReason(id) === null);
   ok(`${name}: has a card case`, CARDS.includes(`case "${name}":`));
 }

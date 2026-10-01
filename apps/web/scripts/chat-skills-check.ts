@@ -14,6 +14,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { AGENT_SKILLS, NO_FEE_CHAT_TOOLS } from "../src/app/chat/agent-skills";
 import { AGENT_TOOLS } from "../src/lib/agent-tools";
+import { CHAT_HIDDEN_TOOLS } from "../src/lib/chat-hidden-tools";
 
 let failures = 0;
 function ok(label: string, cond: boolean, detail = "") {
@@ -22,16 +23,18 @@ function ok(label: string, cond: boolean, detail = "") {
 }
 
 const route = fs.readFileSync(path.resolve(__dirname, "../src/app/api/chat/route.ts"), "utf8");
-const toolsBlock = route.slice(route.indexOf("const ALL_HUB_TOOLS = ["), route.indexOf("const CHAT_HIDDEN_TOOLS"));
+const toolsBlock = route.slice(route.indexOf("const ALL_HUB_TOOLS = ["), route.indexOf("const HUB_TOOLS ="));
 const registered = new Set([...toolsBlock.matchAll(/^\s{4}name: "([a-z0-9_]+)"/gm)].map((m) => m[1]));
-const hiddenBlock = route.slice(route.indexOf("const CHAT_HIDDEN_TOOLS"), route.indexOf("const HUB_TOOLS ="));
-const hidden = new Set([...hiddenBlock.matchAll(/"([a-z0-9_]+)"/g)].map((m) => m[1]));
+// Imported, not parsed: the set moved to lib/chat-hidden-tools.ts (2026-10-01).
+const hidden = CHAT_HIDDEN_TOOLS;
 const freeBlock = route.slice(route.indexOf("const FREE_DIRECT"), route.indexOf("const apiPath"));
 const freeDirect = new Set([...freeBlock.matchAll(/^\s+(hub_[a-z0-9_]+):/gm)].map((m) => m[1]));
 const catalog = new Set(AGENT_TOOLS.map((t) => t.id));
 
 console.log(`\nchat registers ${registered.size} tools, hides ${hidden.size}, calls ${freeDirect.size} directly`);
 ok("the parse found the chat tool list", registered.size > 20 && registered.has("prepare_swap") && registered.has("check_wallet"));
+ok("the route filters by the shared hidden set", /import \{ CHAT_HIDDEN_TOOLS \} from "@\/lib\/chat-hidden-tools"/.test(route)
+  && route.includes("ALL_HUB_TOOLS.filter((t) => !CHAT_HIDDEN_TOOLS.has(t.name))"));
 
 console.log("\n1. every live skill's tools are offered in Chat");
 const live = AGENT_SKILLS.filter((s) => s.status === "active");

@@ -14,6 +14,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { HALTED_TOOLS } from "../src/lib/tool-halts";
+import { CHAT_HIDDEN_TOOLS } from "../src/lib/chat-hidden-tools";
 import { AGENT_TOOLS } from "../src/lib/agent-tools";
 import { HANDLERS } from "../src/app/api/x402/_handlers";
 
@@ -49,15 +50,16 @@ const CHAT = path.resolve(SCRIPTS_DIR, "..", "src", "app", "api", "chat", "route
 const chat = readFileSync(CHAT, "utf8");
 const listStart = chat.indexOf("const ALL_HUB_TOOLS = [");
 const listEnd = chat.indexOf("\n];", listStart);
-const hiddenStart = chat.indexOf("const CHAT_HIDDEN_TOOLS");
-const hiddenEnd = chat.indexOf("const HUB_TOOLS = ALL_HUB_TOOLS", hiddenStart);
+// The hidden set itself is imported (lib/chat-hidden-tools.ts, since
+// 2026-10-01); this anchor only proves the route still filters by it.
+const filterAt = chat.indexOf("const HUB_TOOLS = ALL_HUB_TOOLS.filter((t) => !CHAT_HIDDEN_TOOLS.has(t.name))");
 const endpointStart = chat.indexOf("const TOOL_ENDPOINT: Record<string, string> = {");
 const endpointEnd = chat.indexOf("\n};", endpointStart);
-if ([listStart, listEnd, hiddenStart, hiddenEnd, endpointStart, endpointEnd].some((i) => i < 0)) {
-  failures.push("4 could not locate ALL_HUB_TOOLS / CHAT_HIDDEN_TOOLS / TOOL_ENDPOINT in api/chat/route.ts");
+if ([listStart, listEnd, filterAt, endpointStart, endpointEnd].some((i) => i < 0)) {
+  failures.push("4 could not locate ALL_HUB_TOOLS / the CHAT_HIDDEN_TOOLS filter / TOOL_ENDPOINT in api/chat/route.ts");
 } else {
   const offered = [...chat.slice(listStart, listEnd).matchAll(/^\s{4}name:\s*"([^"]+)"/gm)].map((m) => m[1]);
-  const hidden = new Set([...chat.slice(hiddenStart, hiddenEnd).matchAll(/"([a-z0-9_]+)"/g)].map((m) => m[1]));
+  const hidden = CHAT_HIDDEN_TOOLS;
   const endpoint = new Map(
     [...chat.slice(endpointStart, endpointEnd).matchAll(/^\s*"?([A-Za-z0-9_]+)"?\s*:\s*"([^"]+)"/gm)].map((m) => [m[1], m[2]]),
   );
