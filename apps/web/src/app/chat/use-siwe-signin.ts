@@ -26,6 +26,7 @@
 
 import { useCallback } from "react";
 import { useSignMessage } from "wagmi";
+import { useSilentSigner } from "@/lib/privy/silent-signer";
 import { sessionSiweMessage } from "@/lib/siwe-session-message";
 import { fetchServerNonce } from "@/lib/siwe-nonce";
 import { inEmbeddedFrame, settleSessionTransport } from "@/lib/session-client";
@@ -35,12 +36,16 @@ export function useSiweSignIn() {
   // inherits the Privy-routed connector setup from #142 rather than adding a
   // second, differently-behaving signing path.
   const { signMessageAsync } = useSignMessage();
+  // An embedded (email / social) wallet signs with no modal — see the header of
+  // lib/privy/silent-sign-bridge.tsx. Null for external wallets and Privy-off.
+  const signSilently = useSilentSigner();
 
   /** Resolves to the signed-in wallet, or throws with a message fit for the UI. */
   return useCallback(async (address: string): Promise<string> => {
     const nonce     = await fetchServerNonce();
     const message   = sessionSiweMessage(window.location.host.toLowerCase(), address, nonce);
-    const signature = await signMessageAsync({ message });
+    const silent    = signSilently ? await signSilently(address, message) : null;
+    const signature = silent ?? await signMessageAsync({ message });
 
     const embedded = inEmbeddedFrame();
     const res  = await fetch("/api/auth/session", {
@@ -53,5 +58,5 @@ export function useSiweSignIn() {
     const wallet = String(body.wallet);
     await settleSessionTransport(wallet, typeof body.token === "string" ? body.token : null);
     return wallet;
-  }, [signMessageAsync]);
+  }, [signMessageAsync, signSilently]);
 }

@@ -12,6 +12,7 @@ import { createConfig as privyCreateConfig, WagmiProvider as PrivyWagmiProvider 
 import { PRIVY_APP_ID, PRIVY_ENABLED, privyClientConfig } from "@/lib/privy/config";
 import { PrivyConnectBridge } from "@/lib/privy/connect-bridge";
 import { PrivyIdentityBridge } from "@/lib/privy/identity-bridge";
+import { PrivySilentSignBridge } from "@/lib/privy/silent-sign-bridge";
 import PrivyWalletActivate from "@/lib/privy/wallet-activate";
 import MiniAppReady from "@/components/MiniAppReady";
 import BaseAppAutoConnect from "@/components/BaseAppAutoConnect";
@@ -217,7 +218,11 @@ export default function Providers({ children }: { children: React.ReactNode }) {
                   header of identity-bridge.tsx. On the default tree below,
                   neither bridge is mounted and both hooks read `null`. */}
               <PrivyIdentityBridge>
-                <Shell>{children}</Shell>
+                {/* Lets an embedded (email / social) wallet sign the SIWE
+                    session message with no modal — see silent-sign-bridge. */}
+                <PrivySilentSignBridge>
+                  <Shell>{children}</Shell>
+                </PrivySilentSignBridge>
               </PrivyIdentityBridge>
             </PrivyConnectBridge>
           </PrivyWagmiProvider>
