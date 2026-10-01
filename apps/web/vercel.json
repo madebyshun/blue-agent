@@ -17,6 +17,10 @@
       "schedule": "*/5 * * * *"
     },
     {
+      "path": "/api/cron/watches",
+      "schedule": "*/5 * * * *"
+    },
+    {
       "path": "/api/cron/acp-poll",
       "schedule": "*/2 * * * *"
     }

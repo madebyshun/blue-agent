@@ -62,6 +62,12 @@ export async function GET(req: NextRequest) {
   }
   const w = await readWatches(auth.wallet);
   if (w.status === "unavailable") return bad("Watches unavailable right now — try again shortly.", 503);
+  // Live readings call price APIs whose keyless quota the 5-minute tick
+  // shares — rate-limited per wallet (the badge's `?unread=1` poll is not).
+  if (new URL(req.url).searchParams.get("readings") === "1") {
+    const rl = await rateLimit(auth.wallet, "hub");
+    if (!rl.success) return NextResponse.json({ watches: w.value, alerts: a.value.alerts, seenAt: a.value.seenAt, unread, readings: undefined }, { headers: NO_STORE });
+  }
   // `?readings=1` adds each watch's live price / 1h / 24h change (the same
   // read the tick makes) — for the Scheduled page, not for every poll.
   let readings: Record<string, unknown> | undefined;
@@ -116,7 +122,9 @@ export async function POST(req: NextRequest) {
     ...(tr.trade ? { trade: tr.trade } : {}),
     ...(ca.checkAt ? { checkAt: ca.checkAt, nextCheckAt: nextFireAt({ ...ca.checkAt }, now) } : {}),
   };
-  const res = await mutateWatches(auth.wallet, (ws) => (ws.length >= MAX_WATCHES_PER_WALLET ? ws : [...ws, watch]));
+  // Re-checked inside the write: two concurrent creates must not both pass.
+  const res = await mutateWatches(auth.wallet, (ws) => (ws.length >= MAX_WATCHES_PER_WALLET ? null : [...ws, watch]));
+  if (res === "unchanged") return bad(`You already have ${MAX_WATCHES_PER_WALLET} watches — delete one first.`, 422);
   if (res !== "ok") return bad("Could not save the watch right now — nothing was created.", 503);
   return NextResponse.json({ watch, rule: describeWatch(watch), priceNow: resolved.priceNow }, { headers: NO_STORE });
 }
@@ -124,29 +132,42 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const auth = await requireWallet(req);
   if ("res" in auth) return auth.res;
+  const rl = await rateLimit(auth.wallet, "hub");
+  if (!rl.success) return bad("Too many changes — slow down.", 429);
   let b: Record<string, unknown>;
   try { b = await req.json(); } catch { return bad("Invalid JSON body"); }
   if (b.seen === true) {
-    await markSeen(auth.wallet, Date.now());
+    // Up to the newest alert the page actually rendered (`upTo`), so one
+    // written after it loaded stays unread; capped at now by markSeen.
+    const upTo = typeof b.upTo === "number" && Number.isFinite(b.upTo) ? b.upTo : Date.now();
+    await markSeen(auth.wallet, upTo);
     return NextResponse.json({ ok: true }, { headers: NO_STORE });
   }
   if (typeof b.id !== "string" || typeof b.active !== "boolean") return bad("send { id, active } or { seen: true }");
   const active = b.active;
   // Resuming an automation schedules its next check from now, not from a
   // window that passed while it was paused.
-  const res = await mutateWatches(auth.wallet, (ws) => ws.map((w) => (w.id === b.id
-    ? { ...w, active, armed: active ? true : w.armed, ...(active && w.checkAt ? { nextCheckAt: nextFireAt({ ...w.checkAt }, Date.now()) } : {}) }
-    : w)));
-  if (res !== "ok") return bad("Could not save — try again.", 503);
+  // Re-arm only on a real paused → active transition: "resuming" a watch that
+  // is already active must not re-arm a disarmed repeat and fire it again.
+  const res = await mutateWatches(auth.wallet, (ws) => {
+    const hit = ws.find((w) => w.id === b.id);
+    if (!hit || hit.active === active) return null;
+    return ws.map((w) => (w.id === b.id
+      ? { ...w, active, ...(active ? { armed: true } : {}), ...(active && w.checkAt ? { nextCheckAt: nextFireAt({ ...w.checkAt }, Date.now()) } : {}) }
+      : w));
+  });
+  if (res === "failed") return bad("Could not save — try again.", 503);
   return NextResponse.json({ ok: true }, { headers: NO_STORE });
 }
 
 export async function DELETE(req: NextRequest) {
   const auth = await requireWallet(req);
   if ("res" in auth) return auth.res;
+  const rl = await rateLimit(auth.wallet, "hub");
+  if (!rl.success) return bad("Too many changes — slow down.", 429);
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return bad("id is required");
-  const res = await mutateWatches(auth.wallet, (ws) => ws.filter((w) => w.id !== id));
-  if (res !== "ok") return bad("Could not delete — try again.", 503);
+  const res = await mutateWatches(auth.wallet, (ws) => (ws.some((w) => w.id === id) ? ws.filter((w) => w.id !== id) : null));
+  if (res === "failed") return bad("Could not delete — try again.", 503);
   return NextResponse.json({ ok: true }, { headers: NO_STORE });
 }

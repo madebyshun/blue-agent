@@ -40,6 +40,14 @@ export interface WatchTarget {
   poolName?: string;
   /** Is the watched token the pool's BASE token (else its quote). */
   poolBase?: boolean;
+  /**
+   * Set ONLY by the server, when the user asked for "ETH" itself: the watch
+   * prices WETH's pool, and a prepared trade uses native ETH. Never inferred
+   * from a symbol — a token's `symbol()` is whatever its deployer wrote, and a
+   * scam token named "ETH" must not turn "sell all of 0xScam" into a card
+   * selling the user's ETH (review 2026-10-01).
+   */
+  native?: boolean;
 }
 
 /**
@@ -93,6 +101,8 @@ export interface WatchAlert {
   text: string;
   /** The trade to prepare, when the watch carries one. */
   trade?: WatchTrade & { cash: string };
+  /** Carried from the watch: the trade is in native ETH (see WatchTarget). */
+  native?: boolean;
 }
 
 export interface WatchReading {

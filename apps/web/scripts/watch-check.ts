@@ -13,6 +13,7 @@
 import { evaluateWatch, evaluateScheduled } from "../src/lib/watches/evaluate";
 import { parseRule, parseTrade, parseCheckAt } from "../src/lib/watches/rules";
 import { tradeToolLog } from "../src/app/chat/use-price-alerts";
+import { nextCheckAfter } from "../src/lib/watches/tick";
 import { identify } from "../src/lib/watches/prices";
 import { alertMessages } from "../src/app/chat/use-price-alerts";
 import { describeRule, describeWatch, REARM_BAND, type Watch, type WatchReading } from "../src/lib/watches/types";
@@ -103,7 +104,7 @@ ok("no trade → none", JSON.stringify(parseTrade(undefined)) === "{}");
 ok("a bad side is refused", "error" in parseTrade({ side: "short", amount: "1" }));
 
 const alertBase = { id: "x", watchId: "w", at: 1, chain: "base" as const, token: "0x4200000000000000000000000000000000000006", symbol: "ETH", text: "t" };
-const buyLog = tradeToolLog({ ...alertBase, trade: { side: "buy", amount: "50", cash: "USDC" } });
+const buyLog = tradeToolLog({ ...alertBase, native: true, trade: { side: "buy", amount: "50", cash: "USDC" } });
 const br = buyLog?.result as Record<string, string> | undefined;
 ok("Base buy → the convert card, USDC → native ETH", buyLog?.tool === "prepare_swap" && br?.tokenIn === "USDC"
   && br?.tokenInAddress?.toLowerCase() === pinnedTokenFor("base", "USDC")!.toLowerCase()
@@ -113,13 +114,28 @@ const rr = rhSell?.result as Record<string, string> | undefined;
 ok("RH sell → the Robinhood swap card, token → USDG", rhSell?.tool === "robinhood_swap" && rr?.token_in_address === "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC"
   && rr?.token_address?.toLowerCase() === pinnedTokenFor("robinhood", "USDG")!.toLowerCase() && rr?.amount === "half", JSON.stringify(rr));
 ok("a plain alert prepares nothing", tradeToolLog(alertBase) === null);
-const withTrade = alertMessages([{ ...alertBase, at: 500, trade: { side: "buy", amount: "50", cash: "USDC" } }], 0)[0];
-ok("the alert message carries the card and says nothing executes unsigned", !!withTrade.toolLogs?.length && /nothing executes unless you do/.test(withTrade.content));
+const scam = tradeToolLog({ ...alertBase, token: "0x1111111111111111111111111111111111111111", symbol: "ETH", trade: { side: "sell", amount: "all", cash: "USDC" } });
+ok("a token that CALLS itself ETH sells that token, never native ETH", (scam?.result as Record<string, string>)?.tokenInAddress === "0x1111111111111111111111111111111111111111");
+const withTrade = alertMessages([{ ...alertBase, at: 500, trade: { side: "buy", amount: "50", cash: "USDC" } }], 0, 600)[0];
+ok("the alert message carries the card and says nothing executes unsigned", !!withTrade.toolLogs?.length && /nothing executes unless you do/.test(withTrade.content) && withTrade.alertId === "x");
+ok("no 'Prepared: prepare' stutter", /Prepared trade: a buy of \$50 of ETH with USDC/.test(withTrade.content), withTrade.content);
+const stale = alertMessages([{ ...alertBase, at: 500, trade: { side: "buy", amount: "50", cash: "USDC" } }], 0, 500 + 25 * 3600_000)[0];
+ok("a prepared trade over a day old gets no live card", !stale.toolLogs && /condition may no longer hold/.test(stale.content));
 
 console.log("6. automations — scheduled checks");
 ok("check_at daily 9:00", JSON.stringify(parseCheckAt({ schedule: "daily", time: "9:00", tz: "Asia/Saigon" })) === '{"checkAt":{"schedule":"daily","time":"09:00","tz":"Asia/Saigon"}}');
 ok("bad time refused", "error" in parseCheckAt({ schedule: "daily", time: "25:00" }));
-ok("a junk tz is dropped, not trusted", JSON.stringify(parseCheckAt({ schedule: "weekly", time: "08:30", tz: "x; drop" })) === '{"checkAt":{"schedule":"weekly","time":"08:30"}}');
+ok("a junk tz is refused, never silently UTC", "error" in parseCheckAt({ schedule: "weekly", time: "08:30", tz: "x; drop" }));
+ok("a non-IANA zone is refused (it would fire hours off)", "error" in parseCheckAt({ schedule: "daily", time: "09:00", tz: "Asia/Hanoi" }));
+ok("a zone with digits is kept", JSON.stringify(parseCheckAt({ schedule: "daily", time: "09:00", tz: "Etc/GMT+7" })) === '{"checkAt":{"schedule":"daily","time":"09:00","tz":"Etc/GMT+7"}}');
+{
+  const slot = Date.parse("2026-10-01T23:58:00Z");
+  const late: Watch = { ...base, checkAt: { schedule: "daily", time: "23:58", tz: "UTC" }, nextCheckAt: slot };
+  ok("a check reached after midnight does not skip a day", new Date(nextCheckAfter(late, Date.parse("2026-10-02T00:00:05Z"))).toISOString() === "2026-10-02T23:58:00.000Z");
+}
+ok("buy amounts are rounded to cents, never '1e-7'", "error" in parseTrade({ side: "buy", amount: "0.0000001" }) && JSON.stringify(parseTrade({ side: "buy", amount: "12.345" })) === '{"trade":{"side":"buy","amount":"12.35"}}');
+ok("sell amounts stay as typed decimals", JSON.stringify(parseTrade({ side: "sell", amount: "0.0000001" })) === '{"trade":{"side":"sell","amount":"0.0000001"}}');
+ok("a sell of 1e308 is refused", "error" in parseTrade({ side: "sell", amount: "1e308" }));
 const auto: Watch = { ...base, symbol: "ETH", chain: "base", asset: "crypto", direction: "below", threshold: 2500, repeat: true,
   checkAt: { schedule: "daily", time: "09:00" }, trade: { side: "buy", amount: "50" } };
 ok("sentence: time, condition, prepared trade", describeWatch(auto) === "every day at 09:00, if ETH on Base falls to or below $2,500, prepare a buy of $50 of ETH with USDC", describeWatch(auto));

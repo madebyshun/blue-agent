@@ -21,6 +21,9 @@ const fallback = {
     if (memClean(key)) return null;
     return (memStore.get(key)?.value as T) ?? null;
   },
+  async mget<T>(...keys: string[]): Promise<(T | null)[]> {
+    return keys.map((k) => (memClean(k) ? null : ((memStore.get(k)?.value as T) ?? null)));
+  },
   async set(key: string, value: unknown, opts?: { ex?: number }): Promise<void> {
     memStore.set(key, {
       value,
@@ -98,6 +101,8 @@ const fallback = {
 // ─── Upstash Redis client ─────────────────────────────────────────────────────
 type KVClient = {
   get<T>(key: string): Promise<T | null>;
+  /** One command for many keys (Upstash MGET). Throws on a failed read. */
+  mget<T>(...keys: string[]): Promise<(T | null)[]>;
   set(key: string, value: unknown, opts?: { ex?: number }): Promise<void>;
   del(...keys: string[]): Promise<void>;
   incr(key: string): Promise<number>;
@@ -132,6 +137,7 @@ function getKV(): KVClient {
     return {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       get:  <T>(key: string) => redis.get(key) as Promise<T | null>,
+      mget: <T>(...keys: string[]) => redis.mget(...keys) as Promise<(T | null)[]>,
       set:  (key: string, value: unknown, opts?: { ex?: number }) =>
               opts?.ex ? redis.set(key, value, { ex: opts.ex }) : redis.set(key, value),
       del:  (...keys: string[]) => redis.del(...keys),

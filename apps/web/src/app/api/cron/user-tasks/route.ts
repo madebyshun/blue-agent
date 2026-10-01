@@ -42,7 +42,6 @@
  * Auth: `Authorization: Bearer $CRON_SECRET` (or `?secret=`) — the house pattern.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { runWatchTick } from "@/lib/watches/tick";
 import { pushFeed } from "@/lib/activity";
 import { kvTryLock, kvDel, kvSet } from "@/lib/kv";
 import {
@@ -315,6 +314,7 @@ async function tick(now: number): Promise<TickSummary & { nextAt: number | null 
       }
       budget--;
 
+      const slotAt = live.nextAt;
       const outcome = await runTask(live, wallet);
       const ranAt = Date.now();
       if (outcome.kind === "ok") summary.ran++;
@@ -346,8 +346,12 @@ async function tick(now: number): Promise<TickSummary & { nextAt: number | null 
         }
         // Advance from now, not from the missed slot — a task does not owe runs
         // for windows it slept through. From the LIVE definition, so a time the
-        // user changed mid-run is the one the next window uses.
-        t.nextAt = nextFireAt(t, ranAt);
+        // user changed mid-run is the one the next window uses. Anchored on the
+        // SLOT that ran (`slotAt`), not on `ranAt`: a 23:58 task reached just
+        // after midnight used to anchor on the next day and skip a whole day,
+        // and a weekly one drifted a weekday (review 2026-10-01). `lastRun`
+        // itself still records when it really ran.
+        t.nextAt = nextFireAt({ ...t, lastRun: slotAt }, ranAt);
       });
       // The activity feed (lib/activity): one line per background run, so the
       // timeline on the Scheduled page shows it next to alerts and trades.
@@ -385,17 +389,6 @@ export async function GET(req: NextRequest) {
   }
 
   const now = Date.now();
-
-  // 0. Price watches (lib/watches) ride this same 5-minute timer, BEFORE the
-  //    schedule watermark below — that watermark only knows prompt schedules
-  //    and would otherwise park every watch for up to an hour. Its own lock,
-  //    its own failure: a watch error never blocks a scheduled prompt.
-  try {
-    const w = await runWatchTick(now);
-    if (w.watches > 0 || w.skipped) console.info(`[watch] ${JSON.stringify(w)}`);
-  } catch (e) {
-    console.error(`[watch] tick failed: ${redactWallets((e as Error).message)}`);
-  }
 
   // 1. The one-read fast path. See the header — this is what keeps the whole
   //    feature inside the KV budget.

@@ -4,6 +4,7 @@
  */
 import type { WatchCheckAt, WatchDirection, WatchKind, WatchTrade, WatchWindow } from "./types";
 import { QUANTITY_WORD_RE, wordToBps } from "@/lib/wallet/amount";
+import { normalizeTz } from "@/lib/cron-schedule";
 
 export function parseRule(b: Record<string, unknown>): { kind: WatchKind; direction: WatchDirection; threshold: number; window?: WatchWindow } | { error: string } {
   const kind = b.kind === "change" ? "change" : b.kind === "price" ? "price" : null;
@@ -33,8 +34,8 @@ export function parseTrade(v: unknown): { trade?: WatchTrade } | { error: string
   const amount = String(t.amount ?? "").trim().replace(/^\$/, "");
   if (t.side === "buy") {
     const n = Number(amount);
-    if (!Number.isFinite(n) || n <= 0 || n > 1_000_000) return { error: "a buy needs a dollar amount between 0 and 1,000,000" };
-    return { trade: { side: "buy", amount: String(n) } };
+    if (!Number.isFinite(n) || n < 0.01 || n > 1_000_000) return { error: "a buy needs a dollar amount between $0.01 and $1,000,000" };
+    return { trade: { side: "buy", amount: String(Math.round(n * 100) / 100) } };
   }
   // Quantity words are lib/wallet/amount.ts's set — the same one the trade
   // cards resolve against the live balance, so the card can honour any word
@@ -48,9 +49,9 @@ export function parseTrade(v: unknown): { trade?: WatchTrade } | { error: string
       ? { trade: { side: "sell", amount: amount.toLowerCase() } }
       : { error: "a sell percentage is between 0% and 100%" };
   }
-  const n = Number(amount);
-  if (!Number.isFinite(n) || n <= 0) return { error: "a sell needs a token amount, or all / half / N%" };
-  return { trade: { side: "sell", amount: String(n) } };
+  // A plain decimal only, kept as typed: String(1e-7) would print "1e-7".
+  if (!/^\d{1,15}(\.\d{1,18})?$/.test(amount) || !(Number(amount) > 0)) return { error: "a sell needs a token amount, or all / half / N%" };
+  return { trade: { side: "sell", amount } };
 }
 
 /** A fixed check time (daily/weekly at HH:MM in an IANA zone). Missing → every 5 min. */
@@ -63,6 +64,13 @@ export function parseCheckAt(v: unknown): { checkAt?: WatchCheckAt } | { error: 
   const time = String(c.time ?? "");
   const m = /^(\d{1,2}):(\d{2})$/.exec(time);
   if (!m || Number(m[1]) > 23 || Number(m[2]) > 59) return { error: "check_at.time is HH:MM" };
-  const tz = typeof c.tz === "string" && /^[A-Za-z_]+(\/[A-Za-z_+-]+)*$/.test(c.tz) && c.tz.length <= 64 ? c.tz : undefined;
+  // A zone is kept only if the scheduler itself recognises it — a name it
+  // would silently treat as UTC ("Asia/Hanoi") is refused rather than shown
+  // to the user while firing hours off; digits are legal ("Etc/GMT+7").
+  let tz: string | undefined;
+  if (c.tz != null && c.tz !== "") {
+    if (typeof c.tz !== "string" || c.tz.length > 64 || normalizeTz(c.tz) !== c.tz) return { error: `unknown time zone "${String(c.tz).slice(0, 64)}"` };
+    tz = c.tz;
+  }
   return { checkAt: { schedule, time: `${m[1].padStart(2, "0")}:${m[2]}`, ...(tz ? { tz } : {}) } };
 }

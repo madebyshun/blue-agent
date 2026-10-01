@@ -14,7 +14,8 @@ import type { LaunchChain } from "@/lib/launchpads/registry";
 import { findByContract as findRhByContract, findByTicker as findRhByTicker } from "@/lib/robinhood/rwa-registry";
 import { BASE_STOCKS, findBaseStock } from "@/lib/base-stocks/registry";
 import { pinnedTokenFor } from "@/lib/wallet/pinned-symbols";
-import { chainlinkLatest, BASE_PRICE_SOURCE, RH_PRICE_SOURCE } from "@/lib/robinhood/rwa-price";
+import { chainlinkLatest, RH_PRICE_SOURCE } from "@/lib/robinhood/rwa-price";
+import { readBaseStockQuote } from "@/lib/base-stocks/b20-quote";
 import type { Watch, WatchReading, WatchTarget } from "./types";
 
 type GtPool = { attributes?: Record<string, unknown>; relationships?: Record<string, { data?: { id?: string } }> };
@@ -59,13 +60,13 @@ function stockFor(chain: LaunchChain, token: string): { symbol: string; feed?: s
 }
 
 /** Address, registry ticker on that chain, or pinned major → a contract. */
-export function identify(chain: LaunchChain, raw: string): { token: Address } | { error: string } {
+export function identify(chain: LaunchChain, raw: string): { token: Address; native?: boolean } | { error: string } {
   const t = raw.trim().replace(/^\$/, "");
   if (isAddress(t)) return { token: getAddress(t) };
   const up = t.toUpperCase();
   if (up === "ETH") {
     const weth = pinnedTokenFor(chain, "WETH");
-    if (weth) return { token: getAddress(weth) };
+    if (weth) return { token: getAddress(weth), native: true };
   }
   const pinned = pinnedTokenFor(chain, t);
   if (pinned) return { token: getAddress(pinned) };
@@ -79,7 +80,7 @@ export function identify(chain: LaunchChain, raw: string): { token: Address } | 
   return { error: `"${raw}" does not identify a token on ${chain === "base" ? "Base" : "Robinhood Chain"} — paste its 0x… contract address (only verified stock tickers and the chain's majors resolve by name).` };
 }
 
-export async function resolveWatchTarget(chain: LaunchChain, raw: string): Promise<{ target: WatchTarget; priceNow: number | null; priceSource: string | null } | { error: string }> {
+export async function resolveWatchTarget(chain: LaunchChain, raw: string): Promise<{ target: WatchTarget; priceNow: number | null; priceSource: string | null; priceStale: boolean } | { error: string }> {
   const id = identify(chain, raw);
   if ("error" in id) return id;
   const token = id.token;
@@ -90,7 +91,7 @@ export async function resolveWatchTarget(chain: LaunchChain, raw: string): Promi
   // figure describes the other token.)
   const ds = await dsPairs(chain, [token]);
   const dsBest = ds ? bestPair(ds, token) : undefined;
-  const { body } = dsBest ? { body: null } : await gtJson<{ data?: GtPool[] }>(`/networks/${chain}/tokens/${token}/pools?page=1`);
+  const { body, status: gtStatus } = dsBest ? { body: null, status: 0 } : await gtJson<{ data?: GtPool[] }>(`/networks/${chain}/tokens/${token}/pools?page=1`);
   const gtPools = (body?.data ?? [])
     .map((p) => ({
       address: String(p.attributes?.address ?? ""),
@@ -106,31 +107,59 @@ export async function resolveWatchTarget(chain: LaunchChain, raw: string): Promi
     : gtPools[0];
 
   if (!stock && !pool) {
-    return { error: body == null && ds == null
-      ? "Could not read this token's pools right now (GeckoTerminal) — try again in a minute."
-      : "No pool lists this token as its base on GeckoTerminal yet, so there is no price to watch." };
+    // Only a SUCCESSFUL GeckoTerminal read with no base-side pool is "no pool";
+    // a 429 or network error is "could not read" (review 2026-10-01).
+    const gtRead = dsBest ? true : gtStatus === 200 || gtStatus === 404;
+    return { error: !gtRead
+      ? "Could not read this token's pools right now — try again in a minute."
+      : "No pool lists this token as its base yet (DexScreener, GeckoTerminal), so there is no price to watch." };
   }
 
   let symbol = stock?.symbol ?? null;
   if (!symbol) {
     try { symbol = await launchClient(chain).readContract({ address: token, abi: erc20, functionName: "symbol" }); } catch { symbol = null; }
   }
-  // Asked for "ETH": the watch prices WETH's pool, but the user said ETH.
-  if (raw.trim().replace(/^\$/, "").toUpperCase() === "ETH") symbol = "ETH";
+  // Asked for "ETH" (and only then — `identify` set the flag from the INPUT,
+  // never from a token's own symbol): WETH's pool prices it, trades use ETH.
+  if (id.native) symbol = "ETH";
   const target: WatchTarget = {
     chain, token, symbol: (symbol ?? token.slice(0, 8)).slice(0, 24),
     asset: stock ? "stock" : "crypto",
     ...(stock?.feed ? { feed: stock.feed, heartbeat: stock.heartbeat } : {}),
     ...(pool ? { pool: pool.address, poolName: pool.name, poolBase: true } : {}),
+    ...(id.native ? { native: true } : {}),
   };
   let priceNow: number | null = pool?.price ?? null;
   let priceSource: string | null = pool?.price != null ? (dsBest ? "DexScreener" : "GeckoTerminal") : null;
+  let priceStale = false;
   if (stock?.feed) {
-    const q = await chainlinkLatest(stock.feed as Address, stock.heartbeat, chain === "base" ? BASE_PRICE_SOURCE : RH_PRICE_SOURCE);
-    priceNow = q?.price_usd ?? null;
+    const q = await stockOraclePrice(chain, token, stock.feed, stock.heartbeat);
+    priceNow = q.price;
+    priceStale = q.stale;
     priceSource = priceNow != null ? "Chainlink oracle" : null;
   }
-  return { target, priceNow, priceSource };
+  return { target, priceNow, priceSource, priceStale };
+}
+
+/**
+ * A stock token's oracle price. Robinhood Chain: the Chainlink answer is the
+ * share price. Base: the B20 feed reports TOTAL-RETURN value (share ×
+ * multiplier), so it goes through `readBaseStockQuote` — multiplier-adjusted,
+ * with its impostor, sequencer, identity and sane-band gates; any gate failing
+ * is `price: null` (no fire), never the raw answer (review 2026-10-01).
+ */
+async function stockOraclePrice(chain: LaunchChain, token: string, feed: string, heartbeat?: number): Promise<{ price: number | null; stale: boolean }> {
+  if (chain === "base") {
+    const stock = BASE_STOCKS.find((s) => s.token.toLowerCase() === token.toLowerCase());
+    if (!stock) return { price: null, stale: true };
+    try {
+      const q = await readBaseStockQuote(stock);
+      const ok = q.impostor_ok && q.sequencer_ok && q.multiplier_ok && q.price_in_band && q.share_price_identity.status === "ok";
+      return { price: ok ? q.share_price_usd : null, stale: q.feed_is_stale };
+    } catch { return { price: null, stale: true }; }
+  }
+  const q = await chainlinkLatest(feed as Address, heartbeat ?? 86400, RH_PRICE_SOURCE);
+  return { price: q?.price_usd ?? null, stale: q?.is_stale ?? true };
 }
 
 /** One reading per watch id. Tokens are batched 30 per call per chain. */
@@ -163,14 +192,18 @@ export async function readReadings(watches: Watch[]): Promise<Map<string, WatchR
     }
   }
 
+  // Oracle reads in PARALLEL (review 2026-10-01): sequential reads against a
+  // degraded RPC could each take ~40 s with retries and fallbacks.
   const feeds = new Map<string, { price: number | null; stale: boolean }>();
+  const feedJobs = new Map<string, Watch>();
   for (const w of watches) {
     if (w.asset !== "stock" || !w.feed) continue;
     const k = `${w.chain}:${w.feed.toLowerCase()}`;
-    if (feeds.has(k)) continue;
-    const q = await chainlinkLatest(w.feed as Address, w.heartbeat ?? 86400, w.chain === "base" ? BASE_PRICE_SOURCE : RH_PRICE_SOURCE);
-    feeds.set(k, { price: q?.price_usd ?? null, stale: q?.is_stale ?? true });
+    if (!feedJobs.has(k)) feedJobs.set(k, w);
   }
+  await Promise.all([...feedJobs.entries()].map(async ([k, w]) => {
+    feeds.set(k, await stockOraclePrice(w.chain, w.token, w.feed!, w.heartbeat ?? 86400));
+  }));
 
   for (const w of watches) {
     const pd = tokenData.get(`${w.chain}:${w.token.toLowerCase()}`) ?? (w.pool ? poolData.get(`${w.chain}:${w.pool.toLowerCase()}`) : undefined);

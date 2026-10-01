@@ -32,13 +32,23 @@ export interface FeedEntry {
 }
 
 export const FEED_CAP = 100;
+/** The same refusal (chain + token) is logged at most once per this window. */
+export const BLOCK_DEDUPE_MS = 6 * 60 * 60 * 1000;
 const kFeed = (w: string) => `feed:${w.toLowerCase()}`;
 
 export async function pushFeed(wallet: string, entries: Array<Omit<FeedEntry, "id">>): Promise<void> {
   if (!wallet || entries.length === 0) return;
   const stamped = entries.map((e, i) => ({ ...e, text: e.text.slice(0, 600), id: `${e.kind}:${e.at}:${i}` }));
   try {
-    await kvMutate<FeedEntry[]>(kFeed(wallet), [], (xs) => [...stamped, ...(Array.isArray(xs) ? xs : [])].slice(0, FEED_CAP));
+    await kvMutate<FeedEntry[]>(kFeed(wallet), [], (xs) => {
+      const cur = Array.isArray(xs) ? xs : [];
+      // A pre-trade card re-checks on every mount and edit, so the same BLOCK
+      // arrives again and again. One line per (chain, token) per window —
+      // otherwise refusals crowd real history out of FEED_CAP.
+      const fresh = stamped.filter((e) => e.kind !== "blocked" || !cur.some((c) =>
+        c.kind === "blocked" && c.chain === e.chain && (c.token ?? "").toLowerCase() === (e.token ?? "").toLowerCase() && e.at - c.at < BLOCK_DEDUPE_MS));
+      return fresh.length ? [...fresh, ...cur].slice(0, FEED_CAP) : null;
+    });
   } catch { /* the feed is a record of what happened; the thing itself already happened */ }
 }
 
