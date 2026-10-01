@@ -173,23 +173,7 @@ const ANCHOR_ASSETS = {
   ]),
 } as const;
 
-// Reliable keyless Base RPCs, in fallback order. Verified 2026-08-23 to serve
-// contract reads (NVDA `multiplier()` → 1e18). `base.llamarpc.com` (CF 521) and
-// `base.meowrpc.com` (eth_call disabled) were rejected during that check.
-const DEFAULT_BASE_RPCS = [
-  "https://base-rpc.publicnode.com",
-  "https://base.drpc.org",
-  "https://mainnet.base.org",
-  "https://1rpc.io/base",
-];
-function baseRpcUrls(): string[] {
-  const env =
-    (typeof process !== "undefined" &&
-      (process.env.BASE_RPC_URLS || process.env.BASE_RPC_URL)) ||
-    "";
-  const fromEnv = env.split(",").map((s) => s.trim()).filter(Boolean);
-  return fromEnv.length ? fromEnv : DEFAULT_BASE_RPCS;
-}
+import { baseRpcUrls } from "@/lib/base-rpc";
 
 /**
  * RH anchor valuation (F6, 2026-10-01). The same two addresses as
