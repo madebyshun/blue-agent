@@ -12,9 +12,9 @@
  *     "pons is part of the brainstem" answer came from a tool-free turn) and
  *     names the tools only when they are attached.
  */
-import { keccak256, toBytes } from "viem";
-import { TOPICS, LAUNCHPAD_INFO, BANKR_INTEGRATOR } from "../src/lib/launchpads/registry";
-import { resolveLaunchpad, type ProbeSet } from "../src/lib/launchpads/resolve";
+import { keccak256, toBytes, type PublicClient } from "viem";
+import { TOPICS, LAUNCHPAD_INFO, BANKR_INTEGRATOR, PONS_V2_FACTORY, ZORA_FACTORY, DOPPLER_AIRLOCK } from "../src/lib/launchpads/registry";
+import { resolveLaunchpad, probesFor, type ProbeSet } from "../src/lib/launchpads/resolve";
 import { formatOverview, formatFeed } from "../src/lib/launchpads/format";
 import { buildLaunchpadSection } from "../src/app/api/chat/system-prompt";
 import type { TokenOverview } from "../src/lib/token-overview";
@@ -77,6 +77,54 @@ ok("Pons is Robinhood-only, Zora Base-only", LAUNCHPAD_INFO.pons.chains.join() =
   try { await resolveLaunchpad("base", "NVDA", set()); } catch { threw = true; }
   ok("a non-address is refused", threw);
 
+  console.log("2b. probes cannot be spoofed by what the token says about itself");
+  // A fake client: known (address.function) pairs answer, everything else
+  // reverts — which is what a contract without that function does.
+  const fakeClient = (table: Record<string, (args?: readonly unknown[]) => unknown>) => ({
+    readContract: async ({ address, functionName, args }: { address: string; functionName: string; args?: readonly unknown[] }) => {
+      const f = table[`${address.toLowerCase()}.${functionName}`];
+      if (!f) throw new Error(`The contract function "${functionName}" reverted.`);
+      return f(args);
+    },
+  }) as unknown as PublicClient;
+  // virtuals-api is the one off-chain probe; answer "no such token".
+  globalThis.fetch = (async () => Response.json({ data: [] })) as typeof fetch;
+  const TOK = "0x2222222222222222222222222222222222222222";
+  const OTHER = "0x3333333333333333333333333333333333333333";
+  const CURVE = "0x4444444444444444444444444444444444444444";
+  const lc = (a: string) => a.toLowerCase();
+  const ponsTable = (curveToken: string | null) => ({
+    [`${lc(TOK)}.curve`]: () => CURVE,
+    ...(curveToken ? { [`${lc(CURVE)}.token`]: () => curveToken } : {}),
+    [`${lc(CURVE)}.factory`]: () => PONS_V2_FACTORY,
+    [`${lc(CURVE)}.graduated`]: () => false,
+  });
+  r = await resolveLaunchpad("robinhood", TOK, probesFor("robinhood", TOK, fakeClient(ponsTable(TOK))));
+  ok("Pons: a curve that names the token back is a hit", r.launchpad === "pons", String(r.launchpad));
+  r = await resolveLaunchpad("robinhood", TOK, probesFor("robinhood", TOK, fakeClient(ponsTable(OTHER))));
+  ok("Pons: a token pointing at ANOTHER token's real curve is a miss", r.launchpad === null && r.unread.length === 0, `${r.launchpad} ${r.unread}`);
+  r = await resolveLaunchpad("robinhood", TOK, probesFor("robinhood", TOK, fakeClient(ponsTable(null))));
+  ok("Pons: a curve with no token() (revert) is a miss, not unread", r.launchpad === null && r.unread.length === 0, `${r.launchpad} ${r.unread}`);
+
+  const zoraTable = (version: number) => ({
+    // What the old probe trusted: the token claiming Zora's hook.
+    [`${lc(TOK)}.hooks`]: () => "0x5555555555555555555555555555555555555555",
+    [`${lc(ZORA_FACTORY)}.getVersionForDeployedCoin`]: (a?: readonly unknown[]) => (lc(String(a?.[0])) === lc(TOK) ? version : 0),
+  });
+  r = await resolveLaunchpad("base", TOK, probesFor("base", TOK, fakeClient(zoraTable(0))));
+  ok("Zora: a token the factory never deployed is a miss, whatever hooks() says", r.launchpad === null, String(r.launchpad));
+  r = await resolveLaunchpad("base", TOK, probesFor("base", TOK, fakeClient(zoraTable(4))));
+  ok("Zora: the factory's own deployment record is a hit", r.launchpad === "zora", String(r.launchpad));
+
+  const DEAD_POOL = "0x000000000000000000000000000000000000dEaD";
+  const NUM = "0x4200000000000000000000000000000000000006";
+  r = await resolveLaunchpad("base", TOK, probesFor("base", TOK, fakeClient({
+    [`${lc(DOPPLER_AIRLOCK.base)}.getAssetData`]: () => [NUM, OTHER, OTHER, OTHER, OTHER, OTHER, DEAD_POOL, 1n, 1n, BANKR_INTEGRATOR],
+  })));
+  const bankrText = [r.name, ...r.facts, r.frontEnd].join(" ");
+  ok("Doppler + Bankr integrator: stated as the integrator field", r.launchpad === "bankr" && /integrator field is Bankr's fee address/.test(bankrText), bankrText);
+  ok("…never as 'launched through/by Bankr'", !/launched (through|by) Bankr/i.test(bankrText.replace(/not proof it was launched through Bankr's app/, "")), bankrText);
+
   console.log("3. replies");
   const base: TokenOverview = {
     chain: "robinhood", token: "0xC00899951D84ee5aFb1BF22Df1d91d5206457D86",
@@ -123,6 +171,7 @@ ok("Pons is Robinhood-only, Zora Base-only", LAUNCHPAD_INFO.pons.chains.join() =
   ok("with tools, both tools are named", on.includes("check_token") && on.includes("new_tokens"));
   ok("crypto questions are kept away from /hood", /Never send a question about a crypto or memecoin token to \/hood/.test(off));
   ok("Bankr is a fact, with no integration claimed", /it has no Bankr integration/.test(off));
+  ok("Bankr is stated as Doppler's integrator field, not as the launcher", /integrator is Bankr's fee address/.test(off) && /never "launched by Bankr"/.test(off));
 
   console.log(failures === 0 ? "\nlaunchpad-check: PASS" : `\nlaunchpad-check: FAIL — ${failures}`);
   process.exit(failures === 0 ? 0 : 1);

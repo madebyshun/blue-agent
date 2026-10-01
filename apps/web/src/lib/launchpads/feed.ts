@@ -16,7 +16,7 @@
  * A part that could not be read says so; it is never shown as zero.
  */
 import { parseAbi, type Address, type Hex } from "viem";
-import { isBankrLaunch, launchClient } from "./resolve";
+import { hasBankrIntegrator, launchClient } from "./resolve";
 import { gtJson } from "./gt";
 import {
   CLANKER_FACTORY, DOPPLER_AIRLOCK, FLAP_RH, LAUNCHPAD_INFO, PONS_V2_FACTORY, TOPICS,
@@ -147,7 +147,7 @@ async function trendingFor(chain: LaunchChain, only: LaunchpadId): Promise<Launc
   const checked: typeof top = [];
   for (const r of top) {
     if (checked.length >= 5) break;
-    const v = r.token && /^0x[0-9a-fA-F]{40}$/.test(r.token) ? await isBankrLaunch(chain, r.token as Address) : null;
+    const v = r.token && /^0x[0-9a-fA-F]{40}$/.test(r.token) ? await hasBankrIntegrator(chain, r.token as Address) : null;
     if (v === false) continue;
     checked.push({ ...r, unconfirmed: v === null });
   }

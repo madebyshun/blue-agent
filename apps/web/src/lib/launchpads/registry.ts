@@ -21,11 +21,14 @@
  *    expose no cheap reverse lookup, so Flaunch is named in the knowledge text
  *    only.
  *  - Any Bankr API. Bankr's account is suspended and its integration was
- *    removed (CLAUDE.md, "Bankr is fully removed"). A Bankr launch is
- *    identified PURELY ON-CHAIN: Doppler's `getAssetData(token).integrator`
- *    is Bankr's fee address, verified on three known Bankr launches —
- *    including the original $BLUEAGENT. That is a label read from chain state,
- *    not an integration (ShunTr approved this distinction 2026-10-01).
+ *    removed (CLAUDE.md, "Bankr is fully removed"). What IS read is PURELY
+ *    ON-CHAIN: Doppler's `getAssetData(token).integrator`, which on three
+ *    known Bankr launches — including the original $BLUEAGENT — is Bankr's
+ *    fee address. That is a label read from chain state, not an integration
+ *    (ShunTr approved this distinction 2026-10-01). It is also only the
+ *    INTEGRATOR field: Airlock.create lets its caller set it, so it is stated
+ *    as "Doppler integrator = Bankr's fee address", never as "launched by
+ *    Bankr" (review 2026-10-01).
  *  - Names for the other Doppler integrators. Six on Base and five on RH are
  *    unidentified; they are reported by address, never by a guessed name.
  */
@@ -56,7 +59,9 @@ export const VIRTUALS_BONDING: Record<LaunchChain, Address> = {
   robinhood: "0xd4cCBFA37e2f35611b3042e4096Ad7a3459Bd007",
 };
 
-/** Zora coins factory — Base only (no code on RH). docs.zora.co/coins. */
+/** Zora coins factory — Base only (no code on RH). docs.zora.co/coins. Its
+ *  `getVersionForDeployedCoin(coin)` is the reverse lookup the resolver uses
+ *  (non-zero only for coins it deployed; measured 2026-10-01). */
 export const ZORA_FACTORY: Address = "0x777777751622c0d3258f214F9DF38E35BF45baF3";
 
 /** Pons Family launchpad V2 factory — Robinhood Chain only (ponsfamily.com;
@@ -89,7 +94,7 @@ export type LaunchpadId = "pons" | "doppler" | "bankr" | "virtuals" | "clanker" 
 export const LAUNCHPAD_INFO: Record<LaunchpadId, { name: string; chains: LaunchChain[]; mechanism: string }> = {
   pons:     { name: "Pons (Pons Family)", chains: ["robinhood"], mechanism: "bonding curve quoted in ETH, USDG or a stock token; graduates (4.2 ETH on the ETH quote) into a Uniswap v4 pool with locked LP" },
   doppler:  { name: "Doppler", chains: ["base", "robinhood"], mechanism: "launch protocol many front-ends build on; tokens start in a Uniswap v4 multicurve position" },
-  bankr:    { name: "Bankr (via Doppler)", chains: ["base", "robinhood"], mechanism: "launched through Bankr's front-end on Doppler — straight into a Uniswap v4 multicurve position, no bonding curve, no graduation" },
+  bankr:    { name: "Doppler (integrator: Bankr)", chains: ["base", "robinhood"], mechanism: "a Doppler launch whose integrator field is Bankr's fee address (the creator sets that field) — straight into a Uniswap v4 multicurve position, no bonding curve, no graduation" },
   virtuals: { name: "Virtuals", chains: ["base", "robinhood"], mechanism: "AI-agent launchpad; bonding curve priced in VIRTUAL, graduates to a Uniswap V2 pool" },
   clanker:  { name: "Clanker", chains: ["base", "robinhood"], mechanism: "no bonding curve — a Uniswap v4 pool is created at launch" },
   zora:     { name: "Zora (incl. Base App coins)", chains: ["base"], mechanism: "content / creator coins, each in a Uniswap v4 pool from creation — no bonding curve" },

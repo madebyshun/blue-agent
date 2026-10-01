@@ -3,16 +3,39 @@
  * PURELY from chain state on the token's own chain (2026-10-01).
  *
  * Every probe is a reverse lookup the launchpad's own contracts answer:
- *   Pons V2   token.curve() → curve.factory() == PONS_V2_FACTORY → graduated()
- *   Doppler   Airlock.getAssetData(token) non-zero → integrator (Bankr or an
- *             unidentified front-end, by address) + migration target
+ *   Pons V2   token.curve() → curve.token() == token (the curve points BACK)
+ *             → curve.factory() == PONS_V2_FACTORY → graduated()
+ *   Doppler   Airlock.getAssetData(token) non-zero → integrator (Bankr's fee
+ *             address, or an unidentified integrator by address) + migration
+ *             target. The integrator is chosen by whoever calls
+ *             Airlock.create, so it is reported as "integrator = Bankr's fee
+ *             address", never as "launched by Bankr".
  *   Virtuals  Bonding.tokenInfo(token) → trading / tradingOnUniswap / agentToken;
  *             a GRADUATED agent token is a different address the bonding
  *             contract does not know, so it falls back to Virtuals' own keyless
  *             API (filters[tokenAddress]) — the one off-chain read here
  *   Clanker   factory.tokenDeploymentInfo(token).token == token (+ the token's
  *             self-declared `context.interface`, labelled as self-declared)
- *   Zora      token.hooks() == ZoraFactory.contentCoinHook()/creatorCoinHook()
+ *   Zora      ZoraFactory.getVersionForDeployedCoin(token) > 0 — the FACTORY's
+ *             own record of coins it deployed
+ *
+ * SPOOFING (review 2026-10-01). A probe that only asks the TOKEN is a probe
+ * the token can lie to. The old Zora probe trusted `token.hooks()`: any
+ * contract can return Zora's hook address, and that alone labelled it a Zora
+ * coin. It now asks the Zora factory, which records the version of every coin
+ * it deploys (measured 2026-10-01 on Base: two live coins from the factory's
+ * own CoinCreated logs read 4; the currency and hook addresses in the same
+ * logs read 0) — a token cannot write that mapping. A coin the factory has no
+ * record of is a miss, which may under-label a very old Zora coin; that is
+ * the safe direction.
+ * The old Pons probe trusted `token.curve()` and then asked THAT curve for
+ * its factory, so a token could name a real Pons curve it does not belong to.
+ * The curve must now name the token back (`curve.token()`, measured on a live
+ * RH Pons launch 2026-10-01; a revert there is a miss). Residual, stated
+ * rather than hidden: a token that ships its OWN fake curve answering both
+ * `token()` and `factory()` is not caught by reads alone — only the factory's
+ * TokenLaunched event would, and finding it needs the launch block, which a
+ * single overview cannot afford to scan for.
  *
  * A revert / empty return is a MISS. A network failure is NOT: it lands in
  * `unread`, and a token with no hit but an unread probe is "could not be
@@ -40,7 +63,7 @@ export interface LaunchpadResolution {
   launchpad: LaunchpadId | null;
   name: string | null;
   stage: LaunchStage;
-  /** Doppler front-end: "Bankr", or "unidentified front-end 0x…". */
+  /** Doppler integrator field: "Bankr's fee address 0x…", or "unidentified integrator 0x…". */
   frontEnd?: string;
   /** Facts read on-chain, as short phrases (shown to the user verbatim). */
   facts: string[];
@@ -57,11 +80,10 @@ const isZero = (a: string | undefined | null) => !a || a.toLowerCase() === ZERO;
 const ABI = {
   airlock: parseAbi(["function getAssetData(address) view returns (address numeraire, address timelock, address governance, address liquidityMigrator, address poolInitializer, address pool, address migrationPool, uint256 numTokensToSell, uint256 totalSupply, address integrator)"]),
   ponsToken: parseAbi(["function curve() view returns (address)"]),
-  ponsCurve: parseAbi(["function factory() view returns (address)", "function graduated() view returns (bool)"]),
+  ponsCurve: parseAbi(["function token() view returns (address)", "function factory() view returns (address)", "function graduated() view returns (bool)"]),
   clanker: parseAbi(["function tokenDeploymentInfo(address) view returns ((address token, address hook, address locker, address[] extensions))"]),
   clankerToken: parseAbi(["function allData() view returns (address originalAdmin, address admin, string image, string metadata, string context)"]),
-  zoraFactory: parseAbi(["function contentCoinHook() view returns (address)", "function creatorCoinHook() view returns (address)"]),
-  zoraCoin: parseAbi(["function hooks() view returns (address)"]),
+  zoraFactory: parseAbi(["function getVersionForDeployedCoin(address) view returns (uint8)"]),
   // BondingV5.tokenInfo — layout from the verified Base implementation
   // (0x20c1…db40 on base.blockscout.com); the RH deployment answers the same
   // layout (read back 2026-10-01 on a live RH launch).
@@ -93,6 +115,12 @@ function isMiss(e: unknown): boolean {
 async function probePons(c: PublicClient, token: Address): Promise<Probe> {
   const curve = await c.readContract({ address: token, abi: ABI.ponsToken, functionName: "curve" });
   if (isZero(curve)) return MISS;
+  // The curve must name this token back — otherwise any token could point at
+  // a real Pons curve and borrow its factory. No `token()` (revert) = a miss.
+  let back: Address;
+  try { back = await c.readContract({ address: curve, abi: ABI.ponsCurve, functionName: "token" }); }
+  catch (e) { if (isMiss(e)) return MISS; throw e; }
+  if (back.toLowerCase() !== token.toLowerCase()) return MISS;
   const factory = await c.readContract({ address: curve, abi: ABI.ponsCurve, functionName: "factory" });
   if (factory.toLowerCase() !== PONS_V2_FACTORY.toLowerCase()) return MISS;
   const graduated = await c.readContract({ address: curve, abi: ABI.ponsCurve, functionName: "graduated" });
@@ -118,13 +146,15 @@ async function probeDoppler(c: PublicClient, chain: LaunchChain, token: Address)
   return { hit: true, res: {
     launchpad: bankr ? "bankr" : "doppler",
     name: bankr ? LAUNCHPAD_INFO.bankr.name : LAUNCHPAD_INFO.doppler.name,
-    frontEnd: bankr ? "Bankr" : isZero(integrator) ? undefined : `unidentified front-end ${integrator}`,
+    frontEnd: bankr ? `Bankr's fee address ${integrator}` : isZero(integrator) ? undefined : `unidentified integrator ${integrator}`,
     // NoOp migrator + dead migration pool = the multicurve shape: the v4
     // position IS the market, there is nothing to graduate to. Any other
     // shape migrates when its sale ends, which a single read cannot date.
     stage: noMigration ? "pool_from_launch" : "unknown",
     facts: [
-      bankr ? "launched through Bankr's front-end on Doppler (Doppler integrator = Bankr's fee address)" : "launched on Doppler",
+      // NOT "launched through Bankr": Airlock.create lets its caller set the
+      // integrator, so the field names who takes the integrator fee, nothing more.
+      bankr ? "a Doppler launch whose integrator field is Bankr's fee address (set by whoever created it — not proof it was launched through Bankr's app)" : "launched on Doppler",
       noMigration ? "trades in its Uniswap v4 launch position — no curve, nothing to graduate to" : `migrates to ${migrationPool} when its sale ends (migrator ${migrator})`,
     ],
   } };
@@ -182,25 +212,24 @@ async function probeClanker(c: PublicClient, chain: LaunchChain, token: Address)
 }
 
 async function probeZora(c: PublicClient, token: Address): Promise<Probe> {
-  const hook = await c.readContract({ address: token, abi: ABI.zoraCoin, functionName: "hooks" });
-  const [content, creator] = await Promise.all([
-    c.readContract({ address: ZORA_FACTORY, abi: ABI.zoraFactory, functionName: "contentCoinHook" }),
-    c.readContract({ address: ZORA_FACTORY, abi: ABI.zoraFactory, functionName: "creatorCoinHook" }),
-  ]);
-  const h = hook.toLowerCase();
-  if (h !== content.toLowerCase() && h !== creator.toLowerCase()) return MISS;
+  // The factory's own deployment record — not anything the token says about
+  // itself (see the header: `token.hooks()` alone was spoofable).
+  const version = await c.readContract({ address: ZORA_FACTORY, abi: ABI.zoraFactory, functionName: "getVersionForDeployedCoin", args: [token] });
+  if (!version) return MISS;
   return { hit: true, res: {
     launchpad: "zora", name: LAUNCHPAD_INFO.zora.name, stage: "pool_from_launch",
-    facts: ["a Zora coin (the kind Base App posts and creators mint) — its own Uniswap v4 pool from creation"],
+    facts: [`a Zora coin (the kind Base App posts and creators mint), on the Zora factory's own deployment record (coin version ${version}) — its own Uniswap v4 pool from creation`],
   } };
 }
 
 /**
- * Is this token a Bankr launch? One Airlock read: true / false, or null when
- * the read failed (never treated as "no"). Used to check GeckoTerminal's
- * `bankr` pool listing, which also files pools Bankr did not launch.
+ * Is this token a Doppler launch whose integrator field is Bankr's fee
+ * address? One Airlock read: true / false, or null when the read failed (never
+ * treated as "no"). Used to check GeckoTerminal's `bankr` pool filings, which
+ * also include pools with no such Doppler record. A true here is the
+ * integrator field, not proof the launch went through Bankr's app.
  */
-export async function isBankrLaunch(chain: LaunchChain, token: Address): Promise<boolean | null> {
+export async function hasBankrIntegrator(chain: LaunchChain, token: Address): Promise<boolean | null> {
   try {
     const d = await launchClient(chain).readContract({ address: DOPPLER_AIRLOCK[chain], abi: ABI.airlock, functionName: "getAssetData", args: [token] });
     return d[9].toLowerCase() === BANKR_INTEGRATOR.toLowerCase();
