@@ -292,8 +292,9 @@ async function handleDrift(rest: string): Promise<string> {
   if (!found) {
     return `No live data for <b>${esc(ticker)}</b> in the latest cycle.`;
   }
-  // F6 — published through the quarantine: the RH desk's DEX price and drift
-  // are withheld with the reason, and the oracle price still answers.
+  // F6 — published through the quarantine: an RH row recorded before the
+  // 2026-10-01 pool-rate fix has its DEX price and drift withheld with the
+  // reason (newer rows publish as measured), and the oracle price still answers.
   const row = publishDeskRow(found);
   if (row.provenance === "quarantined" && row.verdict !== "ERROR") {
     return [

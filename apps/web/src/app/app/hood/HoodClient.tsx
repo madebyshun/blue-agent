@@ -1148,8 +1148,9 @@ function DriftRow({
           <FlashCell value={r.oracle_usd} />
         </td>
         <td className="px-3 py-2 text-right">
-          {/* The pool link stays on a withheld row: the pool is a real read,
-              only the price GeckoTerminal attaches to it is under repair. */}
+          {/* The pool link stays on a withheld row: the pool is a real read;
+              what is withheld is a DEX price recorded before the 2026-10-01
+              pool-rate fix (lib/blue-hood/quarantine.ts). */}
           {r.pool_ref ? (
             <a
               href={poolUrl(r.pool_ref, chainOf(r))}

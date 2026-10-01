@@ -130,6 +130,9 @@ export async function settleSessionTransport(wallet: string, token: string | nul
       return;
     }
   }
+  // Never keep a token this sign-in did not just prove — an older one (say,
+  // from before a wallet switch) would otherwise ride along on every call.
+  headerToken = null;
   if (viaCookie.s === "unknown") return;
   throw new Error(SESSION_NOT_KEPT);
 }
