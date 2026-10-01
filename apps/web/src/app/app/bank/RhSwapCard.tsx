@@ -330,7 +330,7 @@ export default function RhSwapCard({
   });
   useEffect(() => {
     if (mined && step === "broadcasting") setStep("done");
-    if (minedErr && step === "broadcasting") { setStep("error"); setErr("Swap reverted on-chain."); }
+    if (minedErr && step === "broadcasting") { setStep("error"); setErr("Trade reverted on-chain."); }
   }, [mined, minedErr, step]);
 
   async function doSwap() {
@@ -419,7 +419,7 @@ export default function RhSwapCard({
     } catch (e) {
       const m = (e as Error).message || String(e);
       const cancelled = /user rejected|denied|cancell?ed/i.test(m);
-      setErr(cancelled ? "Swap cancelled." : m.slice(0, 200));
+      setErr(cancelled ? "Trade cancelled." : m.slice(0, 200));
       setStep("error");
     }
   }
@@ -435,7 +435,7 @@ export default function RhSwapCard({
              className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#4FC3F730] text-[#4FC3F7] inline-block mt-1">View tx ↗</a>
         )}
         <button onClick={() => { setStep("idle"); setAmount(""); setTxHash(""); }}
-          className="font-mono text-[10px] text-slate-500 hover:text-slate-300 ml-3">Swap again</button>
+          className="font-mono text-[10px] text-slate-500 hover:text-slate-300 ml-3">Trade again</button>
       </div>
     );
   }
@@ -617,7 +617,7 @@ export default function RhSwapCard({
             : pt.state === "loading" ? "Checking this trade…"
             : pt.state === "throttled" ? "Check held — retry above"
             : !pt.cleared ? "Confirm the check above"
-            : `Swap ${amt > 0 ? fmt(amt) : ""} ${inSym}`}
+            : `Trade ${amt > 0 ? fmt(amt) : ""} ${inSym}`}
       </ConfirmButton>
       <CardNote>Robinhood Chain · you sign · non-custodial · 4663.</CardNote>
     </WalletCard>

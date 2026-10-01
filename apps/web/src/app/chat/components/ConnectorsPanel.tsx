@@ -433,8 +433,8 @@ const READS: { label: string; note: string }[] = [
   { label: "Stock tokens", note: "RH oracle quotes · Coinbase B20" },
 ];
 const ACTIONS: { label: string; note: string }[] = [
-  { label: "Swap on Base", note: "0x quote · your slippage" },
-  { label: "Swap on Robinhood", note: "floored by a minimum out" },
+  { label: "Trade on Base", note: "buy / sell · 0x quote · your slippage" },
+  { label: "Trade on Robinhood", note: "buy / sell · floored by a minimum out" },
   { label: "Send", note: "address or Basename" },
   { label: "Bridge Base ↔ Robinhood", note: "Relay, full cost shown" },
 ];

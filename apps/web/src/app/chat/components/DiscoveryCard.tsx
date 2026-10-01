@@ -236,10 +236,10 @@ export function DiscoveryCard({
                     className="font-mono text-[10px] font-bold px-2.5 py-1 rounded-lg shrink-0"
                     style={{ background: "#4FC3F712", color: "#4FC3F7", border: "1px solid #4FC3F740" }}
                   >
-                    {open === row.key ? "Close" : "Swap"}
+                    {open === row.key ? "Close" : "Trade"}
                   </button>
                 ) : (
-                  <span className="font-mono text-[9px] text-slate-600 shrink-0" title={row.noSwapReason}>no swap</span>
+                  <span className="font-mono text-[9px] text-slate-600 shrink-0" title={row.noSwapReason}>no trade</span>
                 )}
               </div>
               {open === row.key && row.swappable && <div className="mt-2">{renderSwap(row)}</div>}
@@ -248,7 +248,7 @@ export function DiscoveryCard({
         </div>
       )}
       {more > 0 && <p className="font-mono text-[10px] text-slate-600 mt-2">…and {more} more — search by name to find one.</p>}
-      <p className="font-mono text-[9px] text-slate-600 mt-2">Facts from the tool, not a buy signal · each Swap opens with that row&apos;s chain and contract; you review and sign.</p>
+      <p className="font-mono text-[9px] text-slate-600 mt-2">Facts from the tool, not a buy signal · each Trade opens with that row&apos;s chain and contract; you review and sign.</p>
     </div>
   );
 }

@@ -101,10 +101,10 @@ const LOOP_SKILLS: AgentSkill[] = [
     trigger: "Is this transaction safe to sign? to: 0x… data: 0x…", tools: ["hub_risk_gate"], meterIds: ["risk-gate"] },
   // TRADE — cards the user signs
   { id: "trade-swap-base", group: "trade", chains: ["base"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR, signs: true,
-    name: "Swap on Base", description: "Live 0x quote, your slippage, a pre-trade check — then you sign in your wallet",
-    trigger: "Swap 10 USDC to ETH on Base", tools: ["prepare_swap"] },
+    name: "Trade on Base", description: "Buy or sell any Base token — live 0x quote, your slippage, a pre-trade check, then you sign in your wallet",
+    trigger: "Buy $10 of ETH on Base", tools: ["prepare_swap"] },
   { id: "trade-swap-rh", group: "trade", chains: ["robinhood"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR, signs: true,
-    name: "Swap on Robinhood", description: "Buy or sell a stock token on Robinhood Chain, floored by a slippage minimum",
+    name: "Trade on Robinhood", description: "Buy or sell a token on Robinhood Chain — stock tokens included — floored by a slippage minimum",
     trigger: "Buy $20 of TSLA on Robinhood Chain", tools: ["robinhood_swap"] },
   { id: "trade-send", group: "trade", chains: ["base", "robinhood"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR, signs: true,
     name: "Send", description: "Send ETH or a token to an address or a Basename — the card shows exactly what leaves",

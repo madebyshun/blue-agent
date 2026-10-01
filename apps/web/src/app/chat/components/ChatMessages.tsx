@@ -398,7 +398,7 @@ const EMPTY_HEADING = "What do you want to do onchain?";
 const ONCHAIN_CHIPS: { label: string; prefill: string }[] = [
   { label: "Trending on Base",    prefill: "What's trending on Base?" },                 // hub_safe_trending
   { label: "Robinhood movers",    prefill: "Top movers on Robinhood Chain today" },      // hub_rh_movers
-  { label: "Swap",                prefill: "Swap 0.01 ETH to USDC on Base" },            // prepare_swap
+  { label: "Trade",               prefill: "Buy $5 of ETH on Base" },                    // prepare_swap
   { label: "Send",                prefill: "Send USDC on Base" },                        // prepare_send
   { label: "Bridge to Robinhood", prefill: "Bridge USDC from Base to Robinhood Chain" }, // robinhood_bridge
   { label: "My wallet",           prefill: "What's in my wallet?" },                     // check_wallet

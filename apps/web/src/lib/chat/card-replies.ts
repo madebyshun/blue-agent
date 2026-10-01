@@ -72,7 +72,7 @@ export function cardReply(tool: string, result: unknown, args: Json = {}): strin
         honeypots > 0 ? `${honeypots} measured as a honeypot (no Swap button)` : "",
         flagged > 0 ? `${flagged} carry flags` : "",
       ].filter(Boolean).join(", ");
-      return `${ok.length} trending token${ok.length === 1 ? "" : "s"} on Base above, each with its tax read from the contract${tail ? ` — ${tail}` : ""}. A clean scan is not a buy signal; tap Swap on a row to trade it.`;
+      return `${ok.length} trending token${ok.length === 1 ? "" : "s"} on Base above, each with its tax read from the contract${tail ? ` — ${tail}` : ""}. A clean scan is not a buy signal; tap Trade on a row to buy or sell it.`;
     }
     case "hub_rh_movers": {
       if (!Array.isArray(r.gainers) || !Array.isArray(r.losers)) return null;
@@ -83,7 +83,7 @@ export function cardReply(tool: string, result: unknown, args: Json = {}): strin
       const top = side(g);
       const bottom = side(l);
       if (!top && !bottom) return str(r.note) || "No Robinhood Chain stock token moved enough on a dollar-anchored pool to rank right now.";
-      return `Robinhood Chain movers (24h, pool price): ${[top ? `top ${top}` : "", bottom ? `bottom ${bottom}` : ""].filter(Boolean).join(" · ")}. Full list above; tap Swap on a row to trade it.`;
+      return `Robinhood Chain movers (24h, pool price): ${[top ? `top ${top}` : "", bottom ? `bottom ${bottom}` : ""].filter(Boolean).join(" · ")}. Full list above; tap Trade on a row to buy or sell it.`;
     }
     case "hub_rh_new_listings": {
       if (!Array.isArray(r.recent_deployments)) return null;

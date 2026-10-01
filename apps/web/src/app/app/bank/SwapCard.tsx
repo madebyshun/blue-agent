@@ -376,7 +376,7 @@ export default function SwapCard({
 
   async function swap() {
     if (!account) { setErr("Connect your wallet"); setStep("error"); return; }
-    if (quote?.needsKey) { setErr("Convert needs a 0x API key (ZEROX_API_KEY)"); setStep("error"); return; }
+    if (quote?.needsKey) { setErr("Trading needs a 0x API key (ZEROX_API_KEY)"); setStep("error"); return; }
     if (!quote?.transaction) { setErr(quote?.error || "No route for this pair"); setStep("error"); return; }
     setErr(""); setTxHash("");
     try {
@@ -430,7 +430,7 @@ export default function SwapCard({
              className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#4FC3F730] text-[#4FC3F7] inline-block mt-1">View tx ↗</a>
         )}
         <button onClick={() => { setStep("idle"); setAmount(""); setQuote(null); }}
-          className="font-mono text-[10px] text-slate-500 hover:text-slate-300 ml-3">Convert again</button>
+          className="font-mono text-[10px] text-slate-500 hover:text-slate-300 ml-3">Trade again</button>
       </div>
     );
   }
@@ -549,7 +549,7 @@ export default function SwapCard({
 
       <PreTradeBanner pt={pt} />
 
-      {quote?.needsKey && <p className="text-[9px] text-amber-400 mb-2">Convert needs a free 0x API key — set <span className="text-slate-300">ZEROX_API_KEY</span>.</p>}
+      {quote?.needsKey && <p className="text-[9px] text-amber-400 mb-2">Trading needs a free 0x API key — set <span className="text-slate-300">ZEROX_API_KEY</span>.</p>}
       {step === "error" && <p className="text-[10px] text-amber-400 mb-2">{err}</p>}
 
       {gate === "unverified" && (
@@ -566,7 +566,7 @@ export default function SwapCard({
           : pt.state === "loading" ? "Checking this trade…"
           : pt.state === "throttled" ? "Check held — retry above"
           : !pt.cleared ? "Confirm the check above"
-          : `Convert ${amt > 0 ? fmt(amt) : ""} ${label(sell)} → ${label(buy)}`}
+          : `Trade ${amt > 0 ? fmt(amt) : ""} ${label(sell)} → ${label(buy)}`}
       </ConfirmButton>
       <CardNote>Best route via 0x · 0x fee shown when quoted · you sign · non-custodial · Base mainnet.</CardNote>
     </WalletCard>

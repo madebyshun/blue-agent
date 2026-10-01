@@ -59,7 +59,7 @@ const movers = cardReply("hub_rh_movers", {
   gainers: [{ ticker: "MSTR", change_24h_pct: 4.2 }],
   losers: [{ ticker: "BABA", change_24h_pct: -3.15 }],
 });
-ok("movers quotes top and bottom from the payload", movers === "Robinhood Chain movers (24h, pool price): top MSTR +4.20% · bottom BABA -3.15%. Full list above; tap Swap on a row to trade it.", movers ?? "");
+ok("movers quotes top and bottom from the payload", movers === "Robinhood Chain movers (24h, pool price): top MSTR +4.20% · bottom BABA -3.15%. Full list above; tap Trade on a row to buy or sell it.", movers ?? "");
 
 const quote = cardReply("hub_rh_quote", { ticker: "NVDA", price_usd: 181.5, source: "chainlink", is_stale: true });
 ok("quote names the source and staleness", !!quote && quote.startsWith("NVDA on Robinhood Chain: $181.50 (Chainlink oracle, STALE"), quote ?? "");

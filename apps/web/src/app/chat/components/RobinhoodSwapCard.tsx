@@ -435,7 +435,7 @@ export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
     } catch (e) {
       const m = (e as Error).message || String(e);
       const cancelled = /user rejected|denied|cancell?ed/i.test(m);
-      setErr(cancelled ? "Swap cancelled." : m.slice(0, 200));
+      setErr(cancelled ? "Trade cancelled." : m.slice(0, 200));
       setStep("error");
     }
   }

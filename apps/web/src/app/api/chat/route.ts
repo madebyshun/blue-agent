@@ -1561,7 +1561,7 @@ async function callHubTool(
     if (usdIn && (!tokenIn || /^(usd|\$)$/i.test(tokenIn))) { tokenIn = "USDC"; amountIn = usdIn; }
     return {
       text: "Convert card rendered on BASE MAINNET (8453) — real funds, not a testnet. The card fetches a live 0x quote and the user reviews the rate and SIGNS in their own wallet (non-custodial). Do NOT quote a rate or output amount yourself, do NOT claim the swap happened, and do NOT describe this as a test. Reply with one short line: tell the user to review the quote in the card and sign.",
-      staticReply: "Your convert card is above — review the live quote, then sign the swap in your own wallet.",
+      staticReply: "Your Base trade card is above — review the live quote, then sign the trade in your own wallet.",
       result: {
         kind: "swap",
         tokenIn, tokenOut, amountIn, network: "base",
@@ -1919,10 +1919,10 @@ async function callHubTool(
     return {
       text: error
         ? `Robinhood swap card rendered with an error: ${error}. Reply with one short line telling the user; do NOT invent an address.`
-        : `Robinhood swap card rendered for ${modeDesc}. The card fetches the live Uniswap V3 route and shows a slippage picker; the user's own wallet signs approve (if selling or token↔token) + swap. Do NOT restate the fields as a table, do NOT claim the swap has executed. Reply with one short line telling the user to review the amount + slippage in the card and click the swap button to sign.`,
+        : `Robinhood swap card rendered for ${modeDesc}. The card fetches the live Uniswap V3 route and shows a slippage picker; the user's own wallet signs approve (if selling or token↔token) + swap. Do NOT restate the fields as a table, do NOT claim the swap has executed. Reply with one short line telling the user to review the amount + slippage in the card and click the Confirm button to sign.`,
       staticReply: error
         ? `⚠️ ${error}`
-        : `Your Robinhood swap card (${modeDesc}) is above — review the amount and slippage, then sign in your own wallet.`,
+        : `Your Robinhood trade card (${modeDesc}) is above — review the amount and slippage, then sign in your own wallet.`,
       result: {
         kind: "robinhood_swap",
         direction,
