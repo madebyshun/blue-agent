@@ -2,7 +2,8 @@
  * Validation of a watch rule — shared by /api/watches (POST) and the chat
  * tool that drafts one, so chat can never offer a rule the API would refuse.
  */
-import type { WatchDirection, WatchKind, WatchWindow } from "./types";
+import type { WatchCheckAt, WatchDirection, WatchKind, WatchTrade, WatchWindow } from "./types";
+import { QUANTITY_WORD_RE, wordToBps } from "@/lib/wallet/amount";
 
 export function parseRule(b: Record<string, unknown>): { kind: WatchKind; direction: WatchDirection; threshold: number; window?: WatchWindow } | { error: string } {
   const kind = b.kind === "change" ? "change" : b.kind === "price" ? "price" : null;
@@ -21,3 +22,47 @@ export function parseRule(b: Record<string, unknown>): { kind: WatchKind; direct
   return { kind, direction: b.direction, threshold, window };
 }
 
+
+/** A trade to prepare: buy = a dollar amount of the chain's cash; sell = a
+ *  token amount or a quantity word (all / max / half / N%). Missing → none. */
+export function parseTrade(v: unknown): { trade?: WatchTrade } | { error: string } {
+  if (v == null || v === "") return {};
+  if (typeof v !== "object") return { error: "trade must be { side, amount }" };
+  const t = v as Record<string, unknown>;
+  if (t.side !== "buy" && t.side !== "sell") return { error: "trade side is 'buy' or 'sell'" };
+  const amount = String(t.amount ?? "").trim().replace(/^\$/, "");
+  if (t.side === "buy") {
+    const n = Number(amount);
+    if (!Number.isFinite(n) || n <= 0 || n > 1_000_000) return { error: "a buy needs a dollar amount between 0 and 1,000,000" };
+    return { trade: { side: "buy", amount: String(n) } };
+  }
+  // Quantity words are lib/wallet/amount.ts's set — the same one the trade
+  // cards resolve against the live balance, so the card can honour any word
+  // accepted here. wordToBps rejects 0% and anything over 100%.
+  // wordToBps caps "150%" at everything (right for a live card, where the user
+  // is looking at it); a standing instruction refuses it instead, so what was
+  // saved is what was meant.
+  if (QUANTITY_WORD_RE.test(amount)) {
+    const overHundred = amount.endsWith("%") && parseFloat(amount) > 100;
+    return wordToBps(amount) != null && !overHundred
+      ? { trade: { side: "sell", amount: amount.toLowerCase() } }
+      : { error: "a sell percentage is between 0% and 100%" };
+  }
+  const n = Number(amount);
+  if (!Number.isFinite(n) || n <= 0) return { error: "a sell needs a token amount, or all / half / N%" };
+  return { trade: { side: "sell", amount: String(n) } };
+}
+
+/** A fixed check time (daily/weekly at HH:MM in an IANA zone). Missing → every 5 min. */
+export function parseCheckAt(v: unknown): { checkAt?: WatchCheckAt } | { error: string } {
+  if (v == null || v === "") return {};
+  if (typeof v !== "object") return { error: "check_at must be { schedule, time }" };
+  const c = v as Record<string, unknown>;
+  const schedule = c.schedule === "weekly" ? "weekly" : c.schedule === "daily" ? "daily" : null;
+  if (!schedule) return { error: "check_at.schedule is 'daily' or 'weekly'" };
+  const time = String(c.time ?? "");
+  const m = /^(\d{1,2}):(\d{2})$/.exec(time);
+  if (!m || Number(m[1]) > 23 || Number(m[2]) > 59) return { error: "check_at.time is HH:MM" };
+  const tz = typeof c.tz === "string" && /^[A-Za-z_]+(\/[A-Za-z_+-]+)*$/.test(c.tz) && c.tz.length <= 64 ? c.tz : undefined;
+  return { checkAt: { schedule, time: `${m[1].padStart(2, "0")}:${m[2]}`, ...(tz ? { tz } : {}) } };
+}

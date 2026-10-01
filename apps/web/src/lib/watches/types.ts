@@ -42,6 +42,27 @@ export interface WatchTarget {
   poolBase?: boolean;
 }
 
+/**
+ * What to PREPARE when the watch fires (2026-10-01). Never executed: the alert
+ * carries it, and the "Price alerts" chat renders the ordinary trade card
+ * filled with it — live quote, pre-trade check, and the user's own signature.
+ *   buy  → spend `amount` of the chain's cash (USDC on Base, USDG on Robinhood
+ *          Chain) on the watched token
+ *   sell → sell `amount` of the watched token for that cash — a number, or a
+ *          quantity word the card resolves against the live balance
+ */
+export interface WatchTrade { side: "buy" | "sell"; amount: string }
+
+/**
+ * Checked at a fixed time instead of every 5 minutes — an AUTOMATION: "every
+ * day at 09:00, if ETH is below $2,500, prepare a $50 buy". Each check stands
+ * alone (no re-arm band); a check whose condition does not hold is logged to
+ * the activity feed so the user can see it ran.
+ */
+export interface WatchCheckAt { schedule: "daily" | "weekly"; time: string; tz?: string }
+
+export const CASH: Record<"base" | "robinhood", string> = { base: "USDC", robinhood: "USDG" };
+
 export interface Watch extends WatchTarget {
   id: string;
   kind: WatchKind;
@@ -54,6 +75,11 @@ export interface Watch extends WatchTarget {
   createdAt: number;
   lastTriggeredAt?: number;
   lastError?: string;
+  trade?: WatchTrade;
+  checkAt?: WatchCheckAt;
+  /** Scheduled watches only: when the next check is due, and the last one. */
+  nextCheckAt?: number;
+  lastCheckedAt?: number;
 }
 
 export interface WatchAlert {
@@ -65,6 +91,8 @@ export interface WatchAlert {
   symbol: string;
   /** The whole message, written in code from the reading. */
   text: string;
+  /** The trade to prepare, when the watch carries one. */
+  trade?: WatchTrade & { cash: string };
 }
 
 export interface WatchReading {
@@ -83,6 +111,22 @@ export const CHAIN_NAME: Record<LaunchChain, string> = { base: "Base", robinhood
 function usd(n: number): string {
   if (n >= 1000) return `$${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
   return n >= 1 ? `$${n}` : `$${n.toPrecision(3)}`;
+}
+
+export function describeTrade(t: WatchTrade, symbol: string, chain: "base" | "robinhood"): string {
+  const cash = CASH[chain];
+  if (t.side === "buy") return `prepare a buy of ${/^\d/.test(t.amount) ? `$${t.amount}` : t.amount} of ${symbol} with ${cash}`;
+  return `prepare a sale of ${t.amount} ${symbol} for ${cash}`;
+}
+
+export function describeCheck(c: WatchCheckAt): string {
+  return `${c.schedule === "weekly" ? "every week" : "every day"} at ${c.time}${c.tz ? ` (${c.tz})` : ""}`;
+}
+
+/** The whole automation in one sentence — rule, timing and the prepared trade. */
+export function describeWatch(w: Pick<Watch, "kind" | "direction" | "threshold" | "window" | "symbol" | "chain" | "trade" | "checkAt">): string {
+  const when = w.checkAt ? `${describeCheck(w.checkAt)}, if ${describeRule(w)}` : `when ${describeRule(w)}`;
+  return w.trade ? `${when}, ${describeTrade(w.trade, w.symbol, w.chain)}` : `alert me ${when}`;
 }
 
 export function describeRule(w: Pick<Watch, "kind" | "direction" | "threshold" | "window" | "symbol" | "chain">): string {

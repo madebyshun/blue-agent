@@ -558,7 +558,25 @@ const ALL_HUB_TOOLS = [
         direction: { type: "string", enum: ["above", "below", "up", "down"], description: "above/below for price; up/down for change." },
         threshold: { type: "number", description: "USD level for price; percent (e.g. 20) for change. Exactly what the user said." },
         window:    { type: "string", enum: ["1h", "24h"], description: "Change alerts only. If the user gave no window, use 24h and say so." },
-        repeat:    { type: "boolean", description: "true = keep alerting each time it re-crosses (with a cooldown); default false = alert once." },
+        repeat:    { type: "boolean", description: "true = keep alerting each time it re-crosses (with a cooldown); default false = alert once. A scheduled check (scheduled_check) repeats by default." },
+        trade:     {
+          type: "object",
+          description: "OPTIONAL — an AUTOMATION: when it fires, PREPARE this trade for the user to sign (it never executes by itself). Only when the user asked for a buy/sell on trigger ('…then buy $50 of it', 'sell all if it drops below…'). buy = a dollar amount of the chain's cash (USDC on Base, USDG on Robinhood); sell = a token amount or all / half / N%.",
+          properties: {
+            side:   { type: "string", enum: ["buy", "sell"] },
+            amount: { type: "string", description: "buy: dollars, e.g. '50'. sell: token amount, or 'all' / 'half' / '25%'. Exactly what the user said." },
+          },
+          required: ["side", "amount"],
+        },
+        scheduled_check: {
+          type: "object",
+          description: "OPTIONAL — check at a fixed time instead of every 5 minutes: 'every day at 9am, if…'. Omit for 'whenever it happens'.",
+          properties: {
+            schedule: { type: "string", enum: ["daily", "weekly"] },
+            time:     { type: "string", description: "HH:MM, 24h, in the user's own time zone." },
+          },
+          required: ["schedule", "time"],
+        },
       },
       required: ["token", "chain", "kind", "direction", "threshold"],
     },
@@ -2140,11 +2158,13 @@ async function callHubTool(
     };
   }
   if (toolName === "set_price_alert") {
-    const { parseRule } = await import("@/lib/watches/rules");
+    const { parseRule, parseTrade, parseCheckAt } = await import("@/lib/watches/rules");
     const { resolveWatchTarget } = await import("@/lib/watches/prices");
-    const { describeRule } = await import("@/lib/watches/types");
+    const { describeWatch } = await import("@/lib/watches/types");
     const { fmtPrice } = await import("@/lib/watches/evaluate");
     const chain = args.chain === "base" || args.chain === "robinhood" ? args.chain : null;
+    const tr = parseTrade(args.trade);
+    const ca = parseCheckAt(args.scheduled_check);
     const token = typeof args.token === "string" ? args.token.trim() : "";
     const ruleArgs = { ...args, window: args.kind === "change" ? (args.window ?? "24h") : undefined };
     const rule = parseRule(ruleArgs);
@@ -2152,12 +2172,17 @@ async function callHubTool(
     if (!chain) return fail("Which chain should I watch — Base or Robinhood Chain?");
     if (!token) return fail("Which token? Give its 0x address or a verified stock ticker.");
     if ("error" in rule) return fail(`I can't set that alert: ${rule.error}.`);
+    if ("error" in tr) return fail(`I can't prepare that trade: ${tr.error}.`);
+    if ("error" in ca) return fail(`I can't schedule that check: ${ca.error}.`);
     const resolved = await resolveWatchTarget(chain, token);
     if ("error" in resolved) return fail(resolved.error);
     if (rule.kind === "change" && !resolved.target.pool) return fail("There is no pool to read a % change from for this token.");
-    const ruleText = describeRule({ ...rule, symbol: resolved.target.symbol, chain });
+    const ruleText = describeWatch({ ...rule, symbol: resolved.target.symbol, chain, trade: tr.trade, checkAt: ca.checkAt });
     const now = resolved.priceNow != null ? ` It is ${fmtPrice(resolved.priceNow)} now (${resolved.priceSource ?? "source unknown"}).` : "";
-    const line = `Alert me when ${ruleText}.${now} Press **Arm alert** on the card to start — checked every 5 minutes, free.`;
+    const sentence = ruleText.charAt(0).toUpperCase() + ruleText.slice(1);
+    const how = ca.checkAt ? "checked at that time" : "checked every 5 minutes";
+    const guard = tr.trade ? " When it fires, the trade card waits for your signature — nothing executes on its own." : "";
+    const line = `${sentence}.${now} Press **Arm** on the card to start — ${how}, free.${guard}`;
     return {
       text: `${line}\n[Card rendered. Do not claim the alert is active until the user arms it.]`,
       staticReply: line,
@@ -2165,7 +2190,12 @@ async function callHubTool(
         kind: "price_alert_draft",
         rule: ruleText,
         priceNow: resolved.priceNow,
-        body: { chain, token: resolved.target.token, kind: rule.kind, direction: rule.direction, threshold: rule.threshold, window: rule.window, repeat: args.repeat === true },
+        automation: !!(tr.trade || ca.checkAt),
+        // The browser's own zone for a scheduled check, filled in by the card.
+        body: { chain, token: resolved.target.token, kind: rule.kind, direction: rule.direction, threshold: rule.threshold, window: rule.window,
+          ...(typeof args.repeat === "boolean" ? { repeat: args.repeat } : {}),
+          ...(tr.trade ? { trade: tr.trade } : {}),
+          ...(ca.checkAt ? { check_at: ca.checkAt } : {}) },
       },
     };
   }
@@ -2176,7 +2206,7 @@ async function callHubTool(
     }
     const { readWatches, readAlerts } = await import("@/lib/watches/store");
     const { readReadings } = await import("@/lib/watches/prices");
-    const { describeRule } = await import("@/lib/watches/types");
+    const { describeWatch } = await import("@/lib/watches/types");
     const { fmtPrice } = await import("@/lib/watches/evaluate");
     const [w, a] = await Promise.all([readWatches(userAddress), readAlerts(userAddress)]);
     if (w.status === "unavailable" || a.status === "unavailable") {
@@ -2188,11 +2218,11 @@ async function callHubTool(
     }
     const readings = await readReadings(w.value);
     const pct = (n: number | null) => (n == null ? "?" : `${n > 0 ? "+" : ""}${n.toFixed(2)}%`);
-    const lines = [`**Your price alerts** (${w.value.filter((x) => x.active).length} active of ${w.value.length}):`];
+    const lines = [`**Your alerts & automations** (${w.value.filter((x) => x.active).length} active of ${w.value.length}):`];
     for (const x of w.value) {
       const r = readings.get(x.id);
       const price = r?.priceUsd != null ? fmtPrice(r.priceUsd) : "price unread";
-      lines.push(`- ${x.active ? "" : "(paused) "}${describeRule(x)} — now ${price}${r?.stale ? " (oracle stale — market closed)" : ""} · 1h ${pct(r?.change1h ?? null)} · 24h ${pct(r?.change24h ?? null)}`);
+      lines.push(`- ${x.active ? "" : "(paused) "}${describeWatch(x)} — now ${price}${r?.stale ? " (oracle stale — market closed)" : ""} · 1h ${pct(r?.change1h ?? null)} · 24h ${pct(r?.change24h ?? null)}`);
     }
     const day = Date.now() - 86_400_000;
     const recent = a.value.alerts.filter((x) => x.at >= day);

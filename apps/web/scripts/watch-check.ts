@@ -10,11 +10,12 @@
  *     a stock ticker resolves only from that chain's registry.
  *  4. Alerts become chat messages once each, oldest first, with a check chip.
  */
-import { evaluateWatch } from "../src/lib/watches/evaluate";
-import { parseRule } from "../src/lib/watches/rules";
+import { evaluateWatch, evaluateScheduled } from "../src/lib/watches/evaluate";
+import { parseRule, parseTrade, parseCheckAt } from "../src/lib/watches/rules";
+import { tradeToolLog } from "../src/app/chat/use-price-alerts";
 import { identify } from "../src/lib/watches/prices";
 import { alertMessages } from "../src/app/chat/use-price-alerts";
-import { describeRule, REARM_BAND, type Watch, type WatchReading } from "../src/lib/watches/types";
+import { describeRule, describeWatch, REARM_BAND, type Watch, type WatchReading } from "../src/lib/watches/types";
 import { findByTicker } from "../src/lib/robinhood/rwa-registry";
 import { pinnedTokenFor } from "../src/lib/wallet/pinned-symbols";
 
@@ -91,6 +92,46 @@ ok("only alerts after the synced mark", msgs.length === 2);
 ok("oldest first", msgs[0].content.startsWith("🔔 first") && msgs[1].content.startsWith("🔔 second"));
 ok("a one-tap check chip names the chain", msgs[0].content.includes("↳ Check 0xR on Robinhood Chain"));
 ok("nothing new → nothing appended", alertMessages(alerts, 200).length === 0);
+
+console.log("5. automations — prepared trades");
+ok("buy needs dollars", "error" in parseTrade({ side: "buy", amount: "all" }));
+ok("buy $50 → '50'", JSON.stringify(parseTrade({ side: "buy", amount: "$50" })) === '{"trade":{"side":"buy","amount":"50"}}');
+ok("sell all", JSON.stringify(parseTrade({ side: "sell", amount: "ALL" })) === '{"trade":{"side":"sell","amount":"all"}}');
+ok("sell 25%", "trade" in parseTrade({ side: "sell", amount: "25%" }));
+ok("sell 150% refused", "error" in parseTrade({ side: "sell", amount: "150%" }));
+ok("no trade → none", JSON.stringify(parseTrade(undefined)) === "{}");
+ok("a bad side is refused", "error" in parseTrade({ side: "short", amount: "1" }));
+
+const alertBase = { id: "x", watchId: "w", at: 1, chain: "base" as const, token: "0x4200000000000000000000000000000000000006", symbol: "ETH", text: "t" };
+const buyLog = tradeToolLog({ ...alertBase, trade: { side: "buy", amount: "50", cash: "USDC" } });
+const br = buyLog?.result as Record<string, string> | undefined;
+ok("Base buy → the convert card, USDC → native ETH", buyLog?.tool === "prepare_swap" && br?.tokenIn === "USDC"
+  && br?.tokenInAddress?.toLowerCase() === pinnedTokenFor("base", "USDC")!.toLowerCase()
+  && br?.tokenOutAddress === "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE" && br?.amountIn === "50", JSON.stringify(br));
+const rhSell = tradeToolLog({ ...alertBase, chain: "robinhood", token: "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC", symbol: "NVDA", trade: { side: "sell", amount: "half", cash: "USDG" } });
+const rr = rhSell?.result as Record<string, string> | undefined;
+ok("RH sell → the Robinhood swap card, token → USDG", rhSell?.tool === "robinhood_swap" && rr?.token_in_address === "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC"
+  && rr?.token_address?.toLowerCase() === pinnedTokenFor("robinhood", "USDG")!.toLowerCase() && rr?.amount === "half", JSON.stringify(rr));
+ok("a plain alert prepares nothing", tradeToolLog(alertBase) === null);
+const withTrade = alertMessages([{ ...alertBase, at: 500, trade: { side: "buy", amount: "50", cash: "USDC" } }], 0)[0];
+ok("the alert message carries the card and says nothing executes unsigned", !!withTrade.toolLogs?.length && /nothing executes unless you do/.test(withTrade.content));
+
+console.log("6. automations — scheduled checks");
+ok("check_at daily 9:00", JSON.stringify(parseCheckAt({ schedule: "daily", time: "9:00", tz: "Asia/Saigon" })) === '{"checkAt":{"schedule":"daily","time":"09:00","tz":"Asia/Saigon"}}');
+ok("bad time refused", "error" in parseCheckAt({ schedule: "daily", time: "25:00" }));
+ok("a junk tz is dropped, not trusted", JSON.stringify(parseCheckAt({ schedule: "weekly", time: "08:30", tz: "x; drop" })) === '{"checkAt":{"schedule":"weekly","time":"08:30"}}');
+const auto: Watch = { ...base, symbol: "ETH", chain: "base", asset: "crypto", direction: "below", threshold: 2500, repeat: true,
+  checkAt: { schedule: "daily", time: "09:00" }, trade: { side: "buy", amount: "50" } };
+ok("sentence: time, condition, prepared trade", describeWatch(auto) === "every day at 09:00, if ETH on Base falls to or below $2,500, prepare a buy of $50 of ETH with USDC", describeWatch(auto));
+let se = evaluateScheduled(auto, read(2400, { priceSource: "dexscreener" }), 1000, 9999);
+ok("condition holds → fires, stays active (repeat), next check set", se.fire && se.next.active && se.next.nextCheckAt === 9999 && se.next.lastCheckedAt === 1000);
+se = evaluateScheduled(auto, read(2600, { priceSource: "dexscreener" }), 1000, 9999);
+ok("condition fails → no fire, says what it saw", !se.fire && /\$2,600 \(DexScreener\) — not below \$2,500, nothing prepared/.test(se.text), se.text);
+se = evaluateScheduled(auto, read(null), 1000, 9999);
+ok("no reading → skipped, never 'condition false'", !se.fire && /could not be read/.test(se.text));
+se = evaluateScheduled({ ...auto, asset: "stock" }, read(2000, { stale: true }), 1000, 9999);
+ok("stale oracle → skipped, not fired", !se.fire && /market closed/.test(se.text));
+ok("a one-shot automation stops after it fires", evaluateScheduled({ ...auto, repeat: false }, read(2400, { priceSource: "dexscreener" }), 1, 2).next.active === false);
 
 console.log(failures === 0 ? "\nwatch-check: PASS" : `\nwatch-check: FAIL — ${failures}`);
 process.exit(failures === 0 ? 0 : 1);

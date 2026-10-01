@@ -25,8 +25,9 @@ import { readSession } from "@/lib/session";
 import { normalizeWallet, actingWalletRefusal } from "@/lib/acting-wallet";
 import { readAlerts, readWatches, mutateWatches, markSeen } from "@/lib/watches/store";
 import { resolveWatchTarget, readReadings } from "@/lib/watches/prices";
-import { MAX_WATCHES_PER_WALLET, describeRule, type Watch } from "@/lib/watches/types";
-import { parseRule } from "@/lib/watches/rules";
+import { MAX_WATCHES_PER_WALLET, describeWatch, type Watch } from "@/lib/watches/types";
+import { parseRule, parseTrade, parseCheckAt } from "@/lib/watches/rules";
+import { nextFireAt } from "@/lib/cron-schedule";
 
 export const runtime = "nodejs";
 const NO_STORE = { "Cache-Control": "no-store" } as const;
@@ -83,6 +84,10 @@ export async function POST(req: NextRequest) {
   if (typeof b.token !== "string" || !b.token.trim()) return bad("token is required");
   const rule = parseRule(b);
   if ("error" in rule) return bad(rule.error);
+  const tr = parseTrade(b.trade);
+  if ("error" in tr) return bad(tr.error);
+  const ca = parseCheckAt(b.check_at);
+  if ("error" in ca) return bad(ca.error);
 
   const existing = await readWatches(auth.wallet);
   if (existing.status === "unavailable") return bad("Watches unavailable right now — nothing was created.", 503);
@@ -94,19 +99,26 @@ export async function POST(req: NextRequest) {
   if (rule.kind === "change" && !t.pool) return bad("No pool to read a % change from for this token.", 422);
 
   const dup = existing.value.find((w) => w.chain === t.chain && w.token.toLowerCase() === t.token.toLowerCase()
-    && w.kind === rule.kind && w.direction === rule.direction && w.threshold === rule.threshold && (w.window ?? null) === (rule.window ?? null));
+    && w.kind === rule.kind && w.direction === rule.direction && w.threshold === rule.threshold && (w.window ?? null) === (rule.window ?? null)
+    && JSON.stringify(w.trade ?? null) === JSON.stringify(tr.trade ?? null) && JSON.stringify(w.checkAt ?? null) === JSON.stringify(ca.checkAt ?? null));
   if (dup) return bad("You already have this exact watch.", 409);
 
+  const now = Date.now();
   const watch: Watch = {
     ...t, ...rule,
     id: crypto.randomUUID(),
-    repeat: b.repeat === true,
+    // An automation asks its question every time it comes round, so it keeps
+    // running unless told to stop after the first hit; a plain alert is
+    // one-shot unless told to repeat.
+    repeat: ca.checkAt ? b.repeat !== false : b.repeat === true,
     active: true, armed: true,
-    createdAt: Date.now(),
+    createdAt: now,
+    ...(tr.trade ? { trade: tr.trade } : {}),
+    ...(ca.checkAt ? { checkAt: ca.checkAt, nextCheckAt: nextFireAt({ ...ca.checkAt }, now) } : {}),
   };
   const res = await mutateWatches(auth.wallet, (ws) => (ws.length >= MAX_WATCHES_PER_WALLET ? ws : [...ws, watch]));
   if (res !== "ok") return bad("Could not save the watch right now — nothing was created.", 503);
-  return NextResponse.json({ watch, rule: describeRule(watch), priceNow: resolved.priceNow }, { headers: NO_STORE });
+  return NextResponse.json({ watch, rule: describeWatch(watch), priceNow: resolved.priceNow }, { headers: NO_STORE });
 }
 
 export async function PATCH(req: NextRequest) {
@@ -120,7 +132,11 @@ export async function PATCH(req: NextRequest) {
   }
   if (typeof b.id !== "string" || typeof b.active !== "boolean") return bad("send { id, active } or { seen: true }");
   const active = b.active;
-  const res = await mutateWatches(auth.wallet, (ws) => ws.map((w) => (w.id === b.id ? { ...w, active, armed: active ? true : w.armed } : w)));
+  // Resuming an automation schedules its next check from now, not from a
+  // window that passed while it was paused.
+  const res = await mutateWatches(auth.wallet, (ws) => ws.map((w) => (w.id === b.id
+    ? { ...w, active, armed: active ? true : w.armed, ...(active && w.checkAt ? { nextCheckAt: nextFireAt({ ...w.checkAt }, Date.now()) } : {}) }
+    : w)));
   if (res !== "ok") return bad("Could not save — try again.", 503);
   return NextResponse.json({ ok: true }, { headers: NO_STORE });
 }

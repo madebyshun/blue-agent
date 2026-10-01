@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ALERTS_TASK_PREFIX } from "@/app/chat/use-price-alerts";
 import { ChatProvider, useChat } from "@/app/chat/ChatContext";
 import { useAppChrome, type DrawerNavItem, type DrawerRecent } from "@/app/app/AppChrome";
 
@@ -56,6 +57,21 @@ function ChatShell() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Deep-link /chat?alerts=1 (from Scheduled → Activity / Alerts): open the
+  // "🔔 Price alerts" conversation, where a fired automation's trade card waits
+  // for a signature. Waits for the wallet's conversations to load; the param
+  // is dropped once it has been honoured.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("alerts") !== "1") return;
+    const t = tasks.find((x) => x.id.startsWith(ALERTS_TASK_PREFIX) && x.messages.length > 0);
+    if (!t) return;
+    selectTask(t.id);
+    url.searchParams.delete("alerts");
+    window.history.replaceState({}, "", url.pathname + url.search);
+  }, [tasks, selectTask]);
 
   // Register Blue Chat's sub-nav, recents and credit chip into the shell —
   // desktop sidebar and mobile drawer both read this. Re-runs when the

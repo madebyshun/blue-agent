@@ -70,3 +70,49 @@ export function evaluateWatch(w: Watch, r: WatchReading, now: number): Evaluatio
   }
   return { fire: false, next: w };
 }
+
+export interface ScheduledEvaluation {
+  fire: boolean;
+  /** Fired: the alert text. Not fired: what the check saw, for the feed. */
+  text: string;
+  next: Watch;
+}
+
+/**
+ * An automation's check at its set time. Unlike `evaluateWatch` each check
+ * stands alone — no armed state, no re-arm band: "every day at 09:00, if ETH is
+ * below $2,500" asks a fresh question every morning. Missing data or a stale
+ * oracle is NOT "condition false": it is reported as unreadable, and the
+ * next check comes round as usual.
+ */
+export function evaluateScheduled(w: Watch, r: WatchReading, now: number, nextCheckAt: number): ScheduledEvaluation {
+  const who = `${w.symbol} (${CHAIN_NAME[w.chain]})`;
+  const next: Watch = { ...w, lastCheckedAt: now, nextCheckAt };
+  const src = r.priceSource === "chainlink" ? "Chainlink oracle" : r.priceSource === "dexscreener" ? "DexScreener" : "GeckoTerminal";
+
+  if (w.kind === "price") {
+    const p = r.priceUsd;
+    if (p == null) return { fire: false, text: `${who}: price could not be read at the scheduled check — skipped.`, next };
+    if (r.priceSource === "chainlink" && r.stale) return { fire: false, text: `${who}: the oracle is not updating (market closed) — skipped, ${fmtPrice(p)} is the last close.`, next };
+    const hit = w.direction === "above" ? p >= w.threshold : p <= w.threshold;
+    if (!hit) return { fire: false, text: `${who} is ${fmtPrice(p)} (${src}) — not ${w.direction} ${fmtPrice(w.threshold)}, nothing prepared.`, next };
+    return {
+      fire: true,
+      text: `${who} is ${fmtPrice(p)} (${src}) — ${w.direction} ${fmtPrice(w.threshold)} at the scheduled check.`,
+      next: { ...next, lastTriggeredAt: now, active: w.repeat ? true : false },
+    };
+  }
+  const win = w.window ?? "24h";
+  const ch = win === "1h" ? r.change1h : r.change24h;
+  const label = win === "1h" ? "1h" : "24h";
+  if (ch == null) return { fire: false, text: `${who}: ${label} change could not be read at the scheduled check — skipped.`, next };
+  const hit = w.direction === "up" ? ch >= w.threshold : ch <= -w.threshold;
+  const chSrc = r.changeSource === "geckoterminal" ? "GeckoTerminal" : "DexScreener";
+  const pctText = `${ch > 0 ? "+" : ""}${ch.toFixed(2)}% over ${label} (${chSrc})`;
+  if (!hit) return { fire: false, text: `${who} is ${pctText} — not ${w.direction} ${w.threshold}%, nothing prepared.`, next };
+  return {
+    fire: true,
+    text: `${who} is ${pctText} at the scheduled check.`,
+    next: { ...next, lastTriggeredAt: now, active: w.repeat ? true : false },
+  };
+}
