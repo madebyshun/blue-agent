@@ -2602,6 +2602,8 @@ async function veniceToolStream(
   // into a paid Hub tool, and an unmapped `mcp__` name falls through to
   // callHubTool, which fails honestly rather than inventing a result.
   mcpMap?:         Map<string, McpToolEntry>,
+  // Same deadline as callVeniceStream — Phase 2 streams long-form too.
+  deadlineAt?:     number,
 ): Promise<Response> {
   const cfg = cfgOverride ?? veniceCfg(apiKey);
   const enc = new TextEncoder();
@@ -2742,6 +2744,8 @@ async function veniceToolStream(
         // upstream calls. #193 is specifically about turns that produced
         // NOTHING; this is not one of them.
         let streamRes: Response;
+        // First-byte / idle timeout, not a total one — see idleTimeout().
+        const idle = idleTimeout(deadlineAt);
         try {
           const veniceParams = cfg.veniceExtras
             ? { venice_parameters: { ...cfg.veniceExtras, ...(enableWebSearch ? { enable_web_search: "on" } : {}) } }
@@ -2753,41 +2757,64 @@ async function veniceToolStream(
               model: modelId, messages: phase2Msgs, stream: true, max_tokens: maxTokens,
               ...veniceParams,
             }),
-            signal: AbortSignal.timeout(60_000),
+            signal: idle.signal,
           });
         } catch (e) {
+          idle.clear();
           console.warn(`[chat] ${cfg.provider} tool-stream crashed: ${(e as Error).message}`);
           emit({ delta: { text: "Tool temporarily unavailable. Please try again." } });
           controller.enqueue(enc.encode("data: [DONE]\n\n")); controller.close(); return;
         }
         if (!streamRes.ok) {
-          const err = await streamRes.text();
+          const err = await streamRes.text().catch(() => "");
+          idle.clear();
           const label = cfg.provider === "venice" ? "Venice" : "Virtuals";
           emit({ delta: { text: `[${label} error ${streamRes.status}: ${err.slice(0, 100)}]` } });
           controller.enqueue(enc.encode("data: [DONE]\n\n")); controller.close(); return;
         }
 
-        // Pipe with <think> parsing
+        // Pipe with <think> parsing. The upstream `[DONE]` is held and one
+        // terminal `[DONE]` is written last (same rule as callVeniceStream).
         const think = makeThinkParser(controller);
         const reader = streamRes.body!.getReader(); const dec = new TextDecoder(); let rawBuf = "";
+        let interrupted: "timeout" | "dropped" | null = null;
+        let wrote = false;
         try {
-          while (true) {
-            const { done, value } = await reader.read(); if (done) break;
-            rawBuf += dec.decode(value, { stream: true });
+          read: while (true) {
+            let step: ReadableStreamReadResult<Uint8Array>;
+            try { step = await reader.read(); }
+            catch (e) {
+              interrupted = idle.reason ? "timeout" : "dropped";
+              console.warn(`[chat] ${cfg.provider} tool-stream ${interrupted}: ${(e as Error)?.message ?? e}`);
+              break;
+            }
+            if (step.done) break;
+            idle.touch();
+            rawBuf += dec.decode(step.value, { stream: true });
             const lines = rawBuf.split("\n"); rawBuf = lines.pop() ?? "";
             for (const line of lines) {
               if (!line.startsWith("data: ")) continue;
               const raw = line.slice(6).trim();
-              if (raw === "[DONE]") { think.end(); controller.enqueue(enc.encode("data: [DONE]\n\n")); continue; }
+              if (raw === "[DONE]") break read;
               try {
                 const p = JSON.parse(raw) as { choices?: { delta?: { content?: string } }[] };
                 const chunk = p?.choices?.[0]?.delta?.content ?? "";
-                if (chunk) think.push(chunk);
+                if (chunk) { wrote = true; think.push(chunk); }
               } catch {}
             }
           }
           think.end();
-        } finally { controller.close(); }
+          if (interrupted) {
+            emit({ delta: { text: interrupted === "timeout"
+              ? (wrote ? "\n\n_(Timed out — the answer was cut here. Say \"continue\" for the rest.)_" : "The model timed out before writing a summary — the tool results above are complete.")
+              : (wrote ? "\n\n_(The connection to the model dropped — the answer was cut here.)_" : "The connection to the model dropped before it wrote a summary — the tool results above are complete.") } });
+          }
+        } finally {
+          idle.clear();
+          reader.cancel().catch(() => { /* already closed or aborted */ });
+          controller.enqueue(enc.encode("data: [DONE]\n\n"));
+          controller.close();
+        }
       } catch (e) { controller.error(e); }
     },
   });
@@ -2893,6 +2920,59 @@ Type /credits to check balance.
 Type /skill install <url> for custom skills.`,
 };
 
+// ─── Stream timeouts ──────────────────────────────────────────────────────────
+//
+// `AbortSignal.timeout(60_000)` on a streaming fetch is a TOTAL timeout: it
+// also aborts the BODY read. A 4,096-token long-form answer (LONG_FORM_MAX_TOKENS)
+// takes longer than 60s on the slower presets, so it was cut mid-sentence and —
+// because the read loop had no catch — with no notice and no length note. The
+// timeout that protects the user is a FIRST-BYTE / IDLE one: the upstream must
+// answer, and then keep talking, but a long answer that keeps streaming is
+// allowed to finish. A route-level deadline caps the whole thing below
+// `maxDuration`, so Vercel never kills the function mid-stream instead.
+
+/** Seconds of upstream silence (before headers, or between chunks) that end a stream. */
+const STREAM_IDLE_MS_DEFAULT = 60_000;
+/** Stop streaming this long before `maxDuration` so the close + refund still run. */
+const ROUTE_DEADLINE_MARGIN_MS = 10_000;
+/** The absolute deadline for a request that started now (ms since epoch). */
+function routeDeadlineFrom(startMs: number): number {
+  return startMs + maxDuration * 1000 - ROUTE_DEADLINE_MARGIN_MS;
+}
+function streamIdleMs(): number {
+  // Env override exists for the hermetic test only (a route file may not
+  // export anything but its handlers and config). Unset in every deployment.
+  const n = Number(process.env.CHAT_STREAM_IDLE_MS);
+  return Number.isFinite(n) && n > 0 ? n : STREAM_IDLE_MS_DEFAULT;
+}
+
+/**
+ * An AbortSignal that fires after `idleMs` of silence, re-armed by `touch()`
+ * on every chunk, and never later than `deadlineAt`. `reason` says which fired.
+ */
+function idleTimeout(deadlineAt?: number) {
+  const idleMs = streamIdleMs();
+  const ctl = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let reason: "idle" | "deadline" | null = null;
+  const arm = () => {
+    if (timer) clearTimeout(timer);
+    const remaining = deadlineAt != null ? deadlineAt - Date.now() : Infinity;
+    const which: "idle" | "deadline" = remaining <= idleMs ? "deadline" : "idle";
+    timer = setTimeout(() => {
+      reason = which;
+      ctl.abort(new Error(`chat stream ${which} timeout`));
+    }, Math.max(0, Math.min(idleMs, remaining)));
+  };
+  arm();
+  return {
+    signal: ctl.signal,
+    touch: () => { if (!ctl.signal.aborted) arm(); },
+    clear: () => { if (timer) clearTimeout(timer); },
+    get reason() { return reason; },
+  };
+}
+
 // ─── Venice direct stream (no tools) ─────────────────────────────────────────
 
 async function callVeniceStream(
@@ -2908,8 +2988,12 @@ async function callVeniceStream(
   // condition the chat debit has to be undone under (#193). It fires at most
   // once per request, and never once any content has been emitted.
   onNoOutput?:     () => Promise<void>,
+  // Absolute deadline (ms since epoch) from `routeDeadlineFrom` — the stream
+  // ends with a "timed out" note before the function's maxDuration.
+  deadlineAt?:     number,
 ): Promise<Response> {
   const cfg = cfgOverride ?? veniceCfg(apiKey);
+  const idle = idleTimeout(deadlineAt);
   let veniceRes: Response;
   try {
     const veniceParams = cfg.veniceExtras
@@ -2925,9 +3009,10 @@ async function callVeniceStream(
         max_tokens: maxTokens,
         ...veniceParams,
       }),
-      signal: AbortSignal.timeout(60_000),
+      signal: idle.signal,
     });
   } catch (e) {
+    idle.clear();
     console.warn(`[chat] ${cfg.provider} stream fetch crashed: ${(e as Error).message}`);
     await onNoOutput?.();
     return textToSSE(
@@ -2937,7 +3022,8 @@ async function callVeniceStream(
   }
 
   if (!veniceRes.ok) {
-    const err = await veniceRes.text();
+    const err = await veniceRes.text().catch(() => "");
+    idle.clear();
     const label = cfg.provider === "venice" ? "Venice" : "Virtuals";
     const hint = veniceRes.status === 401
       ? `${label} API key is invalid or expired — please contact support.`
@@ -2984,6 +3070,10 @@ async function callVeniceStream(
       let filtered = false;
       let contentChars = 0;
       let noted = false;
+      // The body read ended early: the idle/deadline timer fired ("timeout"),
+      // or the connection broke ("dropped"). Without this the answer just
+      // stopped mid-sentence with no notice.
+      let interrupted: "timeout" | "dropped" | null = null;
 
       const emit = (obj: object) => {
         emittedOutput = true;
@@ -2991,6 +3081,21 @@ async function callVeniceStream(
       };
       const lengthNote = () => {
         if (noted) return;
+        if (interrupted) {
+          noted = true;
+          if (contentChars > 0) {
+            emit({ delta: { text: interrupted === "timeout"
+              ? "\n\n_(Timed out — the answer was cut here. Say \"continue\" for the rest, or ask about a smaller piece.)_"
+              : "\n\n_(The connection to the model dropped — the answer was cut here. Say \"continue\" for the rest.)_" } });
+          } else {
+            // Around `emit` on purpose, like the zero-content length case:
+            // nothing was delivered, so the turn is refunded.
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ delta: { text: interrupted === "timeout"
+              ? "The model timed out before writing an answer. Nothing was charged — send it again, or ask about a smaller piece."
+              : "The connection to the model dropped before it wrote an answer. Nothing was charged — send it again." } })}\n\n`));
+          }
+          return;
+        }
         if (filtered) {
           noted = true;
           const msg = contentChars > 0
@@ -3050,23 +3155,31 @@ async function callVeniceStream(
         }
       }
 
+      // The upstream's own `[DONE]` is HELD, never forwarded: the client stops
+      // reading at the first `[DONE]` it sees, so forwarding it here put the
+      // `upstream_error` (the refund / failed-turn signal) written below AFTER
+      // the point the client had already stopped listening. Exactly one
+      // terminal `[DONE]` is written, last, in the finally block.
       try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          rawBuf += decoder.decode(value, { stream: true });
+        read: while (true) {
+          let step: ReadableStreamReadResult<Uint8Array>;
+          try {
+            step = await reader.read();
+          } catch (e) {
+            interrupted = idle.reason ? "timeout" : "dropped";
+            console.warn(`[chat] ${cfg.provider} stream ${interrupted}: ${(e as Error)?.message ?? e}`);
+            break;
+          }
+          if (step.done) break;
+          idle.touch();
+          rawBuf += decoder.decode(step.value, { stream: true });
           const lines = rawBuf.split("\n");
           rawBuf = lines.pop() ?? "";
 
           for (const line of lines) {
             if (!line.startsWith("data: ")) continue;
             const raw = line.slice(6).trim();
-            if (raw === "[DONE]") {
-              flush(true);
-              lengthNote();
-              controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-              continue;
-            }
+            if (raw === "[DONE]") break read;
             try {
               const parsed = JSON.parse(raw) as { choices?: { delta?: { content?: string }; finish_reason?: string | null }[] };
               const chunk  = parsed?.choices?.[0]?.delta?.content ?? "";
@@ -3080,6 +3193,8 @@ async function callVeniceStream(
         flush(true); // drain on stream end
         lengthNote();
       } finally {
+        idle.clear();
+        reader.cancel().catch(() => { /* already closed or aborted */ });
         // Upstream accepted the request and then said nothing. The user is
         // looking at a blank reply, so the charge goes back — awaited BEFORE
         // the close so the refund isn't racing a torn-down function instance.
@@ -3087,7 +3202,9 @@ async function callVeniceStream(
           controller.enqueue(encoder.encode(
             `data: ${JSON.stringify({ type: "upstream_error", provider: cfg.provider, status: 204 })}\n\n`,
           ));
-          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+        }
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+        if (!emittedOutput) {
           try { await onNoOutput?.(); } catch { /* best-effort, already logged */ }
         }
         controller.close();
@@ -3253,6 +3370,9 @@ function extractWebSearchSources(resp: LLMResponse): WebSearchSource[] {
 // ─── Route ────────────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
+  // Everything below — GitHub reads, Phase 1, the stream — has to finish
+  // inside maxDuration; the streams stop themselves at this deadline.
+  const deadlineAt = routeDeadlineFrom(Date.now());
   const { success, remaining } = await rateLimit(getIdentifier(req), "chat");
   if (!success) {
     return NextResponse.json(
@@ -3591,7 +3711,7 @@ export async function POST(req: NextRequest) {
       if (outcome.status === "tools") {
         return veniceToolStream(
           apiKey, effModelId, openaiMsgs, outcome.toolCalls, maxTok, autoSearch, payer, undefined,
-          hasConnectorTools ? mcpMap : undefined,
+          hasConnectorTools ? mcpMap : undefined, deadlineAt,
         );
       }
       // Detection broke → this request ends up carrying NO tools. Rebuild the
@@ -3604,7 +3724,7 @@ export async function POST(req: NextRequest) {
     }
 
     // No tools (or E2EE): direct stream
-    return callVeniceStream(apiKey, effModelId, openaiMsgs, maxTok, autoSearch, undefined, undoDebit);
+    return callVeniceStream(apiKey, effModelId, openaiMsgs, maxTok, autoSearch, undefined, undoDebit, deadlineAt);
   }
 
 
@@ -3697,7 +3817,7 @@ export async function POST(req: NextRequest) {
     if (outcome.status === "tools") {
       return veniceToolStream(
         virtualsKey, virtualsModel, openaiMsgs, outcome.toolCalls, virtualsMax, virtualsAutoSearch, payer, cfg,
-        hasConnectorTools ? mcpMap : undefined,
+        hasConnectorTools ? mcpMap : undefined, deadlineAt,
       );
     }
     // Same rebuild as the Venice branch. This is the path that hit the PAID
@@ -3709,6 +3829,6 @@ export async function POST(req: NextRequest) {
     }
   }
   return callVeniceStream(
-    virtualsKey, virtualsModel, openaiMsgs, virtualsMax, virtualsAutoSearch, cfg, undoDebit,
+    virtualsKey, virtualsModel, openaiMsgs, virtualsMax, virtualsAutoSearch, cfg, undoDebit, deadlineAt,
   );
 }
