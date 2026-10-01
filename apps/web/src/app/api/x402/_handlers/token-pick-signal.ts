@@ -2,7 +2,9 @@
 // The top Base token by an on-chain QUALITY score, from REAL Base pools
 // (GeckoTerminal trending + new). Candidates are hard-filtered for quality
 // (liquidity, volume, anti-pump, thin-liq-vs-mcap), then SCORED in code
-// (liquidity health, turnover, momentum, divergence).
+// (liquidity health, turnover, momentum, divergence). A `context` that names a
+// focus (volume / momentum / divergence) re-weights that score, and the
+// response then says so (`score_basis`) — see contextWeights.
 //
 // 🔴 FACTS ONLY since 2026-09-30 (plan §3 fix 3, §7 #8). It used to return
 // "BUY / WATCH / SKIP" plus a model-written thesis, entry, kill-criterion and
@@ -99,15 +101,28 @@ function qualityScore(s: ReturnType<typeof subScores>): number {
   ));
 }
 
-// Context-weighted rank (selection only; quality stays absolute for confidence).
-function rankScore(s: ReturnType<typeof subScores>, ctx: string): number {
+// Context-weighted score. 🔴 THE SCORE THAT ORDERS THE LIST IS THE SCORE SHOWN
+// (2026-10-01). This used to be a hidden `rank` that chose the pick while the
+// summary and the card printed the fixed-weight `quality` and called the pick
+// "Highest on-chain quality score" — so with the Hub's own default context
+// ("rising volume, real liquidity") the pick could score 58 above a "Next: B
+// (61)" on the same card. Now `score` IS this number, the summary names the
+// weighting that produced it, and the fixed-weight number ships beside it as
+// `quality_score`. With no matching context the weights are FIXED_W and the
+// two are equal.
+export function contextWeights(ctx: string): { w: typeof FIXED_W; focus: string[] } {
   const c = ctx.toLowerCase();
   const w = { ...FIXED_W };
-  if (/volume|liquid|turnover|active/.test(c))                       w.vol += 0.15;
-  if (/momentum|rising|breakout|trend|runner|pump|moving|climb/.test(c)) w.mom += 0.15;
-  if (/divergence|accumulat|alpha|quiet|stealth|undervalued|radar/.test(c)) w.div += 0.15;
+  const focus: string[] = [];
+  if (/volume|liquid|turnover|active/.test(c))                           { w.vol += 0.15; focus.push("volume"); }
+  if (/momentum|rising|breakout|trend|runner|pump|moving|climb/.test(c)) { w.mom += 0.15; focus.push("momentum"); }
+  if (/divergence|accumulat|alpha|quiet|stealth|undervalued|radar/.test(c)) { w.div += 0.15; focus.push("divergence"); }
+  return { w, focus };
+}
+
+function weightedScore(s: ReturnType<typeof subScores>, w: typeof FIXED_W): number {
   const sum = w.liq + w.vol + w.lm + w.mom + w.div;
-  return (w.liq * s.liqHealth + w.vol * s.volMom + w.lm * s.liqMcap + w.mom * s.momentum + w.div * s.divergence) / sum;
+  return Math.round(100 * (w.liq * s.liqHealth + w.vol * s.volMom + w.lm * s.liqMcap + w.mom * s.momentum + w.div * s.divergence) / sum);
 }
 
 // ── FIX 3 — signal type assigned from data ────────────────────────────────────
@@ -132,11 +147,37 @@ function cautionFlags(p: Pool): string[] {
 
 type Scored = {
   p: Pool;
+  /** Fixed-weight quality score (FIXED_W). */
   quality: number;
-  rank: number;
+  /** The context-weighted score — what the list is ordered by, and what is shown as `score`. */
+  score: number;
   signal_type: "building" | "spike" | "divergence";
   caution: string[];
 };
+
+/**
+ * Score every survivor and order it by the score that will be SHOWN. Pure and
+ * exported so scripts/token-pick-facts-test.ts pins the ordering ↔ label
+ * agreement without GeckoTerminal.
+ */
+export function scorePools(pools: Pool[], context: string): { scored: Scored[]; basis: string } {
+  const { w, focus } = contextWeights(context);
+  const scored: Scored[] = pools.map((p) => {
+    const s = subScores(p);
+    return { p, quality: qualityScore(s), score: weightedScore(s, w), signal_type: signalType(p, s.turnover), caution: cautionFlags(p) };
+  });
+  // Shown score first; the fixed-weight quality breaks ties.
+  scored.sort((a, b) => b.score - a.score || b.quality - a.quality);
+  const basis = focus.length
+    ? `an on-chain quality score weighted toward ${focus.join(" + ")} (from your context)`
+    : "an on-chain quality score";
+  return { scored, basis };
+}
+
+/** The pick's one-line summary, in code, naming the weighting that chose it. */
+export function pickSummary(top: Scored, qualifying: number, basis: string): string {
+  return `Highest score by ${basis} (${top.score}/100) of ${qualifying} qualifying Base pools: liquidity ${fmtUsd(top.p.liquidityUsd)}, 24h volume ${fmtUsd(top.p.volume24h)}, 24h change ${fmtPct(top.p.change.h24)}, ${top.signal_type} signal.`;
+}
 
 function scoredLine(s: Scored, i: number): string {
   const p = s.p;
@@ -213,17 +254,10 @@ export default async function handler(req: Request): Promise<Response> {
     }
 
     // FIX 2/3/4 — score + classify every survivor
-    const scored: Scored[] = pool.map((p) => {
-      const s = subScores(p);
-      return { p, quality: qualityScore(s), rank: rankScore(s, context), signal_type: signalType(p, s.turnover), caution: cautionFlags(p) };
-    });
-    scored.sort((a, b) => b.rank - a.rank); // context-relevant order; quality stays absolute
+    const { scored, basis } = scorePools(pool, context);
 
     const top = scored[0];
     const others = scored.slice(1, 5);
-    const validSymbols = scored.map((s) => s.p.baseSymbol);
-
-    void validSymbols; // the top row is code-selected from the real list; symbols listed for audit
 
     // Every figure below is from the pool read; the summary is written in code.
     const pick = {
@@ -235,16 +269,19 @@ export default async function handler(req: Request): Promise<Response> {
       cap_tier: capLabel(top.p.marketCap),
       liquidity: fmtUsd(top.p.liquidityUsd),
       volume_24h: fmtUsd(top.p.volume24h),
-      score: top.quality,
+      score: top.score,
+      quality_score: top.quality,
+      score_basis: basis,
       signal_type: top.signal_type,
       caution: top.caution,
-      summary: `Highest on-chain quality score (${top.quality}/100) of ${pool.length} qualifying Base pools: liquidity ${fmtUsd(top.p.liquidityUsd)}, 24h volume ${fmtUsd(top.p.volume24h)}, 24h change ${fmtPct(top.p.change.h24)}, ${top.signal_type} signal.`,
+      summary: pickSummary(top, pool.length, basis),
       url: top.p.url || null,
     };
 
     const near_misses = others.map((s) => ({
       token: s.p.baseSymbol,
-      score: s.quality,
+      score: s.score,
+      quality_score: s.quality,
       signal_type: s.signal_type,
       cap_tier: capLabel(s.p.marketCap),
       caution: s.caution,
@@ -257,7 +294,8 @@ export default async function handler(req: Request): Promise<Response> {
       pick,
       near_misses,
       quality_score: top.quality,
-      note: `${capTier ? `Top ${capTier.tier}-cap` : "Top"} Base token by an on-chain quality score — facts from live pools, not a recommendation to buy or sell.`,
+      score_basis: basis,
+      note: `${capTier ? `Top ${capTier.tier}-cap` : "Top"} Base token by ${basis} — facts from live pools, not a recommendation to buy or sell.`,
       filters_applied,        // FIX 7
       candidates_scanned: candidatesBefore,
     });

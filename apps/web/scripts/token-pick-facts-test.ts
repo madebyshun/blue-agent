@@ -12,6 +12,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { HALTED_TOOLS } from "../src/lib/tool-halts";
+import { scorePools, pickSummary } from "../src/app/api/x402/_handlers/token-pick-signal";
 
 let failures = 0;
 function ok(label: string, cond: boolean) {
@@ -87,6 +88,37 @@ const aiPickAt = AI_PLUGIN.indexOf("token-pick-signal ($0.20)");
 const aiPick = aiPickAt < 0 ? "" : AI_PLUGIN.slice(aiPickAt, AI_PLUGIN.indexOf("market-fit (", aiPickAt));
 ok("token-pick-signal is described as facts, not setups",
   aiPick.length > 0 && !/asymmetric|setup/i.test(aiPick) && !/\bBUY\b/.test(aiPick) && /no buy\/sell call/.test(aiPick));
+
+// ── The score that orders the list is the score shown (2026-10-01) ─────────────
+// The pick was chosen by a hidden context-weighted `rank` while the summary
+// said "Highest on-chain quality score (58/100)" and the card printed
+// "Next: B (61)". Hermetic: two fixture pools whose fixed-weight and
+// volume-weighted orders DISAGREE, so the check exercises the case it guards.
+console.log("\nthe pick's label matches what chose it");
+const pool = (sym: string, liq: number, vol: number, h1: number, h6: number, h24: number, mcap: number) => ({
+  name: `${sym} / WETH`, baseSymbol: sym, quoteSymbol: "WETH", poolAddress: "", baseAddress: "", quoteAddress: "", dex: "",
+  priceUsd: 1, change: { h1, h6, h24 }, volume24h: vol, liquidityUsd: liq,
+  marketCap: mcap, marketCapReported: mcap, fdv: mcap, url: "",
+});
+// A: churns its pool 4x a day on a +50% day, modest depth. B: deep and calm.
+const A = pool("AAA", 300_000, 1_200_000, 0, 0, 50, 10_000_000);
+const B = pool("BBB", 5_000_000, 600_000, 1, 6, 10, 40_000_000);
+const plain = scorePools([A, B], "");
+const vol = scorePools([A, B], "rising volume, real liquidity"); // the Hub's default context
+ok("fixture: the fixed-weight and the context-weighted orders disagree",
+  plain.scored[0].p.baseSymbol !== vol.scored[0].p.baseSymbol);
+for (const [label, r] of [["no context", plain], ["volume context", vol]] as const) {
+  const [top, ...rest] = r.scored;
+  ok(`${label}: the pick has the highest SHOWN score (${top.score}; next ${rest.map((x) => x.score).join(", ")})`,
+    rest.every((x) => x.score <= top.score));
+}
+ok("no context: shown score == fixed-weight quality, and the basis says so",
+  plain.scored.every((x) => x.score === x.quality) && plain.basis === "an on-chain quality score");
+ok("context: the basis names the weighting, and the summary carries it",
+  /weighted toward volume/.test(vol.basis) && pickSummary(vol.scored[0], 2, vol.basis).includes(vol.basis) &&
+  pickSummary(vol.scored[0], 2, vol.basis).includes(`(${vol.scored[0].score}/100)`));
+ok("the handler ships the shown score as `score` and the fixed one beside it",
+  /score:\s*top\.score/.test(H) && /quality_score:\s*top\.quality/.test(H) && /score:\s*s\.score/.test(H) && !/\.rank\b/.test(H));
 
 console.log(failures === 0 ? "\ntoken-pick-facts-test: PASS" : `\ntoken-pick-facts-test: FAIL — ${failures}`);
 process.exit(failures === 0 ? 0 : 1);
