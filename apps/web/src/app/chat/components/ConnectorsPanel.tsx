@@ -39,6 +39,7 @@ const FILTERS: { id: Filter; label: string }[] = [
 export default function ConnectorsPanel({ onPick }: { onPick?: () => void }) {
   void onPick;
   const connectors = useConnectors();
+  const github = CONNECTOR_PRESETS.find((p) => p.id === "github");
   const toolCount = connectors.reduce((n, c) => n + c.tools.length, 0);
 
   // Gallery state
@@ -112,6 +113,9 @@ export default function ConnectorsPanel({ onPick }: { onPick?: () => void }) {
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     return CONNECTOR_PRESETS.filter(p => {
+      // Blue Hub is BUILT IN to Chat (the card at the top) — attaching our own
+      // MCP server as a connector would register every tool twice.
+      if (p.id === BUILT_IN_PRESET) return false;
       if (filter !== "all" && p.auth !== filter) return false;
       if (!q) return true;
       return (p.name + " " + p.description + " " + p.category).toLowerCase().includes(q);
@@ -126,7 +130,7 @@ export default function ConnectorsPanel({ onPick }: { onPick?: () => void }) {
           the mobile "+ Custom" affordance rides in the gallery toolbar below. */}
       <div className="hidden lg:flex items-center gap-3.5 flex-wrap shrink-0 min-h-[56px] px-5 py-2 border-b border-[#1A1A2E]">
         <span className="font-mono text-[11px] font-semibold tracking-[0.16em] text-[#E2E8F0]">// CONNECTORS</span>
-        <span className="font-mono text-[10.5px] text-[#64748B]">MCP servers · output is treated as untrusted third-party data</span>
+        <span className="font-mono text-[10.5px] text-[#64748B]">what Chat is plugged into · onchain built in · MCP servers you add</span>
         <div className="ml-auto flex items-center gap-2">
           <span className="font-mono text-[10px] text-[#94A3B8] border border-[#1A1A2E] rounded-[7px] px-2.5 py-[5px]">
             {connectors.length} attached · {toolCount} tools
@@ -143,6 +147,51 @@ export default function ConnectorsPanel({ onPick }: { onPick?: () => void }) {
       {/* Content */}
       <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="px-5 py-[18px] space-y-6 mx-auto w-full max-w-6xl">
+
+          <BuiltInOnchain />
+          <OnchainPolicy />
+
+          {/* Connect more — the two that matter most, ahead of the gallery. */}
+          <section>
+            <p className="font-mono text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">CONNECT MORE</p>
+            <div className="mt-3 grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))" }}>
+              {github && (
+                <button
+                  type="button"
+                  onClick={() => onPresetClick(github, isPresetAdded(connectors, github))}
+                  className="text-left rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] px-4 py-3.5 hover:border-[#4FC3F7]/45 transition-colors"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <BrandMark brand={github.brand} size={24} />
+                    <span className="font-mono text-[12.5px] font-semibold text-[#E2E8F0]">GitHub MCP</span>
+                    <span className="ml-auto font-mono text-[8.5px] font-medium rounded-full px-[7px] py-[2px] border"
+                      style={isPresetAdded(connectors, github)
+                        ? { color: "#34D399", borderColor: "rgba(52,211,153,.35)" }
+                        : { color: "#F59E0B", borderColor: "rgba(245,158,11,.35)" }}>
+                      {isPresetAdded(connectors, github) ? "CONNECTED" : "NEEDS KEY"}
+                    </span>
+                  </div>
+                  <p className="font-prose text-[10.5px] leading-[1.6] text-[#94A3B8] mt-2">
+                    Repos, issues, PRs and code from your own GitHub token. The token stays in this browser.
+                  </p>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={openCustom}
+                className="text-left rounded-[14px] border border-dashed border-[#1A1A2E] px-4 py-3.5 hover:border-[#4FC3F7]/45 transition-colors"
+              >
+                <div className="flex items-center gap-2.5">
+                  <span className="w-6 h-6 rounded-md border border-[#1A1A2E] flex items-center justify-center font-mono text-[13px] text-[#4FC3F7]">+</span>
+                  <span className="font-mono text-[12.5px] font-semibold text-[#E2E8F0]">Custom remote MCP</span>
+                  <span className="ml-auto font-mono text-[8.5px] font-medium text-[#A78BFA] border border-[#A78BFA]/35 rounded-full px-[7px] py-[2px]">BETA</span>
+                </div>
+                <p className="font-prose text-[10.5px] leading-[1.6] text-[#94A3B8] mt-2">
+                  Any Streamable-HTTP MCP server by URL. Its tools are tested before they attach, and their output is treated as untrusted.
+                </p>
+              </button>
+            </div>
+          </section>
 
           {/* Attached connectors */}
           {connectors.length > 0 && (
@@ -367,5 +416,123 @@ export default function ConnectorsPanel({ onPick }: { onPick?: () => void }) {
         </div>
       )}
     </div>
+  );
+}
+
+// ── Built in: Blue Agent onchain ────────────────────────────────────────────────
+// The Dot-style "connected" card for what Chat has without attaching anything
+// (ShunTr, 2026-10-01). Every line is a chat tool that exists today — the
+// Skills page and scripts/chat-skills-check.ts hold the same list honest.
+const BUILT_IN_PRESET = "blue-hub";
+
+const READS: { label: string; note: string }[] = [
+  { label: "Wallet holdings", note: "Base + Robinhood Chain" },
+  { label: "Token prices", note: "live, with 24h change" },
+  { label: "Safety checks", note: "honeypot, tx risk, contract" },
+  { label: "Discovery", note: "trending Base · RH movers & listings" },
+  { label: "Stock tokens", note: "RH oracle quotes · Coinbase B20" },
+];
+const ACTIONS: { label: string; note: string }[] = [
+  { label: "Swap on Base", note: "0x quote · your slippage" },
+  { label: "Swap on Robinhood", note: "floored by a minimum out" },
+  { label: "Send", note: "address or Basename" },
+  { label: "Bridge Base ↔ Robinhood", note: "Relay, full cost shown" },
+];
+
+function BuiltInOnchain() {
+  return (
+    <section>
+      <p className="font-mono text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">BUILT IN · ALWAYS ON</p>
+      <div className="mt-3 rounded-[14px] border px-4 py-4" style={{ borderColor: "rgba(79,195,247,.28)", background: "rgba(79,195,247,.04)" }}>
+        <div className="flex items-center gap-3 flex-wrap">
+          <BrandMark brand="blue-agent" size={28} />
+          <div className="min-w-0">
+            <span className="block font-mono text-[13px] font-semibold text-[#E2E8F0]">Blue Agent onchain</span>
+            <span className="block font-mono text-[9.5px] text-[#64748B] mt-0.5">Base 8453 · Robinhood Chain 4663 · non-custodial</span>
+          </div>
+          <span className="ml-auto font-mono text-[9px] font-semibold rounded-full px-2 py-[3px]" style={{ color: "#34D399", background: "rgba(52,211,153,.12)" }}>
+            ● CONNECTED
+          </span>
+        </div>
+        <div className="grid gap-4 mt-4" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))" }}>
+          <div>
+            <p className="font-mono text-[9px] tracking-[0.14em] text-[#64748B]">READS · NO SIGNATURE</p>
+            <ul className="mt-2 space-y-1.5">
+              {READS.map((r) => (
+                <li key={r.label} className="flex items-baseline gap-2 font-mono text-[10.5px]">
+                  <span className="text-[#34D399]">✓</span>
+                  <span className="text-[#E2E8F0]">{r.label}</span>
+                  <span className="text-[#475569] truncate">{r.note}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <p className="font-mono text-[9px] tracking-[0.14em] text-[#64748B]">ACTIONS · YOU SIGN</p>
+            <ul className="mt-2 space-y-1.5">
+              {ACTIONS.map((a) => (
+                <li key={a.label} className="flex items-baseline gap-2 font-mono text-[10.5px]">
+                  <span className="text-[#4FC3F7]">✎</span>
+                  <span className="text-[#E2E8F0]">{a.label}</span>
+                  <span className="text-[#475569] truncate">{a.note}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 mt-4 flex-wrap">
+          <p className="flex-1 min-w-[220px] font-prose text-[10.5px] leading-[1.6] text-[#94A3B8]">
+            Every action is a card with the quote and a pre-trade check. Blue Agent never holds a key: nothing moves until your own wallet signs.
+          </p>
+          <a href="/skills" className="font-mono text-[10.5px] text-[#4FC3F7] hover:underline shrink-0">All skills →</a>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ── Onchain actions — the policy, stated ────────────────────────────────────────
+// Dot offers Allow / Ask / Never per action. Here the answer is fixed by
+// construction, so it is shown as a fact, not a setting: there is no "Always"
+// for a transaction because Blue Agent cannot sign one.
+const POLICY: { action: string; mode: "Always" | "Ask" | "You"; detail: string }[] = [
+  { action: "Read balances & prices", mode: "Always", detail: "Nothing leaves your wallet; no signature." },
+  { action: "Build a swap / send / bridge", mode: "Ask", detail: "Only when you ask in chat — shown as a card with the quote and a pre-trade check." },
+  { action: "Sign & send the transaction", mode: "You", detail: "Always in your own wallet. Blue Agent holds no keys and cannot send for you." },
+];
+const MODES = ["Always", "Ask", "You"] as const;
+
+function OnchainPolicy() {
+  return (
+    <section>
+      <p className="font-mono text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">ONCHAIN ACTIONS</p>
+      <div className="mt-3 rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] divide-y divide-[#1A1A2E]">
+        {POLICY.map((p) => (
+          <div key={p.action} className="flex items-center gap-3 px-4 py-3 flex-wrap">
+            <div className="flex-1 min-w-[200px]">
+              <span className="block font-mono text-[11.5px] text-[#E2E8F0]">{p.action}</span>
+              <span className="block font-prose text-[10px] text-[#64748B] mt-0.5">{p.detail}</span>
+            </div>
+            <div className="flex rounded-[8px] border border-[#1A1A2E] overflow-hidden shrink-0" aria-label={`${p.action}: ${p.mode}`}>
+              {MODES.map((m) => (
+                <span key={m}
+                  className="font-mono text-[9.5px] px-2.5 py-1"
+                  style={m === p.mode
+                    ? { color: "#050508", background: m === "You" ? "#34D399" : ACCENT, fontWeight: 600 }
+                    : { color: "#334155" }}>
+                  {m}
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
+        <div className="px-4 py-3">
+          <span className="font-mono text-[9px] tracking-[0.14em] text-[#64748B]">REFUSED ON EVIDENCE</span>
+          <p className="font-prose text-[10.5px] text-[#94A3B8] mt-1 leading-[1.6]">
+            A token impersonating a registered one, a sell tax measured at 50% or more, a bridge whose measured cost is over 20% of the amount. Anything unmeasured is a warning you tick, never a silent pass.
+          </p>
+        </div>
+      </div>
+    </section>
   );
 }
