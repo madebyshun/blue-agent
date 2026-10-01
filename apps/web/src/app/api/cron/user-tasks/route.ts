@@ -42,6 +42,7 @@
  * Auth: `Authorization: Bearer $CRON_SECRET` (or `?secret=`) — the house pattern.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { runWatchTick } from "@/lib/watches/tick";
 import { kvTryLock, kvDel, kvSet } from "@/lib/kv";
 import {
   listOwners,
@@ -373,6 +374,17 @@ export async function GET(req: NextRequest) {
   }
 
   const now = Date.now();
+
+  // 0. Price watches (lib/watches) ride this same 5-minute timer, BEFORE the
+  //    schedule watermark below — that watermark only knows prompt schedules
+  //    and would otherwise park every watch for up to an hour. Its own lock,
+  //    its own failure: a watch error never blocks a scheduled prompt.
+  try {
+    const w = await runWatchTick(now);
+    if (w.watches > 0 || w.skipped) console.info(`[watch] ${JSON.stringify(w)}`);
+  } catch (e) {
+    console.error(`[watch] tick failed: ${redactWallets((e as Error).message)}`);
+  }
 
   // 1. The one-read fast path. See the header — this is what keeps the whole
   //    feature inside the KV budget.
