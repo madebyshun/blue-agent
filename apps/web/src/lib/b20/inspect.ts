@@ -92,6 +92,15 @@ export interface B20Inspection {
   // Admin status — only populated/meaningful when an account is passed to inspect
   admin?: AdminInfo;
 
+  /**
+   * Reads that FAILED (RPC error / revert), by field: "isB20",
+   * "paused.transfer" | "paused.mint" | "paused.burn",
+   * "policies.transferSender" | … . For back-compat the fields above keep
+   * their old fallbacks (isB20 false, paused false, policy open), so a
+   * consumer that states them as facts must check this list first.
+   */
+  unread?: string[];
+
   // Basescan link
   explorerUrl: string;
 
@@ -178,10 +187,15 @@ export async function inspectB20(
   const initialized = ok<boolean>(r1[1]);
 
   if (!isB20Val) {
+    // A FAILED factory read is not the factory saying "no".
+    const isB20Unread = isB20Val === undefined;
     return {
       address, network, isB20: false, initialized: false,
+      ...(isB20Unread ? { unread: ["isB20"] } : {}),
       explorerUrl: explorer,
-      _note:       "Address is not registered as a B20 token by the B20Factory.",
+      _note:       isB20Unread
+        ? "The B20Factory isB20() read failed — whether this is a B20 token is unknown, not 'no'."
+        : "Address is not registered as a B20 token by the B20Factory.",
       timestamp:   Date.now(),
       rpcLatencyMs: Date.now() - t0,
     };
@@ -193,9 +207,15 @@ export async function inspectB20(
   const decimals    = ok<number>(r1[4]) ?? 18;
   const totalSupply = ok<bigint>(r1[5]);
   const supplyCap   = ok<bigint>(r1[6]);
-  const pauseXfer   = ok<boolean>(r1[7]) ?? false;
-  const pauseMint   = ok<boolean>(r1[8]) ?? false;
-  const pauseBurn   = ok<boolean>(r1[9]) ?? false;
+  const unread: string[] = [];
+  const pauseRead = (i: number, field: string): boolean => {
+    const v = ok<boolean>(r1[i]);
+    if (v === undefined) unread.push(field);
+    return v ?? false;
+  };
+  const pauseXfer   = pauseRead(7, "paused.transfer");
+  const pauseMint   = pauseRead(8, "paused.mint");
+  const pauseBurn   = pauseRead(9, "paused.burn");
   const scopeSender = ok<`0x${string}`>(r1[10]);
   const scopeRcvr   = ok<`0x${string}`>(r1[11]);
   const scopeExec   = ok<`0x${string}`>(r1[12]);
@@ -229,10 +249,15 @@ export async function inspectB20(
       ],
     });
 
-    const pidSender = ok<bigint>(r2[0]) ?? ALWAYS_ALLOW_POLICY_ID;
-    const pidRcvr   = ok<bigint>(r2[1]) ?? ALWAYS_ALLOW_POLICY_ID;
-    const pidExec   = ok<bigint>(r2[2]) ?? ALWAYS_ALLOW_POLICY_ID;
-    const pidMintR  = ok<bigint>(r2[3]) ?? ALWAYS_ALLOW_POLICY_ID;
+    const pidRead = (i: number, field: string): bigint => {
+      const v = ok<bigint>(r2[i]);
+      if (v === undefined) unread.push(field);
+      return v ?? ALWAYS_ALLOW_POLICY_ID;
+    };
+    const pidSender = pidRead(0, "policies.transferSender");
+    const pidRcvr   = pidRead(1, "policies.transferReceiver");
+    const pidExec   = pidRead(2, "policies.transferExecutor");
+    const pidMintR  = pidRead(3, "policies.mintReceiver");
 
     // ── Round 3 — policyAdmin for custom policies ─────────────────────────
     // Exclude both sentinels: ALWAYS_ALLOW (0) and ALWAYS_BLOCK have no admin.
@@ -318,6 +343,7 @@ export async function inspectB20(
     paused:  { transfer: pauseXfer, mint: pauseMint, burn: pauseBurn },
     policies,
     admin,
+    ...(unread.length > 0 ? { unread } : {}),
     explorerUrl: explorer,
     // Role enumeration is intentionally absent — B20 does not expose
     // getRoleMemberCount / getRoleMembers (no AccessControlEnumerable).

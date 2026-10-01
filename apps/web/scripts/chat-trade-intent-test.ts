@@ -89,6 +89,18 @@ ok("b20 inspect states supply, cap and pause from the payload", b20.includes("Su
 ok("b20 inspect states each scope's policy", b20.includes("send gated by policy #5 · receive open to all"));
 ok("b20 isB20=false is stated, not described", (cardReply("hub_b20_inspect", { address: "0xabc", isB20: false }) ?? "").includes("is NOT a B20 token"));
 ok("b20 with unread pause is 'unknown', never 'nothing paused'", !(cardReply("hub_b20_inspect", { address: "0xabc", isB20: true, symbol: "Xc" }) ?? "").includes("nothing paused"));
+// Review 2026-10-01: inspectB20 maps FAILED reads to isB20=false / paused=false
+// / policy open and lists them in `unread`; the reply must not state those.
+const failedIsB20 = cardReply("hub_b20_inspect", { address: "0xabc", isB20: false, unread: ["isB20"] }) ?? "";
+ok("b20 with a failed isB20() read is 'could not read', never 'NOT a B20'", /Could not read whether 0xabc is a B20/.test(failedIsB20) && !/is NOT a B20/.test(failedIsB20), failedIsB20);
+const partial = cardReply("hub_b20_inspect", {
+  address: "0xb20000000000000000000078ee7ce2fE4908108C", network: "mainnet", isB20: true, symbol: "Xc",
+  paused: { transfer: false, mint: false, burn: false },
+  policies: { transferSender: { kind: "open", policyId: "0" }, transferReceiver: { kind: "open", policyId: "0" }, transferExecutor: { kind: "open", policyId: "0" }, mintReceiver: { kind: "custom", policyId: "5" } },
+  unread: ["paused.mint", "policies.transferSender"],
+}) ?? "";
+ok("b20 with an unread pause read never says 'nothing paused'", !partial.includes("nothing paused") && /pause state of mint could not be read/.test(partial) && /not paused: transfer, burn/.test(partial), partial);
+ok("b20 with an unread policy read never says 'open to all' for it", /send could not be read/.test(partial) && /receive open to all/.test(partial), partial);
 ok("b20 inspect is not marked as a card", !CARD_RENDERED_TOOLS.has("hub_b20_inspect") && CARD_RENDERED_TOOLS.has("hub_rh_quote"));
 
 ok("every card tool is a real chat tool name (hub_ prefix)", [...CARD_REPLY_TOOLS].every((t) => t.startsWith("hub_")));

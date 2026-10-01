@@ -142,6 +142,11 @@ export function cardReply(tool: string, result: unknown, args: Json = {}): strin
       const addr = str(r.address);
       const net = r.network === "sepolia" ? "Base Sepolia" : "Base mainnet";
       if (!addr || typeof r.isB20 !== "boolean") return null;
+      // inspectB20 keeps old fallbacks (isB20 false, paused false, policy
+      // open) for reads that FAILED and lists those reads in `unread`. A
+      // definite claim is made only from a read that succeeded.
+      const unread = new Set(Array.isArray(r.unread) ? r.unread.filter((x): x is string => typeof x === "string") : []);
+      if (unread.has("isB20")) return `Could not read whether ${addr} is a B20 token on ${net} — the B20 Factory's isB20() read failed. That is not a "no"; try again in a moment.`;
       if (!r.isB20) return `${addr} is NOT a B20 token on ${net} — the B20 Factory's isB20() returned false.`;
       const sym = str(r.symbol);
       const head = `**${sym || addr}**${str(r.name) ? ` (${str(r.name)})` : ""} on ${net} — a B20 token, ${r.variant === "STABLECOIN" ? `stablecoin${str(r.currency) ? ` (${str(r.currency)})` : ""}` : r.variant === "ASSET" ? "asset variant" : "variant unknown"}${typeof r.decimals === "number" ? `, ${r.decimals} decimals` : ""}.`;
@@ -151,12 +156,25 @@ export function cardReply(tool: string, result: unknown, args: Json = {}): strin
         : "unknown";
       const cap = r.supplyCapUncapped === true ? "uncapped" : str(r.supplyCapFormatted) || "unknown";
       const p = r.paused as { transfer?: boolean; mint?: boolean; burn?: boolean } | undefined;
-      const pausedList = p ? (["transfer", "mint", "burn"] as const).filter((k) => p[k] === true) : null;
-      const paused = pausedList == null ? "unknown" : pausedList.length === 0 ? "nothing paused" : `paused: ${pausedList.join(", ")}`;
+      const feats = ["transfer", "mint", "burn"] as const;
+      const paused = (() => {
+        if (!p) return "pause state unknown";
+        const known = (k: (typeof feats)[number]) => !unread.has(`paused.${k}`) && typeof p[k] === "boolean";
+        const yes = feats.filter((k) => known(k) && p[k] === true);
+        const no = feats.filter((k) => known(k) && p[k] === false);
+        const unk = feats.filter((k) => !known(k));
+        if (unk.length === 0) return yes.length === 0 ? "nothing paused" : `paused: ${yes.join(", ")}`;
+        return [
+          yes.length > 0 ? `paused: ${yes.join(", ")}` : "",
+          no.length > 0 ? `not paused: ${no.join(", ")}` : "",
+          `pause state of ${unk.join(", ")} could not be read`,
+        ].filter(Boolean).join("; ");
+      })();
       const pol = r.policies as Record<string, { policyId?: string; kind?: string }> | undefined;
       const scope = (k: string, label: string) => {
         const x = pol?.[k];
         if (!x) return `${label} unknown`;
+        if (unread.has(`policies.${k}`)) return `${label} could not be read`;
         return `${label} ${x.kind === "open" ? "open to all" : x.kind === "blocked" ? "blocked for all" : `gated by policy #${x.policyId ?? "?"}`}`;
       };
       const policies = pol
