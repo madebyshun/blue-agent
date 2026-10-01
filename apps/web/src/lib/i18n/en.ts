@@ -154,6 +154,7 @@ export const en = {
     // Sidebar group headers — the 3 Agent-OS pillars + account band.
     group_agent: "Agent",
     group_explore: "Explore",
+    group_extend: "Extend",
     group_hub: "Hub",
     group_account: "Account",
   },

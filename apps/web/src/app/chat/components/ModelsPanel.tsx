@@ -427,6 +427,17 @@ export default function ModelsPanel({ onPick }: { onPick?: (id: string) => void 
                             <span className="font-mono text-[10px] text-slate-600 truncate block">
                               {isPresets ? `${row.publisher.label} · ${row.modelId}` : row.modelId}
                             </span>
+                            {/* Below lg the capabilities column is hidden, so the
+                                same chips ride under the name — on a phone this is
+                                the only place to learn a preset cannot use tools. */}
+                            {isPresets && row.blueChat && (
+                              <div className="flex flex-wrap gap-1 mt-1 lg:hidden">
+                                {row.blueChat.tools     && <Chip label="Tools"  color="#4FC3F7" />}
+                                {row.blueChat.webSearch && <Chip label="Search" color="#22D3EE" />}
+                                {row.blueChat.privacy   && <Chip label="E2EE"   color="#6EE7B7" />}
+                                {!row.blueChat.tools    && <Chip label="Chat only" color="#64748b" />}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </td>

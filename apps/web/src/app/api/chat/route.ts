@@ -21,6 +21,7 @@ import { checkWallet } from "@/lib/wallet/holdings";
 // Dependency-free on purpose, so a server route and a client card can hold the
 // same rule without either dragging the other's imports along.
 import { isAmountLike } from "@/lib/wallet/amount";
+import { pinnedTokenFor } from "@/lib/wallet/pinned-symbols";
 import { getRobinhoodAddressBalances } from "@/lib/robinhood/blockscout";
 import { mcpCallTool } from "@/lib/mcp-client";
 import { SOUL_MD } from "@/lib/soul";
@@ -1083,13 +1084,13 @@ Testnets are reachable by full id: base-sepolia, ethereum-sepolia, robinhood-tes
   },
   {
     name: "robinhood_bridge",
-    description: "Open a NON-CUSTODIAL BRIDGE card that moves an ERC-20 (or native ETH) between Base (8453) and Robinhood Chain (4663) using Relay Protocol. The server fetches a live quote from Relay's /quote endpoint and returns { to, data, value, chainId } for the source chain; the user's own wallet SIGNS + BROADCASTS. Trigger on: 'bridge X TOKEN to robinhood', 'move 100 USDC from base to robinhood', 'bridge back to base', 'send 0.1 ETH from base to robinhood chain', or any Base↔RH cross-chain intent. NEVER use for same-chain swaps — use robinhood_swap for RH or prepare_swap for Base. NEVER invent a token address — if the user gave only a symbol without a contract, ask for it.",
+    description: "Open a NON-CUSTODIAL BRIDGE card that moves an ERC-20 (or native ETH) between Base (8453) and Robinhood Chain (4663) using Relay Protocol. The server fetches a live quote from Relay's /quote endpoint and returns { to, data, value, chainId } for the source chain; the user's own wallet SIGNS + BROADCASTS. Trigger on: 'bridge X TOKEN to robinhood', 'move 100 USDC from base to robinhood', 'bridge back to base', 'send 0.1 ETH from base to robinhood chain', or any Base↔RH cross-chain intent. NEVER use for same-chain swaps — use robinhood_swap for RH or prepare_swap for Base. NEVER invent a token address. The pinned majors may be passed BY SYMBOL and resolve server-side on the source chain: ETH, USDC or WETH from Base; USDG or WETH from Robinhood Chain. For any other token the user gave only a symbol for, ask for its contract.",
     input_schema: {
       type: "object",
       properties: {
         fromChain:   { type: "string", enum: ["base", "robinhood"], description: "Source chain — the chain funds leave from." },
         toChain:     { type: "string", enum: ["base", "robinhood"], description: "Destination chain — must differ from fromChain." },
-        token:       { type: "string", description: "ERC-20 contract address (0x…) on fromChain, OR the string 'ETH'/'NATIVE' for native ETH. Never invent an address." },
+        token:       { type: "string", description: "ERC-20 contract address (0x…) on fromChain, OR 'ETH'/'NATIVE' for native ETH, OR one pinned symbol: 'USDC'/'WETH' from Base, 'USDG'/'WETH' from Robinhood. Never invent an address." },
         amount:      { type: "string", description: "Amount in whole units (e.g. '25.5', '0.1'). May ALSO be a quantity word — 'all', 'max', 'half', or a percentage like '50%' — pass it through verbatim; the card resolves it against the user's live source-chain balance (never compute the number yourself). Server converts the resolved value to base units using the token's decimals." },
         fromAddress: { type: "string", description: "OPTIONAL hint — usually the connected wallet. The card falls back to the connected wallet." },
         recipient:   { type: "string", description: "OPTIONAL destination address. Defaults to fromAddress." },
@@ -1927,9 +1928,12 @@ async function callHubTool(
     // the card validates and calls the prepare endpoint for calldata/decimals.
     const fromAddress = typeof args.fromAddress === "string" ? args.fromAddress.trim() : "";
     const toAddress   = typeof args.toAddress   === "string" ? args.toAddress.trim()   : "";
-    const rawToken    = typeof args.token       === "string" ? args.token.trim()       : "";
+    let rawToken      = typeof args.token       === "string" ? args.token.trim()       : "";
     const amount      = args.amount != null ? String(args.amount).trim() : "";
-    const tokenSymbol = typeof args.tokenSymbol === "string" ? args.tokenSymbol.trim() : "";
+    let tokenSymbol   = typeof args.tokenSymbol === "string" ? args.tokenSymbol.trim() : "";
+    // USDG / WETH by name → the address this app pins on 4663 (never a search).
+    const pinnedSend = /^0x|^(eth|native)$/i.test(rawToken) ? null : pinnedTokenFor("robinhood", rawToken);
+    if (pinnedSend) { tokenSymbol = tokenSymbol || rawToken.toUpperCase(); rawToken = pinnedSend; }
     let error = "";
     // fromAddress is intentionally OPTIONAL here — the card falls back to the
     // connected wallet client-side. Only fail if the LLM provided a value AND
@@ -1937,7 +1941,7 @@ async function callHubTool(
     if (fromAddress && !/^0x[a-fA-F0-9]{40}$/.test(fromAddress)) error = "fromAddress must be a valid 0x… address (or omit it — the card uses the connected wallet).";
     else if (!/^0x[a-fA-F0-9]{40}$/.test(toAddress)) error = "Missing recipient — pass a 0x… address.";
     else if (!rawToken) error = "Missing token — pass an ERC-20 contract address or 'ETH' for native.";
-    else if (!/^(0x[a-fA-F0-9]{40}|ETH|NATIVE)$/i.test(rawToken)) error = "Token must be a 0x… contract or 'ETH'/'NATIVE' — never invent an address.";
+    else if (!/^(0x[a-fA-F0-9]{40}|ETH|NATIVE)$/i.test(rawToken)) error = `"${rawToken}" is not a token this app pins on that chain — paste its 0x… contract (only ETH, USDC/WETH on Base and USDG/WETH on Robinhood Chain resolve by name).`;
     // Accept a positive decimal OR a quantity word (all|max|half|N%). The card
     // resolves the word against the live balance it already reads, so the number
     // is derived from the user's own chain state, never typed — confirm-only
@@ -1969,9 +1973,15 @@ async function callHubTool(
     const toChain     = typeof args.toChain   === "string" ? args.toChain.trim().toLowerCase()   : "";
     const fromAddress = typeof args.fromAddress === "string" ? args.fromAddress.trim() : "";
     const recipient   = typeof args.recipient === "string" ? args.recipient.trim() : "";
-    const rawToken    = typeof args.token === "string" ? args.token.trim() : "";
+    let rawToken      = typeof args.token === "string" ? args.token.trim() : "";
     const amount      = args.amount != null ? String(args.amount).trim() : "";
-    const tokenSymbol = typeof args.tokenSymbol === "string" ? args.tokenSymbol.trim() : "";
+    let tokenSymbol   = typeof args.tokenSymbol === "string" ? args.tokenSymbol.trim() : "";
+    // USDC/WETH (Base) or USDG/WETH (RH) by name → the address this app pins on
+    // the SOURCE chain (lib/wallet/pinned-symbols.ts). Any other symbol is
+    // still refused below: a ticker does not identify a token.
+    const pinnedBridge = (fromChain === "base" || fromChain === "robinhood") && !/^0x|^(eth|native)$/i.test(rawToken)
+      ? pinnedTokenFor(fromChain, rawToken) : null;
+    if (pinnedBridge) { tokenSymbol = tokenSymbol || rawToken.toUpperCase(); rawToken = pinnedBridge; }
     let error = "";
     if (fromChain !== "base" && fromChain !== "robinhood") error = "fromChain must be 'base' or 'robinhood'.";
     else if (toChain !== "base" && toChain !== "robinhood") error = "toChain must be 'base' or 'robinhood'.";
@@ -1979,7 +1989,7 @@ async function callHubTool(
     else if (fromAddress && !/^0x[a-fA-F0-9]{40}$/.test(fromAddress)) error = "fromAddress must be a valid 0x… address.";
     else if (recipient && !/^0x[a-fA-F0-9]{40}$/.test(recipient)) error = "recipient must be a valid 0x… address.";
     else if (!rawToken) error = "Missing token — pass an ERC-20 contract address or 'ETH' for native.";
-    else if (!/^(0x[a-fA-F0-9]{40}|ETH|NATIVE)$/i.test(rawToken)) error = "Token must be a 0x… contract or 'ETH'/'NATIVE' — never invent an address.";
+    else if (!/^(0x[a-fA-F0-9]{40}|ETH|NATIVE)$/i.test(rawToken)) error = `"${rawToken}" is not a token this app pins on that chain — paste its 0x… contract (only ETH, USDC/WETH on Base and USDG/WETH on Robinhood Chain resolve by name).`;
     // Accept a positive decimal OR a quantity word (all|max|half|N%) — the card
     // resolves it against the live source-chain balance (#137/#138). Confirm-only
     // holds: the number is derived from the user's own balance, never typed.

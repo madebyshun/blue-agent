@@ -151,6 +151,7 @@ export const zh: Dict = {
     // 侧边栏分组标题 — 3 大 Agent-OS 支柱 + 账户分组。
     group_agent: "智能体",
     group_explore: "探索",
+    group_extend: "扩展",
     group_hub: "中心",
     group_account: "账户",
   },

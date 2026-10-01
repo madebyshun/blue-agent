@@ -79,7 +79,9 @@ const IconHood = svg(<><path strokeLinecap="round" strokeLinejoin="round" d="M3.
 const IconWallet = svg(<><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 9.75A2.25 2.25 0 0 1 4.5 7.5h15a2.25 2.25 0 0 1 2.25 2.25v7.5A2.25 2.25 0 0 1 19.5 19.5h-15a2.25 2.25 0 0 1-2.25-2.25v-7.5Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M18 7.5V6.75A2.25 2.25 0 0 0 15.75 4.5H5.25" /><path strokeLinecap="round" strokeLinejoin="round" d="M21.75 12.75h-3a1.875 1.875 0 0 0 0 3.75h3" /></>);
 // Overview — chart-pie (distinct from Hub's grid).
 // Skills — sparkles.
+const IconSkills = svg(<path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456Z" />);
 // Connectors — squares-plus.
+const IconConnectors = svg(<path strokeLinecap="round" strokeLinejoin="round" d="M13.5 16.875h3.375m0 0h3.375m-3.375 0V13.5m0 3.375v3.375M6 10.5h2.25a2.25 2.25 0 0 0 2.25-2.25V6a2.25 2.25 0 0 0-2.25-2.25H6A2.25 2.25 0 0 0 3.75 6v2.25A2.25 2.25 0 0 0 6 10.5Zm0 9.75h2.25A2.25 2.25 0 0 0 10.5 18v-2.25a2.25 2.25 0 0 0-2.25-2.25H6a2.25 2.25 0 0 0-2.25 2.25V18A2.25 2.25 0 0 0 6 20.25Zm9.75-9.75H18a2.25 2.25 0 0 0 2.25-2.25V6A2.25 2.25 0 0 0 18 3.75h-2.25A2.25 2.25 0 0 0 13.5 6v2.25a2.25 2.25 0 0 0 2.25 2.25Z" />);
 // Cron — clock.
 const IconCron = svg(<path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />);
 // Usage — chart-bar.
@@ -91,6 +93,7 @@ const IconDocs = svg(<path strokeLinecap="round" strokeLinejoin="round" d="M19.5
 // other icon came from `svg()` — a 2px and half-a-stroke difference sitting in
 // the same column. Routed through the shared helper so one edit moves all of
 // them and the rail can't drift apart again.
+const IconModels = svg(<path strokeLinecap="round" strokeLinejoin="round" d="M9.75 17 9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2Z" />);
 const IconHome = svg(<path strokeLinecap="round" strokeLinejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />);
 
 // ── Nav model ───────────────────────────────────────────────────────────────────
@@ -122,16 +125,25 @@ type NavGroup = { id: string; items: NavItem[] };
 const NAV_GROUPS: NavGroup[] = [
   {
     id: "group_agent",
-    // Five-item nav (ShunTr, 2026-09-30 — docs/rebuild-5-tang-2026-09-30.md §0):
-    // Chat is the primary surface; Wallet holds swap/send/bridge; Scheduled
-    // (/cron) and Usage follow. HIDDEN, not deleted — every route below still
-    // resolves, only the nav entry is gone: models, dashboard, connectors,
-    // hub (Hub tools stay live inside Chat and over x402), skills, plans.
+    // Rebuild nav (ShunTr, 2026-09-30, revised 2026-10-01): Chat is the
+    // primary surface; Models picks what runs it; Wallet holds
+    // swap/send/bridge; Scheduled (/cron) and Usage follow. Still HIDDEN, not
+    // deleted (every route resolves): dashboard, hub (Hub tools stay live
+    // inside Chat and over x402) and plans.
     items: [
       { id: "chat", href: "/chat", icon: IconChat },
+      { id: "models", href: "/models", icon: IconModels },
       { id: "wallet", href: "/wallet", icon: IconWallet },
       { id: "cron", href: "/cron", icon: IconCron },
       { id: "usage", href: "/usage", icon: IconUsage },
+    ],
+  },
+  {
+    // What Chat can do, and what it is plugged into (restored 2026-10-01).
+    id: "group_extend",
+    items: [
+      { id: "skills", href: "/skills", icon: IconSkills },
+      { id: "connectors", href: "/connectors", icon: IconConnectors },
     ],
   },
   {

@@ -372,6 +372,13 @@ export default function ChatInput() {
                           {isActive && (
                             <span className="font-mono text-[9px]" style={{ color: accent }}>✓</span>
                           )}
+                          {/* Said where the model is picked: a chat-only preset
+                              cannot swap, send, bridge or look anything up, and a
+                              user who learns that from a refusal has already
+                              asked (seen in a shared chat, 2026-10-01). */}
+                          {p.noTools && (
+                            <span className="font-mono text-[8.5px] text-slate-500 border border-[#1A1A2E] rounded px-1 py-px">chat only · no tools</span>
+                          )}
                         </div>
                         <p className="font-mono text-[10px] text-slate-500 leading-snug truncate">{p.desc}</p>
                       </div>
