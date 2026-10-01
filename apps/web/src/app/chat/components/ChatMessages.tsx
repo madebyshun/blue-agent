@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useChat } from "../ChatContext";
 import { ToolResultCard } from "./ToolCards";
+import { chatTierLabel } from "./presets";
 import ArtifactCard from "./ArtifactCard";
 import { isArtifactCardLang } from "../artifacts";
 import { useLang } from "@/lib/i18n/context";
@@ -356,22 +357,13 @@ export function MarkdownRenderer({ content }: { content: string }) {
 
 // ── Model label / color maps ───────────────────────────────────────────────────
 
-// Pre-merge task #4 — label bug. Bankr was banned 2026-07-18; every
-// non-venice tier now routes to Virtuals with model
-// `anthropic-claude-sonnet-5` (server-side `VIRTUALS_CHAT_DEFAULT_MODEL`
-// env, default sonnet-5). The old map showed "Claude Haiku 4.5" for
-// `fast` tier while the request was actually served by Sonnet 5 via
-// Virtuals — pure lie. Every non-venice tier now points at the ACTUAL
-// runtime label so the footer + system-prompt `modelLine` agree.
-// When Virtuals tiers diverge (fast → haiku on Virtuals, etc.) update
-// this map to match — or better, drive it from an SSE `model_used`
-// event the server emits per-message (follow-up).
-const NON_VENICE_LABEL = "Sonnet 5 · Virtuals";
-const MODEL_LABELS: Record<string, string> = {
-  fast: NON_VENICE_LABEL, pro: NON_VENICE_LABEL, max: NON_VENICE_LABEL,
-  deepseek: NON_VENICE_LABEL,
-  // V1 presets with a distinct runtime model (others resolve to the default).
-  free: "Qwen 3.5 9B · Free", flash: "Gemini 2.5 Flash · Virtuals", search: "Grok 4.3 · Venice",
+// Footer label for a reply. Preset ids are labelled from the preset spec
+// (`chatTierLabel` in ./presets) — this used to be a hand-written table that
+// called `fast` "Sonnet 5 · Virtuals" long after `fast` became DeepSeek V4
+// Flash, and labelled `balanced` / `deep` / `private` / `grok` not at all, so
+// the footer printed the raw id. Legacy ids in stored transcripts are handled
+// there too; the Venice ids below are older still and kept for archived chats.
+const LEGACY_VENICE_LABELS: Record<string, string> = {
   "venice-deepseek": "DeepSeek V4 Flash", "venice-deepseek-pro": "DeepSeek V4 Pro",
   "venice-kimi": "Kimi K2", "venice-claude": "Claude Opus 4",
   "venice-grok": "Grok 4", "venice-qwen": "Qwen3 235B",
@@ -380,6 +372,7 @@ const MODEL_LABELS: Record<string, string> = {
   "venice-e2ee-venice": "Private Venice", "venice-e2ee-gemma": "Private Gemma",
   "venice-e2ee-qwen": "Private Qwen",
 };
+const modelLabel = (id: string) => chatTierLabel(id) ?? LEGACY_VENICE_LABELS[id] ?? id;
 
 const MODEL_COLORS: Record<string, string> = {
   free: "#34D399", fast: "#64748b", pro: "#4FC3F7", max: "#A78BFA",
@@ -393,23 +386,22 @@ const MODEL_COLORS: Record<string, string> = {
 };
 
 // ── Empty-state hero ────────────────────────────────────────────────────────
-// Onchain quick-starts. Each chip PREFILLS the composer (never auto-sends): the
-// first three seed a natural-language prompt the router turns into a signable
-// card (prepare_swap / prepare_send / robinhood_bridge); the last seeds the
-// `blue audit ` agent-skill trigger. ("Find yield" / prepare_yield left with
-// the yield card on 2026-09-30: chat executes swap, send and bridge only.)
-// The user reviews, then sends
-// — same seed-not-send philosophy as ChatClient's ?prefill deep-link.
-//
-// Not sends: earlier this was four "starter" cards that fired `send(text)` on
-// click. Four of the five now open a wallet-signable flow, so auto-sending would
-// have raced the user to a transaction card they never asked to see.
-const EMPTY_HEADING = "What are you building?";
+// Onchain quick-starts — the chat loop in order: discover → swap / send /
+// bridge → see what you hold (2026-10-01; the old set ended on `blue audit `,
+// a founder command outside that loop). Each chip PREFILLS the composer
+// (never auto-sends) — same seed-not-send philosophy as ChatClient's ?prefill
+// deep-link. Not sends: three of these open a wallet-signable card, and
+// auto-sending would race the user to a transaction card they never asked to
+// see. Every prefill names its chain, because a request without one is the
+// ambiguity the router then has to ask about.
+const EMPTY_HEADING = "What do you want to do onchain?";
 const ONCHAIN_CHIPS: { label: string; prefill: string }[] = [
-  { label: "Swap a token",        prefill: "Swap 0.1 ETH to USDC on Base" },             // prepare_swap
-  { label: "Send USDC",           prefill: "Send USDC on Base" },                        // prepare_send
+  { label: "Trending on Base",    prefill: "What's trending on Base?" },                 // hub_safe_trending
+  { label: "Robinhood movers",    prefill: "Top movers on Robinhood Chain today" },      // hub_rh_movers
+  { label: "Swap",                prefill: "Swap 0.01 ETH to USDC on Base" },            // prepare_swap
+  { label: "Send",                prefill: "Send USDC on Base" },                        // prepare_send
   { label: "Bridge to Robinhood", prefill: "Bridge USDC from Base to Robinhood Chain" }, // robinhood_bridge
-  { label: "Audit a contract",    prefill: "blue audit " },                              // blue-audit skill
+  { label: "My wallet",           prefill: "What's in my wallet?" },                     // check_wallet
 ];
 
 // ── Main ──────────────────────────────────────────────────────────────────────
@@ -713,7 +705,7 @@ export default function ChatMessages() {
                           <span className="w-1.5 h-1.5 rounded-full shrink-0"
                             style={{ background: MODEL_COLORS[msg.modelUsed] ?? "#4FC3F7" }} />
                           <span className="font-mono text-[10px] text-slate-700">
-                            {MODEL_LABELS[msg.modelUsed] ?? msg.modelUsed}
+                            {modelLabel(msg.modelUsed)}
                           </span>
                           <span className="font-mono text-[10px] text-slate-800">·</span>
                           <span className="font-mono text-[10px] text-slate-700">

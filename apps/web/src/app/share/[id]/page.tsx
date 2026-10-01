@@ -214,12 +214,17 @@ function fmtTime(ts?: number) {
  * a tier that has since been retired, and showing the id is honest where
  * inventing a label would not be.
  */
-const MODEL_LABELS: Record<string, string> = Object.fromEntries(
-  VIRTUALS_PRESETS.map((p) => [
-    p.id,
-    `${p.label} · ${p.provider === "venice" ? "Venice" : "Virtuals"}`,
-  ]),
-);
+const MODEL_LABELS: Record<string, string> = {
+  // Legacy chat tiers (the default was `pro` until 2026-10-01): each ran the
+  // server's default chat model, which is the Balanced preset's.
+  pro: "Balanced · Virtuals", max: "Balanced · Virtuals", deepseek: "Balanced · Virtuals",
+  ...Object.fromEntries(
+    VIRTUALS_PRESETS.map((p) => [
+      p.id,
+      `${p.label} · ${p.provider === "venice" ? "Venice" : "Virtuals"}`,
+    ]),
+  ),
+};
 
 function MessageBubble({ msg }: { msg: ShareDoc["messages"][0] }) {
   const isAssistant = msg.role === "assistant";

@@ -10,7 +10,7 @@ import type { Attachment } from "../types";
 // ChatContext → cycle). Imported here for the picker's own use, and re-exported
 // so existing callers that import them from `./ChatInput` (e.g. ModelsPanel)
 // keep resolving.
-import { VIRTUALS_PRESETS_V1, formatContextTokens, type VirtualsPresetV1 } from "./presets";
+import { VIRTUALS_PRESETS_V1, formatContextTokens, normalizeChatTier, type VirtualsPresetV1 } from "./presets";
 export { VIRTUALS_PRESETS_V1, resolvePresetDispatch, formatContextTokens } from "./presets";
 export type { VirtualsPresetV1 } from "./presets";
 import ProviderMark from "./ProviderMark";
@@ -59,8 +59,9 @@ export interface ModelTier {
 // selection. The cost-lookup tables in /lib/credits.ts and /lib/credit-
 // pricing.ts keep all 14 IDs around so legacy chatTier values cached in
 // localStorage still resolve to a price; the ChatContext bootstrap below
-// remaps any unknown ID back to "pro" so the picker never lands on a
-// model that doesn't exist in the UI any more.
+// starts on DEFAULT_CHAT_PRESET ("balanced", presets.ts) and the picker maps
+// any unknown ID through normalizeChatTier, so it never lands on a model that
+// doesn't exist in the UI any more.
 
 // ⚠️ LEGACY COSMETIC TABLE — renamed from `BANKR_TIERS` on 2026-09-18. It never
 // described Bankr by then and Bankr has been 403-banned since 2026-07-20, but
@@ -191,8 +192,9 @@ export default function ChatInput() {
 
   // Active preset — highlighted in the picker when chatTier === preset.id.
   // V1 preset ids ARE the chatTier values (fast, balanced, deep, private,
-  // grok), so the lookup is 1:1.
-  const activeVirtualsPreset = virtualsPresets.find(p => p.id === chatTier) ?? virtualsPresets[0];
+  // grok), so the lookup is 1:1. A legacy id highlights what the server runs
+  // for it (normalizeChatTier → balanced), never simply the first row.
+  const activeVirtualsPreset = virtualsPresets.find(p => p.id === normalizeChatTier(chatTier)) ?? virtualsPresets[0];
   const activePreset = MODEL_PRESETS.find(p => p.id === chatTier);
 
   const activeTier = ALL_TIERS.find(t => t.id === chatTier) ?? LEGACY_TIERS[1];

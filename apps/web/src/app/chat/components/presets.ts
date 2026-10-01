@@ -54,6 +54,34 @@ export const VIRTUALS_PRESETS_V1: VirtualsPresetV1[] = [
 ];
 
 /**
+ * The preset a new chat starts on, and what any id that is not a live preset
+ * (a legacy `pro` / `max` / `deepseek` from an older build) is shown and sent
+ * as. Until 2026-10-01 the default chatTier was the legacy `pro`: the server
+ * ran it as Sonnet 5 at 50 credits (`presetForTier ?? VIRTUALS_CHAT_DEFAULT_MODEL`),
+ * the picker's `?? presets[0]` fallback highlighted "Fast · 10 cr", and every
+ * reply footer read "pro" — three different answers to "which model is this".
+ * `balanced` IS what `pro` ran (same model, same 50 credits), so the default
+ * moves to it and all three agree.
+ */
+export const DEFAULT_CHAT_PRESET: VirtualsPresetV1["id"] = "balanced";
+
+/** A live preset id, or the default for anything else. */
+export function normalizeChatTier(id: string | null | undefined): VirtualsPresetV1["id"] {
+  const hit = VIRTUALS_PRESETS_V1.find((p) => p.id === id);
+  return hit ? hit.id : DEFAULT_CHAT_PRESET;
+}
+
+/**
+ * Footer label for a reply, from the preset it ran on: "Balanced · Claude
+ * Sonnet 5". Legacy ids in stored transcripts ran the server default model.
+ */
+export function chatTierLabel(id: string): string | null {
+  const legacy = id === "pro" || id === "max" || id === "deepseek";
+  const p = VIRTUALS_PRESETS_V1.find((x) => x.id === (legacy ? DEFAULT_CHAT_PRESET : id));
+  return p ? `${p.label} · ${p.desc.split(" · ")[0]}` : null;
+}
+
+/**
  * chatTier id → how to dispatch it. This replaces two older mechanisms that
  * disagreed with each other:
  *

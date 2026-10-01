@@ -46,7 +46,7 @@ export function migrateOldChat(addr?: string): ChatTask | null {
       messages,
       createdAt: Date.now() - 86_400_000,
       updatedAt: Date.now() - 86_400_000,
-      model:     "pro",
+      model:     "balanced",
     };
   } catch { return null; }
 }

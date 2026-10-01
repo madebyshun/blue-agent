@@ -17,7 +17,7 @@ import { localTz } from "@/lib/cron-schedule";
 import { extractArtifacts } from "./artifacts";
 import { enabledSkillsPrompt, loadIntegrations, runSkillCommand } from "./integrations";
 import { enabledConnectorsForChat } from "./connectors";
-import { resolvePresetDispatch, VIRTUALS_PRESETS_V1 } from "./components/presets";
+import { resolvePresetDispatch, VIRTUALS_PRESETS_V1, DEFAULT_CHAT_PRESET } from "./components/presets";
 import { useWorkspaceSync, WORKSPACE_HYDRATED_EVENT, type UseWorkspaceSync } from "./workspace-sync";
 import { useScheduleSync, type UseScheduleSync } from "./use-schedule-sync";
 import { patchById } from "./schedule-merge";
@@ -227,7 +227,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // ── Tasks ─────────────────────────────────────────────────────────────────
   const [tasks,        setTasksState]  = useState<ChatTask[]>([]);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
-  const [chatTier,     setChatTier]    = useState("pro");
+  const [chatTier,     setChatTier]    = useState<string>(DEFAULT_CHAT_PRESET);
 
   // Landing → chat deep-link: `/app/chat?preset=<id>` selects a V1 preset.
   // Guarded to the live preset ids (derived from the spec, not hardcoded, so
