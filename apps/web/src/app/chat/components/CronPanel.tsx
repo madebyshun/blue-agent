@@ -1,6 +1,10 @@
 "use client";
 import { useState, useEffect } from "react";
-import WatchesPanel from "./WatchesPanel";
+import { useWatches } from "../use-watches";
+import AlertsTab from "./scheduled/AlertsTab";
+import AlertDrawer from "./scheduled/AlertDrawer";
+import { Drawer, StatTile } from "./scheduled/ui";
+import { MAX_WATCHES_PER_WALLET } from "@/lib/watches/types";
 import { useChat } from "../ChatContext";
 import { isBackground, nextRunLabel } from "../storage";
 import { localTz, nextFireAt } from "@/lib/cron-schedule";
@@ -117,7 +121,7 @@ function Toggle({ active, onChange }: { active: boolean; onChange: () => void })
 
 // ── Main ───────────────────────────────────────────────────────────────────────
 export default function CronPanel() {
-  const { crons, addCron, updateCron, deleteCron, runCron, cronRunning, schedule, holderTier } = useChat();
+  const { crons, addCron, updateCron, deleteCron, runCron, cronRunning, schedule, holderTier, walletAddr } = useChat();
   // The zone the TIME field is written in — shown next to the label so "09:00"
   // is 09:00 somewhere in particular. `addCron` stamps this same value onto the
   // task, so what the form says and what the server fires on are one string.
@@ -160,150 +164,100 @@ export default function CronPanel() {
   // is what these tasks would cost if every one produced output — hence "~".
   const upcomingCredits = upcoming.reduce((n, x) => n + creditCost(x.cron.tier ?? "pro", holderTier), 0);
 
+  // ── Price alerts — one loader for the stat strip, the cards and the feed.
+  const w = useWatches(walletAddr);
+  const [tab, setTab] = useState<"alerts" | "tasks">("alerts");
+  const [alertOpen, setAlertOpen] = useState(false);
+  // Looking at the Alerts tab is reading it: clear the nav badge. The dots
+  // stay lit until the next load, so what was new is still visible now.
+  const unread = w.state.s === "ok" ? w.state.unread : 0;
+  useEffect(() => {
+    if (tab === "alerts" && unread > 0) void w.markSeen();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, unread]);
+
+  const watching = w.state.s === "ok" ? w.state.watches.filter((x) => x.active).length : null;
+  const lastAlert = w.state.s === "ok" ? w.state.alerts[0] : undefined;
+  const bgCount = crons.filter((c) => isBackground(c)).length;
+  const next = upcoming[0];
+
+  const actions = (
+    <>
+      <button onClick={() => setAlertOpen(true)}
+        className="font-mono text-[10.5px] font-semibold rounded-[7px] px-[11px] py-[6px]" style={{ color: "#050508", background: "#4FC3F7" }}>
+        + Price alert
+      </button>
+      <button onClick={() => { setTab("tasks"); setShowForm(true); }}
+        className="font-mono text-[10.5px] font-semibold rounded-[7px] px-[11px] py-[6px] border border-[#2A2A4E] text-[#E2E8F0] hover:border-[#4FC3F7]/40">
+        + Recurring task
+      </button>
+    </>
+  );
+
   return (
     <>
     <div className="flex flex-col h-full bg-[#050508] overflow-y-auto">
 
       {/* ── Header — desktop only. Below lg the app shell's MobileTopBar already
-           prints "// SCHEDULED", so rendering this too would duplicate it. ─── */}
+           prints "// SCHEDULED", so rendering this too would duplicate it; the
+           two actions move into the body there. ─── */}
       <div className="hidden lg:flex items-center gap-3.5 flex-wrap shrink-0 min-h-[56px] px-5 py-2 border-b border-[#1A1A2E]">
         <span className="font-mono text-[11px] font-semibold tracking-[0.16em] text-[#E2E8F0]">// SCHEDULED</span>
-        <span className="font-mono text-[10.5px] text-[#64748B]">recurring agent runs · background tasks fire with the tab closed</span>
-        <button
-          onClick={() => setShowForm(v => !v)}
-          className="ml-auto font-mono text-[10.5px] font-semibold rounded-[7px] px-[11px] py-[5px] transition-all"
-          style={showForm
-            ? { color: "#F87171", background: "rgba(248,113,113,.1)", border: "1px solid rgba(248,113,113,.3)" }
-            : { color: "#050508", background: "#4FC3F7" }}
-        >
-          {showForm ? "✕ Cancel" : "+ Add task"}
-        </button>
+        <span className="font-mono text-[10.5px] text-[#64748B]">price alerts every 5 min · recurring agent runs, even with the tab closed</span>
+        <span className="ml-auto flex gap-2">{actions}</span>
       </div>
 
-      {/* ── Price alerts (lib/watches) — checked in code every 5 min, free. ─── */}
-      <WatchesPanel />
+      <div className="px-5 py-5 mx-auto w-full max-w-6xl">
+        <div className="flex lg:hidden gap-2 mb-4">{actions}</div>
 
-      {/* ── Stop everything the server runs for this wallet — including tasks
-           this browser never saw (L4). ─── */}
-      {schedule.count > 0 && (
-        <div className="shrink-0 px-5 py-2 border-b border-[#1A1A2E] flex items-center gap-3">
-          <p className="font-mono text-[10px] text-[#64748B]">{schedule.count} background task{schedule.count === 1 ? "" : "s"} run with this tab closed.</p>
-          <button
-            onClick={() => void schedule.disableAll()}
-            className="ml-auto font-mono text-[10px] rounded-md px-2.5 py-1"
-            style={{ color: "#F87171", border: "1px solid rgba(248,113,113,.3)" }}
-          >
-            Turn off all background tasks
-          </button>
+        {/* ── Stat strip ─── */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <StatTile label="WATCHING" value={watching == null ? "—" : `${watching}/${MAX_WATCHES_PER_WALLET}`} sub="active price alerts" />
+          <StatTile label="NEW ALERTS" value={w.state.s === "ok" ? unread : "—"} tone={unread > 0 ? "#4FC3F7" : undefined}
+            sub={lastAlert ? `last ${new Date(lastAlert.at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}` : "none fired yet"} />
+          <StatTile label="RECURRING" value={crons.length} sub={`${bgCount} in the background`} />
+          <StatTile label="NEXT RUN" value={next ? new Date(next.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}
+            sub={next ? next.cron.label : "no background run in 24h"} />
         </div>
-      )}
 
-      {/* ── Background scheduler state — honest about what keeps it running. ─── */}
-      {(schedule.state.phase === "signed-out" || schedule.state.phase === "error") && (
-        <div className="shrink-0 px-5 py-2 border-b border-[#1A1A2E]">
-          <p className="font-mono text-[10px] text-[#64748B]">
-            {schedule.state.phase === "signed-out"
-              ? "Sign in with your wallet to keep background tasks running while this tab is closed."
-              : schedule.state.message}
-          </p>
-        </div>
-      )}
-
-      {/* ── Add form — same wiring as before, restyled shell. ─── */}
-      {showForm && (
-        <div className="px-5 py-5 border-b border-[#1A1A2E] bg-[#0A0A12] shrink-0">
-          <form onSubmit={handleAdd} className="space-y-3 max-w-2xl">
-            {/* Task name */}
-            <div>
-              <label className="font-mono text-[10px] text-slate-500 block mb-1.5">TASK NAME</label>
-              <input
-                value={form.label}
-                onChange={e => setForm(f => ({ ...f, label: e.target.value }))}
-                placeholder="e.g. Daily token pick"
-                className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-xl px-3 py-2.5 font-mono text-sm text-white placeholder:text-slate-700 outline-none transition-colors"
-              />
-            </div>
-
-            {/* Schedule + Time */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="font-mono text-[10px] text-slate-500 block mb-1.5">SCHEDULE</label>
-                <select
-                  value={form.schedule}
-                  onChange={e => setForm(f => ({ ...f, schedule: e.target.value as CronSchedule }))}
-                  className="w-full bg-[#050508] border border-[#1A1A2E] rounded-xl px-3 py-2.5 font-mono text-sm text-white outline-none appearance-none cursor-pointer"
-                >
-                  {SCHEDULES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                </select>
-              </div>
-              <div>
-                {/* The picker decides something now: the server tick reads it
-                    through `lib/cron-schedule.ts`, in the zone shown below. It
-                    is still ignored for a foreground task — hence the two-line
-                    explanation under the grid rather than a bare label. */}
-                <label className="font-mono text-[10px] text-slate-500 block mb-1.5">
-                  TIME <span className="text-slate-700">· {tzLabel}</span>
-                </label>
-                <input
-                  type="time"
-                  value={form.time}
-                  onChange={e => setForm(f => ({ ...f, time: e.target.value }))}
-                  className="w-full bg-[#050508] border border-[#1A1A2E] rounded-xl px-3 py-2.5 font-mono text-sm text-white outline-none"
-                />
-              </div>
-            </div>
-
-            <p className="font-mono text-[10px] text-slate-700 leading-relaxed">
-              The time is used once you switch the task to Background. Until then
-              a daily task runs the first time you open Blue Chat after 24h have
-              passed.
-            </p>
-
-            {/* Prompt */}
-            <div>
-              <label className="font-mono text-[10px] text-slate-500 block mb-1.5">PROMPT</label>
-              <textarea
-                value={form.prompt}
-                onChange={e => setForm(f => ({ ...f, prompt: e.target.value }))}
-                placeholder="The prompt to run… e.g. What happened on Base this week?"
-                rows={3}
-                className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-xl px-3 py-2.5 font-mono text-sm text-white placeholder:text-slate-700 outline-none transition-colors resize-none"
-              />
-            </div>
-
-            {/* Presets */}
-            <div>
-              <p className="font-mono text-[10px] text-slate-600 mb-2">Quick presets:</p>
-              <div className="flex flex-wrap gap-1.5">
-                {CRON_PRESETS.map(p => (
-                  <button
-                    key={p.label}
-                    type="button"
-                    onClick={() => usePreset(p)}
-                    className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#1A1A2E] hover:border-[#4FC3F7]/30 text-slate-500 hover:text-[#4FC3F7] transition-all"
-                  >
-                    {p.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Submit */}
-            <button
-              type="submit"
-              className="w-full py-2.5 rounded-xl font-mono text-sm font-bold transition-all hover:opacity-90 active:scale-[0.98]"
-              style={{ background: "#4FC3F7", color: "#050508" }}
-            >
-              Save task
+        {/* ── Tabs ─── */}
+        <div className="flex items-center gap-1 mt-6 mb-4 border-b border-[#1A1A2E]">
+          {([["alerts", "Price alerts", w.state.s === "ok" ? w.state.watches.length : null], ["tasks", "Recurring tasks", crons.length]] as const).map(([id, label, count]) => (
+            <button key={id} onClick={() => setTab(id)}
+              className="relative font-mono text-[11.5px] px-3.5 py-2.5 -mb-px border-b-2 transition-colors"
+              style={tab === id ? { color: "#E2E8F0", borderColor: "#4FC3F7" } : { color: "#64748B", borderColor: "transparent" }}>
+              {label}{count != null && <span className="ml-1.5 text-[10px] text-[#475569]">{count}</span>}
+              {id === "alerts" && unread > 0 && <span className="absolute top-2 right-0.5 w-1.5 h-1.5 rounded-full bg-[#4FC3F7]" />}
             </button>
-          </form>
+          ))}
         </div>
-      )}
 
-      {/* ── Body ─── */}
-      <div className="px-5 py-[18px] mx-auto w-full max-w-6xl">
-        {crons.length > 0 ? (
+        {tab === "alerts" ? (
+          <AlertsTab w={w} onNew={() => setAlertOpen(true)} />
+        ) : (
           <>
+            {/* ── Stop everything the server runs for this wallet — including
+                 tasks this browser never saw (L4). ─── */}
+            {schedule.count > 0 && (
+              <div className="rounded-xl border border-[#1A1A2E] px-4 py-2.5 mb-4 flex items-center gap-3">
+                <p className="font-mono text-[10px] text-[#64748B]">{schedule.count} background task{schedule.count === 1 ? "" : "s"} run with this tab closed.</p>
+                <button onClick={() => void schedule.disableAll()} className="ml-auto font-mono text-[10px] rounded-md px-2.5 py-1"
+                  style={{ color: "#F87171", border: "1px solid rgba(248,113,113,.3)" }}>
+                  Turn off all background tasks
+                </button>
+              </div>
+            )}
+            {/* ── Background scheduler state — honest about what keeps it running. ─── */}
+            {(schedule.state.phase === "signed-out" || schedule.state.phase === "error") && (
+              <p className="font-mono text-[10px] text-[#64748B] mb-4">
+                {schedule.state.phase === "signed-out"
+                  ? "Sign in with your wallet to keep background tasks running while this tab is closed."
+                  : schedule.state.message}
+              </p>
+            )}
+
+            {crons.length > 0 ? (
+              <>
             {/* ── NEXT 24 HOURS ─── */}
             <div className="border border-[#1A1A2E] bg-[#0D0D14] rounded-2xl px-[18px] py-4">
               <div className="flex justify-between items-baseline gap-3">
@@ -543,39 +497,119 @@ export default function CronPanel() {
               </div>
             </div>
 
-            {/* ── Composer — opens the structured form. It is a button, not a
-                 text field: Blue Chat has no natural-language task parser, so a
-                 "describe it in plain words" input would promise a feature that
-                 isn't there. ── */}
-            {!showForm && (
-              <button
-                onClick={() => setShowForm(true)}
-                className="w-full mt-6 border border-dashed border-[#1A1A2E] rounded-2xl px-[18px] py-4 flex items-center gap-3.5 text-left hover:border-[#4FC3F7]/30 transition-colors"
-              >
-                <span className="font-mono text-[11px] text-[#4FC3F7]">›</span>
-                <span className="flex-1 font-mono text-[11.5px] text-[#64748B]">Set up a recurring task — a prompt, a cadence, and the time it runs.</span>
-                <span className="font-mono text-[10.5px] font-semibold rounded-lg px-[13px] py-2" style={{ color: "#050508", background: "#4FC3F7" }}>New task</span>
-              </button>
+              </>
+            ) : (
+              <div className="border border-[#1A1A2E] bg-[#0D0D14] rounded-2xl px-6 py-12 flex flex-col items-center text-center">
+                <div className="w-10 h-10 rounded-xl border border-[#1A1A2E] flex items-center justify-center mb-3 text-lg">⏱</div>
+                <p className="font-mono text-[13px] text-[#94A3B8] mb-1">No recurring tasks yet</p>
+                <p className="font-mono text-[10.5px] text-[#64748B] max-w-sm leading-relaxed mb-4">
+                  A prompt that runs daily or weekly — next time you open Blue Chat, or in the background once you switch it on. Each run costs chat credits.
+                </p>
+                <div className="flex flex-wrap justify-center gap-1.5">
+                  {CRON_PRESETS.map((p) => (
+                    <button key={p.label} onClick={() => usePreset(p)}
+                      className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#1A1A2E] hover:border-[#4FC3F7]/30 text-slate-500 hover:text-[#4FC3F7]">
+                      {p.label}
+                    </button>
+                  ))}
+                  <button onClick={() => setShowForm(true)} className="font-mono text-[10px] font-semibold rounded-lg px-2.5 py-1" style={{ color: "#050508", background: "#4FC3F7" }}>+ Custom</button>
+                </div>
+              </div>
             )}
           </>
-        ) : !showForm ? (
-          <div className="border border-[#1A1A2E] bg-[#0D0D14] rounded-2xl px-6 py-12 flex flex-col items-center text-center">
-            <div className="w-10 h-10 rounded-xl border border-[#1A1A2E] flex items-center justify-center mb-3 text-lg">⏱</div>
-            <p className="font-mono text-[13px] text-[#94A3B8] mb-1">No scheduled tasks yet</p>
-            <p className="font-mono text-[10.5px] text-[#64748B] max-w-sm leading-relaxed mb-4">
-              Add a recurring prompt to run daily or weekly. It runs next time you open Blue Chat, or in the background once you switch it on.
-            </p>
-            <button
-              onClick={() => setShowForm(true)}
-              className="font-mono text-[11px] font-semibold rounded-lg px-3.5 py-2 transition-all"
-              style={{ color: "#050508", background: "#4FC3F7" }}
-            >
-              + Add task
-            </button>
-          </div>
-        ) : null}
+        )}
       </div>
     </div>
+
+    {/* ── Drawers ── */}
+    <AlertDrawer open={alertOpen} onClose={() => setAlertOpen(false)} create={w.create} />
+    <Drawer open={showForm} title="// NEW RECURRING TASK" onClose={() => setShowForm(false)}>
+          <form onSubmit={handleAdd} className="space-y-3">
+            {/* Task name */}
+            <div>
+              <label className="font-mono text-[10px] text-slate-500 block mb-1.5">TASK NAME</label>
+              <input
+                value={form.label}
+                onChange={e => setForm(f => ({ ...f, label: e.target.value }))}
+                placeholder="e.g. Daily token pick"
+                className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-xl px-3 py-2.5 font-mono text-sm text-white placeholder:text-slate-700 outline-none transition-colors"
+              />
+            </div>
+
+            {/* Schedule + Time */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="font-mono text-[10px] text-slate-500 block mb-1.5">SCHEDULE</label>
+                <select
+                  value={form.schedule}
+                  onChange={e => setForm(f => ({ ...f, schedule: e.target.value as CronSchedule }))}
+                  className="w-full bg-[#050508] border border-[#1A1A2E] rounded-xl px-3 py-2.5 font-mono text-sm text-white outline-none appearance-none cursor-pointer"
+                >
+                  {SCHEDULES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                </select>
+              </div>
+              <div>
+                {/* The picker decides something now: the server tick reads it
+                    through `lib/cron-schedule.ts`, in the zone shown below. It
+                    is still ignored for a foreground task — hence the two-line
+                    explanation under the grid rather than a bare label. */}
+                <label className="font-mono text-[10px] text-slate-500 block mb-1.5">
+                  TIME <span className="text-slate-700">· {tzLabel}</span>
+                </label>
+                <input
+                  type="time"
+                  value={form.time}
+                  onChange={e => setForm(f => ({ ...f, time: e.target.value }))}
+                  className="w-full bg-[#050508] border border-[#1A1A2E] rounded-xl px-3 py-2.5 font-mono text-sm text-white outline-none"
+                />
+              </div>
+            </div>
+
+            <p className="font-mono text-[10px] text-slate-700 leading-relaxed">
+              The time is used once you switch the task to Background. Until then
+              a daily task runs the first time you open Blue Chat after 24h have
+              passed.
+            </p>
+
+            {/* Prompt */}
+            <div>
+              <label className="font-mono text-[10px] text-slate-500 block mb-1.5">PROMPT</label>
+              <textarea
+                value={form.prompt}
+                onChange={e => setForm(f => ({ ...f, prompt: e.target.value }))}
+                placeholder="The prompt to run… e.g. What happened on Base this week?"
+                rows={3}
+                className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-xl px-3 py-2.5 font-mono text-sm text-white placeholder:text-slate-700 outline-none transition-colors resize-none"
+              />
+            </div>
+
+            {/* Presets */}
+            <div>
+              <p className="font-mono text-[10px] text-slate-600 mb-2">Quick presets:</p>
+              <div className="flex flex-wrap gap-1.5">
+                {CRON_PRESETS.map(p => (
+                  <button
+                    key={p.label}
+                    type="button"
+                    onClick={() => usePreset(p)}
+                    className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#1A1A2E] hover:border-[#4FC3F7]/30 text-slate-500 hover:text-[#4FC3F7] transition-all"
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Submit */}
+            <button
+              type="submit"
+              className="w-full py-2.5 rounded-xl font-mono text-sm font-bold transition-all hover:opacity-90 active:scale-[0.98]"
+              style={{ background: "#4FC3F7", color: "#050508" }}
+            >
+              Save task
+            </button>
+          </form>
+    </Drawer>
 
     {/* ── Result modal — full markdown report ── */}
     {viewing && <ResultModal cron={viewing} onClose={() => setViewing(null)} />}

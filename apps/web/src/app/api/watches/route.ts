@@ -24,7 +24,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { readSession } from "@/lib/session";
 import { normalizeWallet, actingWalletRefusal } from "@/lib/acting-wallet";
 import { readAlerts, readWatches, mutateWatches, markSeen } from "@/lib/watches/store";
-import { resolveWatchTarget } from "@/lib/watches/prices";
+import { resolveWatchTarget, readReadings } from "@/lib/watches/prices";
 import { MAX_WATCHES_PER_WALLET, describeRule, type Watch } from "@/lib/watches/types";
 import { parseRule } from "@/lib/watches/rules";
 
@@ -61,7 +61,13 @@ export async function GET(req: NextRequest) {
   }
   const w = await readWatches(auth.wallet);
   if (w.status === "unavailable") return bad("Watches unavailable right now — try again shortly.", 503);
-  return NextResponse.json({ watches: w.value, alerts: a.value.alerts, seenAt: a.value.seenAt, unread }, { headers: NO_STORE });
+  // `?readings=1` adds each watch's live price / 1h / 24h change (the same
+  // read the tick makes) — for the Scheduled page, not for every poll.
+  let readings: Record<string, unknown> | undefined;
+  if (new URL(req.url).searchParams.get("readings") === "1" && w.value.length > 0) {
+    try { readings = Object.fromEntries(await readReadings(w.value)); } catch { readings = undefined; }
+  }
+  return NextResponse.json({ watches: w.value, alerts: a.value.alerts, seenAt: a.value.seenAt, unread, readings }, { headers: NO_STORE });
 }
 
 export async function POST(req: NextRequest) {
