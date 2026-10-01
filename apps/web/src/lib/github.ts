@@ -19,6 +19,8 @@ export interface RepoData {
   openIssues: number; watchers: number; daysSincePush: number | null;
   language: string; license: string; archived: boolean; topics: string[];
   commitCount: number; commitDays: number | null; rootFiles: string[];
+  /** The branch GitHub serves by default — what a file read should target. */
+  defaultBranch: string;
 }
 
 export async function fetchRepo(slug: string): Promise<RepoData | null> {
@@ -59,6 +61,7 @@ export async function fetchRepo(slug: string): Promise<RepoData | null> {
     archived: (d.archived as boolean) ?? false,
     topics: (d.topics as string[]) ?? [],
     commitCount, commitDays, rootFiles,
+    defaultBranch: (d.default_branch as string) || "main",
   };
 }
 

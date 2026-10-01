@@ -32,6 +32,7 @@ import { findByTicker as findRwaByTicker, findByContract as findRwaByContract } 
 import { CHAT_HIDDEN_TOOLS } from "@/lib/chat-hidden-tools";
 import { cardReply, CARD_ALREADY_SHOWN } from "@/lib/chat/card-replies";
 import { baseStockByTickerOrSymbol, dollarAmount } from "@/lib/chat/trade-intent";
+import { githubContextFor } from "@/lib/chat/github-context";
 
 export const runtime = "nodejs";
 // Vercel kills serverless functions at 60s by default — explicit budget so
@@ -3199,6 +3200,13 @@ export async function POST(req: NextRequest) {
   // has to be rebuilt rather than patched. Handing the model a tool list plus a
   // later retraction is worse than never mentioning tools: it has to guess which
   // half wins, and prod says it guesses the tool list.
+  // A linked github.com repository is read server-side (public only) — see
+  // lib/chat/github-context.ts for why the model cannot be left to "fetch" it.
+  const lastUser = messages[messages.length - 1] as LLMMessage | undefined;
+  const githubSection = lastUser?.role === "user" && typeof lastUser.content === "string"
+    ? await githubContextFor(lastUser.content).catch(() => null)
+    : null;
+
   const buildSystem = (hasTools: boolean, toolsUnreachable = false) => [
     // SOUL.md goes FIRST — it's the identity layer (who Blue Agent is, how it
     // talks, what it won't do); everything after it is operational detail.
@@ -3225,6 +3233,7 @@ export async function POST(req: NextRequest) {
     // see with their own eyes, which is why it must never contradict the
     // screen — see the caller's label.
     pageContext ?? "",
+    githubSection ?? "",
     cmdPrompt ?? "",
   ].filter(Boolean).join("\n\n");
 
