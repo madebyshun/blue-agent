@@ -5,8 +5,14 @@
  * GET                                  → who am I (never 500s on a KV blip)
  * DELETE                               → sign out, drop the server record
  *
- * The only thing a session grants is access to `workspace:<wallet>`. It moves
- * no funds and authorizes no transaction — see `sessionSiweMessage`.
+ * A session is this wallet's proof for 30 days. It began as access to
+ * `workspace:<wallet>` (cross-device sync) and, since 2026-09-30, is also what
+ * every route that CHARGES the wallet or WRITES its private state accepts
+ * (lib/acting-wallet.ts): spending its prepaid credits on chat and tool runs,
+ * running its scheduled tasks, claiming credits, its Hood alerts and Telegram
+ * link, its private usage history. It moves no funds on-chain and authorizes
+ * no transaction. The signed statement says all of this — see
+ * `sessionSiweMessage`, and keep the two in step.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { rateLimit, getIdentifier } from "@/lib/rate-limit";
