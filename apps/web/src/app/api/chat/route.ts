@@ -265,6 +265,10 @@ function authRequiredSSE(reason: "sign_in_required" | "wallet_mismatch" | "sessi
 // prompt's "Output style" section pushes toward short answers, and this is the
 // budget guard so a model that ignores the prompt still can't run away into a
 // 2000-token essay for a one-line price question.
+/** Budget for long-form turns (founder commands, linked-repo reviews). */
+const LONG_FORM_MAX_TOKENS = 4096;
+const FOUNDER_COMMAND_RE = /^\s*\/?blue\s+(idea|build|audit|ship|raise)\b/i;
+
 const MODELS: Record<string, { maxTokens: number }> = {
   fast:     { maxTokens: 768  },  // was 1024
   pro:      { maxTokens: 1200 },  // was 2048 — also the fallback for every unlisted tier
@@ -2751,10 +2755,44 @@ async function callVeniceStream(
       // but one visible token, even inside a <think> block, means the model ran
       // and the charge stands.
       let emittedOutput = false;
+      // `finish_reason: "length"` — the reply hit max_tokens. Measured
+      // 2026-10-01: a 6-file `blue audit` on Fast (768 tokens) streamed 179
+      // characters and stopped mid-sentence, and on reasoning models the
+      // budget went to hidden reasoning, so the bubble was BLANK on all three
+      // tries. Say so instead of ending silently.
+      let cutAtLength = false;
+      // Same shape, different cause: the provider's own filter ended the
+      // reply (`finish_reason: "content_filter"`). Seen intermittently on
+      // Sonnet 5 via Virtuals for the same audit prompt that answered fine on
+      // the next try — not something this route can prevent, only report.
+      let filtered = false;
+      let contentChars = 0;
+      let noted = false;
 
       const emit = (obj: object) => {
         emittedOutput = true;
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
+      };
+      const lengthNote = () => {
+        if (noted) return;
+        if (filtered) {
+          noted = true;
+          const msg = contentChars > 0
+            ? "\n\n_(The model provider's filter stopped this answer here.)_"
+            : "The model provider's filter declined this request without an answer. Nothing was charged — sending it again usually works, or try another preset.";
+          if (contentChars > 0) emit({ delta: { text: msg } });
+          else controller.enqueue(encoder.encode(`data: ${JSON.stringify({ delta: { text: msg } })}\n\n`));
+          return;
+        }
+        if (!cutAtLength) return;
+        noted = true;
+        if (contentChars > 0) {
+          emit({ delta: { text: "\n\n_(Cut off at this preset's length limit — say \"continue\" for the rest, or switch to Deep for longer answers.)_" } });
+        } else {
+          // Written around `emit` on purpose: nothing the user asked for was
+          // delivered, so `emittedOutput` stays false and the turn is refunded.
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ delta: { text: "The model used this preset's whole length budget before writing an answer. Nothing was charged — try again on the Deep preset, or ask about a smaller piece." } })}\n\n`));
+        }
       };
 
       // Flush textBuf through state machine — routes text to thinking vs content
@@ -2801,17 +2839,22 @@ async function callVeniceStream(
             const raw = line.slice(6).trim();
             if (raw === "[DONE]") {
               flush(true);
+              lengthNote();
               controller.enqueue(encoder.encode("data: [DONE]\n\n"));
               continue;
             }
             try {
-              const parsed = JSON.parse(raw) as { choices?: { delta?: { content?: string } }[] };
+              const parsed = JSON.parse(raw) as { choices?: { delta?: { content?: string }; finish_reason?: string | null }[] };
               const chunk  = parsed?.choices?.[0]?.delta?.content ?? "";
-              if (chunk) { textBuf += chunk; flush(); }
+              const fin = parsed?.choices?.[0]?.finish_reason;
+              if (fin === "length") cutAtLength = true;
+              if (fin === "content_filter") filtered = true;
+              if (chunk) { contentChars += chunk.length; textBuf += chunk; flush(); }
             } catch {}
           }
         }
         flush(true); // drain on stream end
+        lengthNote();
       } finally {
         // Upstream accepted the request and then said nothing. The user is
         // looking at a blank reply, so the charge goes back — awaited BEFORE
@@ -3222,6 +3265,8 @@ export async function POST(req: NextRequest) {
     ? await githubContextFor(lastUser.content).catch(() => null)
     : null;
 
+  const longForm = !!githubSection || (typeof lastUser?.content === "string" && FOUNDER_COMMAND_RE.test(lastUser.content));
+
   const buildSystem = (hasTools: boolean, toolsUnreachable = false) => [
     // SOUL.md goes FIRST — it's the identity layer (who Blue Agent is, how it
     // talks, what it won't do); everything after it is operational detail.
@@ -3384,7 +3429,10 @@ export async function POST(req: NextRequest) {
   // /v1/models mid-day, we surface a typed error instead of a mystery 400.
   const presetForTier = VIRTUALS_PRESETS.find((p) => p.id === tier);
   const virtualsModel = presetForTier?.model ?? VIRTUALS_CHAT_DEFAULT_MODEL;
-  const virtualsMax = (MODELS[tier as string] ?? MODELS.pro).maxTokens;
+  // Long-form turns get a long-form budget: a founder command (`blue audit …`)
+  // or a turn carrying source read from a linked repo cannot answer inside
+  // the 768/1,200-token caps that keep a price question short (see MODELS).
+  const virtualsMax = Math.max((MODELS[tier as string] ?? MODELS.pro).maxTokens, longForm ? LONG_FORM_MAX_TOKENS : 0);
   // No auto-web-search on Virtuals — hard-off regardless of the user's
   // toggle; the toggle only matters on the Venice branch above.
   const virtualsAutoSearch = false;
