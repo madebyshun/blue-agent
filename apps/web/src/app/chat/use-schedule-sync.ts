@@ -48,6 +48,7 @@ import {
   FOREGROUND_PATCH, type ServerTask,
 } from "./schedule-merge";
 import { useEnsureSession } from "@/hooks/useEnsureSession";
+import { sessionFetch } from "@/lib/session-client";
 
 export type ScheduleState =
   | { phase: "off" }                     // nothing is scheduled server-side
@@ -110,7 +111,7 @@ export function useScheduleSync(
   const background = crons.filter(isBackground);
   const payload    = JSON.stringify(background.map(toPayload));
   // The connected wallet, for the route to compare with the session. Never the
-  // owner — the route takes that from the session cookie only.
+  // owner — the route takes that from the SIWE session only.
   const scheduleUrl = walletAddr
     ? `/api/chat/schedule?address=${encodeURIComponent(walletAddr)}`
     : "/api/chat/schedule";
@@ -142,7 +143,7 @@ export function useScheduleSync(
       }
       if (cancelled) return;
       pulled.current = walletAddr;
-      return fetch(scheduleUrl, { cache: "no-store" })
+      return sessionFetch(scheduleUrl, { cache: "no-store" })
       .then(async r => ({ status: r.status, body: await r.json().catch(() => ({})) }))
       .then(({ status, body }) => {
         if (cancelled) return;
@@ -196,7 +197,7 @@ export function useScheduleSync(
         return;
       }
       if (cancelled) return;
-      return fetch(scheduleUrl, {
+      return sessionFetch(scheduleUrl, {
         method:  "PUT",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ tasks: JSON.parse(payload) }),
@@ -259,7 +260,7 @@ export function useScheduleSync(
     // the UI never claims "all off" while the server is still running them —
     // and the route now answers 503, not 200, when the KV delete did not land.
     try {
-      const r = await fetch(scheduleUrl, { method: "DELETE" });
+      const r = await sessionFetch(scheduleUrl, { method: "DELETE" });
       if (r.status === 401) { setState({ phase: "signed-out" }); return; }
       if (!r.ok) { setState({ phase: "error", message: "Couldn't stop the background tasks — try again." }); return; }
     } catch {

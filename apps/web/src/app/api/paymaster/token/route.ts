@@ -2,8 +2,9 @@
 //
 // Issues the short-lived sponsorship token the page embeds in the paymaster URL
 // it hands the wallet (see lib/paymaster-token.ts for why a token and not the
-// cookie). Same-origin, so the SIWE session cookie IS present here — this is the
-// one place the paymaster learns who the user is.
+// cookie). Same-origin, so the SIWE session IS present here — the cookie, or in
+// the embedded mini-app the `x-blue-session` header the page attaches (see
+// lib/session.ts) — this is the one place the paymaster learns who the user is.
 //
 // Every refusal is a normal answer, not an error the UI should shout about: the
 // client reads "no token" as "send without sponsorship", which is exactly what a

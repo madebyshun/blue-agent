@@ -5,7 +5,7 @@
  * PUT    → replace it (an empty list means "stop running these in the background")
  * DELETE → leave the scheduler entirely
  *
- * ── The wallet comes from the session cookie. Always. ────────────────────────
+ * ── The wallet comes from the SIWE session. Always. ──────────────────────────
  * No `?wallet=`, no `address` in the body — the same rule as `/api/workspace`,
  * for a stronger reason. A workspace is data; a schedule is a STANDING
  * INSTRUCTION TO SPEND. Every fire debits the owner's credit ledger and can call

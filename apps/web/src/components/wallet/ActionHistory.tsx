@@ -23,6 +23,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useEnsureSession } from "@/hooks/useEnsureSession";
 import { WALLET_CHAINS } from "@/lib/wallet/chains";
 import { actionSummary } from "@/lib/action-summary";
+import { sessionFetch } from "@/lib/session-client";
 
 export type ActionRow = {
   id: string;
@@ -70,7 +71,7 @@ export function useActionHistory(address: string | undefined, limit = 50) {
     setLoad({ s: "loading" });
     try {
       if (!(await hasSession(address))) { setLoad({ s: "signed-out" }); return; }
-      const r = await fetch(`/api/actions?limit=${limit}`, { cache: "no-store" });
+      const r = await sessionFetch(`/api/actions?limit=${limit}`, { cache: "no-store" });
       if (r.status === 401) { setLoad({ s: "signed-out" }); return; }
       const j = (await r.json().catch(() => null)) as { ok?: boolean; actions?: ActionRow[]; error?: string } | null;
       if (!r.ok || !j?.ok || !Array.isArray(j.actions)) {

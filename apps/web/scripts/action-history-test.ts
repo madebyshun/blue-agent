@@ -46,7 +46,7 @@ const web = path.resolve(__dirname, "..");
 const read = (p: string) => fs.readFileSync(path.join(web, p), "utf8");
 const view = read("src/components/wallet/ActionHistory.tsx");
 const hs = view.indexOf("await hasSession(address)");
-const fe = view.indexOf("fetch(`/api/actions");
+const fe = view.search(/\b(?:fetch|sessionFetch)\(`\/api\/actions/); // sessionFetch since the mini-app header session
 ok("no read of /api/actions before a session for THIS wallet is confirmed", hs > 0 && fe > hs);
 ok("signed out → the one-signature offer, not an empty list", /s: "signed-out"/.test(view) && /Sign in to see them/.test(view));
 ok("a failed read renders as an error with Retry, distinct from \"No actions yet\"",

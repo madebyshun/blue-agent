@@ -32,6 +32,7 @@
  * between them.
  */
 import { useCallback, useEffect, useState } from "react";
+import { sessionFetch } from "@/lib/session-client";
 
 export type SponsoredNetwork = "base" | "baseSepolia";
 
@@ -50,7 +51,7 @@ export async function fetchSponsoredPaymasterUrl(
 ): Promise<string | null> {
   if (!account || typeof window === "undefined") return null;
   try {
-    const r = await fetch("/api/paymaster/token", {
+    const r = await sessionFetch("/api/paymaster/token", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ network }),

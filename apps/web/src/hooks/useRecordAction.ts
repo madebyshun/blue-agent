@@ -14,6 +14,7 @@
  *   • once per hash — re-renders and remounts do not duplicate it.
  */
 import { useEffect, useRef } from "react";
+import { sessionFetch } from "@/lib/session-client";
 
 export type RecordInput = {
   wallet: string | undefined;
@@ -36,10 +37,10 @@ export async function recordAction(input: RecordInput & { txHash: string }): Pro
   const wallet = input.wallet?.toLowerCase();
   if (!wallet || !/^0x[0-9a-f]{40}$/.test(wallet)) return;
   try {
-    const who = (await fetch("/api/auth/session", { cache: "no-store" }).then((r) => r.json()).catch(() => null)) as
+    const who = (await sessionFetch("/api/auth/session", { cache: "no-store" }).then((r) => r.json()).catch(() => null)) as
       { status?: string; wallet?: string } | null;
     if (who?.status !== "active" || who.wallet?.toLowerCase() !== wallet) return;
-    await fetch("/api/actions", {
+    await sessionFetch("/api/actions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

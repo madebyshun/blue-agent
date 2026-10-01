@@ -27,6 +27,7 @@ import { formatUnits } from "viem";
 import AppConnectPrompt from "@/components/app/AppConnectPrompt";
 import { useBasename } from "@/lib/useBasename";
 import { useConnectors } from "@/app/chat/connectors";
+import { sessionFetch } from "@/lib/session-client";
 
 // ── Contracts (Base mainnet) ─────────────────────────────────────────────────
 
@@ -200,7 +201,7 @@ export default function OverviewView() {
   useEffect(() => {
     if (!address) { setLedger(null); return; }
     let cancelled = false;
-    fetch(`/api/credits/balance/${address}`)
+    sessionFetch(`/api/credits/balance/${address}`)
       .then(r => r.json())
       .then(d => {
         if (cancelled) return;

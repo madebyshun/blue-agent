@@ -52,6 +52,7 @@ import {
   getMemory, saveMemory, getChunks, saveChunks,
   type UserMemory, type MemoryChunk,
 } from "@/lib/memory";
+import { sessionFetch, setHeaderSessionToken } from "@/lib/session-client";
 
 /** Fired after hydration so ChatContext can re-read localStorage into React state. */
 export const WORKSPACE_HYDRATED_EVENT = "blueagent:workspace-hydrated";
@@ -238,7 +239,7 @@ export function useWorkspaceSync(
   useEffect(() => {
     if (!enabled || !walletAddr) { setSessionWallet(null); return; }
     let cancelled = false;
-    fetch("/api/auth/session", { cache: "no-store" })
+    sessionFetch("/api/auth/session", { cache: "no-store" })
       .then(async r => ({ ok: r.ok, status: r.status, body: await r.json().catch(() => ({})) }))
       .then(({ status, body }) => {
         if (cancelled) return;
@@ -263,7 +264,7 @@ export function useWorkspaceSync(
 
     let cancelled = false;
     setState({ phase: "hydrating" });
-    fetch("/api/workspace", { cache: "no-store" })
+    sessionFetch("/api/workspace", { cache: "no-store" })
       .then(async r => ({ status: r.status, body: await r.json().catch(() => ({})) }))
       .then(({ status, body }) => {
         if (cancelled) return;
@@ -308,7 +309,7 @@ export function useWorkspaceSync(
 
       setState({ phase: "syncing" });
       try {
-        const r = await fetch("/api/workspace", {
+        const r = await sessionFetch("/api/workspace", {
           method:  "PUT",
           headers: { "Content-Type": "application/json" },
           body,
@@ -358,12 +359,13 @@ export function useWorkspaceSync(
     // End the server session. The workspace record is left alone — see `forget`.
     // The cache is dropped AFTER the delete lands: dropped before, a whoami in
     // between would still see the live session and cache it again.
-    await fetch("/api/auth/session", { method: "DELETE" }).catch(() => null);
+    await sessionFetch("/api/auth/session", { method: "DELETE" }).catch(() => null);
+    setHeaderSessionToken(null);
     onSessionEnded?.();
   }, [walletAddr, onSessionEnded]);
 
   const forget = useCallback(async () => {
-    await fetch("/api/workspace", { method: "DELETE" }).catch(() => null);
+    await sessionFetch("/api/workspace", { method: "DELETE" }).catch(() => null);
     lastSent.current = "";
     setState({ phase: "idle", at: Date.now() });
   }, []);

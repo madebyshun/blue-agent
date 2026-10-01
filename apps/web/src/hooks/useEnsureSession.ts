@@ -4,14 +4,18 @@
  * Make sure the SIWE session is for THIS wallet before a call that charges it
  * or writes its private state (client half of lib/acting-wallet.ts).
  *
- * Since 2026-09-30 those routes take the wallet from the session cookie, not
+ * Since 2026-09-30 those routes take the wallet from the SIWE session, not
  * from the body. Most connected users had never signed in — SIWE used to be
  * opt-in, for cross-device sync only — so each such call first asks here:
  *   • a session for this wallet already → nothing to do (cached ~5 minutes, so
  *     a chat does not pay a whoami round-trip per message);
  *   • none, or one for a different wallet → one SIWE signature (no
  *     transaction, no funds), which the session then covers for 30 days.
- * A refused signature throws, and the caller shows why nothing was sent.
+ * A refused signature throws, and the caller shows why nothing was sent. So
+ * does a signature whose session this page cannot carry (the cross-site
+ * mini-app before the header fallback existed): `signIn` proves the session
+ * answers before returning, so "signed in" is never cached on a POST's 200
+ * alone — that cache is what turned a dropped cookie into a prompt per send.
  *
  * `fetchWithSession` adds the other half: a 401 `AUTH_REQUIRED` from the
  * server (session expired or revoked since the cache was filled) signs in and
@@ -26,6 +30,7 @@
  */
 import { useCallback, useSyncExternalStore } from "react";
 import { useSiweSignIn } from "@/app/chat/use-siwe-signin";
+import { sessionFetch } from "@/lib/session-client";
 
 const CACHE_MS = 5 * 60 * 1000;
 let cached: { wallet: string; at: number } | null = null;
@@ -57,7 +62,7 @@ export function useSessionEpoch(): number {
 
 async function whoami(): Promise<string | null> {
   try {
-    const r = await fetch("/api/auth/session", { cache: "no-store" });
+    const r = await sessionFetch("/api/auth/session", { cache: "no-store" });
     const j = (await r.json().catch(() => ({}))) as { status?: string; wallet?: string };
     return j.status === "active" && typeof j.wallet === "string" ? j.wallet.toLowerCase() : null;
   } catch {
@@ -90,13 +95,13 @@ export function useEnsureSession() {
   const fetchWithSession = useCallback(
     async (wallet: string, input: string, init?: RequestInit): Promise<Response> => {
       await ensureSession(wallet);
-      const res = await fetch(input, init);
+      const res = await sessionFetch(input, init);
       if (res.status !== 401) return res;
       const body = (await res.clone().json().catch(() => ({}))) as { code?: string };
       if (body.code !== "AUTH_REQUIRED") return res;
       invalidateSessionCache();
       await ensureSession(wallet);
-      return fetch(input, init);
+      return sessionFetch(input, init);
     },
     [ensureSession],
   );

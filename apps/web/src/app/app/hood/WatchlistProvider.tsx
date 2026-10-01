@@ -32,6 +32,7 @@ import { useAccount } from "wagmi";
 import type { Watchlist, WatchEntry, AlertKind } from "@/lib/blue-hood/watchlist";
 import { rowKey, type HoodChain } from "@/lib/blue-hood/types";
 import { useEnsureSession, useSessionEpoch } from "@/hooks/useEnsureSession";
+import { sessionFetch } from "@/lib/session-client";
 
 /** Result of an add/remove — carries the server's reason so the UI can show a cap/validation message. */
 export type WatchlistMutation = { ok: true } | { ok: false; error: string; code?: string };
@@ -106,7 +107,7 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       setNeedsSignIn(false);
-      const res = await fetch(`/api/hood/watchlist?address=${address}`, { cache: "no-store" });
+      const res = await sessionFetch(`/api/hood/watchlist?address=${address}`, { cache: "no-store" });
       const body = (await res.json()) as { ok: boolean; watchlist?: Watchlist };
       // A failed read leaves the last-known list rather than nuking the UI to
       // empty — an unreadable KV shouldn't look like "you watch nothing".

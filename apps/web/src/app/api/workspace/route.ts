@@ -5,7 +5,7 @@
  * PUT    → replace it
  * DELETE → stop syncing and remove the server copy
  *
- * ── The wallet comes from the session cookie. Always. ────────────────────────
+ * ── The wallet comes from the SIWE session. Always. ──────────────────────────
  * There is no `?wallet=` and no `address` field in the body. That is the whole
  * reason `lib/session.ts` exists: the last per-wallet CRUD in this repo took
  * its wallet from the URL with no auth at all, which meant anyone could read or

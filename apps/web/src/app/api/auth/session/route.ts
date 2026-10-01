@@ -1,9 +1,14 @@
 /**
  * /api/auth/session — the Blue Chat sign-in session.
  *
- * POST   { address, signature, nonce } → verify SIWE, set httpOnly cookie
+ * POST   { address, signature, nonce, embedded? } → verify SIWE, set httpOnly cookie
  * GET                                  → who am I (never 500s on a KV blip)
  * DELETE                               → sign out, drop the server record
+ *
+ * All three read the session from the cookie or, in the embedded mini-app,
+ * from the `x-blue-session` header (lib/session.ts header). POST returns the
+ * token in its body ONLY for `embedded: true` — the cross-site iframe where the
+ * Lax cookie is dropped — and never otherwise.
  *
  * A session is this wallet's proof for 30 days. It began as access to
  * `workspace:<wallet>` (cross-device sync) and, since 2026-09-30, is also what
@@ -40,7 +45,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Too many sign-in attempts. Try again shortly." }, { status: 429 });
   }
 
-  let body: { address?: unknown; signature?: unknown; nonce?: unknown };
+  let body: { address?: unknown; signature?: unknown; nonce?: unknown; embedded?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -71,7 +76,16 @@ export async function POST(req: NextRequest) {
   }
 
   const token = await createSession(address);
-  const res   = NextResponse.json({ wallet: address.toLowerCase() });
+  // The cookie is always set — a same-site embed keeps it, and the client
+  // measures which transport works before using either. The token goes in the
+  // body only on an explicit `embedded: true` (strictly the boolean): handing a
+  // bearer token to script by default would undo what httpOnly buys every
+  // ordinary tab. `no-store` so no cache between us and the frame keeps a copy.
+  const embedded = body.embedded === true;
+  const res = NextResponse.json(
+    embedded ? { wallet: address.toLowerCase(), token } : { wallet: address.toLowerCase() },
+    { headers: { "Cache-Control": "no-store" } },
+  );
   setSessionCookie(res, token);
   return res;
 }

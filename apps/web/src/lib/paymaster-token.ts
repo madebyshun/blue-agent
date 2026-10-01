@@ -4,7 +4,7 @@
  * WHY A TOKEN AND NOT THE SESSION COOKIE. The wallet — not our page — calls the
  * paymaster URL we hand it in the EIP-5792 `paymasterService` capability, from
  * its own origin, so our httpOnly SIWE cookie never arrives there. The page
- * therefore asks `/api/paymaster/token` (same origin, cookie present) for a
+ * therefore asks `/api/paymaster/token` (same origin, session present) for a
  * token bound to the signed-in wallet, and puts it in the URL. Before this the
  * paymaster had no gate at all: anyone could spend the project's sponsorship
  * budget on any smart account (plan §1 fix 3, ShunTr chose "gate" 2026-09-30).

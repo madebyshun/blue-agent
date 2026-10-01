@@ -9,6 +9,7 @@ import { useEffect, useState } from "react";
 import { useChat } from "../ChatContext";
 import { WalletPickerModal } from "@/components/WalletPicker";
 import { useEnsureSession } from "@/hooks/useEnsureSession";
+import { sessionFetch } from "@/lib/session-client";
 
 const DISMISS_KEY = "blueagent:claim-dismissed";
 
@@ -44,7 +45,7 @@ export default function ClaimBanner() {
   useEffect(() => {
     let off = false;
     const q = walletAddr ? `?address=${walletAddr}` : "";
-    fetch(`/api/credits/claim${q}`)
+    sessionFetch(`/api/credits/claim${q}`)
       .then((r) => r.json())
       .then((d: Status) => {
         if (off || d.ok === false) return; // counter unreadable → show nothing

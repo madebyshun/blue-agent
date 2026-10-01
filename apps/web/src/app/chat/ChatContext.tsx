@@ -36,6 +36,7 @@ import {
   buildMemoryContext, updateMemoryAfterChat,
   addChunk, recentChunks,
 } from "@/lib/memory";
+import { sessionFetch } from "@/lib/session-client";
 
 // ── Context type ──────────────────────────────────────────────────────────────
 
@@ -198,7 +199,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       // Connected — fetch the ledger balance. Refreshes whenever
       // walletRefresh increments (after a send / on demand).
       let cancelled = false;
-      fetch(`/api/credits/balance/${walletAddr}`)
+      sessionFetch(`/api/credits/balance/${walletAddr}`)
         .then(r => r.json())
         .then(d => {
           if (cancelled) return;
@@ -718,7 +719,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         typeof document !== "undefined" && /(?:^|;\s*)lang=zh\b/.test(document.cookie)
           ? "zh"
           : "en";
-      const res = await fetch("/api/chat", {
+      const res = await sessionFetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-lang": langPref },
         body: JSON.stringify({
@@ -752,7 +753,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       // /api/chat against the unified ledger — we just re-fetch the balance.
       // Guest sessions still drain the localStorage daily quota.
       if (walletAddr) {
-        fetch(`/api/credits/balance/${walletAddr}`)
+        sessionFetch(`/api/credits/balance/${walletAddr}`)
           .then(r => r.json())
           .then(d => {
             const bal = Number(d?.balance);

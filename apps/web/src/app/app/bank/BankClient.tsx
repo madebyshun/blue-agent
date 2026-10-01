@@ -84,6 +84,7 @@ import { useNetWorth } from "@/lib/wallet/useNetWorth";
 import { resolveIdentity } from "@/lib/identity/account-identity";
 import { usePrivyIdentity } from "@/lib/privy/identity-bridge";
 import { buildWalletState } from "@/lib/state";
+import { sessionFetch } from "@/lib/session-client";
 
 const usd = (n: number | null | undefined) =>
   n == null ? "—" : n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -945,7 +946,7 @@ export default function BankPage() {
           return;
         }
       }
-      const res = await fetch("/api/chat", {
+      const res = await sessionFetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

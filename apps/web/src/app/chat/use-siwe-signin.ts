@@ -3,10 +3,15 @@
 /**
  * Blue Chat — SIWE sign-in (browser half).
  *
- * Three steps, in this order and no other:
+ * Four steps, in this order and no other:
  *   1. GET  /api/auth/nonce      → a nonce the SERVER minted and recorded
  *   2. sign `sessionSiweMessage(host, address, nonce)` in the wallet
  *   3. POST /api/auth/session    → server verifies, sets an httpOnly cookie
+ *      (and, only when this page is an embedded frame, returns the token too)
+ *   4. `settleSessionTransport`  → prove the session is actually CARRIED —
+ *      by the cookie, or in the mini-app by the in-memory header token — and
+ *      throw a plain reason if neither, instead of reporting a sign-in that
+ *      the next request will not see (lib/session-client.ts)
  *
  * Step 1 is not optional and cannot be replaced with a locally generated nonce:
  * the server would never have recorded issuing it, so it could never detect the
@@ -23,6 +28,7 @@ import { useCallback } from "react";
 import { useSignMessage } from "wagmi";
 import { sessionSiweMessage } from "@/lib/siwe-session-message";
 import { fetchServerNonce } from "@/lib/siwe-nonce";
+import { inEmbeddedFrame, settleSessionTransport } from "@/lib/session-client";
 
 export function useSiweSignIn() {
   // Same hook the Hub's SubmitTool / DashboardView already sign with, so this
@@ -36,13 +42,16 @@ export function useSiweSignIn() {
     const message   = sessionSiweMessage(window.location.host.toLowerCase(), address, nonce);
     const signature = await signMessageAsync({ message });
 
+    const embedded = inEmbeddedFrame();
     const res  = await fetch("/api/auth/session", {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ address, signature, nonce }),
+      body:    JSON.stringify({ address, signature, nonce, ...(embedded ? { embedded: true } : {}) }),
     });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(String(body?.error ?? "Sign-in failed."));
-    return String(body.wallet);
+    const wallet = String(body.wallet);
+    await settleSessionTransport(wallet, typeof body.token === "string" ? body.token : null);
+    return wallet;
   }, [signMessageAsync]);
 }

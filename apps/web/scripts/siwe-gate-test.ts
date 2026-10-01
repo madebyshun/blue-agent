@@ -15,6 +15,14 @@
  * show its proof, and the few that prove it another way must show THAT proof —
  * a named exemption with no check behind it is how this repo hid a second x402
  * door once already.
+ *
+ * Group 7 (2026-10-01) is the embedded mini-app: the Lax cookie never reaches
+ * a cross-site iframe, so the same token may ride `x-blue-session` instead.
+ * It pins that the header proves exactly what the cookie proves and nothing
+ * more — a malformed one is ignored, the token is never handed to a caller that
+ * did not ask, no session route answers a CORS preflight, the client attaches
+ * it only to our own relative /api/ paths, and every client call to a session
+ * route goes through `sessionFetch` (discovered, not listed).
  */
 for (const k of ["KV_REST_API_URL", "KV_REST_API_TOKEN", "UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN"]) {
   delete process.env[k];
@@ -25,7 +33,9 @@ process.env.NEXT_PUBLIC_APP_URL = "https://app.invalid";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { NextRequest } from "next/server";
-import { createSession, SESSION_COOKIE } from "../src/lib/session";
+import { createSession, issueNonce, requestDomain, sessionSiweMessage, SESSION_COOKIE, SESSION_HEADER } from "../src/lib/session";
+import { sessionFetch, setHeaderSessionToken, settleSessionTransport, usingHeaderSession, SESSION_NOT_KEPT } from "../src/lib/session-client";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { resolveActingWallet } from "../src/lib/acting-wallet";
 import { getBalance } from "../src/lib/credit-ledger";
 
@@ -204,6 +214,177 @@ async function sseEvents(res: Response): Promise<Array<Record<string, unknown>>>
   for (const rel of Object.keys(OTHER_PROOF)) {
     check(`6.e the "${rel}" exemption still names a real mutator route`, files.some((f) => relative(ROOT, f) === rel && MUTATOR.test(strip(readFileSync(f, "utf8")))));
   }
+
+  console.log("\n7. Embedded mini-app: the session may ride x-blue-session, and only that");
+  const H = (t: string) => ({ [SESSION_HEADER]: t });
+  a = await resolveActingWallet(req("/x", { headers: H(aliceSession) }), ALICE);
+  check("7.1 header session, no cookie → ok via session", a.status === "ok" && a.wallet === ALICE && a.via === "session", JSON.stringify(a));
+  a = await resolveActingWallet(req("/x", { headers: H(aliceSession) }), MALLORY);
+  check("7.2 header session claiming another wallet → mismatch, same as the cookie", a.status === "mismatch");
+  a = await resolveActingWallet(req("/x", { headers: H(aliceSession.toUpperCase()) }), ALICE);
+  check("7.3 a malformed header proves nothing (no cookie → anonymous)", a.status === "anonymous");
+  a = await resolveActingWallet(req("/x", { headers: H("not-a-token"), cookie: aliceSession }), ALICE);
+  check("7.4 a malformed header is ignored, not an error — the cookie still answers", a.status === "ok" && a.wallet === ALICE);
+  a = await resolveActingWallet(req("/x", { headers: H("ab".repeat(32)) }), ALICE);
+  check("7.5 a well-formed but unknown token → anonymous", a.status === "anonymous");
+  res = await WL.GET(req(`/api/hood/watchlist?address=${ALICE}`, { method: "GET", headers: H(aliceSession) }));
+  check("7.6 a gated route accepts the header session (Alice reads her watchlist)", res.status === 200, `${res.status}`);
+
+  const SESSION = await import("../src/app/api/auth/session/route");
+  res = await SESSION.GET(req("/api/auth/session", { method: "GET", headers: H(aliceSession) }));
+  let who = (await res.json()) as { status?: string; wallet?: string };
+  check("7.7 whoami answers for the header session", who.status === "active" && who.wallet === ALICE, JSON.stringify(who));
+
+  const acct = privateKeyToAccount(generatePrivateKey());
+  const signInBody = async (extra: Record<string, unknown>) => {
+    const nonce = (await issueNonce())!;
+    // Signed for whatever host the route will bind the message to.
+    const domain = requestDomain(req("/api/auth/session"));
+    const signature = await acct.signMessage({ message: sessionSiweMessage(domain, acct.address, nonce) });
+    return { address: acct.address, signature, nonce, ...extra };
+  };
+  res = await SESSION.POST(req("/api/auth/session", { body: await signInBody({}) }));
+  let signed = (await res.json()) as { wallet?: string; token?: string };
+  check("7.8 a default sign-in never returns the token (cookie only)",
+    res.status === 200 && signed.wallet === acct.address.toLowerCase() && !("token" in signed) && /blue_session=/.test(res.headers.get("set-cookie") ?? ""),
+    JSON.stringify(signed));
+  res = await SESSION.POST(req("/api/auth/session", { body: await signInBody({ embedded: "true" }) }));
+  signed = (await res.json()) as typeof signed;
+  check("7.9 only the boolean `embedded: true` unlocks it — a truthy string does not", res.status === 200 && !("token" in signed));
+  res = await SESSION.POST(req("/api/auth/session", { body: await signInBody({ embedded: true }) }));
+  signed = (await res.json()) as typeof signed;
+  check("7.10 embedded sign-in returns the token, uncacheable, and the cookie is still set",
+    res.status === 200 && typeof signed.token === "string" && /^[0-9a-f]{64}$/.test(signed.token)
+      && res.headers.get("Cache-Control") === "no-store" && /blue_session=/.test(res.headers.get("set-cookie") ?? ""),
+    JSON.stringify({ status: res.status, cc: res.headers.get("Cache-Control") }));
+  check("7.11 the token-bearing response is not CORS-readable", res.headers.get("access-control-allow-origin") === null);
+  const tok = signed.token ?? "";
+  res = await SESSION.GET(req("/api/auth/session", { method: "GET", headers: H(tok) }));
+  who = (await res.json()) as typeof who;
+  check("7.12 the returned token is a working session for the signer", who.status === "active" && who.wallet === acct.address.toLowerCase());
+  await SESSION.DELETE(req("/api/auth/session", { method: "DELETE", headers: H(tok) }));
+  res = await SESSION.GET(req("/api/auth/session", { method: "GET", headers: H(tok) }));
+  who = (await res.json()) as typeof who;
+  check("7.13 sign-out by header destroys that session", who.status === "anonymous", JSON.stringify(who));
+
+  // CORS: a cross-site page can only set x-blue-session after a preflight. No
+  // session route may answer one, and nothing global may add the headers that
+  // would let it through.
+  const sessionRoutes = files.filter((f) => /\b(readSession|resolveActingWallet|destroySession)\s*\(/.test(strip(readFileSync(f, "utf8"))));
+  check("7.14 the session-route discovery is alive", sessionRoutes.length >= 10, `${sessionRoutes.length} routes`);
+  for (const f of sessionRoutes) {
+    const code = strip(readFileSync(f, "utf8"));
+    check(`7.c ${relative(ROOT, f)} answers no preflight and grants no CORS`,
+      !/export\s+(async\s+)?function\s+OPTIONS\b|export\s+const\s+OPTIONS\b/.test(code) && !/Access-Control-Allow/i.test(code));
+  }
+  for (const g of ["next.config.ts", "src/middleware.ts", "vercel.json"]) {
+    let text = "";
+    try { text = readFileSync(join(ROOT, g), "utf8"); } catch { /* absent is fine */ }
+    check(`7.g ${g} adds no global CORS headers`, !/Access-Control-Allow/i.test(text));
+  }
+
+  // The client half, against a stubbed fetch: what gets the header, and how
+  // the transport is chosen after a sign-in.
+  const sent: { url: string; header: string | null }[] = [];
+  let whoCookie: Response = new Response("{}");
+  let whoHeader: Response = new Response("{}");
+  const stubbed = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    const header = new Headers(init?.headers).get(SESSION_HEADER);
+    sent.push({ url, header });
+    if (url === "/api/auth/session") return (header ? whoHeader : whoCookie).clone();
+    return new Response("{}");
+  }) as typeof fetch;
+  const active = (w: string) => new Response(JSON.stringify({ status: "active", wallet: w }));
+  const anon = () => new Response(JSON.stringify({ status: "anonymous" }));
+  try {
+    setHeaderSessionToken(null);
+    await sessionFetch("/api/chat", { method: "POST" });
+    check("7.15 cookie mode: sessionFetch adds nothing", sent.at(-1)?.header === null);
+    setHeaderSessionToken("NOT-HEX");
+    check("7.16 a malformed token is never held", !usingHeaderSession());
+    setHeaderSessionToken(aliceSession);
+    await sessionFetch("/api/chat", { method: "POST", headers: { "x-lang": "en" } });
+    check("7.17 header mode: our /api/ path gets the token", sent.at(-1)?.header === aliceSession);
+    await sessionFetch("https://evil.example/api/chat");
+    await sessionFetch("//evil.example/api/chat");
+    check("7.18 …an absolute or protocol-relative URL never does", sent.at(-1)?.header === null && sent.at(-2)?.header === null);
+    await sessionFetch("/share/abc");
+    check("7.19 …nor a same-origin non-API path", sent.at(-1)?.header === null);
+
+    const T = "cd".repeat(32);
+    setHeaderSessionToken(null);
+    whoCookie = active(ALICE); whoHeader = active(ALICE);
+    await settleSessionTransport(ALICE, T);
+    check("7.20 the cookie stuck → cookie mode, the token is discarded unused", !usingHeaderSession());
+    whoCookie = anon(); whoHeader = active(ALICE);
+    await settleSessionTransport(ALICE, T);
+    check("7.21 the cookie was dropped (cross-site frame) → header mode", usingHeaderSession());
+    setHeaderSessionToken(null);
+    whoCookie = anon(); whoHeader = anon();
+    let threw = "";
+    try { await settleSessionTransport(ALICE, T); } catch (e) { threw = (e as Error).message; }
+    check("7.22 neither transport keeps it → a plain reason, not 'signed in' (the old loop)", threw === SESSION_NOT_KEPT && !usingHeaderSession(), threw);
+    threw = "";
+    try { await settleSessionTransport(ALICE, null); } catch (e) { threw = (e as Error).message; }
+    check("7.23 a non-embedded sign-in whose cookie did not stick also says so", threw === SESSION_NOT_KEPT);
+    whoCookie = new Response("{}", { status: 503 });
+    threw = "";
+    try { await settleSessionTransport(ALICE, null); } catch (e) { threw = (e as Error).message; }
+    check("7.24 whoami 503 is no verdict — a store blip does not fail the sign-in", threw === "");
+  } finally {
+    globalThis.fetch = stubbed;
+    setHeaderSessionToken(null);
+  }
+
+  // Discovery: every client call that names a session route goes through
+  // sessionFetch. Route paths come from the files found above (`[param]`
+  // matches any segment); a `${…}` in a template literal is treated as "could
+  // continue here", so `/api/credits/claim${q}` still counts.
+  const DYN = "\u0000";
+  const routePatterns = sessionRoutes.map((f) => {
+    const path = relative(join(ROOT, "src/app"), f).replace(/\/route\.ts$/, "");
+    const body = path.split("/").map((seg) => (/^\[.+\]$/.test(seg) ? "[^/]+" : seg.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))).join("/");
+    return new RegExp(`^/${body}(?:${DYN}.*)?$`);
+  });
+  const clientFiles: string[] = [];
+  const walkClient = (d: string) => {
+    for (const n of readdirSync(d)) {
+      const p = join(d, n);
+      if (statSync(p).isDirectory()) { if (p !== join(ROOT, "src/app/api")) walkClient(p); }
+      else if (/\.tsx?$/.test(n)) clientFiles.push(p);
+    }
+  };
+  walkClient(join(ROOT, "src"));
+  // Two bare fetches are correct, each shown by a property rather than listed:
+  //   • the sign-in POST — it CREATES a session, it presents none;
+  //   • session-client.ts's own whoami probes, which must ask over exactly one
+  //     transport to learn which one works (cookie alone, or an explicit token).
+  const SESSION_CLIENT = "src/lib/session-client.ts";
+  let calls = 0;
+  for (const f of clientFiles) {
+    const rel = relative(ROOT, f);
+    const code = strip(readFileSync(f, "utf8"));
+    const re = /\b(fetch|sessionFetch)\(\s*["'`](\/api\/[^"'`]*)/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(code))) {
+      const target = m[2].replace(/\$\{[^}]*\}/g, DYN).split("?")[0];
+      if (!routePatterns.some((r) => r.test(target))) continue;
+      calls++;
+      const after = code.slice(m.index, m.index + 160);
+      if (m[1] === "fetch" && target === "/api/auth/session" && /method:\s*"POST"/.test(after)) {
+        check(`7.d ${rel} → the sign-in POST creates the session, so a bare fetch is right`, true);
+        continue;
+      }
+      if (m[1] === "fetch" && rel === SESSION_CLIENT) {
+        check(`7.d ${rel} → its whoami probe names its one transport explicitly`, /\[SESSION_HEADER\]:\s*token/.test(after));
+        continue;
+      }
+      check(`7.d ${rel} → ${m[2].slice(0, 48)} goes through sessionFetch`, m[1] === "sessionFetch");
+    }
+  }
+  check("7.25 the client-call discovery is alive", calls >= 15, `${calls} calls`);
 
   console.log(`\nsiwe-gate-test: ${passes}/${passes + failures} passed`);
   if (failures > 0) process.exit(1);

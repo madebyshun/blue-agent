@@ -18,7 +18,8 @@
  * so it is single-use by a different but sound route.
  *
  * What a session is here:
- *   • an opaque 256-bit random token, stored ONLY in an httpOnly cookie
+ *   • an opaque 256-bit random token, stored in an httpOnly cookie — or, in an
+ *     embedded mini-app ONLY, carried in the `x-blue-session` header (below)
  *   • KV `session:<token>` → { wallet, createdAt, expiresAt }
  *
  * The wallet is never in the cookie. A cookie the client can read is a cookie
@@ -30,18 +31,41 @@
  * authorizes no transaction. It is a proof of key control, nothing else. The
  * message says so, because a wallet prompt the user doesn't understand is a
  * wallet prompt they should refuse.
+ *
+ * ── The embedded-mode exception (2026-10-01), and its threat model ──────────
+ * The Farcaster / Base App mini-app renders us in a CROSS-SITE iframe, where a
+ * `SameSite=Lax` cookie is neither stored nor sent, so a user there could sign
+ * forever and never hold a session. The cookie stays Lax — `None` would make it
+ * ambient on cross-site requests and reopen CSRF on every route that charges a
+ * wallet. Instead:
+ *   • POST /api/auth/session returns the token in its JSON body ONLY when the
+ *     client says it is embedded (`embedded: true`). Never by default.
+ *   • `sessionToken` accepts it back from `x-blue-session`. A custom header is
+ *     not ambient — a cross-site page cannot make a victim's browser attach it,
+ *     and sending it at all needs a CORS preflight that no session route
+ *     answers — so the header adds no CSRF surface.
+ *   • The client keeps it in memory only (lib/session-client.ts).
+ * What this DOES cost: in embedded mode the token is readable by script on our
+ * page, so an XSS there could lift it and use it elsewhere for up to 30 days —
+ * which the httpOnly cookie prevents. That exposure exists only for a session
+ * the client explicitly asked to receive in the body; cookie mode is
+ * byte-for-byte unchanged, and a token is never returned to a caller that did
+ * not ask. Header beats cookie when both arrive, because the header is the one
+ * the page deliberately attached (a stale Lax cookie must not shadow it).
  */
 
 import type { NextRequest, NextResponse } from "next/server";
 import { createPublicClient, http, verifyMessage } from "viem";
 import { base } from "viem/chains";
 import { kvGetProbe, kvSet, kvSetNX, kvDel } from "@/lib/kv";
+import { SESSION_HEADER } from "@/lib/session-client";
 
 // Re-exported so route handlers have one import, but DEFINED in a dependency-free
 // module because the browser has to build the identical string to sign it.
 export { sessionSiweMessage } from "@/lib/siwe-session-message";
 
 export const SESSION_COOKIE = "blue_session";
+export { SESSION_HEADER };
 
 const SESSION_TTL_S = 30 * 24 * 60 * 60; // 30 days
 const NONCE_TTL_S   = 5 * 60;            // 5 minutes to sign
@@ -233,9 +257,24 @@ export type SessionRead =
  * and if that empty workspace is then mirrored back it has silently deleted
  * their conversations. Callers must branch on all three.
  */
+const TOKEN_RE = /^[0-9a-f]{64}$/;
+
+/**
+ * The session token this request carries, if any: a well-formed
+ * `x-blue-session` header first (embedded mode, see the header of this file),
+ * else the cookie. A malformed header is ignored, not an error — it proves
+ * nothing, so the request is judged on its cookie alone.
+ */
+export function sessionToken(req: NextRequest): string | null {
+  const header = req.headers.get(SESSION_HEADER)?.trim();
+  if (header && TOKEN_RE.test(header)) return header;
+  const cookie = req.cookies.get(SESSION_COOKIE)?.value;
+  return cookie && TOKEN_RE.test(cookie) ? cookie : null;
+}
+
 export async function readSession(req: NextRequest): Promise<SessionRead> {
-  const token = req.cookies.get(SESSION_COOKIE)?.value;
-  if (!token || !/^[0-9a-f]{64}$/.test(token)) return { status: "anonymous" };
+  const token = sessionToken(req);
+  if (!token) return { status: "anonymous" };
 
   const probe = await kvGetProbe<SessionRecord>(sessKey(token));
   if (probe.status === "error") return { status: "unavailable", message: probe.message };
@@ -248,10 +287,16 @@ export async function readSession(req: NextRequest): Promise<SessionRead> {
   return { status: "active", wallet: rec.wallet.toLowerCase() };
 }
 
-/** Drop the server record. The cookie is cleared separately, on the response. */
+/** Drop the server record — every one this request names, header AND cookie,
+ *  so signing out never leaves the other transport's session alive. The cookie
+ *  itself is cleared separately, on the response. */
 export async function destroySession(req: NextRequest): Promise<void> {
-  const token = req.cookies.get(SESSION_COOKIE)?.value;
-  if (token && /^[0-9a-f]{64}$/.test(token)) await kvDel(sessKey(token));
+  const tokens = new Set<string>();
+  const header = req.headers.get(SESSION_HEADER)?.trim();
+  if (header && TOKEN_RE.test(header)) tokens.add(header);
+  const cookie = req.cookies.get(SESSION_COOKIE)?.value;
+  if (cookie && TOKEN_RE.test(cookie)) tokens.add(cookie);
+  for (const t of tokens) await kvDel(sessKey(t));
 }
 
 // ─── Cookie ──────────────────────────────────────────────────────────────────
@@ -260,6 +305,8 @@ export async function destroySession(req: NextRequest): Promise<void> {
  * `httpOnly` so no script — ours, an injected one, or an extension — can read
  * the token. `sameSite: "lax"` because the session is only ever used by
  * same-origin fetches from our own app; there is no cross-site POST that needs it.
+ * The one context Lax shuts out — the cross-site mini-app iframe — is served by
+ * the header, never by loosening this (see the header of this file).
  */
 export function setSessionCookie(res: NextResponse, token: string): void {
   res.cookies.set(SESSION_COOKIE, token, {

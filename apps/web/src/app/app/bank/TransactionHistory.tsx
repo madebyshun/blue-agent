@@ -5,6 +5,7 @@ import { useEnsureSession, useSessionEpoch, invalidateSessionCache } from "@/hoo
 import { useBasename, shortAddr } from "@/lib/useBasename";
 import { TOPUP_TREASURY } from "@/lib/payments";
 import { WALLET_CHAINS, type WalletChain } from "@/lib/wallet/chains";
+import { sessionFetch } from "@/lib/session-client";
 
 /**
  * Counterparties we can name from their ADDRESS ALONE.
@@ -194,7 +195,7 @@ function useSpendReceipts(address?: string): ReceiptState {
     void (async () => {
       if (!(await hasSession(address))) { if (alive) setState(noReceipts("signed-out")); return; }
       try {
-        const r = await fetch(`/api/wallet/spend?address=${address}`);
+        const r = await sessionFetch(`/api/wallet/spend?address=${address}`);
         const j = await r.json().catch(() => null);
         if (!alive) return;
         const next = receiptStateFrom(r.status, j);

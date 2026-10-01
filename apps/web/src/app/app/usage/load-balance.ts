@@ -12,7 +12,12 @@
 // cache was wrong (`onStaleSession`), and the public aggregate is read instead,
 // so the KPIs still render and Recent activity offers the signature. Any other
 // non-2xx is a real failure and throws.
+//
+// The default fetch is `sessionFetch`, so inside the embedded mini-app — where
+// the session rides the `x-blue-session` header, not the cookie — the detail
+// read is still recognised as the owner's (lib/session-client.ts).
 import type { BalanceSummary } from "@/lib/credit-ledger";
+import { sessionFetch } from "@/lib/session-client";
 
 export interface BalanceLoad {
   data: BalanceSummary;
@@ -23,9 +28,9 @@ export interface BalanceLoad {
 export async function loadBalance(
   address: string,
   signedIn: boolean,
-  opts: { fetchImpl?: typeof fetch; onStaleSession?: () => void } = {},
+  opts: { fetchImpl?: (input: string, init?: RequestInit) => Promise<Response>; onStaleSession?: () => void } = {},
 ): Promise<BalanceLoad> {
-  const doFetch = opts.fetchImpl ?? fetch;
+  const doFetch = opts.fetchImpl ?? sessionFetch;
   let mine = signedIn;
   let res = await doFetch(`/api/credits/balance/${address}${mine ? "?detail=1" : ""}`);
   if (mine && res.status === 401) {

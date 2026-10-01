@@ -13,7 +13,9 @@
  *      `x-blue-user: <0x…>`. Only our own server holds that key; it is how a
  *      background job (the user-tasks cron → cron/run → chat) acts for the
  *      owner it already verified when the task was saved.
- *   2. SESSION — the SIWE cookie (`lib/session.ts`).
+ *   2. SESSION — the SIWE cookie (`lib/session.ts`), or the same token in
+ *      `x-blue-session` inside the embedded mini-app, where the Lax cookie
+ *      cannot reach us (see that file's header for why that is not CSRF).
  *
  * `claimed` is what the client SAYS it is connected as. It is never trusted,
  * only compared: a session for a different wallet is `mismatch`, so a user who

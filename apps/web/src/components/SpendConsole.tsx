@@ -49,6 +49,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useEnsureSession } from "@/hooks/useEnsureSession";
+import { sessionFetch } from "@/lib/session-client";
 
 export type RailStatus = "ok" | "unavailable";
 
@@ -287,7 +288,7 @@ export function useSpendSummary(address?: string): Load {
     setState({ s: "loading" });
     void (async () => {
     if (!(await hasSession(address))) { if (alive) setState({ s: "signed-out", signIn }); return; }
-    fetch(`/api/wallet/spend-summary?address=${address}`)
+    sessionFetch(`/api/wallet/spend-summary?address=${address}`)
       .then(r => r.json())
       // A 200 that CARRIES an error is a failed read, not an empty ledger.
       //
