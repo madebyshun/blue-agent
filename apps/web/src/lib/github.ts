@@ -21,6 +21,13 @@ export interface RepoData {
   commitCount: number; commitDays: number | null; rootFiles: string[];
   /** The branch GitHub serves by default — what a file read should target. */
   defaultBranch: string;
+  /**
+   * GitHub itself reports this repository as PUBLIC (`private === false`, and
+   * `visibility` absent or "public"). With GITHUB_TOKEN set the API also
+   * serves private repositories that token can see — a caller that relays
+   * content onward must check this, not "the fetch succeeded".
+   */
+  isPublic: boolean;
 }
 
 export async function fetchRepo(slug: string): Promise<RepoData | null> {
@@ -62,6 +69,7 @@ export async function fetchRepo(slug: string): Promise<RepoData | null> {
     topics: (d.topics as string[]) ?? [],
     commitCount, commitDays, rootFiles,
     defaultBranch: (d.default_branch as string) || "main",
+    isPublic: d.private === false && (d.visibility === undefined || d.visibility === "public"),
   };
 }
 

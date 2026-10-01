@@ -3517,8 +3517,20 @@ export async function POST(req: NextRequest) {
   const detectedCmd = extractCommand(messages as LLMMessage[]);
   const cmdPrompt = detectedCmd ? COMMAND_PROMPTS[detectedCmd.cmd] : null;
 
-  // /credits and /help are knowledge-only — no live tools needed.
-  const knowledgeOnly = !!cmdPrompt;
+  // A linked github.com repository is read server-side (public only) — see
+  // lib/chat/github-context.ts for why the model cannot be left to "fetch" it.
+  // Read HERE, above the tool gates, because it decides one of them.
+  const lastUser = messages[messages.length - 1] as LLMMessage | undefined;
+  const github = lastUser?.role === "user" && typeof lastUser.content === "string"
+    ? await githubContextFor(lastUser.content).catch(() => null)
+    : null;
+
+  // /credits and /help are knowledge-only — no live tools needed. So is a turn
+  // that carries content read from a linked repository: that content is
+  // attacker-publishable text in the model's context, and on such a turn the
+  // model gets NO tools — nothing paid to run, no wallet read, no trade or
+  // transfer card to draft — so an injected instruction has nothing to reach.
+  const knowledgeOnly = !!cmdPrompt || !!github?.carriesRepoContent;
 
   // ── Free tier: server-pin provider + model (never trust the client here) ──
   // The free preset is the only 0-credit tier and is chat-only. Because it
@@ -3602,14 +3614,15 @@ export async function POST(req: NextRequest) {
   // has to be rebuilt rather than patched. Handing the model a tool list plus a
   // later retraction is worse than never mentioning tools: it has to guess which
   // half wins, and prod says it guesses the tool list.
-  // A linked github.com repository is read server-side (public only) — see
-  // lib/chat/github-context.ts for why the model cannot be left to "fetch" it.
-  const lastUser = messages[messages.length - 1] as LLMMessage | undefined;
-  const githubSection = lastUser?.role === "user" && typeof lastUser.content === "string"
-    ? await githubContextFor(lastUser.content).catch(() => null)
-    : null;
+  const longForm = !!github || (typeof lastUser?.content === "string" && FOUNDER_COMMAND_RE.test(lastUser.content));
 
-  const longForm = !!githubSection || (typeof lastUser?.content === "string" && FOUNDER_COMMAND_RE.test(lastUser.content));
+  // The repository data rides in its OWN user-role message, just before the
+  // user's last message — never in the system prompt, where repo text would
+  // speak with the system's authority. The system prompt only points at it.
+  const withRepoData = <T extends { role: string; content: unknown }>(msgs: T[]): T[] =>
+    github?.data && msgs.length > 0
+      ? [...msgs.slice(0, -1), { role: "user", content: github.data } as T, msgs[msgs.length - 1]]
+      : msgs;
 
   const buildSystem = (hasTools: boolean, toolsUnreachable = false) => [
     // SOUL.md goes FIRST — it's the identity layer (who Blue Agent is, how it
@@ -3639,7 +3652,7 @@ export async function POST(req: NextRequest) {
     // see with their own eyes, which is why it must never contradict the
     // screen — see the caller's label.
     pageContext ?? "",
-    githubSection ?? "",
+    github?.pointer ?? "",
     cmdPrompt ?? "",
   ].filter(Boolean).join("\n\n");
 
@@ -3683,10 +3696,10 @@ export async function POST(req: NextRequest) {
 
     const openaiMsgs = [
       { role: "system", content: system },
-      ...veniceMessages.map((m) => ({
+      ...withRepoData(veniceMessages.map((m) => ({
         role:    m.role as string,
         content: typeof m.content === "string" ? m.content : JSON.stringify(m.content),
-      })),
+      }))),
     ];
 
     // `freeNoTools` drops the tool phase for the chat-only free tier: a
@@ -3785,10 +3798,10 @@ export async function POST(req: NextRequest) {
 
   const openaiMsgs = [
     { role: "system", content: system },
-    ...virtualsMessages.map((m) => ({
+    ...withRepoData(virtualsMessages.map((m) => ({
       role: m.role as string,
       content: typeof m.content === "string" ? m.content : JSON.stringify(m.content),
-    })),
+    }))),
   ];
 
   // `!freeNoTools` is not redundant here, it is load-bearing. The Venice branch
