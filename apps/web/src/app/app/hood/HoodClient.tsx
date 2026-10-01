@@ -46,6 +46,7 @@ import PositionsStrip, { usePositions, positionsHeldMap } from "@/components/blu
 import EnableAlertsButton from "./inbox/EnableAlertsButton";
 import { HealthProvider, HealthBanner } from "./HealthProvider";
 import { WatchlistProvider, useWatchlist } from "./WatchlistProvider";
+import { watchStarState, watchStarTitle } from "./watch-star";
 import { WATCHLIST_LIMITS } from "@/lib/blue-hood/watchlist-config";
 import { ARROWS_FROZEN, ARROWS_FROZEN_NOTE, ARROWS_FROZEN_SINCE, ARROW_TRADE_ENABLED } from "@/lib/blue-hood/arrow-freeze";
 import { useEnsureSession } from "@/hooks/useEnsureSession";
@@ -1246,14 +1247,23 @@ function DriftRow({
 }
 
 // ── Per-ticker watch toggle (2.2b · B2) ──────────────────────────────────────
-// A compact ★/☆ glyph in the drift-board Ticker cell. Four states:
+// A compact ★/☆ glyph in the drift-board Ticker cell. Five states, decided by
+// ./watch-star.ts (pinned by scripts/watch-star-test.ts):
 //   • disconnected → dimmed ☆, tooltip "connect wallet to watch" (inert)
+//   • unknown      → dimmed ☆, tooltip "sign in to see your watchlist" (or
+//                    "couldn't read…"). The list is null — no session, or the
+//                    read failed — and null is NOT "unwatched": rendering it as
+//                    ☆ "watch for alerts" told a user whose DMs still arrive
+//                    that their alerts were off. A click signs in and READS;
+//                    it never subscribes, so it cannot become a blind add.
 //   • watching     → green ★, tooltip "watching · click to remove"
 //   • at free cap  → dimmed ☆, DISABLED, tooltip "free limit N · hold $BLUE for
 //                    more". UI-only: the server does NOT enforce the free cap
 //                    yet (1.7 tier-config default-off), so this is a nudge, not
 //                    a wall — we never fabricate an enforcement that isn't there.
 //   • watchable    → ☆, tooltip "watch for alerts"
+// A refused signature or a server refusal on any click is shown beside the
+// star — before, the result was dropped and a failed ★ simply did nothing.
 // Lives inside a <tr onClick> that expands the detail panel, so EVERY handler
 // stops propagation — a click here must never toggle the row.
 // Not rendered while ARROWS_FROZEN: a watch only ever yields an alert when a
@@ -1265,20 +1275,27 @@ function DriftRow({
 // arrows: a different contract on a chain the user never asked about.
 function WatchToggle({ ticker, chain }: { ticker: string; chain: HoodChain }) {
   const { isConnected } = useAccount();
-  const { watchlist, isWatching, add, remove } = useWatchlist();
+  const { watchlist, loading, needsSignIn, isWatching, add, remove, signIn } = useWatchlist();
   const [busy, setBusy] = useState(false);
-  const watching = isWatching(ticker, chain);
-  const count = watchlist?.entries.length ?? 0;
-  const atCap = !watching && count >= WATCHLIST_LIMITS.free.maxEntries;
+  const [err, setErr] = useState<string | null>(null);
+  const cap = WATCHLIST_LIMITS.free.maxEntries;
+  const state = watchStarState({
+    connected: isConnected,
+    known: watchlist !== null,
+    watching: isWatching(ticker, chain),
+    count: watchlist?.entries.length ?? 0,
+    cap,
+  });
+  const title = watchStarTitle(state, { needsSignIn, loading, cap });
 
   // Disconnected — a dimmed star that hints what connecting unlocks. Inert, but
   // still swallows the click so it can't expand the row.
-  if (!isConnected) {
+  if (state === "disconnected") {
     return (
       <span
         className="ml-2 cursor-default align-baseline text-[12px]"
         style={{ color: "#3a3f4b", lineHeight: 1 }}
-        title="connect wallet to watch"
+        title={title}
         onClick={(e) => e.stopPropagation()}
       >
         ☆
@@ -1288,39 +1305,56 @@ function WatchToggle({ ticker, chain }: { ticker: string; chain: HoodChain }) {
 
   async function onClick(e: React.MouseEvent) {
     e.stopPropagation();
-    if (busy || atCap) return;
+    if (busy || state === "at-cap") return;
     setBusy(true);
+    setErr(null);
     try {
-      if (watching) await remove(ticker, chain);
-      else await add(ticker, chain); // no kinds → server defaults to ALL_KINDS
+      const r = state === "unknown"
+        ? await signIn() // sign in and READ; never a blind add
+        : state === "watching"
+          ? await remove(ticker, chain)
+          : await add(ticker, chain); // no kinds → server defaults to ALL_KINDS
+      if (!r.ok) setErr(r.error);
     } finally {
       setBusy(false);
     }
   }
 
-  const title = watching
-    ? "watching · click to remove"
-    : atCap
-      ? `free limit ${WATCHLIST_LIMITS.free.maxEntries} · hold $BLUE for more`
-      : "watch for alerts";
-
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={busy || atCap}
-      className="ml-2 align-baseline text-[12px] transition-opacity disabled:cursor-not-allowed"
-      style={{
-        color: watching ? RH_GREEN : atCap ? "#3a3f4b" : MUTED,
-        opacity: busy ? 0.5 : 1,
-        lineHeight: 1,
-      }}
-      title={title}
-      aria-pressed={watching}
-      aria-label={watching ? `Unwatch ${ticker}` : `Watch ${ticker}`}
-    >
-      {watching ? "★" : "☆"}
-    </button>
+    <>
+      <button
+        type="button"
+        onClick={onClick}
+        disabled={busy || state === "at-cap" || (state === "unknown" && loading)}
+        className="ml-2 align-baseline text-[12px] transition-opacity disabled:cursor-not-allowed"
+        style={{
+          color: state === "watching" ? RH_GREEN : state === "watchable" ? MUTED : "#3a3f4b",
+          opacity: busy ? 0.5 : 1,
+          lineHeight: 1,
+        }}
+        title={title}
+        // Unknown is neither pressed nor unpressed — omit the state rather
+        // than announce "not pressed" for a list nobody read.
+        aria-pressed={state === "unknown" ? undefined : state === "watching"}
+        aria-label={
+          state === "unknown" ? `Sign in to see whether you watch ${ticker}`
+            : state === "watching" ? `Unwatch ${ticker}` : `Watch ${ticker}`
+        }
+      >
+        {state === "watching" ? "★" : "☆"}
+      </button>
+      {err && (
+        <span
+          role="alert"
+          className="ml-1 inline-block max-w-[16ch] truncate align-baseline font-mono text-[9px]"
+          style={{ color: RED }}
+          title={err}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {err}
+        </span>
+      )}
+    </>
   );
 }
 

@@ -31,21 +31,29 @@ import { createContext, useCallback, useContext, useEffect, useState } from "rea
 import { useAccount } from "wagmi";
 import type { Watchlist, WatchEntry, AlertKind } from "@/lib/blue-hood/watchlist";
 import { rowKey, type HoodChain } from "@/lib/blue-hood/types";
-import { useEnsureSession } from "@/hooks/useEnsureSession";
+import { useEnsureSession, useSessionEpoch } from "@/hooks/useEnsureSession";
 
 /** Result of an add/remove — carries the server's reason so the UI can show a cap/validation message. */
 export type WatchlistMutation = { ok: true } | { ok: false; error: string; code?: string };
 
 type WatchlistState = {
-  /** The connected wallet's list, or null when disconnected / before first load. */
+  /** The connected wallet's list, or null when it is UNKNOWN: disconnected,
+   *  before the first load, not signed in, or a first read that failed. Null
+   *  is never "watches nothing", so a UI must not render it as unwatched. */
   watchlist: Watchlist | null;
   /** true until the first fetch for the current address resolves. */
   loading: boolean;
-  /** Convenience: is this ticker watched ON THIS CHAIN? Both args required. */
+  /** A wallet is connected but has no session, so its list was not read. */
+  needsSignIn: boolean;
+  /** Convenience: is this ticker watched ON THIS CHAIN? Both args required.
+   *  Also `false` while `watchlist` is null — check that first. */
   isWatching: (ticker: string, chain: HoodChain) => boolean;
   add: (ticker: string, chain: HoodChain, kinds?: AlertKind[]) => Promise<WatchlistMutation>;
   remove: (ticker: string, chain: HoodChain) => Promise<WatchlistMutation>;
   refresh: () => Promise<void>;
+  /** Show the list: ask for the one signature if there is no session, then
+   *  read. Subscribes to nothing — unlike a ★, which would also add a watch. */
+  signIn: () => Promise<WatchlistMutation>;
 };
 
 const noop = async (): Promise<WatchlistMutation> => ({ ok: false, error: "connect a wallet first" });
@@ -53,10 +61,12 @@ const noop = async (): Promise<WatchlistMutation> => ({ ok: false, error: "conne
 const WatchlistContext = createContext<WatchlistState>({
   watchlist: null,
   loading: false,
+  needsSignIn: false,
   isWatching: () => false,
   add: noop,
   remove: noop,
   refresh: async () => {},
+  signIn: noop,
 });
 
 /** Subscribe to the connected wallet's alert watchlist. */
@@ -68,23 +78,34 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
   const { address } = useAccount();
   const [watchlist, setWatchlist] = useState<Watchlist | null>(null);
   const [loading, setLoading] = useState(false);
+  const [needsSignIn, setNeedsSignIn] = useState(false);
   // The watchlist is private to the SIGNED-IN wallet (SIWE, 2026-09-30). The
   // on-load read never prompts — without a session the list is simply unknown
-  // (null) — and the first ★ asks for the one signature, then the server's
-  // echo fills the list in.
-  const { hasSession, fetchWithSession } = useEnsureSession();
+  // (null, `needsSignIn`), and the star renders it as unknown, NOT as ☆ "watch
+  // for alerts": a user whose Telegram DMs are still arriving must not be told
+  // they watch nothing. Clicking that unknown star calls `signIn` (signature,
+  // then read); a ★ asks for the same signature and the server's echo fills
+  // the list in.
+  const { ensureSession, hasSession, fetchWithSession } = useEnsureSession();
+  // Re-read after a signature anywhere on this page creates a session. Without
+  // it, signing in through another card (or the chat) left this list unknown
+  // until a reload — see the header of hooks/useEnsureSession.
+  const epoch = useSessionEpoch();
 
   const refresh = useCallback(async () => {
     if (!address) {
       setWatchlist(null);
+      setNeedsSignIn(false);
       return;
     }
     setLoading(true);
     try {
       if (!(await hasSession(address))) {
         setWatchlist(null);
+        setNeedsSignIn(true);
         return;
       }
+      setNeedsSignIn(false);
       const res = await fetch(`/api/hood/watchlist?address=${address}`, { cache: "no-store" });
       const body = (await res.json()) as { ok: boolean; watchlist?: Watchlist };
       // A failed read leaves the last-known list rather than nuking the UI to
@@ -97,10 +118,32 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
     }
   }, [address, hasSession]);
 
-  // Fetch once per connected address. No interval — see file header.
+  // A list belongs to the wallet it was read for. Drop it when the wallet
+  // changes, so a failed first read for the new one stays unknown instead of
+  // showing the previous wallet's stars — "keep last-known" is per wallet.
+  useEffect(() => {
+    setWatchlist(null);
+  }, [address]);
+
+  // Fetch once per connected address, and again after a sign-in on this page.
+  // No interval — see file header. (A sign-in through `signIn` below reads
+  // twice, once here and once there: one extra GET per signature, not a poll.)
   useEffect(() => {
     void refresh();
-  }, [refresh]);
+  }, [refresh, epoch]);
+
+  const signIn = useCallback(async (): Promise<WatchlistMutation> => {
+    if (!address) return { ok: false, error: "connect a wallet first" };
+    try {
+      await ensureSession(address);
+    } catch (e) {
+      return { ok: false, error: (e as Error).message || "the signature was cancelled" };
+    }
+    // Not left to the epoch effect: a session that already existed (the first
+    // read failed, not the sign-in) bumps no epoch, and still needs a read.
+    await refresh();
+    return { ok: true };
+  }, [address, ensureSession, refresh]);
 
   const add = useCallback(
     async (ticker: string, chain: HoodChain, kinds?: AlertKind[]): Promise<WatchlistMutation> => {
@@ -156,7 +199,7 @@ export function WatchlistProvider({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <WatchlistContext.Provider value={{ watchlist, loading, isWatching, add, remove, refresh }}>
+    <WatchlistContext.Provider value={{ watchlist, loading, needsSignIn, isWatching, add, remove, refresh, signIn }}>
       {children}
     </WatchlistContext.Provider>
   );
