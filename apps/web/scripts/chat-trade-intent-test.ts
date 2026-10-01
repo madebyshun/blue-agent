@@ -9,7 +9,7 @@
  *    failed payload returns null so the model (not code) answers.
  */
 import { dollarAmount, baseStockByTickerOrSymbol } from "../src/lib/chat/trade-intent";
-import { cardReply, CARD_REPLY_TOOLS } from "../src/lib/chat/card-replies";
+import { cardReply, CARD_REPLY_TOOLS, CARD_RENDERED_TOOLS } from "../src/lib/chat/card-replies";
 import { BASE_STOCKS } from "../src/lib/base-stocks/registry";
 
 let failures = 0;
@@ -76,6 +76,20 @@ ok("token price without usd → null", cardReply("hub_token_price", { symbol: "e
 
 const listings = cardReply("hub_rh_new_listings", { recent_deployments: [{}, {}], new_since_registry: 1 });
 ok("new listings counts deployments and unlisted", !!listings && listings.startsWith("2 recent deployments") && listings.includes("1 not yet in BlueAgent's registry"), listings ?? "");
+
+const b20 = cardReply("hub_b20_inspect", {
+  address: "0xb20000000000000000000078ee7ce2fE4908108C", network: "mainnet", isB20: true, symbol: "NVDAc", name: "NVIDIA Corporation",
+  decimals: 8, variant: "ASSET", totalSupplyFormatted: "20362.95", supplyCapUncapped: true,
+  paused: { transfer: false, mint: false, burn: false },
+  policies: { transferSender: { kind: "custom", policyId: "5" }, transferReceiver: { kind: "open", policyId: "0" }, transferExecutor: { kind: "custom", policyId: "5" }, mintReceiver: { kind: "custom", policyId: "5" } },
+  explorerUrl: "https://basescan.org/token/0xb20000000000000000000078ee7ce2fE4908108C",
+}) ?? "";
+ok("b20 inspect is a list, never a one-line table", b20.split("\n").length >= 3 && !b20.includes("|---"), b20);
+ok("b20 inspect states supply, cap and pause from the payload", b20.includes("Supply 20,362.95 NVDAc · cap uncapped · nothing paused"));
+ok("b20 inspect states each scope's policy", b20.includes("send gated by policy #5 · receive open to all"));
+ok("b20 isB20=false is stated, not described", (cardReply("hub_b20_inspect", { address: "0xabc", isB20: false }) ?? "").includes("is NOT a B20 token"));
+ok("b20 with unread pause is 'unknown', never 'nothing paused'", !(cardReply("hub_b20_inspect", { address: "0xabc", isB20: true, symbol: "Xc" }) ?? "").includes("nothing paused"));
+ok("b20 inspect is not marked as a card", !CARD_RENDERED_TOOLS.has("hub_b20_inspect") && CARD_RENDERED_TOOLS.has("hub_rh_quote"));
 
 ok("every card tool is a real chat tool name (hub_ prefix)", [...CARD_REPLY_TOOLS].every((t) => t.startsWith("hub_")));
 

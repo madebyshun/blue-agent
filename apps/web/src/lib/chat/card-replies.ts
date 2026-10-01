@@ -50,7 +50,17 @@ export const CARD_REPLY_TOOLS = new Set([
   "hub_rh_quote",
   "hub_rh_index",
   "hub_token_price",
+  "hub_b20_inspect",
 ]);
+
+/**
+ * The subset whose result renders as a CARD. `hub_b20_inspect` has no card —
+ * its code-written reply IS the answer (a short list, because a model asked to
+ * format the same fields printed a markdown table on one line on the
+ * 2026-10-01 test share) — so the "already shown as a card" note must not be
+ * attached to it.
+ */
+export const CARD_RENDERED_TOOLS = new Set([...CARD_REPLY_TOOLS].filter((t) => t !== "hub_b20_inspect"));
 
 /**
  * The line shown under the card, or null to let the model answer.
@@ -127,6 +137,38 @@ export function cardReply(tool: string, result: unknown, args: Json = {}): strin
       const mc = fmtUsd(r.marketCap);
       const net = str(r.network) ? ` on ${str(r.network)}` : "";
       return `${who}${net}: ${price}${ch ? ` (24h ${ch})` : ""}${mc ? `, market cap ${mc}` : ""} — CoinGecko.`;
+    }
+    case "hub_b20_inspect": {
+      const addr = str(r.address);
+      const net = r.network === "sepolia" ? "Base Sepolia" : "Base mainnet";
+      if (!addr || typeof r.isB20 !== "boolean") return null;
+      if (!r.isB20) return `${addr} is NOT a B20 token on ${net} — the B20 Factory's isB20() returned false.`;
+      const sym = str(r.symbol);
+      const head = `**${sym || addr}**${str(r.name) ? ` (${str(r.name)})` : ""} on ${net} — a B20 token, ${r.variant === "STABLECOIN" ? `stablecoin${str(r.currency) ? ` (${str(r.currency)})` : ""}` : r.variant === "ASSET" ? "asset variant" : "variant unknown"}${typeof r.decimals === "number" ? `, ${r.decimals} decimals` : ""}.`;
+      const supplyN = Number(str(r.totalSupplyFormatted));
+      const supply = str(r.totalSupplyFormatted)
+        ? `${Number.isFinite(supplyN) ? supplyN.toLocaleString("en-US", { maximumFractionDigits: 2 }) : str(r.totalSupplyFormatted)}${sym ? ` ${sym}` : ""}`
+        : "unknown";
+      const cap = r.supplyCapUncapped === true ? "uncapped" : str(r.supplyCapFormatted) || "unknown";
+      const p = r.paused as { transfer?: boolean; mint?: boolean; burn?: boolean } | undefined;
+      const pausedList = p ? (["transfer", "mint", "burn"] as const).filter((k) => p[k] === true) : null;
+      const paused = pausedList == null ? "unknown" : pausedList.length === 0 ? "nothing paused" : `paused: ${pausedList.join(", ")}`;
+      const pol = r.policies as Record<string, { policyId?: string; kind?: string }> | undefined;
+      const scope = (k: string, label: string) => {
+        const x = pol?.[k];
+        if (!x) return `${label} unknown`;
+        return `${label} ${x.kind === "open" ? "open to all" : x.kind === "blocked" ? "blocked for all" : `gated by policy #${x.policyId ?? "?"}`}`;
+      };
+      const policies = pol
+        ? [scope("transferSender", "send"), scope("transferReceiver", "receive"), scope("transferExecutor", "executor"), scope("mintReceiver", "mint")].join(" · ")
+        : "unknown";
+      const url = str(r.explorerUrl);
+      return [
+        head,
+        `- Supply ${supply} · cap ${cap} · ${paused}`,
+        `- Who may move it: ${policies}`,
+        url ? `- [Contract on Basescan](${url})` : "",
+      ].filter(Boolean).join("\n");
     }
   }
   return null;

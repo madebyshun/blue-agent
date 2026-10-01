@@ -30,7 +30,7 @@ import { buildBaseSystem, buildAgentCapabilities, buildB20Section } from "./syst
 import { normalizeWallet, resolveActingWallet } from "@/lib/acting-wallet";
 import { findByTicker as findRwaByTicker, findByContract as findRwaByContract } from "@/lib/robinhood/rwa-registry";
 import { CHAT_HIDDEN_TOOLS } from "@/lib/chat-hidden-tools";
-import { cardReply, CARD_ALREADY_SHOWN } from "@/lib/chat/card-replies";
+import { cardReply, CARD_ALREADY_SHOWN, CARD_RENDERED_TOOLS } from "@/lib/chat/card-replies";
 import { baseStockByTickerOrSymbol, dollarAmount } from "@/lib/chat/trade-intent";
 import { githubContextFor } from "@/lib/chat/github-context";
 import { runInternalTool } from "@/lib/x402-internal-run";
@@ -2447,7 +2447,7 @@ async function veniceToolStream(
             const line = cardReply(tc.function.name, out.result, args);
             if (line) {
               out.staticReply = line;
-              out.text = CARD_ALREADY_SHOWN + out.text;
+              if (CARD_RENDERED_TOOLS.has(tc.function.name)) out.text = CARD_ALREADY_SHOWN + out.text;
             }
           }
           return { tc, out };
