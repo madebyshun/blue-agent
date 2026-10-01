@@ -422,8 +422,8 @@ export async function readGradePrices(
   }
 
   // robinhood (default) — the original M5 read.
-  // Raw reading (recorder path): the published M5 door withholds the DEX leg
-  // under F6, and an open arrow is still graded on the price it fired on.
+  // Raw reading (recorder path): the published M5 door projects the DEX leg
+  // through the F6 quarantine, and an open arrow is graded on the raw reading.
   const r = await callRecorderTool<M5Response>("rh-stock-arb", { ticker: arrow.ticker });
   // Downgraded to a soft skip: throwing here dumped the arrow into
   // `errored[]` every cycle forever, and one bad ticker's rate-limit

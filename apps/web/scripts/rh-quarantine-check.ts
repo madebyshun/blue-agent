@@ -29,6 +29,16 @@
  *       and /api/hood/ticker-series: withheld on the way out, raw in KV
  *   §7  the board: a quarantined row is bucketed by its real liquidity, not as
  *       "NO POOL" — run on the rows /api/hood/snapshot actually publishes
+ *
+ * AFTER THE PRICE-SOURCE FIX (2026-10-01) the quarantine holds RH rows WITHOUT
+ * the `dex_source: "pool_rate"` stamp — the ones recorded before the fix — and
+ * publishes rows measured from the pool's own rate. So every group above now
+ * pins BOTH halves: an unstamped (pre-fix) RH reading stays withheld on its
+ * door, and a stamped one publishes as measured. The GeckoTerminal fixture in
+ * §5 gives the token-level USD figure ($241.00) and the pool's own rate
+ * ($237.70 in USDG) DIFFERENT values, so every number asserted there proves
+ * which of the two the code read. §8 runs the real poller on that fixture and
+ * checks it stamps what it records.
  */
 for (const k of ["KV_REST_API_URL", "KV_REST_API_TOKEN", "UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN"]) {
   delete process.env[k];
@@ -116,9 +126,14 @@ const NON_PUBLISHING: Record<string, { why: string; holds: (src: string) => bool
     market: { is_open: false, session: "afterhours", ny_time_iso: at }, warnings: [],
     polled_at_ms: 1000, data_age_s: 5, sparkline: null, no_data_reason: null, ...over,
   });
+  // NVDA: an RH row recorded BEFORE the fix (no stamp). AMZN: one recorded
+  // after it, from the pool's own rate (stamped). Same snapshot, same desk.
+  const stamped = (over: Partial<TickerSnapshot>) =>
+    row({ chain: "robinhood", ticker: "AMZN", name: "Amazon", contract: "0x0000000000000000000000000000000000000002",
+      verdict: "ALIGNED", oracle_usd: 250.38, dex_usd: 251.0, drift_pct: 0.25, dex_source: "pool_rate", ...over });
   await kvSet(KV_SNAPSHOT_LATEST, {
     cycle_id: 1, started_at: at, finished_at: at, duration_ms: 1000,
-    tickers: [row({ chain: "robinhood" })],
+    tickers: [row({ chain: "robinhood" }), stamped({})],
     metrics: { registry_total: 1, tokens_watched: 1, tokens_errored: 0, tvl_scanned_usd: 0, market_is_open: false, market_session: "afterhours" },
   });
   await kvSet(KV_BASE_ROWS_LATEST, {
@@ -129,19 +144,27 @@ const NON_PUBLISHING: Record<string, { why: string; holds: (src: string) => bool
   const snapRoute = await import("../src/app/api/hood/snapshot/route");
   const snap = (await (await snapRoute.GET()).json()) as { snapshot: { tickers: (TickerSnapshot & { provenance?: string; provenance_note?: string })[] }; rh_desk?: { provenance?: string } };
   const rhRow = snap.snapshot.tickers.find((t) => t.chain === "robinhood");
+  const rhStamped = snap.snapshot.tickers.find((t) => t.chain === "robinhood" && t.ticker === "AMZN");
   const baseRow = snap.snapshot.tickers.find((t) => t.chain === "base");
-  ok("/api/hood/snapshot: RH row → drift, DEX price and verdict withheld, marked quarantined with the note",
+  ok("/api/hood/snapshot: pre-fix (unstamped) RH row → drift, DEX price and verdict withheld, marked quarantined with the note",
     rhRow?.drift_pct === null && rhRow?.dex_usd === null && rhRow?.verdict === "INSUFFICIENT_DATA" && rhRow?.provenance === "quarantined" && rhRow?.provenance_note === RH_DESK_QUARANTINE.note,
     JSON.stringify(rhRow && { d: rhRow.drift_pct, x: rhRow.dex_usd, v: rhRow.verdict, p: rhRow.provenance }));
   ok("…the facts that were read stay: Chainlink price, liquidity, volume", rhRow?.oracle_usd === 230.55 && rhRow?.total_tvl_usd === 6_000_000 && rhRow?.volume_24h_usd === 900_000);
+  ok("…a pool-rate (stamped) RH row in the same snapshot is published as measured: drift, DEX price and verdict intact",
+    rhStamped?.drift_pct === 0.25 && rhStamped?.dex_usd === 251.0 && rhStamped?.verdict === "ALIGNED" && rhStamped?.provenance === "measured" && rhStamped?.provenance_note === undefined,
+    JSON.stringify(rhStamped && { d: rhStamped.drift_pct, x: rhStamped.dex_usd, v: rhStamped.verdict, p: rhStamped.provenance }));
   ok("…the Base row is untouched and marked measured", baseRow?.drift_pct === 0.4 && baseRow?.dex_usd === 231.47 && baseRow?.provenance === "measured");
-  ok("…the response says the RH desk is quarantined", snap.rh_desk?.provenance === "quarantined");
+  ok("…the response says the RH desk is quarantined while ANY of its published rows is withheld", snap.rh_desk?.provenance === "quarantined");
 
   const dis = await import("../src/app/api/hood/dislocation/route");
   let body = (await (await dis.GET(new Request("https://blueagent.dev/api/hood/dislocation?ticker=NVDA&chain=robinhood"))).json()) as Record<string, unknown>;
   ok("/api/hood/dislocation (robinhood): drift and DEX price null, beyond_threshold null (not false), reason attached",
     body.drift_pct === null && body.dex_price_usd === null && body.beyond_threshold === null && body.provenance === "quarantined" && typeof body.provenance_note === "string" && body.oracle_price_usd === 230.55,
     JSON.stringify({ d: body.drift_pct, x: body.dex_price_usd, b: body.beyond_threshold, p: body.provenance }));
+  body = (await (await dis.GET(new Request("https://blueagent.dev/api/hood/dislocation?ticker=AMZN&chain=robinhood"))).json()) as Record<string, unknown>;
+  ok("/api/hood/dislocation (robinhood, stamped row): measured, drift and DEX price served",
+    body.drift_pct === 0.25 && body.dex_price_usd === 251.0 && body.provenance === "measured",
+    JSON.stringify({ d: body.drift_pct, x: body.dex_price_usd, p: body.provenance }));
   body = (await (await dis.GET(new Request("https://blueagent.dev/api/hood/dislocation?ticker=NVDA&chain=base"))).json()) as Record<string, unknown>;
   ok("/api/hood/dislocation (base): measured, drift intact", body.drift_pct === 0.4 && body.provenance === "measured");
 
@@ -157,13 +180,17 @@ const NON_PUBLISHING: Record<string, { why: string; holds: (src: string) => bool
   const { HANDLERS } = await import("../src/app/api/x402/_handlers/index");
   const live = (await (await HANDLERS["hood-live"](new Request("https://blueagent.dev/api/x402/hood-live", { method: "POST", body: "{}" }))).json()) as { rows?: Record<string, unknown>[] };
   const liveRh = live.rows?.find((r) => r.chain === "robinhood");
-  ok("x402 hood-live (paid): RH row quarantined, drift null", liveRh?.provenance === "quarantined" && liveRh?.drift_pct === null && liveRh?.dex_usd === null, JSON.stringify(liveRh && { p: liveRh.provenance, d: liveRh.drift_pct }));
+  ok("x402 hood-live (paid): pre-fix RH row quarantined, drift null", liveRh?.provenance === "quarantined" && liveRh?.drift_pct === null && liveRh?.dex_usd === null, JSON.stringify(liveRh && { p: liveRh.provenance, d: liveRh.drift_pct }));
+  const liveStamped = live.rows?.find((r) => r.chain === "robinhood" && r.ticker === "AMZN");
+  ok("x402 hood-live (paid): stamped RH row measured, drift served", liveStamped?.provenance === "measured" && liveStamped?.drift_pct === 0.25,
+    JSON.stringify(liveStamped && { p: liveStamped.provenance, d: liveStamped.drift_pct }));
 
   const acp = await import("../src/app/api/acp/drift/route");
   const acpBody = (await (await acp.GET(new Request("https://blueagent.dev/api/acp/drift", { headers: { "x-forwarded-for": "203.0.113.9" } }))).json()) as Record<string, unknown>;
   const acpText = JSON.stringify(acpBody);
-  ok("/api/acp/drift (sold to agents): RH rows quarantined, no RH drift number on the wire",
+  ok("/api/acp/drift (sold to agents): the pre-fix RH row quarantined, its drift not on the wire",
     acpText.includes('"provenance":"quarantined"') && !acpText.includes('"drift_pct":3.1'), acpText.slice(0, 200));
+  ok("/api/acp/drift: the stamped RH row is sold as measured", acpText.includes('"provenance":"measured"'), acpText.slice(0, 200));
 
   const tg = fs.readFileSync(path.join(SRC, "app/api/telegram/webhook/route.ts"), "utf8");
   ok("Telegram /drift answers through the quarantine (source)", /const row = publishDeskRow\(found\)/.test(tg) && /withheld/.test(tg));
@@ -196,7 +223,10 @@ const NON_PUBLISHING: Record<string, { why: string; holds: (src: string) => bool
     /export default async function handler[\s\S]*?publishArbResult\(/.test(handlerSrc) && !/export default async function measureRhStockArb/.test(handlerSrc));
 
   // Behaviour, on a fabricated upstream: GeckoTerminal serves one USDG-anchored
-  // NVDA pool at $237.70, Chainlink answers $230.55 — a +3.10% "drift".
+  // NVDA pool whose OWN rate is 237.70 USDG, while GT's token-level USD figure
+  // for NVDA says $241.00 — the F6 gap, made obvious. Chainlink answers $230.55.
+  // The pool rate × USDG at par is $237.70 — a +3.10% drift; GT's figure would
+  // have been +4.53%. Every number asserted below names which one was read.
   const NVDA = "0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC".toLowerCase();
   const USDG = "0x5fc5360d0400a0fd4f2af552add042d716f1d168";
   const word = (n: bigint) => n.toString(16).padStart(64, "0");
@@ -204,7 +234,7 @@ const NON_PUBLISHING: Record<string, { why: string; holds: (src: string) => bool
   // Every prompt A3/A4 send to the gateway, verbatim — the model is a door too.
   const prompts: string[] = [];
   process.env.VIRTUALS_API_KEY = "rh-quarantine-check";
-  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  const fixtureFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input instanceof Request ? input.url : input);
     if (url.startsWith("https://compute.virtuals.io/")) {
       if (!url.endsWith("/chat/completions")) return new Response("{}", { status: 404 }); // catalog unknown → dispatch anyway
@@ -219,7 +249,8 @@ const NON_PUBLISHING: Record<string, { why: string; holds: (src: string) => bool
         data: [{
           attributes: {
             address: `0x${"ab".repeat(32)}`, name: "NVDA / USDG",
-            base_token_price_usd: "237.7", quote_token_price_usd: "1.0",
+            base_token_price_usd: "241.0", quote_token_price_usd: "1.0",
+            base_token_price_quote_token: "237.7", quote_token_price_base_token: String(1 / 237.7),
             reserve_in_usd: "5000000", volume_usd: { h24: "900000" },
             price_change_percentage: { h1: "0.4", h24: "1.9" },
           },
@@ -245,29 +276,58 @@ const NON_PUBLISHING: Record<string, { why: string; holds: (src: string) => bool
     }
     return new Response("{}", { status: 404 });
   }) as typeof fetch;
+  globalThis.fetch = fixtureFetch;
 
   try {
-    type Arb = { verdict?: string; provenance?: string; provenance_note?: string; error?: string;
+    type Arb = { verdict?: string; provenance?: string; provenance_note?: string; error?: string; dex_price_basis?: string;
       delta?: { pct: number | null; abs_usd: number | null } | null;
-      dex?: { price_usd?: number | null; change_24h_pct?: number | null; total_tvl_usd?: number; volume_24h_usd?: number | null; pool_ref?: string } | null;
+      dex?: { price_usd?: number | null; price_basis?: string; anchor_usd?: number | null; change_24h_pct?: number | null; total_tvl_usd?: number; volume_24h_usd?: number | null; pool_ref?: string } | null;
       chainlink?: { price_usd?: number } | null };
     const published = (await (await HANDLERS["rh-stock-arb"](new Request("https://blueagent.dev/api/x402/rh-stock-arb", { method: "POST", body: JSON.stringify({ ticker: "NVDA" }) }))).json()) as Arb;
-    ok("HANDLERS[rh-stock-arb]: DEX price, delta and verdict withheld, marked quarantined with the note",
-      published.dex?.price_usd === null && published.delta?.pct === null && published.delta?.abs_usd === null &&
-        published.dex?.change_24h_pct === null && published.verdict === "INSUFFICIENT_DATA" &&
-        published.provenance === "quarantined" && published.provenance_note === RH_DESK_QUARANTINE.note,
-      JSON.stringify({ x: published.dex?.price_usd, d: published.delta, v: published.verdict, p: published.provenance }));
-    ok("…the reads that are real stay: Chainlink price, the pool, its liquidity and volume",
+    const pubPct = published.delta?.pct;
+    ok("HANDLERS[rh-stock-arb]: the DEX price is the POOL's rate × USDG at par ($237.70), not GT's token figure ($241.00)",
+      published.dex?.price_usd === 237.7 && published.dex?.price_basis === "pool_rate" && published.dex?.anchor_usd === 1,
+      JSON.stringify({ x: published.dex?.price_usd, b: published.dex?.price_basis, a: published.dex?.anchor_usd }));
+    ok("…the reading is stamped and published as MEASURED: delta and verdict served",
+      published.dex_price_basis === "pool_rate" && published.provenance === "measured" && published.provenance_note === undefined &&
+        typeof pubPct === "number" && Math.abs(pubPct - 3.1012) < 0.001 && published.verdict !== "INSUFFICIENT_DATA",
+      JSON.stringify({ d: published.delta, v: published.verdict, p: published.provenance }));
+    ok("…and the reads that were always real stay: Chainlink price, the pool, its liquidity and volume",
       published.chainlink?.price_usd === 230.55 && published.dex?.total_tvl_usd === 5_000_000 &&
         published.dex?.volume_24h_usd === 900_000 && typeof published.dex?.pool_ref === "string");
+
+    // The other half: a reading WITHOUT the stamp — the old figure, or a
+    // regression to it — is still withheld by the same publishing function.
+    const { publishArbResult, publishRhFacts, publishDeskRow: pdr } = await import("../src/lib/blue-hood/quarantine");
+    const unstampedBody: Record<string, unknown> = { ...(published as Record<string, unknown>) };
+    delete unstampedBody.dex_price_basis; delete unstampedBody.provenance;
+    const held = publishArbResult(unstampedBody) as Arb;
+    ok("publishArbResult on an UNSTAMPED M5 reading: DEX price, delta and verdict withheld, marked quarantined with the note",
+      held.dex?.price_usd === null && held.delta?.pct === null && held.delta?.abs_usd === null &&
+        held.dex?.change_24h_pct === null && held.verdict === "INSUFFICIENT_DATA" &&
+        held.provenance === "quarantined" && held.provenance_note === RH_DESK_QUARANTINE.note,
+      JSON.stringify({ x: held.dex?.price_usd, d: held.delta, v: held.verdict, p: held.provenance }));
+    const heldFacts = publishRhFacts({ dex_price_usd: 237.7, dex_change_24h_pct: 1.9 }, undefined);
+    const keptFacts = publishRhFacts({ dex_price_usd: 237.7, dex_change_24h_pct: 1.9 }, "pool_rate");
+    ok("publishRhFacts: an unstamped reading is withheld; a pool_rate one is used as is",
+      heldFacts.facts.dex_price_usd === null && heldFacts.withheld && heldFacts.provenance === "quarantined" &&
+        keptFacts.facts.dex_price_usd === 237.7 && !keptFacts.withheld && keptFacts.provenance === "measured");
+    // The quarantine restates the stamp as a literal (it must not import the
+    // price layer); pin it to the price layer's constant behaviourally.
+    const { RH_DEX_PRICE_BASIS } = await import("../src/lib/robinhood/rwa-price");
+    ok("the quarantine's stamp and the price layer's RH_DEX_PRICE_BASIS are the same value",
+      pdr(row({ chain: "robinhood", dex_source: RH_DEX_PRICE_BASIS })).provenance === "measured" &&
+        pdr(row({ chain: "robinhood" })).provenance === "quarantined" &&
+        pdr(row({ chain: undefined, dex_source: RH_DEX_PRICE_BASIS })).provenance === "measured",
+      RH_DEX_PRICE_BASIS);
 
     const { callRecorderTool } = await import("../src/lib/blue-hood/tool-caller");
     const raw = await callRecorderTool<Arb>("rh-stock-arb", { ticker: "NVDA" });
     const rawPct = raw.ok ? raw.data.delta?.pct : undefined;
-    ok("the recorder path gets the RAW reading (the archive keeps recording)",
+    ok("the recorder path gets the RAW reading, stamped (the poller copies the stamp onto the row)",
       raw.ok && raw.data.dex?.price_usd === 237.7 && typeof rawPct === "number" && Math.abs(rawPct - 3.1012) < 0.001 &&
-        raw.data.verdict !== "INSUFFICIENT_DATA" && raw.data.provenance === undefined,
-      JSON.stringify(raw.ok ? { x: raw.data.dex?.price_usd, d: rawPct, v: raw.data.verdict } : raw));
+        raw.data.verdict !== "INSUFFICIENT_DATA" && raw.data.provenance === undefined && raw.data.dex_price_basis === "pool_rate",
+      JSON.stringify(raw.ok ? { x: raw.data.dex?.price_usd, d: rawPct, v: raw.data.verdict, b: raw.data.dex_price_basis } : raw));
 
     const bad = (await (await HANDLERS["rh-stock-arb"](new Request("https://blueagent.dev/api/x402/rh-stock-arb", { method: "POST", body: "{}" }))).json()) as Arb;
     ok("an error body carries no reading and passes through unmarked", typeof bad.error === "string" && bad.provenance === undefined);
@@ -277,12 +337,15 @@ const NON_PUBLISHING: Record<string, { why: string; holds: (src: string) => bool
     process.env.INTERNAL_SERVICE_KEY = "rh-quarantine-check";
     const x402 = await import("../src/app/api/x402/[tool]/route");
     const { NextRequest } = await import("next/server");
-    // Withholding alone left the door CHARGING for the withheld verdict: the route
-    // settles on any 200. So the paid door must refuse before a payment
-    // requirement exists — on the POST path and on the GET (402 discovery) path.
+    // These two were HALTED while every reading they could make was the old
+    // figure (the route settles on any 200, and the verdict was withheld by
+    // construction). With the fix their readings are stamped and published as
+    // measured, so the halt is lifted: the paid door serves the pool-rate
+    // verdict. If the stamp is ever lost, the projection above withholds again
+    // and the halt in lib/tool-halts.ts should come back with it.
     const { haltReason } = await import("../src/lib/tool-halts");
     for (const id of ["rh-stock-arb", "rh-stock-agent-brief"]) {
-      ok(`${id} is halted (its product is a direction built on the withheld leg)`, haltReason(id) !== null);
+      ok(`${id} is no longer halted (its reading is the pool's own rate, stamped)`, haltReason(id) === null);
       const post = await x402.POST(
         new NextRequest(`https://blueagent.dev/api/x402/${id}`, {
           method: "POST",
@@ -291,55 +354,47 @@ const NON_PUBLISHING: Record<string, { why: string; holds: (src: string) => bool
         }),
         { params: Promise.resolve({ tool: id }) },
       );
-      const postBody = (await post.json()) as { code?: string; verdict?: string };
-      ok(`/api/x402/${id} POST refuses (501 TOOL_HALTED) — nothing runs, nothing is charged`,
-        post.status === 501 && postBody.code === "TOOL_HALTED" && postBody.verdict === undefined, `${post.status} ${postBody.code}`);
-      const get = await x402.GET(new NextRequest(`https://blueagent.dev/api/x402/${id}`), { params: Promise.resolve({ tool: id }) });
-      ok(`/api/x402/${id} GET issues no payment requirement`, get.status === 501 && !get.headers.get("payment-required"), String(get.status));
+      const postBody = (await post.json()) as { code?: string; verdict?: string; provenance?: string };
+      ok(`/api/x402/${id} POST answers 200 with a measured verdict (not TOOL_HALTED, not INSUFFICIENT_DATA)`,
+        post.status === 200 && postBody.code !== "TOOL_HALTED" && postBody.provenance === "measured" &&
+          typeof postBody.verdict === "string" && postBody.verdict !== "INSUFFICIENT_DATA",
+        `${post.status} ${postBody.code ?? ""} ${postBody.verdict} ${postBody.provenance}`);
     }
 
-    // A4 — halted at the route, and what still reaches the handler without the
-    // route (Blue Hood's brief fetcher calls HANDLERS) gets the published block.
+    // A4 / A3 — the facts go through `publishRhFacts` with the reading's basis
+    // BEFORE the verdict and the prompt. The stamped reading is used as is, and
+    // what the model is handed is the POOL's price, never GT's token figure.
     type Brief = { verdict?: string; verdict_note?: string; provenance?: string; provenance_note?: string; warnings?: string[];
       facts?: { dex_price_usd?: number | null; dex_change_24h_pct?: number | null; chainlink_price_usd?: number | null; dex_tvl_usd?: number | null; dex_volume_24h_usd?: number | null } };
     const callA = async <T,>(id: string) =>
       (await (await HANDLERS[id](new Request(`https://blueagent.dev/api/x402/${id}`, { method: "POST", body: JSON.stringify({ ticker: "NVDA" }) }))).json()) as T;
     prompts.length = 0;
     const brief = await callA<Brief>("rh-stock-agent-brief");
-    ok("HANDLERS[rh-stock-agent-brief]: DEX price and its 24h change withheld; verdict INSUFFICIENT_DATA (not WATCH, not a drift), said why",
-      brief.facts?.dex_price_usd === null && brief.facts?.dex_change_24h_pct === null && brief.verdict === "INSUFFICIENT_DATA" &&
-        brief.verdict_note === RH_DESK_QUARANTINE.note && brief.provenance === "quarantined" &&
-        (brief.warnings ?? []).some((w) => w.startsWith(RH_DESK_QUARANTINE.code)),
+    ok("HANDLERS[rh-stock-agent-brief]: the pool-rate DEX price is used; the verdict maps the drift (not INSUFFICIENT_DATA), marked measured",
+      brief.facts?.dex_price_usd === 237.7 && brief.verdict !== "INSUFFICIENT_DATA" && brief.provenance === "measured" &&
+        !(brief.warnings ?? []).some((w) => w.startsWith(RH_DESK_QUARANTINE.code)),
       JSON.stringify({ x: brief.facts?.dex_price_usd, v: brief.verdict, p: brief.provenance }));
-    ok("…the reads that are real stay: Chainlink price, pool depth and volume",
+    ok("…the reads that were always real stay: Chainlink price, pool depth and volume",
       brief.facts?.chainlink_price_usd === 230.55 && brief.facts?.dex_tvl_usd === 5_000_000 && brief.facts?.dex_volume_24h_usd === 900_000);
-    ok("…and the model was never handed the withheld price (checked on the request sent)",
-      prompts.length === 1 && !prompts[0].includes("237.7") && prompts[0].includes('\\"dex_price_usd\\": null'),
+    ok("…and the model is handed the POOL's price ($237.70), never GT's token figure ($241.00) (checked on the request sent)",
+      prompts.length === 1 && prompts[0].includes('\\"dex_price_usd\\": 237.7') && !prompts[0].includes('\\"dex_price_usd\\": 241'),
       `prompts=${prompts.length}`);
 
-    // A3 — not halted (its product is the brief), so it must withhold the leg
-    // BEFORE the prompt: a FACTS block the model is told not to contradict.
     type Report = { provenance?: string; warnings?: string[];
       facts?: { dex_price_usd?: number | null; dex_change_24h_pct?: number | null; dex_change_1h_pct?: number | null; chainlink_price_usd?: number | null; dex_tvl_usd?: number | null; dex_price_unavailable_reason?: string | null } };
     prompts.length = 0;
     const report = await callA<Report>("rh-stock-report");
-    ok("HANDLERS[rh-stock-report]: DEX price and the changes computed on it withheld, the reason is the quarantine note",
-      report.facts?.dex_price_usd === null && report.facts?.dex_change_24h_pct === null && report.facts?.dex_change_1h_pct === null &&
-        report.facts?.dex_price_unavailable_reason === RH_DESK_QUARANTINE.note && report.provenance === "quarantined" &&
-        (report.warnings ?? []).some((w) => w.startsWith(RH_DESK_QUARANTINE.code)),
+    ok("HANDLERS[rh-stock-report]: the pool-rate DEX price is used, no unavailable reason, marked measured",
+      report.facts?.dex_price_usd === 237.7 && report.facts?.dex_price_unavailable_reason === null && report.provenance === "measured" &&
+        !(report.warnings ?? []).some((w) => w.startsWith(RH_DESK_QUARANTINE.code)),
       JSON.stringify({ x: report.facts?.dex_price_usd, p: report.provenance }));
     ok("…Chainlink and depth stay", report.facts?.chainlink_price_usd === 230.55 && report.facts?.dex_tvl_usd === 5_000_000);
-    ok("…and the model was never handed the withheld price", prompts.length === 1 && !prompts[0].includes("237.7"), `prompts=${prompts.length}`);
+    ok("…and the model is handed the pool's price, not GT's",
+      prompts.length === 1 && prompts[0].includes('\\"dex_price_usd\\": 237.7') && !prompts[0].includes('\\"dex_price_usd\\": 241'), `prompts=${prompts.length}`);
 
     await withQuarantineLiftedForTest(async () => {
-      const b = await callA<Brief>("rh-stock-agent-brief");
-      ok("lifted (test only), A4 maps the drift again (AFTERHOURS/PREMARKET/ARB…, not INSUFFICIENT_DATA), marked measured",
-        b.facts?.dex_price_usd === 237.7 && b.verdict !== "INSUFFICIENT_DATA" && b.provenance === "measured", JSON.stringify({ v: b.verdict, p: b.provenance }));
-    });
-
-    await withQuarantineLiftedForTest(async () => {
-      const lifted = (await (await HANDLERS["rh-stock-arb"](new Request("https://blueagent.dev/api/x402/rh-stock-arb", { method: "POST", body: JSON.stringify({ ticker: "NVDA" }) }))).json()) as Arb;
-      ok("lifted (test only), the paid tool serves the delta again, marked measured",
+      const lifted = publishArbResult(unstampedBody) as Arb;
+      ok("lifted (test only), even an unstamped M5 reading is served — the quarantine is the only thing withholding it",
         lifted.dex?.price_usd === 237.7 && typeof lifted.delta?.pct === "number" && lifted.provenance === "measured",
         JSON.stringify({ x: lifted.dex?.price_usd, d: lifted.delta?.pct, p: lifted.provenance }));
     });
@@ -361,8 +416,8 @@ const NON_PUBLISHING: Record<string, { why: string; holds: (src: string) => bool
   ok(`found the live readers of the DEX leg (${liveLegReaders.length}) — the detector is alive`, liveLegReaders.length >= 6, liveLegReaders.map(rel).join(", "));
   /** Not a direction, a QUOTE: the figure sizes a trade the user signs, and
    *  withholding it removes the quote rather than a claim. Listed with the
-   *  property that makes that true, CHECKED; NOT CLOSED — quarantine.ts says
-   *  what stays open (the quote basis is the price-source fix's decision). */
+   *  property that makes that true, CHECKED. Since the price-source fix they
+   *  quote from the same pool-rate `PoolMeta.price_usd` (quarantine.ts). */
   const DIRECTION = /\b(LONG_DEX|SHORT_DEX|ARB_LONG_DEX|ARB_SHORT_DEX|PREMARKET_DRIFT|AFTERHOURS_DRIFT|FROZEN_ALIGNED)\b/;
   const EXECUTION_QUOTE: Record<string, string> = {
     "src/app/api/x402/_handlers/rh-stock-swap-quote.ts": "swap quote — the figure is the min_out basis",
@@ -408,33 +463,46 @@ const NON_PUBLISHING: Record<string, { why: string; holds: (src: string) => bool
   const nowIso = new Date().toISOString();
   await persistSeriesPoint({
     cycle_id: 2, started_at: nowIso, finished_at: nowIso, duration_ms: 1000,
-    tickers: [row({ chain: undefined })],
+    // NVDA recorded the old way (no stamp); AMZN recorded after the fix.
+    tickers: [row({ chain: undefined }), stamped({ chain: undefined })],
     metrics: { registry_total: 1, tokens_watched: 1, tokens_errored: 0, tvl_scanned_usd: 0, market_is_open: false, market_session: "afterhours" },
   } as never);
   const today = yyyymmdd(new Date());
   const [stored] = await readSeriesDays([today]);
   const storedRow = stored.status === "hit" ? stored.value.points.at(-1)?.rows.find((r) => r.ticker === "NVDA") : undefined;
+  const storedStamped = stored.status === "hit" ? stored.value.points.at(-1)?.rows.find((r) => r.ticker === "AMZN") : undefined;
   ok("the recorder wrote the raw DEX leg to the archive (fixture is live)", storedRow?.dex_usd === 237.7 && storedRow?.drift_pct === 3.1, JSON.stringify(storedRow));
+  ok("…and carried the stamp onto the archive row it was given, and none onto the row without one",
+    storedStamped?.dex_source === "pool_rate" && storedRow !== undefined && !("dex_source" in storedRow), JSON.stringify(storedStamped));
 
   const { NextRequest: NR } = await import("next/server");
   const seriesRoute = await import("../src/app/api/hood/series/route");
   type SeriesBody = { provenance?: string; provenance_note?: string; days: { status: string; points?: { rows: { ticker: string; oracle_usd: number | null; dex_usd: number | null; drift_pct: number | null; total_tvl_usd: number | null }[] }[] }[] };
   const series = (await (await seriesRoute.GET(new NR(`https://blueagent.dev/api/hood/series?day=${today}`))).json()) as SeriesBody;
   const servedRows = series.days.flatMap((d) => d.points ?? []).flatMap((p) => p.rows).filter((r) => r.ticker === "NVDA");
-  ok("/api/hood/series: every served RH row has dex_usd and drift_pct withheld, marked quarantined",
+  ok("/api/hood/series: every served pre-fix RH row has dex_usd and drift_pct withheld; the window is marked quarantined",
     servedRows.length > 0 && servedRows.every((r) => r.dex_usd === null && r.drift_pct === null) &&
       series.provenance === "quarantined" && series.provenance_note === RH_DESK_QUARANTINE.note,
     JSON.stringify({ n: servedRows.length, first: servedRows[0], p: series.provenance }));
   ok("…the oracle price and liquidity are served as recorded", servedRows.every((r) => r.oracle_usd === 230.55 && r.total_tvl_usd === 6_000_000));
+  const servedStamped = series.days.flatMap((d) => d.points ?? []).flatMap((p) => p.rows).filter((r) => r.ticker === "AMZN");
+  ok("…while a stamped row in the SAME hour is served with its DEX price and drift",
+    servedStamped.length > 0 && servedStamped.every((r) => r.dex_usd === 251.0 && r.drift_pct === 0.25),
+    JSON.stringify(servedStamped[0]));
 
   const tickerSeries = await import("../src/app/api/hood/ticker-series/route");
   type TsBody = { provenance?: string; deadband?: { graded: number }; segments: { kind: string; points?: { dex_usd: number | null; drift_pct: number | null; oracle_usd: number | null }[] }[] };
   const ts = (await (await tickerSeries.GET(new NR("https://blueagent.dev/api/hood/ticker-series?ticker=NVDA&chain=robinhood&days=1"))).json()) as TsBody;
   const tsPoints = ts.segments.flatMap((s) => s.points ?? []);
-  ok("/api/hood/ticker-series (robinhood): the chart gets no DEX price and no drift, and grades none",
+  ok("/api/hood/ticker-series (robinhood, pre-fix rows): the chart gets no DEX price and no drift, and grades none",
     tsPoints.length > 0 && tsPoints.every((p) => p.dex_usd === null && p.drift_pct === null && p.oracle_usd === 230.55) &&
       ts.deadband?.graded === 0 && ts.provenance === "quarantined",
     JSON.stringify({ n: tsPoints.length, first: tsPoints[0], graded: ts.deadband?.graded, p: ts.provenance }));
+  const tsA = (await (await tickerSeries.GET(new NR("https://blueagent.dev/api/hood/ticker-series?ticker=AMZN&chain=robinhood&days=1"))).json()) as TsBody;
+  const tsAPoints = tsA.segments.flatMap((s) => s.points ?? []);
+  ok("/api/hood/ticker-series (robinhood, stamped rows): the chart draws the pool-rate DEX leg, marked measured",
+    tsAPoints.length > 0 && tsAPoints.every((p) => p.dex_usd === 251.0 && p.drift_pct === 0.25) && tsA.provenance === "measured",
+    JSON.stringify({ n: tsAPoints.length, first: tsAPoints[0], p: tsA.provenance }));
 
   const [after] = await readSeriesDays([today]);
   const afterRow = after.status === "hit" ? after.value.points.at(-1)?.rows.find((r) => r.ticker === "NVDA") : undefined;
@@ -458,6 +526,8 @@ const NON_PUBLISHING: Record<string, { why: string; holds: (src: string) => bool
   ok("the published RH row (a $6M pool) is TRADABLE and withheld — not no-data",
     boardRowState(boardRh) === "tradable" && isWithheld(boardRh), `${boardRowState(boardRh)} withheld=${isWithheld(boardRh)}`);
   ok("the published Base row is tradable and NOT withheld", boardRowState(boardBase) === "tradable" && !isWithheld(boardBase));
+  const boardStamped = board.snapshot.tickers.find((t) => t.chain === "robinhood" && t.ticker === "AMZN")!;
+  ok("the published stamped RH row is tradable and NOT withheld", boardRowState(boardStamped) === "tradable" && !isWithheld(boardStamped));
   const { publishDeskRow } = await import("../src/lib/blue-hood/quarantine");
   const thin = publishDeskRow(row({ chain: "robinhood", total_tvl_usd: 1_200, tvl_usd: 1_200 }));
   ok("a withheld RH row on a thin pool is DUST (by its liquidity), still withheld", boardRowState(thin) === "dust" && isWithheld(thin));
@@ -480,6 +550,30 @@ const NON_PUBLISHING: Record<string, { why: string; holds: (src: string) => bool
   const client = code(fs.readFileSync(path.join(WEB, "src/app/app/hood/HoodClient.tsx"), "utf8"));
   ok("HoodClient: the NO DATA branch is taken on the shared state, and a withheld row says WITHHELD",
     /const noData = state === "no_data"/.test(client) && /<WithheldBadge\b/.test(client) && /withheld \?/.test(client));
+
+  // ── §8 ─────────────────────────────────────────────────────────────────────
+  // The stamp is only worth anything if the RECORDER writes it from the
+  // reading. Run the real poll cycle on the §5 fixture (only NVDA has a pool;
+  // every feed answers $230.55) and check what it would record.
+  console.log("\n8. the poller stamps each RH row from the reading it recorded");
+  process.env.BH_POLL_STAGGER_MS = "0";
+  globalThis.fetch = fixtureFetch;
+  try {
+    const { runPollCycle } = await import("../src/lib/blue-hood/poller");
+    const cycle = await runPollCycle();
+    const nv = cycle.tickers.find((t) => t.ticker === "NVDA");
+    ok("NVDA is recorded at the POOL's rate ($237.70, not GT's $241.00), stamped pool_rate",
+      nv?.dex_usd === 237.7 && nv?.dex_source === "pool_rate" && typeof nv?.drift_pct === "number" && Math.abs(nv.drift_pct - 3.1012) < 0.001,
+      JSON.stringify(nv && { x: nv.dex_usd, s: nv.dex_source, d: nv.drift_pct }));
+    const answered = cycle.tickers.filter((t) => t.verdict !== "ERROR");
+    ok(`every RH row whose reading came back is stamped (${answered.length}/${cycle.tickers.length}), pool or no pool`,
+      answered.length > 0 && answered.every((t) => t.dex_source === "pool_rate"),
+      answered.filter((t) => t.dex_source !== "pool_rate").map((t) => t.ticker).join(", "));
+    ok("…so the recorded NVDA row publishes as measured", publishDeskRow(nv!).provenance === "measured");
+  } finally {
+    globalThis.fetch = realFetch;
+    delete process.env.BH_POLL_STAGGER_MS;
+  }
 
   console.log(failures === 0 ? "\nrh-quarantine-check: PASS" : `\nrh-quarantine-check: FAIL — ${failures}`);
   process.exit(failures === 0 ? 0 : 1);

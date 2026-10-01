@@ -166,9 +166,17 @@ export interface TickerSnapshot {
   volume_24h_usd: number | null;
   /** dex/oracle drift as a percentage. Positive = DEX above oracle. */
   drift_pct: number | null;
+  /** Set by the RECORDER on RH rows (poller.ts), from the M5 reading:
+   *  `"pool_rate"` ⟹ `dex_usd` is the selected pool's own exchange rate × its
+   *  USD anchor (F6 fix, 2026-10-01). ABSENT on every RH row recorded before
+   *  that fix, whose DEX price was GeckoTerminal's token-level figure — that
+   *  absence is exactly what keeps them quarantined (lib/blue-hood/quarantine.ts).
+   *  Never set on Base rows: their DEX leg is DexScreener's pair price. */
+  dex_source?: "pool_rate";
   /** Set by the PUBLISHING readers (lib/blue-hood/quarantine.ts), never by the
-   *  recorder: "quarantined" ⟹ this desk's DEX leg is under repair (F6), and
-   *  `dex_usd` / `drift_pct` / the verdict were withheld — see the note. */
+   *  recorder: "quarantined" ⟹ this RH row was recorded before the F6 price
+   *  source fix (no `dex_source` stamp), and `dex_usd` / `drift_pct` / the
+   *  verdict were withheld — see the note. */
   provenance?: "measured" | "quarantined";
   provenance_note?: string;
   /** Reference to the primary pool (address or v4 pool id). */
@@ -390,6 +398,12 @@ export interface SeriesRow {
   /** dex/oracle drift %, positive = DEX above oracle. Copied from the
    *  snapshot, never recomputed here — one definition of drift, upstream. */
   drift_pct: number | null;
+  /** RH only — copied from `TickerSnapshot.dex_source`: `"pool_rate"` on rows
+   *  recorded after the F6 price-source fix (2026-10-01). Absent on every
+   *  earlier row; additive and optional, so no `SERIES_VERSION` bump — an
+   *  absent field already means "recorded the old way". The RH archive readers
+   *  withhold the DEX leg of unstamped rows (lib/blue-hood/quarantine.ts). */
+  dex_source?: "pool_rate";
   /** Total TVL across every pool for this token, USD. Kept because "the DEX
    *  disagreed with the oracle" means nothing without knowing how much
    *  depth was standing behind the disagreement. */

@@ -69,8 +69,8 @@ import {
   DEADBAND_ABS_PCT,
   type ChartDayInput,
 } from "@/lib/blue-hood/chart-series";
-import type { HoodChain } from "@/lib/blue-hood/types";
-import { publishRhArchivePoints, rhDeskProvenance } from "@/lib/blue-hood/quarantine";
+import type { HoodChain, SeriesPoint } from "@/lib/blue-hood/types";
+import { publishRhArchivePoints, rhArchiveProvenance } from "@/lib/blue-hood/quarantine";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -134,6 +134,9 @@ export async function GET(req: NextRequest) {
   // wrong in a direction that quietly shrinks the holes.
   let dayInputs: ChartDayInput[];
   let unreadable: string[];
+  // F6 — the RH points as read, so the window's provenance is stated from the
+  // rows' own stamps (`rhArchiveProvenance`), not assumed for the whole desk.
+  let rhPoints: SeriesPoint[] = [];
 
   if (chain === "base") {
     const reads = await readBaseSeriesDays(requested);
@@ -153,13 +156,16 @@ export async function GET(req: NextRequest) {
   } else {
     const reads = await readSeriesDays(requested);
     unreadable = reads.filter((r) => r.status === "error").map((r) => r.day);
+    rhPoints = reads.flatMap((r) => (r.status === "hit" ? r.value.points : []));
     dayInputs = reads.map((r) =>
       r.status === "hit"
         ? {
             day: r.day,
             status: "hit" as const,
-            // F6 — published through the quarantine (see the header). Coverage
-            // reads the raw points: it is about which HOURS exist, not prices.
+            // F6 — published through the quarantine (see the header): rows
+            // recorded before the price-source fix lose their DEX leg, stamped
+            // rows pass. Coverage reads the raw points: it is about which HOURS
+            // exist, not prices.
             points: publishRhArchivePoints(r.value.points),
             hours_absent: seriesCoverage(r.day, r.value.points, now).hours_absent,
           }
@@ -208,7 +214,7 @@ export async function GET(req: NextRequest) {
       chain,
       chain_id: chain === "base" ? 8453 : 4663,
       // F6 — whether this desk's DEX leg is published. Base is always measured.
-      ...(chain === "base" ? { provenance: "measured" as const } : rhDeskProvenance()),
+      ...(chain === "base" ? { provenance: "measured" as const } : rhArchiveProvenance(rhPoints, ticker)),
       archive_start: archiveStart,
       requested,
       // Two separate questions, as everywhere else in this archive: `complete`
@@ -252,7 +258,7 @@ export async function GET(req: NextRequest) {
         chain:
           "the chart is an assertion about ONE token. A ticker exists on both chains as different tokens with different pools, so this field is part of the answer, not decoration",
         provenance:
-          "`quarantined` = this desk's DEX price is under repair (see provenance_note): dex_usd and drift_pct are null on every point, WITHHELD rather than unobserved, and `deadband.graded` counts none of them. The oracle line is as recorded",
+          "`quarantined` = some points in this window were recorded before 2026-10-01, when this desk's DEX price was not the pool's own rate (see provenance_note): on those points dex_usd and drift_pct are null, WITHHELD rather than unobserved, and `deadband.graded` counts none of them. Points recorded since are priced from the pool's own rate and served as recorded. The oracle line is as recorded. `measured` = every point in the window was recorded after the fix",
       },
     },
     { headers: { "Cache-Control": cache } },

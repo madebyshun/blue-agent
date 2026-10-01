@@ -41,7 +41,7 @@ import { join, relative } from "node:path";
 import { kvGet, kvSet } from "../src/lib/kv";
 import { runRuleEngine } from "../src/lib/blue-hood/rule-engine";
 import { ARROWS_FROZEN, ARROWS_FROZEN_SINCE, ARROW_TRADE_ENABLED, arrowAnswerCloser } from "../src/lib/blue-hood/arrow-freeze";
-import { RH_DESK_QUARANTINE } from "../src/lib/blue-hood/quarantine";
+import { isQuarantinedRow } from "../src/lib/blue-hood/quarantine";
 import type { HoodSnapshot, TickerSnapshot } from "../src/lib/blue-hood/types";
 
 let failures = 0;
@@ -269,8 +269,11 @@ async function resetArrows() {
     }
     check("4.2 /start points at trading-from-a-signal only while it exists",
       ARROW_TRADE_ENABLED || !/To act on a signal/i.test(start));
-    check("4.2 /start's help does not advertise a live RH drift while the RH desk is quarantined",
-      !RH_DESK_QUARANTINE.active || !/live oracle vs DEX drift/i.test(start));
+    // Since the F6 price-source fix (2026-10-01) the quarantine holds only RH
+    // rows recorded before it; a pool-rate reading publishes. The help may
+    // advertise the live drift only while that is actually true.
+    check("4.2 /start's help advertises a live RH drift only while a pool-rate RH reading publishes",
+      !/live oracle vs DEX drift/i.test(start) || !isQuarantinedRow({ chain: "robinhood", dex_source: "pool_rate" }));
 
     if (ARROWS_FROZEN) {
       const badLink = await say("/start link_NOPE00");

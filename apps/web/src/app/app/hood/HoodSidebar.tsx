@@ -396,9 +396,10 @@ function WatchRow({
           title={
             kind === "no_data"
               ? "No pool data this cycle"
-              // F6 — the pool was read; its DEX price and verdict are withheld.
+              // F6 — the pool was read; this row predates the price-source fix,
+              // so its DEX price and verdict are withheld.
               : isWithheld(r)
-                ? r.provenance_note ?? "DEX price withheld while the price source is repaired"
+                ? r.provenance_note ?? "DEX price withheld: recorded before the price-source fix"
                 : r.verdict
           }
         />

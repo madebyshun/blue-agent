@@ -45,9 +45,10 @@
  * F6 — THIS IS A PUBLISHING DOOR OF THE RH DESK. The archive holds the same DEX
  * leg the quarantine withholds on the snapshot (lib/blue-hood/quarantine.ts),
  * so every served point goes through `publishRhArchivePoints` and the response
- * says `provenance`. The archive in KV stays raw — that is the recorder's job,
- * and the reason the numbers can be re-derived once the price source is fixed.
- * Coverage is computed from the points' HOURS, which the quarantine does not
+ * says `provenance`. Since the price-source fix (2026-10-01) the projection is
+ * per row: rows stamped `dex_source: "pool_rate"` are served as recorded, rows
+ * recorded before the fix keep their DEX leg withheld. The archive in KV stays
+ * raw — that is the recorder's job. Coverage is computed from the points' HOURS, which the quarantine does not
  * touch, so the holes this route reports are the same either way.
  */
 import { NextRequest, NextResponse } from "next/server";
@@ -58,7 +59,7 @@ import {
   type SeriesCoverage,
 } from "@/lib/blue-hood/poller";
 import { yyyymmdd } from "@/lib/blue-hood/kv-keys";
-import { publishRhArchivePoints, rhDeskProvenance } from "@/lib/blue-hood/quarantine";
+import { publishRhArchivePoints, rhArchiveProvenance } from "@/lib/blue-hood/quarantine";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -205,9 +206,11 @@ export async function GET(req: NextRequest) {
     {
       ok: true,
       archive_start: SERIES_ARCHIVE_START,
-      // F6 — "quarantined" ⟹ every row's `dex_usd` / `drift_pct` is withheld
-      // (null) with the reason; the oracle price and liquidity are as recorded.
-      ...rhDeskProvenance(),
+      // F6 — "quarantined" ⟹ some rows in this window were recorded before
+      // the price-source fix and have `dex_usd` / `drift_pct` withheld (null)
+      // with the reason; rows stamped `dex_source: "pool_rate"` are as
+      // recorded. The oracle price and liquidity are always as recorded.
+      ...rhArchiveProvenance(hits.flatMap((r) => (r.status === "hit" ? r.value.points : []))),
       // False the moment any day in the window could not be read. A consumer
       // that flattens `days[].points` into one array MUST check this first,
       // or it will plot a hole it cannot see.
@@ -233,7 +236,7 @@ export async function GET(req: NextRequest) {
         contiguous:
           "false when a readable day still has holes — distinct from `complete`, which is only about whether the days could be read at all",
         provenance:
-          "`quarantined` = this desk's DEX price is under repair (see provenance_note): every row's dex_usd and drift_pct are null here, WITHHELD rather than unobserved. The row stays in its hour because the hour was recorded; the archive itself keeps the raw values",
+          "`quarantined` = this window holds rows recorded before 2026-10-01, when this desk's DEX price was not the pool's own rate (see provenance_note): on every row WITHOUT `dex_source: \"pool_rate\"`, dex_usd and drift_pct are null here, WITHHELD rather than unobserved. Rows with the stamp are served as recorded. A row stays in its hour because the hour was recorded; the archive itself keeps the raw values. `measured` = every row in the window carries the stamp",
       },
     },
     { headers: { "Cache-Control": cache } },

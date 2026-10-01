@@ -116,7 +116,10 @@ export interface ExecPlan {
   side: ExecSide;
   size_usd: number;
   as_of: string;
-  mid_price_usd: number;
+  /** The deepest pool's own rate × its USD anchor (`PoolMeta.price_usd`, F6).
+   *  Null when that pool has no dollar price — an RWA-vs-RWA pool (the
+   *  no-anchor edge case below) or an anchor that could not be valued. */
+  mid_price_usd: number | null;
   pool_count: number;
   total_tvl_usd: number;
   /** The pool the recommended route fills (deepest in the chosen frame). */

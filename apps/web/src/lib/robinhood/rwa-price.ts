@@ -7,6 +7,9 @@
 //      unmapped (`chainlink-only-feeds` for tickers whose token isn't in the
 //      registry yet, or vice-versa). The DEX *provider* is per-source: RH uses
 //      GeckoTerminal, Base uses DexScreener (see `DexFeed` below for why).
+//      On RH the spot is the selected pool's OWN exchange rate times its USD
+//      anchor (`poolRateUsd`), never GeckoTerminal's token-level USD figure —
+//      F6, fixed 2026-10-01; see `dexPriceGecko`.
 //
 // Never let an LLM invent a stock price. If both sources fail, return null +
 // note so the tool can honestly say "insufficient data".
@@ -14,6 +17,7 @@
 import { createPublicClient, http, fallback, type Address, type Chain } from "viem";
 import { base } from "viem/chains";
 import { robinhoodMainnet } from "@/lib/robinhood/chains";
+import { RH_CHAINLINK_ETH_USD } from "@/lib/robinhood/rwa-registry";
 
 /**
  * DexFeed — which DEX aggregator supplies the *spot price* for this source.
@@ -42,8 +46,27 @@ import { robinhoodMainnet } from "@/lib/robinhood/chains";
  * that turns into a silent wrong-chain price later). TypeScript enforces it.
  */
 export type DexFeed =
-  | { kind: "geckoterminal" }
+  | { kind: "geckoterminal"; anchorUsd: AnchorUsdTable }
   | { kind: "dexscreener"; chain: string };
+
+/**
+ * How one USD anchor is turned into dollars when a pool's exchange rate is
+ * priced (F6, 2026-10-01). Required on the GeckoTerminal feed, because that
+ * reader no longer takes a USD figure from GT at all — it reads the pool's own
+ * rate, which is denominated in the anchor, and needs the anchor's value:
+ *   • `par`       — a dollar stablecoin, taken at exactly $1. Not GT's price
+ *                   for it: GT's figure for the anchor is one of the things the
+ *                   F6 diagnosis had to rule out (the ×1.052 USDG hypothesis),
+ *                   so a $1 stablecoin is valued at $1 here by definition.
+ *   • `chainlink` — valued by the chain's own Chainlink feed. If that read fails
+ *                   or is stale, the pool has NO dollar price — never GT's.
+ * Keyed by lowercased address. An anchor missing from the table prices as
+ * unknown (null), not as GT's number.
+ */
+export type AnchorUsd =
+  | { kind: "par" }
+  | { kind: "chainlink"; feed: Address; heartbeat: number };
+export type AnchorUsdTable = Readonly<Record<string, AnchorUsd>>;
 
 /**
  * PriceSource — the per-chain adapter that makes every read in this file
@@ -69,9 +92,11 @@ export interface PriceSource {
   /** GeckoTerminal network slug — used in the tokens URL, the `<net>_<addr>`
    *  token-id prefix GT prepends, and the pool permalink. */
   gtNetwork: string;
-  /** DEX spot-price provider. Omitted ⟹ GeckoTerminal (every pre-existing RH
-   *  caller keeps its exact behaviour). See `DexFeed` for why Base differs. */
-  dexFeed?: DexFeed;
+  /** DEX spot-price provider. Required since F6 (2026-10-01): the
+   *  GeckoTerminal variant carries the anchor valuation its pool-rate pricing
+   *  needs, so there is no default that could price without one. See `DexFeed`
+   *  for why Base differs. */
+  dexFeed: DexFeed;
   /** Explicit RPC endpoints. When set, reads use a viem `fallback` transport
    *  across them (cross-endpoint failover) instead of the chain's single default
    *  RPC. RH omits this — its default RPC is reliable and singular. Base sets a
@@ -166,9 +191,23 @@ function baseRpcUrls(): string[] {
   return fromEnv.length ? fromEnv : DEFAULT_BASE_RPCS;
 }
 
+/**
+ * RH anchor valuation (F6, 2026-10-01). The same two addresses as
+ * `ANCHOR_ASSETS.robinhood`: the anchor RULE — which pools may price a stock —
+ * is unchanged; this only says what one unit of each anchor is worth in
+ * dollars. USDG at par; WETH at RH's own Chainlink ETH/USD
+ * (`RH_CHAINLINK_ETH_USD`, from the registry — the feed the swap tools already
+ * convert WETH amounts with).
+ */
+const RH_ANCHOR_USD: AnchorUsdTable = {
+  "0x5fc5360d0400a0fd4f2af552add042d716f1d168": { kind: "par" }, // USDG
+  "0x0bd7d308f8e1639fab988df18a8011f41eacad73": { kind: "chainlink", feed: RH_CHAINLINK_ETH_USD, heartbeat: 86400 }, // WETH
+};
+
 export const RH_PRICE_SOURCE: PriceSource = {
   chain: robinhoodMainnet,
   gtNetwork: "robinhood",
+  dexFeed: { kind: "geckoterminal", anchorUsd: RH_ANCHOR_USD },
   anchors: ANCHOR_ASSETS.robinhood,
 };
 
@@ -286,6 +325,86 @@ export async function chainlinkLatest(
   }
 }
 
+// ── Pool-rate pricing (F6, fixed 2026-10-01) ─────────────────────────────────
+//
+// The RH desk's "DEX price" used to be GeckoTerminal's `*_token_price_usd` — a
+// token-level USD figure GT computes across ITS view of every market, not the
+// rate of the pool we select. Measured 2026-09-30 (scripts/rh-f6-diagnose.ts,
+// 35 RH tickers): 34 differed from `pool rate × anchor at par` by more than
+// 0.1% and 16 by more than 1%, and the figure sat CLOSER to Chainlink than the
+// pool did — so "drift" was GT-vs-Chainlink, not a DEX dislocation. That is the
+// finding the quarantine (lib/blue-hood/quarantine.ts) was holding for.
+//
+// The fix prices from the pool itself: GT's `base_token_price_quote_token` /
+// `quote_token_price_base_token` is the pool's exchange rate (our token in units
+// of the counter-asset), and the counter-asset is by the anchor rule a USD
+// anchor whose dollar value this module states (`AnchorUsd`) rather than
+// borrows. Selection is untouched — the same pool is chosen; only what is read
+// off it changed.
+
+/** Stamp carried by every RH DEX price this module produces: the pool's own
+ *  rate × its anchor. Rows recorded before the fix have no stamp, which is how
+ *  the quarantine tells the two apart (lib/blue-hood/quarantine.ts). */
+export const RH_DEX_PRICE_BASIS = "pool_rate" as const;
+export type DexPriceBasis = typeof RH_DEX_PRICE_BASIS;
+
+/** The two GT pool attributes that carry the pool's own exchange rate. */
+export type GtPoolRateAttrs = {
+  base_token_price_quote_token?: string;
+  quote_token_price_base_token?: string;
+};
+
+/** Our token's price IN THE COUNTER-ASSET, read off this pool's own rate.
+ *  `isQuoteSide` picks the attribute for the side our token sits on. Null when
+ *  GT did not report the rate (never substituted from a USD figure). */
+export function poolRateInCounter(attr: GtPoolRateAttrs, isQuoteSide: boolean): number | null {
+  const n = parseFloat((isQuoteSide ? attr.quote_token_price_base_token : attr.base_token_price_quote_token) ?? "");
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/** USD = pool rate × the anchor's dollar value. Null if either is unknown. */
+export function poolRateUsd(rateInCounter: number | null, anchorUsd: number | null): number | null {
+  if (rateInCounter === null || anchorUsd === null) return null;
+  const v = rateInCounter * anchorUsd;
+  return Number.isFinite(v) && v > 0 ? v : null;
+}
+
+// Oracle-valued anchors are read at most once a minute per feed — the same TTL
+// as the GT memo in rwa-market.ts, so a poll cycle of ~24 tickers costs one
+// ETH/USD read, not one per ticker. Only successes are memoised: a failed read
+// is retried on the next call rather than remembered as "no price".
+const ANCHOR_TTL_MS = 60_000;
+const _anchorMemo = new Map<string, { at: number; usd: number }>();
+
+/**
+ * Dollar value of ONE unit of each anchor in `addrs`, per `source`'s GT feed
+ * table. `par` → 1. `chainlink` → the feed's latest answer, or null when the
+ * read fails or the round is stale (2× heartbeat). An address with no entry —
+ * or a source whose feed is not GeckoTerminal — is null. Never GT's figure.
+ */
+export async function anchorUsdValues(
+  addrs: Iterable<string>,
+  source: PriceSource = RH_PRICE_SOURCE,
+): Promise<Map<string, number | null>> {
+  const table = source.dexFeed.kind === "geckoterminal" ? source.dexFeed.anchorUsd : {};
+  const out = new Map<string, number | null>();
+  await Promise.all(
+    [...new Set([...addrs].map((a) => a.toLowerCase()))].map(async (addr) => {
+      const spec = table[addr];
+      if (!spec) { out.set(addr, null); return; }
+      if (spec.kind === "par") { out.set(addr, 1); return; }
+      const key = `${source.chain.id}:${spec.feed.toLowerCase()}`;
+      const hit = _anchorMemo.get(key);
+      if (hit && Date.now() - hit.at < ANCHOR_TTL_MS) { out.set(addr, hit.usd); return; }
+      const q = await chainlinkLatest(spec.feed, spec.heartbeat, source);
+      const usd = q && !q.is_stale && Number.isFinite(q.price_usd) && q.price_usd > 0 ? q.price_usd : null;
+      if (usd !== null) _anchorMemo.set(key, { at: Date.now(), usd });
+      out.set(addr, usd);
+    }),
+  );
+  return out;
+}
+
 export type DexQuote = {
   source: "dex-spot";
   price_usd: number;
@@ -295,6 +414,10 @@ export type DexQuote = {
   liquidity_usd: number | null;
   change_24h: number | null;
   pool_url: string | null;
+  /** Set on the GeckoTerminal (RH) path only: `price_usd` is the pool's own
+   *  rate × its anchor. DexScreener's `priceUsd` is already the pair's own
+   *  price and carries no stamp. */
+  price_basis?: DexPriceBasis;
 };
 
 /**
@@ -330,21 +453,33 @@ export async function dexPrice(
   contract: Address,
   source: PriceSource = RH_PRICE_SOURCE,
 ): Promise<DexQuote | null> {
-  const feed = source.dexFeed ?? { kind: "geckoterminal" as const };
+  const feed = source.dexFeed;
   return feed.kind === "dexscreener"
     ? dexPriceDexScreener(contract, feed.chain, source.anchors)
-    : dexPriceGecko(contract, source.gtNetwork, source.anchors);
+    : dexPriceGecko(contract, source);
 }
 
 /** GeckoTerminal price + pool metadata for a token. Free, no key.
  *  Picks whichever side (base / quote) the queried token sits on, so the
  *  returned price is always for our token — never the pool's counter-asset.
  *
+ *  ── F6 (fixed 2026-10-01): the price is the POOL's, not GT's ────────────────
+ *  Until this date `price_usd` was GT's `*_token_price_usd` for our side — a
+ *  token-level figure from GT's own cross-market view, which the F6 diagnosis
+ *  measured as NOT the selected pool's rate (16 of 35 RH tickers more than 1%
+ *  apart). It is now `poolRateInCounter × anchor value` on the same selected
+ *  pool (see the pool-rate block above). If the anchor cannot be valued — the
+ *  ETH/USD read failed or is stale — the answer is null, logged as a miss, and
+ *  NEVER GT's figure: a pool with no dollar price is reported as such. The
+ *  selection rule below is unchanged; a pool GT reports no rate for is skipped
+ *  exactly as a pool with no USD price used to be.
+ *
  *  ── #223: why this reader needed the anchor rule too ───────────────────────
- *  It is tempting to think GT is immune: it publishes `base_token_price_usd` /
- *  `quote_token_price_usd` computed from ITS OWN cross-market view, so a
- *  hijacked pool does not move the price the way DexScreener's `priceUsd` does.
- *  That is true of the PRICE and false of everything else. `pool_address`,
+ *  It used to be tempting to think GT was immune: it publishes
+ *  `base_token_price_usd` / `quote_token_price_usd` computed from ITS OWN
+ *  cross-market view, so a hijacked pool does not move that figure the way
+ *  DexScreener's `priceUsd` does. That is true of the FIGURE (no longer used
+ *  here, per F6) and false of everything else. `pool_address`,
  *  `liquidity_usd`, `volume_24h_usd` and `change_24h` are all read off the
  *  winning pool verbatim, and `liquidity_usd`/`volume_24h_usd` feed the
  *  dead-pool liveness gate in `rule-engine.ts` — the gate that decides whether
@@ -359,9 +494,10 @@ export async function dexPrice(
  *  were priced on a pool whose metadata belonged to some other token. */
 async function dexPriceGecko(
   contract: Address,
-  net: string,
-  anchors: ReadonlySet<string>,
+  source: PriceSource,
 ): Promise<DexQuote | null> {
+  const net = source.gtNetwork;
+  const anchors = source.anchors;
   const token = contract.toLowerCase();
   const t0 = Date.now();
   try {
@@ -379,11 +515,9 @@ async function dexPriceGecko(
     }
     const d = await r.json() as {
       data?: Array<{
-        attributes?: {
+        attributes?: GtPoolRateAttrs & {
           address?: string;
           name?: string;
-          base_token_price_usd?: string;
-          quote_token_price_usd?: string;
           reserve_in_usd?: string;
           volume_usd?: { h24?: string };
           price_change_percentage?: { h24?: string };
@@ -400,7 +534,7 @@ async function dexPriceGecko(
     const prefix = `${net}_`;
     const strip = (id: string | undefined) =>
       id ? (id.startsWith(prefix) ? id.slice(prefix.length).toLowerCase() : id.toLowerCase()) : "";
-    // Materialize each pool with the correct side selected + non-null price.
+    // Materialize each pool with the correct side selected + its own rate.
     let unanchored = 0;
     const enriched = (d.data ?? []).flatMap((p) => {
       const attr = p.attributes;
@@ -413,11 +547,10 @@ async function dexPriceGecko(
       // value we are implicitly quoting in.
       const counterAsset = isQuoteSide ? baseId : quoteId;
       if (!anchors.has(counterAsset)) { unanchored++; return []; }
-      const priceStr = isQuoteSide ? attr.quote_token_price_usd : attr.base_token_price_usd;
-      if (!priceStr) return [];
-      const price = parseFloat(priceStr);
-      if (!Number.isFinite(price) || price <= 0) return [];
-      return [{ p, attr, priceStr, price }];
+      // F6 — the pool's own rate, in units of the anchor (see the header).
+      const rate = poolRateInCounter(attr, isQuoteSide);
+      if (rate === null) return [];
+      return [{ p, attr, rate, counterAsset }];
     });
     if (!enriched.length) {
       // Three very different causes, separated because they need opposite fixes:
@@ -427,8 +560,9 @@ async function dexPriceGecko(
       //                 that is not USD-anchored (#223). NOT an outage: the
       //                 honest answer for a token with no dollar-denominated
       //                 market is "no price", not a memecoin exchange rate.
-      //   usable=0    → anchored pools exist but none priced OUR token on
-      //                 either side (missing *_token_price_usd, id mismatch).
+      //   usable=0    → anchored pools exist but none carried a rate for OUR
+      //                 side (missing *_price_quote_token/_base_token, id
+      //                 mismatch).
       const pools = d.data?.length ?? 0;
       logDexMiss(
         "geckoterminal", net, token, Date.now() - t0,
@@ -439,11 +573,23 @@ async function dexPriceGecko(
       return null;
     }
     enriched.sort((a, b) => parseFloat(b.attr.reserve_in_usd ?? "0") - parseFloat(a.attr.reserve_in_usd ?? "0"));
-    const { p, attr, price } = enriched[0];
+    const { p, attr, rate, counterAsset } = enriched[0];
+    // F6 — value the anchor AFTER selection, so a failed oracle read cannot
+    // shift which pool is measured; it can only make the measurement unknown.
+    const anchorUsd = (await anchorUsdValues([counterAsset], source)).get(counterAsset) ?? null;
+    const price = poolRateUsd(rate, anchorUsd);
+    if (price === null) {
+      logDexMiss(
+        "geckoterminal", net, token, Date.now() - t0,
+        `http=200 anchor_unpriced=${counterAsset} (pool rate read; the anchor's USD value is unavailable — no dollar price, by design not GT's figure)`,
+      );
+      return null;
+    }
     const poolAddr = (attr.address ?? "").toLowerCase();
     return {
       source: "dex-spot",
       price_usd: price,
+      price_basis: RH_DEX_PRICE_BASIS,
       pool_address: poolAddr,
       dex: p.relationships?.dex?.data?.id ?? attr.dex_id ?? "unknown",
       volume_24h_usd: attr.volume_usd?.h24 ? parseFloat(attr.volume_usd.h24) : null,

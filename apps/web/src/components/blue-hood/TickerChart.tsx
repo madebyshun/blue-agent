@@ -149,8 +149,10 @@ type ApiOk = {
   dating: ChartSeries["dating"];
   deadband: ChartSeries["deadband"];
   segments: ChartSegment[];
-  /** F6 — "quarantined" ⟹ the route withheld `dex_usd` / `drift_pct` on every
-   *  point (lib/blue-hood/quarantine.ts). Optional: an older deploy omits it. */
+  /** F6 — "quarantined" ⟹ the route withheld `dex_usd` / `drift_pct` on the
+   *  points recorded before the price-source fix (2026-10-01); points recorded
+   *  since are served as measured (lib/blue-hood/quarantine.ts). Optional: an
+   *  older deploy omits it. */
   provenance?: "measured" | "quarantined";
   provenance_note?: string;
 };
@@ -705,7 +707,7 @@ export default function TickerChart({
           withholding, not a quiet market; say so, in the quarantine's words. */}
       {data.provenance === "quarantined" && (
         <p className="font-mono text-[10px] leading-relaxed" style={{ color: DRIFT }}>
-          DEX price and drift withheld. {data.provenance_note ?? ""}
+          DEX price and drift withheld on hours recorded before the price-source fix. {data.provenance_note ?? ""}
         </p>
       )}
       {!data.complete && (

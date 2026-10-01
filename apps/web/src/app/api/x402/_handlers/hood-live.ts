@@ -85,9 +85,10 @@ const STALE_AFTER_S = 15 * 60;
  * start) exactly as `/api/acp/drift` drops it.
  */
 function shapeRow(raw: TickerSnapshot) {
-  // F6 — every row is published through the quarantine: on the Robinhood desk
-  // dex_usd / drift_pct / verdict are withheld (the DEX leg is GT's token-level
-  // figure, not the pool's rate), with the reason in `provenance_note`.
+  // F6 — every row is published through the quarantine: a Robinhood row
+  // recorded before the price-source fix (no `dex_source` stamp — its DEX leg
+  // was GT's token-level figure, not the pool's rate) has dex_usd / drift_pct /
+  // verdict withheld, with the reason in `provenance_note`.
   const r = publishDeskRow(raw);
   const chain: HoodChain = chainOf(r);
   const meta = TX_CHAINS[chain];

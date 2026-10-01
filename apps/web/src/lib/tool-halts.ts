@@ -25,20 +25,17 @@ const UNDELIVERED =
   "record that nothing ever reads (inventory 2026-09-29). Halted rather than " +
   "left charging for it.";
 
-// F6 (lib/blue-hood/quarantine.ts). These two ids sell a direction hard-mapped
-// from the RH "DEX price" minus Chainlink, and that DEX price is GeckoTerminal's
-// token-level figure, not the pool's own rate. Their HANDLERS entries withhold
-// it, which is right for every door and wrong as a product: the route settles
-// on any 200, so a caller paid full price for a body whose advertised verdict
-// was INSUFFICIENT_DATA by construction. Same pattern as MORALIS above. The
-// Blue Hood recorder never comes through this route (callRecorderTool), so the
-// archive keeps recording while the door is shut.
-const F6_DRIFT =
-  "Robinhood Chain DEX leg under quarantine (F6, diagnosed 2026-09-30): this tool's " +
-  "product is a verdict hard-mapped from the RH DEX price vs Chainlink, and that DEX " +
-  "price is GeckoTerminal's token-level figure, not the pool's own rate, so it is " +
-  "withheld on every door. Answering 200 without it would charge for a verdict that " +
-  "cannot be given. Halted until the price source is fixed.";
+// F6 (lib/blue-hood/quarantine.ts). `rh-stock-arb` and `rh-stock-agent-brief`
+// were halted here from 2026-09-30: they sell a direction hard-mapped from the
+// RH "DEX price" minus Chainlink, that price was GeckoTerminal's token-level
+// figure rather than the pool's own rate, and with it withheld the route would
+// have settled on a 200 whose verdict was INSUFFICIENT_DATA by construction.
+// UN-HALTED 2026-10-01 with the price-source fix: both read live through
+// `resolvePrimaryPool`, whose `price_usd` is now the pool's own rate × its
+// anchor, and every reading carries `price_basis: "pool_rate"`, which the
+// quarantine publishes as measured. Should a reading ever lose that stamp, its
+// HANDLERS entry withholds the leg again (publishArbResult / publishRhFacts) —
+// re-halt here if that happens, for the same reason as before.
 
 export const HALTED_TOOLS: Readonly<Record<string, string>> = {
   "wallet-holdings": MORALIS,
@@ -52,8 +49,6 @@ export const HALTED_TOOLS: Readonly<Record<string, string>> = {
   "base-activity-score": MORALIS,
   "rh-stock-alert": UNDELIVERED,
   "rh-rwa-dca": UNDELIVERED,
-  "rh-stock-arb": F6_DRIFT,
-  "rh-stock-agent-brief": F6_DRIFT,
 };
 
 /** The halt reason for `tool`, or null when it is not halted. */

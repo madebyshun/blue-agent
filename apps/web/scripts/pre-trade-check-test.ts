@@ -170,8 +170,11 @@ async function run(input: Parameters<typeof preTradeCheck>[0]) {
   c = await run({ chain: "base", kind: "swap", token: CLEAN, now: WEEKDAY });
   ok("a measured clean tax → PASS with an INFO receipt", c.verdict === "PASS" && /read on-chain: clean/.test(texts(c)), texts(c));
   c = await run({ chain: "robinhood", kind: "swap", token: RH_STOCK.contract, now: WEEKDAY });
-  ok("an RH stock token on a weekday → WARN: the oracle-vs-DEX desk data is paused (F6), said as a gap",
-    c.verdict === "WARN" && /paused/.test(texts(c)) && !/weekend/.test(texts(c)), texts(c));
+  // F6's price source is fixed (2026-10-01), but this check still does not read
+  // the RH desk (no freshness bound on that snapshot — see pre-trade-check.ts),
+  // so the gap is still said, under the same machine code.
+  ok("an RH stock token on a weekday → WARN: the oracle-vs-DEX check is not run here, said as a gap",
+    c.verdict === "WARN" && c.reasons.some((r) => r.code === "RH_ORACLE_GAP_PAUSED") && /not run here/.test(texts(c)) && !/weekend/.test(texts(c)), texts(c));
   c = await run({ chain: "robinhood", kind: "swap", token: RH_STOCK.contract, now: SATURDAY });
   ok("…and on a Saturday the weekend WARN joins it", /weekend/.test(texts(c)), texts(c));
   c = await run({ chain: "robinhood", kind: "swap", token: RH_STOCK_NO_FEED.contract, now: WEEKDAY });

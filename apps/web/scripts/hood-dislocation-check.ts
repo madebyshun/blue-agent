@@ -706,10 +706,12 @@ async function main(): Promise<void> {
   process.exit(failed === 0 ? 0 : 1);
 }
 
-// The Robinhood desk is quarantined (F6, lib/blue-hood/quarantine.ts), which
-// withholds exactly the RH numbers these guards pin. They run with it lifted so
-// the arithmetic stays tested for the day it lifts for real; the quarantine
-// itself is guarded by rh-quarantine-check.ts.
+// The F6 quarantine (lib/blue-hood/quarantine.ts) withholds RH rows that lack
+// the `dex_source: "pool_rate"` stamp — rows recorded before the price-source
+// fix — and these fixtures' RH rows carry no stamp. They run with it lifted so
+// the drift arithmetic is pinned independently of the stamp; the quarantine
+// itself (stamped publishes, unstamped withheld) is guarded by
+// rh-quarantine-check.ts.
 withQuarantineLiftedForTest(main).catch((e) => {
   console.error(e);
   process.exit(1);

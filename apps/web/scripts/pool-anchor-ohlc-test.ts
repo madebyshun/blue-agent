@@ -33,6 +33,15 @@
  * which reads as a stablecoin chart, not as an obvious failure, and is why it
  * survived in two paid tools (M2 rh-stock-ohlc, D5 rh-stock-correlations).
  *
+ * ── F6 (2026-10-01) — case G ────────────────────────────────────────────────
+ *
+ * `PoolMeta.price_usd` is the pool's own rate (GT's `*_price_quote_token`) ×
+ * the anchor's dollar value — USDG at par, WETH at RH's Chainlink ETH/USD —
+ * and null when the anchor cannot be valued or the pool is unanchored. GT's
+ * token-level `*_token_price_usd` survives only as `gt_token_price_usd`. The
+ * stub answers the Chainlink RPC at $2,400 (not the fixture's GT WETH figure)
+ * so a WETH-pool price can only have come from the oracle.
+ *
  * ── ON THE FIXTURE ADDRESSES ────────────────────────────────────────────────
  *
  * AAPL, USDG and WETH use their real RH-Chain addresses. The two unanchored
@@ -49,6 +58,7 @@ import {
   poolOhlc,
   isUsdAnchored,
 } from "../src/lib/robinhood/rwa-market";
+import { dexPrice, RH_PRICE_SOURCE } from "../src/lib/robinhood/rwa-price";
 
 const AAPL = "0xaf3d76f1834a1d425780943c99ea8a608f8a93f9";
 const USDG = "0x5fc5360d0400a0fd4f2af552add042d716f1d168";
@@ -95,6 +105,10 @@ function poolItem(r: Row, i: number) {
       name: r.n,
       base_token_price_usd: r.base_usd,
       quote_token_price_usd: r.quote_usd,
+      // The pool's own exchange rate (F6). GT reports both directions; derived
+      // here from the measured USD pair so the fixture stays one set of numbers.
+      base_token_price_quote_token: String(Number(r.base_usd) / Number(r.quote_usd)),
+      quote_token_price_base_token: String(Number(r.quote_usd) / Number(r.base_usd)),
       reserve_in_usd: r.tvl,
       volume_usd: { h24: "1000" },
       price_change_percentage: { h1: "0.5", h24: "1.25" },
@@ -112,12 +126,34 @@ let servedPools: Row[] = AAPL_POOLS;
 const requestedUrls: string[] = [];
 let networkCalls = 0;
 
+/** RH Chainlink ETH/USD as the stub answers it (F6 — WETH anchor valuation).
+ *  Deliberately NOT GT's WETH figure in the fixture (2389.58), so a WETH pool
+ *  priced at `rate × 2400` can only have come from the oracle. */
+const ETH_USD = 2400;
+/** While true the RPC is down: every eth_call errors, so the WETH anchor has
+ *  no dollar value. Starts true so no success is memoised before case G. */
+let rpcDown = true;
+const word = (n: bigint) => n.toString(16).padStart(64, "0");
+
 const realFetch = globalThis.fetch;
 function installStub() {
-  globalThis.fetch = (async (input: RequestInfo | URL) => {
-    const url = String(input);
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
     requestedUrls.push(url);
     networkCalls++;
+    let rpc: { id: number; method: string; params: [{ data?: string; input?: string }] } | null = null;
+    try { rpc = JSON.parse(String(init?.body ?? "")); } catch { rpc = null; }
+    if (rpc && rpc.method === "eth_call") {
+      if (rpcDown) return new Response("rpc down", { status: 503 });
+      const data = (rpc.params[0].data ?? rpc.params[0].input ?? "").toLowerCase();
+      const now = BigInt(Math.floor(Date.now() / 1000) - 60);
+      const result = data.startsWith("0x313ce567") // decimals()
+        ? `0x${word(8n)}`
+        : data.startsWith("0xfeaf968c") // latestRoundData()
+          ? `0x${word(1n)}${word(BigInt(ETH_USD) * 100_000_000n)}${word(now)}${word(now)}${word(1n)}`
+          : "0x";
+      return new Response(JSON.stringify({ jsonrpc: "2.0", id: rpc.id, result }), { status: 200 });
+    }
     if (url.includes("/pools?page=1") || url.includes("/pools?")) {
       return new Response(JSON.stringify({ data: servedPools.map(poolItem) }), { status: 200 });
     }
@@ -205,10 +241,18 @@ async function main() {
     unanchored.length === 2 && pools.indexOf(unanchored[0]) === 1,
     `${unanchored.map((p) => `${p.name} $${p.reserve_usd.toFixed(0)}`).join(", ")}`,
   );
+  // Side selection is read off GT's quote-side figure (the diagnostic field):
+  // since F6 an unanchored pool carries NO dollar price at all — its rate is in
+  // INU/ICOIN, and there is no USD anchor to turn that into dollars.
   check(
     "our token is correctly read off the QUOTE side of those pools",
-    unanchored.every((p) => !p.token_is_base && Math.abs(p.price_usd - 332.96) < 1),
-    `price_usd = ${unanchored.map((p) => p.price_usd.toFixed(2)).join(", ")}`,
+    unanchored.every((p) => !p.token_is_base && p.gt_token_price_usd !== null && Math.abs(p.gt_token_price_usd - 332.96) < 1),
+    `gt_token_price_usd = ${unanchored.map((p) => p.gt_token_price_usd?.toFixed(2)).join(", ")}`,
+  );
+  check(
+    "…and an unanchored pool has no dollar price (F6: price_usd null, never GT's figure)",
+    unanchored.every((p) => p.price_usd === null && p.counterparty_token_price_usd === null),
+    `price_usd = ${unanchored.map((p) => p.price_usd).join(", ")}`,
   );
 
   servedPools = AAPL_POOLS.filter((r) => r.n !== "AAPL / USDG 0.3%");
@@ -258,6 +302,57 @@ async function main() {
     "and does not report the unanchored depth as dollar depth",
     none.total_tvl_usd === 0 && none.unanchored_tvl_usd > 1_400_000,
     `total_tvl_usd=$${none.total_tvl_usd} unanchored=$${none.unanchored_tvl_usd.toFixed(0)}`,
+  );
+
+  // ── G. F6 — the price is the POOL's rate × its anchor, never GT's figure ──
+  // The fixture's GT USD figures and the pool's own rate disagree by the USDG
+  // quote (1.0003…) and by GT's WETH figure vs the oracle's — exactly the gap
+  // F6 measured — so each assertion can only pass on the pool-rate path.
+  console.log("\nG. F6 — pool-rate pricing (rate × USDG at par / × Chainlink ETH):");
+  servedPools = AAPL_POOLS;
+  const rate = (r: Row) => Number(r.base_usd) / Number(r.quote_usd);
+  const usdg03 = AAPL_POOLS.find((r) => r.n === "AAPL / USDG 0.3%")!;
+  const wethRow = AAPL_POOLS.find((r) => r.n === "AAPL / WETH 0.05%")!;
+  // G1 — RPC down: the WETH anchor cannot be valued.
+  let ladder = await poolsForToken(AAPL);
+  let usdgPool = ladder.find((p) => p.name === usdg03.n)!;
+  let wethPool = ladder.find((p) => p.name === wethRow.n)!;
+  check(
+    "a USDG pool is priced at its own rate × $1, not GT's token figure",
+    Math.abs((usdgPool.price_usd ?? 0) - rate(usdg03)) < 1e-9 && usdgPool.price_usd !== Number(usdg03.base_usd) &&
+      usdgPool.gt_token_price_usd === Number(usdg03.base_usd) && usdgPool.counterparty_token_price_usd === 1 &&
+      usdgPool.price_basis === "pool_rate",
+    `price_usd=${usdgPool.price_usd} rate=${rate(usdg03)} gt=${usdgPool.gt_token_price_usd}`,
+  );
+  check(
+    "with the ETH/USD read failing, a WETH pool has NO dollar price (null, not GT's $" + wethRow.base_usd + ")",
+    wethPool.price_usd === null && wethPool.counterparty_token_price_usd === null,
+    `price_usd=${wethPool.price_usd}`,
+  );
+  // G2 — RPC up: WETH valued at the oracle.
+  rpcDown = false;
+  ladder = await poolsForToken(AAPL);
+  usdgPool = ladder.find((p) => p.name === usdg03.n)!;
+  wethPool = ladder.find((p) => p.name === wethRow.n)!;
+  check(
+    "with the oracle readable, a WETH pool is rate × Chainlink ETH/USD",
+    wethPool.price_usd !== null && Math.abs(wethPool.price_usd - rate(wethRow) * ETH_USD) < 1e-6 &&
+      wethPool.counterparty_token_price_usd === ETH_USD,
+    `price_usd=${wethPool.price_usd} expected=${rate(wethRow) * ETH_USD}`,
+  );
+  const sel = await resolvePrimaryPool(AAPL);
+  check(
+    "the selector's pick is unchanged and carries the pool-rate price + basis",
+    sel.pool?.name === usdg03.n && sel.pool?.price_usd === usdgPool.price_usd && sel.price_basis === "pool_rate",
+    `${sel.pool?.name} $${sel.pool?.price_usd} basis=${sel.price_basis}`,
+  );
+  // The desk-adjacent reader in rwa-price.ts (rh-stock-quote, rh-stock-token,
+  // portfolio): deepest ANCHORED pool, same pricing.
+  const dq = await dexPrice(AAPL as `0x${string}`, RH_PRICE_SOURCE);
+  check(
+    "rwa-price dexPrice (GT path) returns the deepest anchored pool at its own rate, stamped",
+    dq !== null && Math.abs(dq.price_usd - rate(usdg03)) < 1e-9 && dq.price_basis === "pool_rate",
+    `price_usd=${dq?.price_usd} basis=${dq?.price_basis}`,
   );
 
   // ── F. The 60s memo really does collapse the double read ─────────────────

@@ -3,7 +3,8 @@
 //
 // For a given RH RWA ticker, reads:
 //   • Chainlink AggregatorV3 latestRoundData (oracle-truth price)
-//   • Deepest DEX pool spot on RH Chain (executable price)
+//   • The primary USD-anchored DEX pool on RH Chain — its OWN exchange rate ×
+//     the anchor's dollar value (USDG at par, WETH at RH's Chainlink ETH/USD)
 // and returns the delta in absolute and percentage terms, plus a directional
 // verdict (LONG_DEX, SHORT_DEX, ALIGNED).
 //
@@ -17,18 +18,18 @@
 //     (lib/blue-hood/tool-caller.ts). It is NOT in HANDLERS, so no HTTP door —
 //     paid, chat, blue_call — can serve it.
 //   • the default export is what HANDLERS["rh-stock-arb"] serves, and it
-//     publishes through the quarantine: the DEX price, the delta and the verdict
-//     derived from them are withheld with the reason. The diagnosis found that
-//     "DEX price" is GeckoTerminal's token-level USD figure, not the pool's rate,
-//     and every free and ACP door already withheld it — this $0.05 door was
-//     still selling it, because it computes the number live and so never
-//     appeared among the readers of the snapshot the quarantine was wired into.
-//   • and the paid door is HALTED (lib/tool-halts.ts, F6_DRIFT). Withholding
-//     alone turned "sells the withheld number" into "charges $0.05 for a body
-//     whose verdict is INSUFFICIENT_DATA by construction" — the route settles
-//     on any 200. The halt refuses before a payment requirement is issued; the
-//     quarantined default export stays as defence in depth for anything that
-//     dispatches through HANDLERS without the route.
+//     publishes through the quarantine. The diagnosis (2026-09-30) found the
+//     "DEX price" was GeckoTerminal's token-level USD figure, not the pool's
+//     rate, and this door withheld it with the price, delta and verdict. The
+//     price source was FIXED on 2026-10-01 (lib/robinhood/rwa-price.ts,
+//     pool-rate block): every reading now carries
+//     `dex_price_basis: "pool_rate"`, and the quarantine publishes a stamped
+//     reading as measured. The projection stays as the guard that a reading
+//     WITHOUT the stamp — a regression to the old figure — is withheld again.
+//   • the paid door was HALTED (lib/tool-halts.ts) while the leg was
+//     quarantined, because a 200 whose verdict was INSUFFICIENT_DATA by
+//     construction still settled. Lifted with the fix: the price it sells is
+//     now the pool's own rate.
 
 import { findByTicker, RH_CHAIN } from "@/lib/robinhood/rwa-registry";
 import { chainlinkLatest } from "@/lib/robinhood/rwa-price";
@@ -76,15 +77,22 @@ export async function measureRhStockArb(req: Request): Promise<Response> {
     ]);
 
     const dex = primary.pool;
+    // F6 — `price_usd` is the pool's own rate × its anchor, and is null when
+    // the anchor could not be valued (WETH with the ETH/USD feed down). A pool
+    // with no dollar price cannot be arbed against the oracle.
+    const dexPrice = dex?.price_usd ?? null;
 
     // Cannot arb without both sources — return honest INSUFFICIENT_DATA.
-    if (!chainlink || !dex) {
+    if (!chainlink || !dex || dexPrice === null) {
       return Response.json({
         tool: "rh-stock-arb",
         ticker: token.ticker,
         name: token.name,
         contract: token.contract,
         verdict: "INSUFFICIENT_DATA",
+        // F6 — how this instrument prices the DEX leg, stamped on every
+        // reading (lib/blue-hood/quarantine.ts reads it).
+        dex_price_basis: primary.price_basis,
         chainlink: chainlink ?? null,
         dex: dex ?? null,
         market,
@@ -98,7 +106,9 @@ export async function measureRhStockArb(req: Request): Promise<Response> {
             ? "No Chainlink feed available for this ticker."
             : primary.selection === "no_usd_anchored_pool"
               ? `Token has ${primary.pool_count} pool(s) on Robinhood Chain but none quoted against USDG or WETH ($${primary.unanchored_tvl_usd.toFixed(0)} unanchored TVL). A stock-vs-stock pool is an exchange rate, not a USD price, so no arb verdict is possible.`
-              : "No DEX pool found for this token on Robinhood Chain.",
+              : dex && dexPrice === null
+                ? `The primary pool (${dex.name}) was read, but its counter-asset's USD value is unavailable right now (the Chainlink ETH/USD read failed or is stale), so the pool has no dollar price to compare with the oracle.`
+                : "No DEX pool found for this token on Robinhood Chain.",
         data_sources: [
           chainlink ? "Chainlink AggregatorV3 on-chain (RH Chain)" : null,
           dex ? "api.geckoterminal.com (RH Chain)" : null,
@@ -109,7 +119,7 @@ export async function measureRhStockArb(req: Request): Promise<Response> {
     }
 
     const cl = chainlink.price_usd;
-    const dx = dex.price_usd;
+    const dx = dexPrice;
     const abs_delta = dx - cl;
     const pct_delta = (abs_delta / cl) * 100;
 
@@ -162,6 +172,9 @@ export async function measureRhStockArb(req: Request): Promise<Response> {
       name: token.name,
       contract: token.contract,
       verdict,
+      // F6 — see the INSUFFICIENT_DATA branch above. From the pool that was
+      // priced, so the stamp cannot outlive the pricing it names.
+      dex_price_basis: dex.price_basis,
       market,
       delta: {
         abs_usd: +abs_delta.toFixed(6),
@@ -174,7 +187,11 @@ export async function measureRhStockArb(req: Request): Promise<Response> {
         is_v4_pool_id: dex.is_v4_pool_id,
         pool_name: dex.name,
         dex_id: dex.dex,
-        price_usd: dex.price_usd,
+        price_usd: dexPrice,
+        /** "pool_rate": this pool's own rate × the anchor's USD value. */
+        price_basis: dex.price_basis,
+        /** The USD value of one unit of the pool's counter-asset used above. */
+        anchor_usd: dex.counterparty_token_price_usd,
         // `tvl_usd` = deprecated alias for `primary_pool_tvl_usd`. Kept
         // for back-compat with agents/tools that already consume it. New
         // consumers should read `primary_pool_tvl_usd` and `total_tvl_usd`

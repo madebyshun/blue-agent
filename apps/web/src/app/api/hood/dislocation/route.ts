@@ -276,9 +276,10 @@ export async function GET(req: Request): Promise<NextResponse> {
     );
   }
 
-  // F6 — published through the quarantine: on the Robinhood desk the DEX
-  // price and the drift derived from it are withheld (null, with the reason),
-  // because that leg is GT's token-level figure, not the pool's rate.
+  // F6 — published through the quarantine: on a Robinhood row recorded before
+  // the price-source fix (no `dex_source` stamp) the DEX price and the drift
+  // derived from it are withheld (null, with the reason), because that leg was
+  // GT's token-level figure, not the pool's rate.
   const row = publishDeskRow(found);
 
   // ── Freshness. Reported on EVERY response, stale or not. ────────────────

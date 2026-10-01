@@ -24,8 +24,9 @@
  *   /start        — intro + hard safety declaration + Open-Blue-Hood link
  *   /link CODE    — bind this Telegram user ↔ the wallet that minted CODE (1.7)
  *   /drift TICKER — the latest snapshot's row for an RH ticker (health-gated),
- *                   published through the F6 quarantine: oracle price, with the
- *                   DEX price and drift withheld while that leg is repaired
+ *                   published through the F6 quarantine: oracle vs DEX drift,
+ *                   with the DEX price and drift withheld only on a row
+ *                   recorded before the price-source fix (2026-10-01)
  *   /track        — public hit-rate, gated below the sample threshold (0.2)
  *
  * WHILE ARROWS ARE FROZEN (arrow-freeze.ts) no alert can be produced: arrows are
@@ -45,7 +46,7 @@ import {
   removeFromBroadcast,
 } from "@/lib/blue-hood/watchlist";
 import { KV_SNAPSHOT_LATEST } from "@/lib/blue-hood/kv-keys";
-import { publishDeskRow, isQuarantinedRow } from "@/lib/blue-hood/quarantine";
+import { publishDeskRow } from "@/lib/blue-hood/quarantine";
 import { ARROWS_FROZEN, ARROWS_FROZEN_NOTE, ARROW_TRADE_ENABLED } from "@/lib/blue-hood/arrow-freeze";
 import type { HoodSnapshot } from "@/lib/blue-hood/types";
 import { readPublicArrows } from "@/lib/blue-hood/public-feed";
@@ -178,14 +179,14 @@ async function handleStart(rest: string, from?: TgUser): Promise<string> {
 
 /**
  * What `/drift` returns, in the help text. It reads the RH snapshot only (see
- * `handleDrift`), and while the F6 quarantine holds that desk's DEX price and
- * drift are withheld — so "live oracle vs DEX drift" would advertise the one
- * number the command no longer answers with.
+ * `handleDrift`). While the F6 quarantine held the whole desk this said the
+ * drift was withheld; since the price-source fix (2026-10-01) the quarantine
+ * holds only rows recorded before it, which the poller replaces within a
+ * cycle, so the command answers with the drift again. A row that is still
+ * withheld says so itself in `handleDrift` (`publishDeskRow`).
  */
 function driftHelp(): string {
-  return isQuarantinedRow({ chain: "robinhood" })
-    ? "Robinhood Chain oracle price (DEX price and drift withheld while that desk's price source is repaired)"
-    : "live oracle vs DEX drift";
+  return "live oracle vs DEX drift";
 }
 
 /**

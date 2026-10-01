@@ -119,9 +119,15 @@ export async function preTradeCheck(input: PreTradeInput): Promise<PreTradeCheck
       if (input.kind === "swap") {
         const wk = weekendReason(now);
         if (wk) reasons.push(wk);
-        // Plan §0b: the RH desk's oracle-vs-DEX data is quarantined until F6
-        // is fixed, so this is said as a gap, never measured.
-        reasons.push({ level: "WARN", code: "RH_ORACLE_GAP_PAUSED", text: "Oracle-vs-DEX check for Robinhood Chain is paused (desk data under repair) — check the pool price against the oracle yourself." });
+        // Plan §0b: said as a gap, never measured. F6's price source was fixed
+        // on 2026-10-01 (stamped RH rows now publish a pool-rate drift), but
+        // this check still does NOT read the RH desk: unlike Base
+        // (`BASE_ROWS_MAX_AGE_MS` on `KV_BASE_ROWS_LATEST`) the RH snapshot has
+        // no freshness bound a pre-trade read could honour, and a stale drift
+        // presented as current is worse than the gap. Wiring it needs that
+        // bound first; the code stays the same so dispatching agents keep
+        // working.
+        reasons.push({ level: "WARN", code: "RH_ORACLE_GAP_PAUSED", text: "Oracle-vs-DEX check for Robinhood Chain is not run here — check the pool price against the oracle yourself." });
         if (!rwa.chainlinkFeed) reasons.push({ level: "INFO", code: "NO_ORACLE_FEED", text: "No Chainlink feed exists for this ticker yet — there is no oracle to compare against." });
       }
       return finish("rh_stock_token", label, reasons);

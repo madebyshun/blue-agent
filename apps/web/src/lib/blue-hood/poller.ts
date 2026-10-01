@@ -46,6 +46,10 @@ import { readSparkline } from "./sparkline";
 // the tool trips a compile error here first).
 interface M5Response {
   verdict: M5Verdict;
+  /** F6 — "pool_rate" on every reading since the price-source fix. Optional so
+   *  a reading without it (a regression) records an UNSTAMPED row, which the
+   *  quarantine withholds — the safe direction. */
+  dex_price_basis?: "pool_rate";
   ticker: string;
   name: string;
   contract: string;
@@ -154,6 +158,10 @@ async function pollOne(ticker: string, cycleStart: number): Promise<TickerSnapsh
     total_tvl_usd: d.dex?.total_tvl_usd ?? d.dex?.tvl_usd ?? null,
     volume_24h_usd: d.dex?.volume_24h_usd ?? null,
     drift_pct: typeof d.delta?.pct === "number" ? d.delta.pct : null,
+    // F6 — the stamp comes off the reading itself, not a constant here, so a
+    // reading that stops saying how it priced the DEX leg is recorded unstamped
+    // and stays quarantined (lib/blue-hood/quarantine.ts).
+    ...(d.dex_price_basis === "pool_rate" ? { dex_source: "pool_rate" as const } : {}),
     pool_ref: d.dex?.pool_ref ?? null,
     is_v4_pool_id: Boolean(d.dex?.is_v4_pool_id),
     market: d.market,
@@ -417,6 +425,9 @@ export function mergeSeriesPoint(
       oracle_usd: t.oracle_usd,
       dex_usd: t.dex_usd,
       drift_pct: t.drift_pct,
+      // F6 — carried so the archive can tell a pool-rate row from one recorded
+      // before the fix. Absent stays absent (never defaulted to "pool_rate").
+      ...(t.dex_source ? { dex_source: t.dex_source } : {}),
       total_tvl_usd: t.total_tvl_usd ?? t.tvl_usd,
     }));
   if (rows.length === 0) return null;

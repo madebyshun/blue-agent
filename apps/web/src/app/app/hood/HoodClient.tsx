@@ -344,7 +344,7 @@ export default function HoodClient() {
               <span className="mr-2 font-mono text-[10px] uppercase tracking-widest" style={{ color: AMBER }}>
                 robinhood desk
               </span>
-              {rhDesk.note ?? "DEX price and drift are withheld while the price source is repaired."}
+              {rhDesk.note ?? "DEX price and drift are withheld on readings recorded before the price-source fix."}
             </div>
           )}
 
@@ -1402,7 +1402,7 @@ function WithheldBadge({ note }: { note?: string }) {
     <span
       className="rounded px-2 py-0.5 font-mono text-[10px] font-semibold tracking-wider"
       style={{ color: AMBER, backgroundColor: "rgba(245,179,66,0.10)" }}
-      title={note ?? "DEX price and drift withheld while the price source is repaired"}
+      title={note ?? "DEX price and drift withheld: recorded before the price-source fix"}
     >
       WITHHELD
     </span>

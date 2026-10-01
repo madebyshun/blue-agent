@@ -30,14 +30,15 @@
 // `dex_price_unavailable_reason` the model is told to report as a gap.
 //
 // F6 (lib/blue-hood/quarantine.ts) — the same "do not contradict them" is why
-// the DEX price leg is withheld HERE, before the prompt, not on the way out:
-// `dex_price_usd` and the changes computed on it are GeckoTerminal's
-// token-level figure, not the pool's rate, and section 3 below asks the model
-// to interpret exactly that figure against Chainlink — the RH drift every other
-// door withholds. `publishRhFacts` nulls them and the withholding note becomes
+// the DEX price leg goes through the quarantine HERE, before the prompt, not on
+// the way out: section 3 below asks the model to interpret `dex_price_usd`
+// against Chainlink. Until the price-source fix (2026-10-01) that figure was
+// GeckoTerminal's token-level number, not the pool's rate, and was withheld.
+// It is now the pool's own rate × its anchor (`PoolMeta.price_usd`), and
+// `publishRhFacts` is handed the reading's `price_basis`: a "pool_rate" reading
+// is used as is; anything else is nulled and the withholding note becomes
 // `dex_price_unavailable_reason`, which the prompt already tells the model to
-// quote as a gap. Not halted, unlike A4: this tool sells the brief (oracle,
-// depth, volume, labelled background), which stands without the leg.
+// quote as a gap.
 
 import { findByTicker, RH_CHAIN } from "@/lib/robinhood/rwa-registry";
 import { chainlinkLatest } from "@/lib/robinhood/rwa-price";
@@ -72,7 +73,12 @@ export default async function handler(req: Request): Promise<Response> {
     // against another equity or a memecoin, so there is no dollar quote to
     // report. Saying so is the whole point (#231).
     const dex_price_unavailable_reason = primaryPool
-      ? null
+      ? primaryPool.price_usd === null
+        // F6 — the pool's own rate was read, but its counter-asset could not be
+        // valued in dollars (the Chainlink ETH/USD read failed or is stale), so
+        // the pool has no dollar price. Never filled from GT's token figure.
+        ? `The primary pool (${primaryPool.name}) was read, but its counter-asset's USD value is unavailable right now, so no dex_price_usd is reported.`
+        : null
       : primary.selection === "no_usd_anchored_pool"
         ? `${primary.pool_count} DEX pool(s) exist for this token on Robinhood Chain but none is quoted against a dollar-anchored asset (USDG/WETH). Their prices are exchange rates against another equity or a memecoin, not USD, so no dex_* figure is reported.`
         : "No DEX pool found for this token on Robinhood Chain.";
@@ -101,7 +107,7 @@ export default async function handler(req: Request): Promise<Response> {
       dex_price_unavailable_reason,
     };
     // F6 — before the prompt. See the header.
-    const published = publishRhFacts(rawFacts);
+    const published = publishRhFacts(rawFacts, primary.price_basis);
     const dex_withheld = published.withheld;
     const facts = dex_withheld
       ? { ...published.facts, dex_price_unavailable_reason: RH_DESK_QUARANTINE.note }

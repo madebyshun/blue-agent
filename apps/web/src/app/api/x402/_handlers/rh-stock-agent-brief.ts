@@ -9,15 +9,16 @@
 // LLM-picked). Agents wire the verdict directly into downstream skill
 // calls without parsing prose.
 //
-// F6 (lib/blue-hood/quarantine.ts) — the `dex_*` price fields are
-// GeckoTerminal's token-level figure, not the pool's own rate, and the verdict
-// is that figure minus Chainlink. `facts` therefore go through `publishRhFacts`
-// FIRST: the verdict is mapped from the published block (a withheld DEX price
-// maps to INSUFFICIENT_DATA, never to WATCH, which would claim "aligned"), and
-// the model is handed the same block, so its prose cannot be built on the
-// withheld number either. The paid door is also HALTED (lib/tool-halts.ts):
-// the direction is this tool's product. What still reaches this handler
-// without the route — Blue Hood's brief fetcher — gets the published block.
+// F6 (lib/blue-hood/quarantine.ts) — the verdict is the `dex_price_usd` minus
+// Chainlink. Until the price-source fix (2026-10-01) that price was
+// GeckoTerminal's token-level figure, not the pool's own rate; it is now the
+// pool's own rate × its anchor (`PoolMeta.price_usd`). `facts` still go
+// through `publishRhFacts` FIRST, with the reading's `price_basis`: the verdict
+// is mapped from the published block (a withheld DEX price maps to
+// INSUFFICIENT_DATA, never to WATCH, which would claim "aligned"), and the
+// model is handed the same block, so neither can be built on a reading that is
+// not "pool_rate". The paid door was HALTED (lib/tool-halts.ts) while every
+// reading was the old figure; lifted with the fix.
 
 import { findByTicker, RH_CHAIN } from "@/lib/robinhood/rwa-registry";
 import { chainlinkLatest } from "@/lib/robinhood/rwa-price";
@@ -40,14 +41,17 @@ function verdictFromNumbers(args: {
   market_session: "regular" | "premarket" | "afterhours" | "weekend";
   /** A DEX price existed and the F6 quarantine withheld it. */
   dex_withheld: boolean;
+  /** The pool was read but has no dollar price: its anchor could not be valued
+   *  (F6 pool-rate pricing — the ETH/USD read failed or is stale). */
+  dex_unpriced: boolean;
 }): Verdict {
-  const { chainlink_price_usd, dex_price_usd, dex_tvl_usd, market_is_open, market_session, dex_withheld } = args;
+  const { chainlink_price_usd, dex_price_usd, dex_tvl_usd, market_is_open, market_session, dex_withheld, dex_unpriced } = args;
   if (chainlink_price_usd === null && dex_price_usd === null && !dex_withheld) return "INSUFFICIENT_DATA";
   if (chainlink_price_usd === null) return "NO_ORACLE";
   if (dex_tvl_usd !== null && dex_tvl_usd < 5_000) return "THIN_LIQUIDITY";
-  // Before the WATCH arm, which reads "DEX/oracle aligned": a withheld price
-  // is not a measured alignment.
-  if (dex_withheld) return "INSUFFICIENT_DATA";
+  // Before the WATCH arm, which reads "DEX/oracle aligned": neither a withheld
+  // price nor a pool with no dollar price is a measured alignment.
+  if (dex_withheld || dex_unpriced) return "INSUFFICIENT_DATA";
   if (dex_price_usd === null) return "WATCH";
   const pct = ((dex_price_usd - chainlink_price_usd) / chainlink_price_usd) * 100;
   const threshold = market_is_open ? 0.5 : 1.5;
@@ -90,9 +94,12 @@ export default async function handler(req: Request): Promise<Response> {
       pool_selection: primary.selection,
     };
     // F6 — before the verdict and before the prompt. See the header.
-    const published = publishRhFacts(rawFacts);
+    const published = publishRhFacts(rawFacts, primary.price_basis);
     const facts = published.facts;
     const dex_withheld = published.withheld;
+    const dex_unpriced = deepestPool !== null && deepestPool.price_usd === null;
+    const DEX_UNPRICED_NOTE =
+      "The primary pool was read, but its counter-asset's USD value is unavailable right now (the Chainlink ETH/USD read failed or is stale), so there is no DEX price to compare with the oracle.";
 
     // Warnings must mirror M5 so an agent reading A4 sees the same
     // confidence signals as one reading M5 for the same ticker + moment.
@@ -100,6 +107,7 @@ export default async function handler(req: Request): Promise<Response> {
     const factWarnings: string[] = [];
     if (!market.is_open) factWarnings.push(`market_closed_session_${market.session}: Chainlink frozen on last regular print; DEX drifts.${dex_withheld ? "" : " Verdict reflects post-close drift, NOT arb."}`);
     if (dex_withheld) factWarnings.push(`${RH_DESK_QUARANTINE.code}: ${RH_DESK_QUARANTINE.note}`);
+    if (dex_unpriced) factWarnings.push(`dex_anchor_unpriced: ${DEX_UNPRICED_NOTE}`);
     if (market.is_open && oracle && oracle.age_seconds > FEED_FRESH_MAX_AGE_INHOURS_SECONDS) {
       factWarnings.push(`feed_abnormally_stale: Chainlink age ${oracle.age_seconds}s while market OPEN — expected <${FEED_FRESH_MAX_AGE_INHOURS_SECONDS}s. Treat verdict as low-confidence.`);
     }
@@ -113,6 +121,7 @@ export default async function handler(req: Request): Promise<Response> {
       market_is_open: market.is_open,
       market_session: market.session,
       dex_withheld,
+      dex_unpriced,
     });
 
     // Model-recall context — NOT web-searched. This comment said "Web-searched
@@ -163,7 +172,8 @@ Do NOT invent numbers, headlines, or URLs. Empty values are acceptable and prefe
       ...(published.provenance_note ? { provenance_note: published.provenance_note } : {}),
       // A withheld price is INSUFFICIENT_DATA for a different reason than the
       // stock note below ("neither a feed nor a pool"), so it says its own.
-      verdict_note: dex_withheld && verdict === "INSUFFICIENT_DATA" ? RH_DESK_QUARANTINE.note : {
+      verdict_note: dex_withheld && verdict === "INSUFFICIENT_DATA" ? RH_DESK_QUARANTINE.note
+        : dex_unpriced && verdict === "INSUFFICIENT_DATA" ? DEX_UNPRICED_NOTE : {
         // These two said "real arb: consider buying / selling DEX" until
         // 2026-10-01 — a trade call, which the rebuild strips everywhere
         // (token-pick-signal, plan §3 fix 3). The verdict names the measured

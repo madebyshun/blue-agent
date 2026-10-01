@@ -10,33 +10,42 @@
  * hours before 2026-09-18 to 157/275 after. Hypothesis on file: GT priced USDG
  * at ~$1.052.
  *
- * What the desk reads (lib/robinhood/rwa-price.ts `dexPriceGecko`): it picks
- * the deepest USD-ANCHORED pool, but takes the PRICE from GT's
- * `*_token_price_usd` — GT's own token-level USD figure. That is not the
- * anchored pool's exchange rate. This script puts the three prices side by
- * side so the gap has a name:
+ * DIAGNOSIS (2026-09-30, the first version of this script): the desk took the
+ * PRICE from GT's `*_token_price_usd` — GT's own token-level USD figure — not
+ * from the anchored pool's exchange rate. 34 of 35 tickers differed from
+ * `pool rate × anchor at par` by > 0.1%, 16 by > 1%.
  *
- *   desk      = GT `<our side>_token_price_usd`             (what the desk stores)
- *   pool@GT   = pool rate in quote × GT's USD for the quote  (pool, GT's USDG)
- *   pool@par  = pool rate in quote × $1 (USDG) / ETH oracle  (pool, anchor at par)
+ * FIX (2026-10-01): `PoolMeta.price_usd` (rwa-market.ts — the reader M5 and so
+ * the Blue Hood poller use) and `dexPrice` (rwa-price.ts — rh-stock-quote,
+ * rh-stock-token, the portfolio) are now the selected pool's own rate × the
+ * anchor (USDG at par, WETH at RH's Chainlink ETH/USD). This script therefore
+ * runs THE PRODUCTION READERS and checks each against an INDEPENDENT pool@par
+ * computed here from the same raw GT item:
+ *
+ *   desk      = resolvePrimaryPool(token).pool.price_usd   (what M5 records)
+ *   quote     = dexPrice(token).price_usd                   (deepest anchored)
+ *   gt        = GT `<our side>_token_price_usd` of the desk's pool (the old figure)
+ *   pool@par  = that pool's rate in quote × $1 (USDG) / × Chainlink ETH (WETH)
  *   oracle    = Chainlink latestRoundData on RH 4663
  *
+ * Every GeckoTerminal URL is fetched ONCE per run and served to the script and
+ * to both readers from that one response, so all columns describe identical
+ * data (and the run costs one GT call per ticker, not three).
+ *
  * Reading the result:
- *   desk ≠ pool@GT          → GT's token price is NOT this pool's price (it is
- *                             a cross-pool figure — unanchored pools leak in)
- *   pool@GT ≠ pool@par      → GT misprices the anchor itself (the ×1.052 idea)
- *   pool@par ≈ oracle, but desk is not → the desk's drift is manufactured by
- *                             the price source, not by the market
+ *   desk ≠ pool@par or quote ≠ pool@par → the fix regressed (must be 0 / 0)
+ *   gt ≠ pool@par                       → the gap F6 found, still visible
+ *   pool@par vs oracle                  → the real DEX dislocation
  */
-import { RWA_TOKENS } from "../src/lib/robinhood/rwa-registry";
-import { chainlinkLatest, RH_PRICE_SOURCE } from "../src/lib/robinhood/rwa-price";
-import { RH_CHAINLINK_ETH_USD } from "../src/lib/robinhood/rwa-registry";
+import { RWA_TOKENS, RH_CHAINLINK_ETH_USD } from "../src/lib/robinhood/rwa-registry";
+import { chainlinkLatest, dexPrice, RH_PRICE_SOURCE } from "../src/lib/robinhood/rwa-price";
+import { resolvePrimaryPool } from "../src/lib/robinhood/rwa-market";
 
 const USDG = "0x5fc5360d0400a0fd4f2af552add042d716f1d168";
 const WETH = "0x0bd7d308f8e1639fab988df18a8011f41eacad73";
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const pct = (a: number | null, b: number | null) => (a && b ? ((a / b - 1) * 100) : null);
-const f = (x: number | null, d = 2) => (x == null ? "—" : x.toFixed(d));
+const f = (x: number | null | undefined, d = 2) => (x == null ? "—" : x.toFixed(d));
 
 type Attr = {
   address?: string; name?: string; reserve_in_usd?: string;
@@ -45,65 +54,97 @@ type Attr = {
 };
 type Item = { attributes?: Attr; relationships?: { base_token?: { data?: { id?: string } }; quote_token?: { data?: { id?: string } } } };
 
-(async () => {
-  const ethUsd = (await chainlinkLatest(RH_CHAINLINK_ETH_USD, 86400))?.price_usd ?? null;
-  console.log(`RH ETH/USD (Chainlink): ${f(ethUsd)}   anchors: ${[...RH_PRICE_SOURCE.anchors].join(", ")}\n`);
-  console.log("ticker | pool | desk | pool@GT | pool@par | oracle | desk−pool@par % | poolGT−par % | desk−oracle % | pool@par−oracle %");
-  const rows: { t: string; deskVsPar: number | null; gtAnchor: number | null; deskVsOracle: number | null; parVsOracle: number | null }[] = [];
-
-  for (const tok of RWA_TOKENS.filter((t) => (t.kind === "stock" || t.kind === "etf") && t.chainlinkFeed)) {
-    const oracle = await chainlinkLatest(tok.chainlinkFeed as `0x${string}`, tok.chainlinkHeartbeat ?? 86400);
-    // GT's free tier answers 429 under load; an unread page is NOT "no pool".
-    let items: Item[] = [];
-    let http = 0;
+// ── One GT response per URL, shared by the script and the production readers ─
+// GT's free tier answers 429 under load; an unread page is NOT "no pool", so
+// retry here (the readers' own retry would see the same wall).
+const realFetch = globalThis.fetch;
+const gtBodies = new Map<string, { status: number; body: string }>();
+globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  const url = String(input instanceof Request ? input.url : input);
+  if (!url.startsWith("https://api.geckoterminal.com/")) return realFetch(input, init);
+  let hit = gtBodies.get(url);
+  if (!hit) {
     for (let attempt = 0; attempt < 4; attempt++) {
       try {
-        const r = await fetch(`https://api.geckoterminal.com/api/v2/networks/robinhood/tokens/${tok.contract.toLowerCase()}/pools?page=1`, {
-          headers: { accept: "application/json" }, signal: AbortSignal.timeout(15_000),
-        });
-        http = r.status;
+        const r = await realFetch(url, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(15_000) });
         if (r.status === 429) { await sleep(15_000 * (attempt + 1)); continue; }
-        items = r.ok ? (((await r.json()) as { data?: Item[] }).data ?? []) : [];
-      } catch { http = -1; }
+        hit = { status: r.status, body: await r.text() };
+      } catch { hit = { status: 599, body: "" }; }
       break;
     }
-    const me = tok.contract.toLowerCase();
-    const strip = (id?: string) => (id ?? "").replace(/^robinhood_/, "").toLowerCase();
-    const anchored = items.flatMap((p) => {
-      const a = p.attributes;
-      if (!a?.address) return [];
-      const base = strip(p.relationships?.base_token?.data?.id);
-      const quote = strip(p.relationships?.quote_token?.data?.id);
-      const quoteSide = me === quote && me !== base;
-      const cp = quoteSide ? base : quote;
-      if (!RH_PRICE_SOURCE.anchors.has(cp)) return [];
-      const desk = parseFloat((quoteSide ? a.quote_token_price_usd : a.base_token_price_usd) ?? "");
-      const inQuote = parseFloat((quoteSide ? a.quote_token_price_base_token : a.base_token_price_quote_token) ?? "");
-      const cpUsd = parseFloat((quoteSide ? a.base_token_price_usd : a.quote_token_price_usd) ?? "");
-      return [{ a, cp, desk, inQuote, cpUsd, reserve: parseFloat(a.reserve_in_usd ?? "0") }];
-    }).sort((x, y) => y.reserve - x.reserve);
-    const top = anchored[0];
-    const desk = top && Number.isFinite(top.desk) ? top.desk : null;
-    const poolGt = top && Number.isFinite(top.inQuote) && Number.isFinite(top.cpUsd) ? top.inQuote * top.cpUsd : null;
-    const par = top && Number.isFinite(top.inQuote)
-      ? (top.cp === USDG ? top.inQuote : top.cp === WETH && ethUsd ? top.inQuote * ethUsd : null)
+    hit ??= { status: 429, body: "" };
+    gtBodies.set(url, hit);
+  }
+  return new Response(hit.body, { status: hit.status, headers: { "content-type": "application/json" } });
+}) as typeof fetch;
+
+(async () => {
+  const eth = await chainlinkLatest(RH_CHAINLINK_ETH_USD, 86400);
+  const ethUsd = eth && !eth.is_stale ? eth.price_usd : null;
+  console.log(`RH ETH/USD (Chainlink): ${f(ethUsd)}   anchors: ${[...RH_PRICE_SOURCE.anchors].join(", ")}\n`);
+  console.log("ticker | desk pool | desk | quote | gt (old) | pool@par | oracle | desk−par % | quote−par % | gt−par % | par−oracle %");
+  type Row = { t: string; deskVsPar: number | null; quoteVsPar: number | null; gtVsPar: number | null; parVsOracle: number | null };
+  const rows: Row[] = [];
+
+  const me = (c: string) => c.toLowerCase();
+  const strip = (id?: string) => (id ?? "").replace(/^robinhood_/, "").toLowerCase();
+  /** pool@par for one raw GT item, computed HERE — not by the code under test. */
+  function parOf(p: Item, token: string): { par: number | null; gt: number | null; reserve: number; cp: string } | null {
+    const a = p.attributes;
+    if (!a?.address) return null;
+    const base = strip(p.relationships?.base_token?.data?.id);
+    const quote = strip(p.relationships?.quote_token?.data?.id);
+    const quoteSide = token === quote && token !== base;
+    const cp = quoteSide ? base : quote;
+    const inQuote = parseFloat((quoteSide ? a.quote_token_price_base_token : a.base_token_price_quote_token) ?? "");
+    const gt = parseFloat((quoteSide ? a.quote_token_price_usd : a.base_token_price_usd) ?? "");
+    const par = Number.isFinite(inQuote)
+      ? (cp === USDG ? inQuote : cp === WETH && ethUsd ? inQuote * ethUsd : null)
       : null;
+    return { par, gt: Number.isFinite(gt) ? gt : null, reserve: parseFloat(a.reserve_in_usd ?? "0"), cp };
+  }
+
+  for (const tok of RWA_TOKENS.filter((t) => (t.kind === "stock" || t.kind === "etf") && t.chainlinkFeed)) {
+    const token = me(tok.contract);
+    const oracle = await chainlinkLatest(tok.chainlinkFeed as `0x${string}`, tok.chainlinkHeartbeat ?? 86400);
+    const url = `https://api.geckoterminal.com/api/v2/networks/robinhood/tokens/${token}/pools?page=1`;
+    const res = await fetch(url);
+    const items: Item[] = res.ok ? (((await res.json()) as { data?: Item[] }).data ?? []) : [];
+
+    // The production readers, on the same response.
+    const primary = await resolvePrimaryPool(tok.contract);
+    const quote = await dexPrice(tok.contract as `0x${string}`);
+
+    const deskItem = primary.pool ? items.find((p) => (p.attributes?.address ?? "").toLowerCase() === primary.pool!.pool_ref) : undefined;
+    const deskRef = deskItem ? parOf(deskItem, token) : null;
+    const quoteItem = quote ? items.find((p) => (p.attributes?.address ?? "").toLowerCase() === quote.pool_address) : undefined;
+    const quoteRef = quoteItem ? parOf(quoteItem, token) : null;
+
+    const desk = primary.pool?.price_usd ?? null;
     const o = oracle && !oracle.is_stale ? oracle.price_usd : null;
-    const row = { t: tok.ticker, deskVsPar: pct(desk, par), gtAnchor: pct(poolGt, par), deskVsOracle: pct(desk, o), parVsOracle: pct(par, o) };
+    const row: Row = {
+      t: tok.ticker,
+      deskVsPar: pct(desk, deskRef?.par ?? null),
+      quoteVsPar: pct(quote?.price_usd ?? null, quoteRef?.par ?? null),
+      gtVsPar: pct(deskRef?.gt ?? null, deskRef?.par ?? null),
+      parVsOracle: pct(deskRef?.par ?? null, o),
+    };
     rows.push(row);
     console.log([
-      tok.ticker, top ? `${top.a.name} ($${Math.round(top.reserve).toLocaleString()})` : http === 200 ? `no anchored pool in ${items.length}` : `UNREAD (http ${http})`,
-      f(desk), f(poolGt), f(par), f(o),
-      f(row.deskVsPar), f(row.gtAnchor), f(row.deskVsOracle), f(row.parVsOracle),
+      tok.ticker,
+      primary.pool ? `${primary.pool.name} ($${Math.round(primary.pool.reserve_usd).toLocaleString()})` : res.status === 200 ? `${primary.selection} (${items.length} pools)` : `UNREAD (http ${res.status})`,
+      f(desk), f(quote?.price_usd), f(deskRef?.gt), f(deskRef?.par), f(o),
+      f(row.deskVsPar, 4), f(row.quoteVsPar, 4), f(row.gtVsPar), f(row.parVsOracle),
     ].join(" | "));
     await sleep(2200);
   }
 
   const measured = rows.filter((r) => r.deskVsPar != null);
-  const over = (k: keyof typeof rows[number], lim: number) => measured.filter((r) => Math.abs((r[k] as number | null) ?? 0) > lim).length;
-  console.log(`\n${measured.length} tickers with an anchored pool`);
-  console.log(`desk vs pool@par   |Δ| > 0.1%: ${over("deskVsPar", 0.1)}   > 1%: ${over("deskVsPar", 1)}`);
-  console.log(`GT's anchor vs par |Δ| > 0.1%: ${over("gtAnchor", 0.1)}   > 1%: ${over("gtAnchor", 1)}`);
-  console.log(`desk vs oracle     |Δ| > 2%:   ${measured.filter((r) => Math.abs(r.deskVsOracle ?? 0) > 2).length}`);
-  console.log(`pool@par vs oracle |Δ| > 2%:   ${measured.filter((r) => Math.abs(r.parVsOracle ?? 0) > 2).length}`);
+  const over = (k: keyof Row, lim: number) => measured.filter((r) => Math.abs((r[k] as number | null) ?? 0) > lim).length;
+  console.log(`\n${measured.length} tickers where the desk priced a pool`);
+  console.log(`desk  vs pool@par  |Δ| > 0.0001%: ${over("deskVsPar", 0.0001)}   > 0.1%: ${over("deskVsPar", 0.1)}   > 1%: ${over("deskVsPar", 1)}`);
+  console.log(`quote vs pool@par  |Δ| > 0.0001%: ${rows.filter((r) => Math.abs(r.quoteVsPar ?? 0) > 0.0001).length}   (of ${rows.filter((r) => r.quoteVsPar != null).length} priced)`);
+  console.log(`gt (old figure) vs pool@par |Δ| > 0.1%: ${over("gtVsPar", 0.1)}   > 1%: ${over("gtVsPar", 1)}`);
+  console.log(`pool@par vs oracle |Δ| > 2%: ${measured.filter((r) => Math.abs(r.parVsOracle ?? 0) > 2).length}`);
+  globalThis.fetch = realFetch;
 })().catch((e) => { console.error(e); process.exit(1); });

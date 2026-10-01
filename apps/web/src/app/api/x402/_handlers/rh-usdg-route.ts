@@ -42,7 +42,10 @@ export default async function handler(req: Request): Promise<Response> {
       const v3Deepest = bestPool(v3Pools);
       wethPath = {
         via: "WETH pool (RH V3 factory + GT confirmed)",
-        expected_out_usdg: wethPool ? (amount * (wethPool.counterparty_usd ?? 0)) : null,
+        // F6 — the counterparty's value is now RH's Chainlink ETH/USD, and null
+        // when that read fails. `?? 0` here used to turn an unread value into an
+        // expected output of 0 USDG; unknown stays unknown.
+        expected_out_usdg: wethPool && wethPool.counterparty_usd !== null ? amount * wethPool.counterparty_usd : null,
         v3_pool: v3Deepest ? { address: v3Deepest.address, fee: v3Deepest.fee, liquidity: v3Deepest.liquidity } : null,
         gt_pool: wethPool ? { address: wethPool.address, name: wethPool.name, tvl_usd: wethPool.reserve_usd, dex: wethPool.dex } : null,
         executable_via: v3Deepest ? "rh-stock-swap-prepare with denom=WETH" : "Universal Router (V4 pool)",
@@ -62,7 +65,7 @@ export default async function handler(req: Request): Promise<Response> {
       const usdgPool = gt.find((p) => p.base_token === USDG_ADDR.toLowerCase() || p.quote_token === USDG_ADDR.toLowerCase());
       rwaPath = {
         via: `Sell ${rwaMatch.ticker} → USDG on deepest pool`,
-        expected_out_usdg: usdgPool ? amount * usdgPool.price_usd : null,
+        expected_out_usdg: usdgPool && usdgPool.price_usd !== null ? amount * usdgPool.price_usd : null,
         gt_pool: usdgPool ? { address: usdgPool.address, name: usdgPool.name, tvl_usd: usdgPool.reserve_usd, dex: usdgPool.dex } : null,
         executable_via: usdgPool?.dex.includes("v4") ? "Universal Router (V4 pool) — Task #98 for direct integration" : "rh-stock-swap-prepare",
       };

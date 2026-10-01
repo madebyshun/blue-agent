@@ -88,12 +88,14 @@ async function runLocal<T>(
 }
 
 /**
- * Raw measurements the RECORDER needs and no door may publish (F6,
+ * Raw measurements the RECORDER needs and no door may publish unprojected (F6,
  * lib/blue-hood/quarantine.ts). `HANDLERS["rh-stock-arb"]` answers through the
- * quarantine — DEX price, delta and verdict withheld — so `callTool` would hand
- * the poller a snapshot with no DEX leg and the archive would stop recording
- * the very numbers it is keeping so they can be re-derived once the price
- * source is fixed. The grader needs the same reading to close open arrows.
+ * quarantine, which withholds the DEX price, delta and verdict of any reading
+ * without the pool-rate stamp — so if the stamp were ever lost, `callTool`
+ * would hand the poller a snapshot with no DEX leg and the archive would stop
+ * recording the numbers. The recorder takes the raw reading, stamp and all,
+ * and the readers decide what to publish. The grader needs the same reading to
+ * close open arrows.
  */
 const RECORDER_SOURCES = {
   "rh-stock-arb": async () =>

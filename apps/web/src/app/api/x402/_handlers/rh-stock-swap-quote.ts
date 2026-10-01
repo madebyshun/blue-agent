@@ -137,6 +137,12 @@ export default async function handler(req: Request): Promise<Response> {
     // unanchored pool anyway and the fix would have appeared to work while
     // changing nothing. Falling back to Chainlink is the honest degradation and
     // it already exists below (`spot_source === "chainlink"` raises a warning).
+    //
+    // F6 (fixed 2026-10-01) — `price_usd` is the selected pool's OWN rate × its
+    // anchor (USDG at par, WETH at Chainlink ETH/USD), no longer GeckoTerminal's
+    // token-level figure, so min_out is based on the pool the swap hits and
+    // `pool_oracle_delta_pct` below is that pool's real gap to Chainlink. Null
+    // when the anchor cannot be valued → the Chainlink fallback, warned.
     const pool_spot_usd: number | null = primaryPool?.price_usd ?? null;
     const chainlink_spot_usd: number | null = oracle && !oracle.is_stale ? oracle.price_usd : null;
     const spot_usd = pool_spot_usd ?? chainlink_spot_usd;
@@ -164,9 +170,12 @@ export default async function handler(req: Request): Promise<Response> {
         let weth_usd: number | null = ethQuote?.price_usd ?? null;
         if (!weth_usd) {
           // anchor-exempt(#227): the predicate IS the anchor (WETH on one side), and
-          // what we read off it is WETH's OWN usd price, not the stock's.
+          // what we read off it is WETH's OWN usd price, not the stock's — the
+          // value the pool-rate pricing used for this anchor (F6: the same RH
+          // Chainlink ETH/USD, memoised up to 60s). The `?? wethPool.price_usd`
+          // tail that used to follow was the STOCK's price, not WETH's; gone.
           const wethPool = gtPools.find((p) => p.base_token === ROBINHOOD_MAINNET_VERIFIED_WETH9.toLowerCase() || p.quote_token === ROBINHOOD_MAINNET_VERIFIED_WETH9.toLowerCase());
-          weth_usd = wethPool?.counterparty_token_price_usd ?? wethPool?.price_usd ?? null;
+          weth_usd = wethPool?.counterparty_token_price_usd ?? null;
         }
         if (weth_usd) {
           expected_out = side === "buy" ? (amount * weth_usd) / spot_usd : (amount * spot_usd) / weth_usd;

@@ -102,7 +102,10 @@ export default async function handler(req: Request): Promise<Response> {
       pool: PoolMeta;
       is_primary_pool: boolean;
       token_change_24h: number;
-      token_price_usd: number;
+      /** The pool's own rate × its anchor (F6). Null when the anchor could not
+       *  be valued (WETH with the ETH/USD feed unreadable) — shown as unknown,
+       *  never as GeckoTerminal's token-level figure. */
+      token_price_usd: number | null;
     };
     // Tokens that trade only against non-dollar assets. Reported, never dropped
     // in silence — an absent ticker should be explainable, not mysterious.

@@ -6,7 +6,15 @@
 //     within a single warm invocation this collapses N calls to 1 network.
 //   • honest null-returns on error (never guess numbers)
 
-import { RH_PRICE_SOURCE } from "./rwa-price";
+import {
+  RH_PRICE_SOURCE,
+  RH_DEX_PRICE_BASIS,
+  anchorUsdValues,
+  poolRateInCounter,
+  poolRateUsd,
+  type DexPriceBasis,
+  type GtPoolRateAttrs,
+} from "./rwa-price";
 
 const GT = "https://api.geckoterminal.com/api/v2/networks/robinhood";
 
@@ -107,8 +115,32 @@ export type PoolMeta = {
    * by definition the base side, so this is the quote token.
    */
   counterparty_token: string;
-  price_usd: number;          // ALWAYS for the token we queried
-  /** The counterparty token's USD price (WETH ~$1800, USDG ~$1). Not a
+  /**
+   * The queried token's USD price FROM THIS POOL: its own exchange rate (our
+   * token in units of the counterparty) × the counterparty's dollar value
+   * (`counterparty_token_price_usd`). F6, fixed 2026-10-01 — until then this
+   * was GeckoTerminal's token-level `*_token_price_usd`, which the diagnosis
+   * measured as NOT the pool's rate (lib/robinhood/rwa-price.ts, pool-rate
+   * block).
+   *
+   * NULL when the pool has no dollar price: the counterparty is not a USD
+   * anchor (a stock-vs-stock pool is an exchange rate, see `isUsdAnchored`), or
+   * it is one whose value could not be read (WETH with the ETH/USD feed down or
+   * stale). Never filled from GT's figure — read `gt_token_price_usd` if you
+   * want that, knowing it is not this pool's price.
+   */
+  price_usd: number | null;
+  /** Always `"pool_rate"`: how `price_usd` was produced. Carried through to
+   *  the Blue Hood snapshot so the quarantine can tell rows measured this way
+   *  from rows recorded before the fix (lib/blue-hood/quarantine.ts). */
+  price_basis: DexPriceBasis;
+  /** DIAGNOSTIC ONLY — GeckoTerminal's token-level USD figure for our side
+   *  (`*_token_price_usd`). Not this pool's price (F6); kept so the gap stays
+   *  inspectable (scripts/rh-f6-diagnose.ts). Never use it as a price. */
+  gt_token_price_usd: number | null;
+  /** The dollar value of ONE unit of the counterparty that `price_usd` was
+   *  computed with: USDG at par ($1), WETH at RH's Chainlink ETH/USD. Null for
+   *  an unanchored counterparty or an anchor that could not be valued. Not a
    *  liquidity value — renamed from `counterparty_usd` for clarity. */
   counterparty_token_price_usd: number | null;
   /** @deprecated Use counterparty_token_price_usd. Kept for one release. */
@@ -126,7 +158,7 @@ export type PoolMeta = {
   url: string;
 };
 
-type PoolAttrs = {
+type PoolAttrs = GtPoolRateAttrs & {
   address?: string;
   name?: string;
   base_token_price_usd?: string;
@@ -155,26 +187,51 @@ function stripChainPrefix(id: string | undefined): string {
   return id.startsWith("robinhood_") ? id.slice("robinhood_".length).toLowerCase() : id.toLowerCase();
 }
 
-/**
- * Build a PoolMeta from a GT pool item. If `forToken` is set, the tool selects
- * whichever side (base / quote) matches that token so `price_usd` is the price
- * of *that* token, not the pool's default base. Otherwise defaults to base.
- */
-function poolFromItem(p: PoolItem, forToken?: string): PoolMeta | null {
-  const attr = p.attributes;
-  if (!attr?.address) return null;
+/** Our side of a GT pool item: whether `forToken` is the quote token, and the
+ *  counterparty (the other side). Without `forToken` our token is the base. */
+function sidesOf(p: PoolItem, forToken?: string) {
   const baseId = stripChainPrefix(p.relationships?.base_token?.data?.id);
   const quoteId = stripChainPrefix(p.relationships?.quote_token?.data?.id);
   const target = forToken?.toLowerCase();
   const isQuoteSide = !!(target && target === quoteId && target !== baseId);
+  return { baseId, quoteId, isQuoteSide, counterparty: isQuoteSide ? baseId : quoteId };
+}
+
+/** Dollar value of each USD-anchored counterparty among `items` (F6): USDG at
+ *  par, WETH at RH's Chainlink ETH/USD — read only when a WETH pool is present.
+ *  Unanchored counterparties are not valued at all: they have no dollar price. */
+async function anchorValuesFor(items: PoolItem[], forToken?: string): Promise<Map<string, number | null>> {
+  const anchored = items
+    .map((p) => sidesOf(p, forToken).counterparty)
+    .filter((c) => RH_ANCHORS.has(c));
+  return anchorUsdValues(anchored, RH_PRICE_SOURCE);
+}
+
+/**
+ * Build a PoolMeta from a GT pool item. If `forToken` is set, the tool selects
+ * whichever side (base / quote) matches that token so `price_usd` is the price
+ * of *that* token, not the pool's default base. Otherwise defaults to base.
+ *
+ * F6 — `price_usd` is this pool's own rate × the counterparty's dollar value
+ * from `anchorUsd` (see the PoolMeta field). A pool GT reports no rate for is
+ * dropped, as a pool with no USD price used to be; a pool whose counterparty
+ * has no dollar value is KEPT with `price_usd: null` — it is still a real pool
+ * (routing, depth), it just has no dollar price.
+ */
+function poolFromItem(
+  p: PoolItem,
+  forToken: string | undefined,
+  anchorUsd: ReadonlyMap<string, number | null>,
+): PoolMeta | null {
+  const attr = p.attributes;
+  if (!attr?.address) return null;
+  const { baseId, quoteId, isQuoteSide, counterparty } = sidesOf(p, forToken);
   const tokenIsBase = !isQuoteSide;
-  const priceStr = isQuoteSide ? attr.quote_token_price_usd : attr.base_token_price_usd;
-  const counterpartyStr = isQuoteSide ? attr.base_token_price_usd : attr.quote_token_price_usd;
-  if (!priceStr) return null;
-  const price = parseFloat(priceStr);
-  if (!Number.isFinite(price) || price <= 0) return null;
-  const cp = counterpartyStr ? parseFloat(counterpartyStr) : NaN;
-  const cpVal = Number.isFinite(cp) && cp > 0 ? cp : null;
+  const rate = poolRateInCounter(attr, isQuoteSide);
+  if (rate === null) return null;
+  const cpVal = RH_ANCHORS.has(counterparty) ? anchorUsd.get(counterparty) ?? null : null;
+  const price = poolRateUsd(rate, cpVal);
+  const gt = parseFloat((isQuoteSide ? attr.quote_token_price_usd : attr.base_token_price_usd) ?? "");
   const poolRef = attr.address.toLowerCase();
   // RH Chain runs Uniswap V4 in a singleton PoolManager, so GT's "address"
   // for a pool is a 32-byte pool ID (64 hex chars + 0x). Legacy V3 pools
@@ -189,8 +246,10 @@ function poolFromItem(p: PoolItem, forToken?: string): PoolMeta | null {
     dex: p.relationships?.dex?.data?.id ?? "unknown",
     base_token: baseId,
     quote_token: quoteId,
-    counterparty_token: isQuoteSide ? baseId : quoteId,
+    counterparty_token: counterparty,
     price_usd: price,
+    price_basis: RH_DEX_PRICE_BASIS,
+    gt_token_price_usd: Number.isFinite(gt) && gt > 0 ? gt : null,
     counterparty_token_price_usd: cpVal,
     counterparty_usd: cpVal, // deprecated alias
     token_is_base: tokenIsBase,
@@ -295,6 +354,10 @@ export async function resolvePrimaryPool(
   total_tvl_usd: number;
   /** Depth we deliberately excluded, so nothing is hidden by the change above. */
   unanchored_tvl_usd: number;
+  /** F6 — how any `pool.price_usd` this selector returns was produced, stated
+   *  even when there is no pool, so a reader built on it (M5, A3, A4) can stamp
+   *  every reading it makes, not only the ones that found a price. */
+  price_basis: DexPriceBasis;
 }> {
   const pools = await poolsForToken(contract);
   const anchored = anchoredPools(pools);
@@ -303,6 +366,7 @@ export async function resolvePrimaryPool(
     .filter((p) => !isUsdAnchored(p))
     .reduce((sum, p) => sum + (p.reserve_usd || 0), 0);
   const counts = {
+    price_basis: RH_DEX_PRICE_BASIS,
     pool_count: pools.length,
     anchored_pool_count: anchored.length,
     total_tvl_usd,
@@ -357,8 +421,10 @@ export async function poolsForToken(contract: string): Promise<PoolMeta[]> {
     `${GT}/tokens/${contract.toLowerCase()}/pools?page=1`,
   );
   if (!d?.data) return [];
-  const pools = d.data
-    .map((p) => poolFromItem(p, contract))
+  const items = d.data;
+  const anchorUsd = await anchorValuesFor(items, contract);
+  const pools = items
+    .map((p) => poolFromItem(p, contract, anchorUsd))
     .filter((p): p is PoolMeta => p !== null);
   pools.sort((a, b) => b.reserve_usd - a.reserve_usd);
   return pools;
@@ -372,8 +438,10 @@ export async function topPools(limit = 50): Promise<PoolMeta[]> {
     `${GT}/pools?page=1&sort=h24_volume_usd_desc`,
   );
   if (!d?.data) return [];
-  return d.data
-    .map((p) => poolFromItem(p))
+  const items = d.data;
+  const anchorUsd = await anchorValuesFor(items);
+  return items
+    .map((p) => poolFromItem(p, undefined, anchorUsd))
     .filter((p): p is PoolMeta => p !== null)
     .slice(0, limit);
 }
