@@ -1,29 +1,21 @@
-"use client";
-
-// /app/skills — the Skills catalog promoted to a first-class Control page.
+// /app/skills — the Skills catalog as a first-class page (rebuilt 2026-10-01
+// around the trading loop: discover → check → trade → wallet → stock tokens,
+// builder commands last).
 //
-// Reuses the very same <SkillsPanel> the chat surface exposes. SkillsPanel now
-// renders the handoff's own `// SKILLS` header bar, so this page does NOT wrap it
-// in PanelHost — a PanelHost header would print a second title above it. We still
-// mount a ChatProvider directly (the pattern /app/cron uses): SkillsPanel calls
-// useChat() for setInput, so it must live inside the chat tree even though a
-// standalone page routes picks to /chat via onUse instead of seeding a local
-// composer. SkillsPanel's root is `flex flex-col h-full`, which fills the /app
-// <main> flex column directly.
-
-import { useRouter } from "next/navigation";
-import { ChatProvider } from "@/app/chat/ChatContext";
-import SkillsPanel from "@/app/chat/components/SkillsPanel";
+// A SERVER component on purpose: each skill's tool fee comes from the catalog
+// price (lib/credit-pricing.ts toolCreditCost, the same function the x402
+// credit path debits with), and computing it here keeps the ~2,000-line
+// AGENT_TOOLS catalog out of the client bundle. Only the numbers cross over.
+import { AGENT_SKILLS } from "@/app/chat/agent-skills";
+import { toolCreditCostFor } from "@/lib/credit-pricing";
+import SkillsPageClient from "./SkillsPageClient";
 
 export default function SkillsPage() {
-  const router = useRouter();
-  return (
-    <ChatProvider>
-      <SkillsPanel
-        onUse={(trigger) =>
-          router.push("/chat" + (trigger ? "?prefill=" + encodeURIComponent(trigger) : ""))
-        }
-      />
-    </ChatProvider>
-  );
+  const costs: Record<string, number> = {};
+  for (const sk of AGENT_SKILLS) {
+    for (const id of sk.meterIds ?? []) {
+      if (!(id in costs)) costs[id] = toolCreditCostFor(id, 0);
+    }
+  }
+  return <SkillsPageClient costs={costs} />;
 }

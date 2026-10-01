@@ -5,6 +5,11 @@
 
 export type SkillProvider = "Blue Agent" | "Base MCP" | "Bundled";
 export type SkillStatus   = "active" | "available" | "soon";
+/** Where a skill sits in the loop the rebuilt product is organised around
+ *  (ShunTr, 2026-10-01): find something → check it → trade it → see your
+ *  wallet; stock tokens beside it; the founder commands last. */
+export type SkillGroup    = "discover" | "check" | "trade" | "wallet" | "stocks" | "build";
+export type SkillChain    = "base" | "robinhood";
 
 /** Who actually operates the backend a skill runs on.
  *
@@ -56,12 +61,87 @@ export interface AgentSkill {
    *  gets retired for it. One of them, `hub_builder_score`, resolved to no tool
    *  on any surface at all. */
   meterIds?:   string[];
+  /** Section on the Skills page. Unset ⟹ not part of the loop (Base MCP "soon"). */
+  group?:      SkillGroup;
+  /** The chains it acts on — named, never assumed (CLAUDE.md rule 1). */
+  chains?:     SkillChain[];
+  /** Builds a transaction the USER signs in their own wallet (a card). Blue
+   *  Agent never signs; these are the only skills that move funds, and only
+   *  after that signature. */
+  signs?:      boolean;
 }
 
+// ── The trading loop (2026-10-01) ─────────────────────────────────────────────
+// Every entry names the CHAT tools it runs (`tools`) and the catalog ids they
+// meter under (`meterIds`) — scripts/skills-catalog-check.ts fails if a tool
+// here is not offered in Chat, or a meter id is not a catalog id. A skill is a
+// promise that typing its trigger reaches a real tool.
+const LOOP_SKILLS: AgentSkill[] = [
+  // DISCOVER
+  { id: "discover-base-trending", group: "discover", chains: ["base"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR,
+    name: "Trending on Base", description: "What is moving on Base right now — each token's buy/sell tax read on-chain before it is listed",
+    trigger: "What's trending on Base?", tools: ["hub_safe_trending"], meterIds: ["safe-trending"] },
+  { id: "discover-rh-movers", group: "discover", chains: ["robinhood"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR,
+    name: "Robinhood movers", description: "Biggest 24h movers among Robinhood Chain stock tokens, from their pools",
+    trigger: "Top movers on Robinhood Chain today", tools: ["hub_rh_movers"], meterIds: ["rh-stock-movers"] },
+  { id: "discover-rh-new", group: "discover", chains: ["robinhood"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR,
+    name: "New on Robinhood", description: "Stock tokens newly listed on Robinhood Chain",
+    trigger: "What's newly listed on Robinhood Chain?", tools: ["hub_rh_new_listings"], meterIds: ["rh-stock-new-listings"] },
+  { id: "discover-price", group: "discover", chains: ["base", "robinhood"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR,
+    name: "Token price", description: "Live price, 24h change, market cap and volume for a token",
+    // No meterIds: chat calls /api/token-price directly (FREE_DIRECT in
+    // api/chat/route.ts), so there is no tool fee and no usage:<id> counter.
+    trigger: "ETH price", tools: ["hub_token_price"] },
+  // CHECK
+  { id: "check-honeypot", group: "check", chains: ["base"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR,
+    name: "Can I sell it?", description: "Honeypot check — buy/sell tax and blacklist read on-chain; unread stays UNKNOWN, never SAFE",
+    trigger: "Is this token a honeypot? ", tools: ["hub_honeypot"], meterIds: ["honeypot-check"] },
+  { id: "check-tx-risk", group: "check", chains: ["base"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR,
+    name: "Before you sign", description: "Risk check on a transaction — the target, the approval it grants, the value it moves",
+    trigger: "Is this transaction safe to sign? to: 0x… data: 0x…", tools: ["hub_risk_gate"], meterIds: ["risk-gate"] },
+  // TRADE — cards the user signs
+  { id: "trade-swap-base", group: "trade", chains: ["base"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR, signs: true,
+    name: "Swap on Base", description: "Live 0x quote, your slippage, a pre-trade check — then you sign in your wallet",
+    trigger: "Swap 10 USDC to ETH on Base", tools: ["prepare_swap"] },
+  { id: "trade-swap-rh", group: "trade", chains: ["robinhood"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR, signs: true,
+    name: "Swap on Robinhood", description: "Buy or sell a stock token on Robinhood Chain, floored by a slippage minimum",
+    trigger: "Buy $20 of TSLA on Robinhood Chain", tools: ["robinhood_swap"] },
+  { id: "trade-send", group: "trade", chains: ["base", "robinhood"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR, signs: true,
+    name: "Send", description: "Send ETH or a token to an address or a Basename — the card shows exactly what leaves",
+    trigger: "Send 5 USDC to ", tools: ["prepare_send", "robinhood_send"] },
+  { id: "trade-bridge", group: "trade", chains: ["base", "robinhood"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR, signs: true,
+    name: "Bridge Base ↔ Robinhood", description: "Relay quote with its full cost; refused when the cost is over 20% of the amount",
+    trigger: "Bridge 10 USDC from Base to Robinhood", tools: ["robinhood_bridge"] },
+  // WALLET
+  { id: "wallet-holdings", group: "wallet", chains: ["base", "robinhood"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR,
+    name: "My wallet", description: "Everything your connected wallet holds on Base and Robinhood Chain",
+    trigger: "Check my wallet", tools: ["check_wallet"] },
+  // STOCK TOKENS
+  { id: "stocks-rh-quote", group: "stocks", chains: ["robinhood"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR,
+    name: "Oracle quote", description: "Chainlink price for a Robinhood Chain stock token, with the round's age and staleness",
+    trigger: "Oracle price of NVDA on Robinhood Chain", tools: ["hub_rh_quote"], meterIds: ["rh-stock-quote"] },
+  { id: "stocks-rh-search", group: "stocks", chains: ["robinhood"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR,
+    name: "Find a stock token", description: "Look a company up in the Robinhood Chain token registry — by contract, never by a guessed address",
+    trigger: "Find Tesla on Robinhood Chain", tools: ["hub_rh_search"], meterIds: ["rh-stock-search"] },
+  { id: "stocks-b20", group: "stocks", chains: ["base"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR,
+    name: "B20 stock on Base", description: "Inspect a Coinbase B20 tokenized stock — read on-chain from its own contract",
+    trigger: "Inspect the NVDA B20 token on Base", tools: ["hub_b20_inspect"], meterIds: ["b20-inspect"] },
+];
+
+/** Chat tools that carry NO tool fee: the native cards and readers, and the
+ *  utilities chat calls directly rather than through /api/x402 (FREE_DIRECT
+ *  in api/chat/route.ts). A skill built only from these has no `meterIds`. */
+export const NO_FEE_CHAT_TOOLS: ReadonlySet<string> = new Set([
+  "prepare_swap", "prepare_send", "robinhood_swap", "robinhood_send", "robinhood_bridge",
+  "check_wallet", "hub_token_price", "hub_crypto_rpc",
+]);
+
 export const AGENT_SKILLS: AgentSkill[] = [
-  // ── Blue Agent Core ─────────────────────────────────────────────────────────
+  ...LOOP_SKILLS,
+  // ── Blue Agent Core — the founder commands (Builder section) ───────────────
   {
     id:          "blue-idea",
+    group:       "build",
     name:        "Idea → Brief",
     description: "Turn a rough concept into a fundable brief — problem, why Base, MVP, risks, 24h plan",
     provider:    "Blue Agent",
@@ -73,6 +153,7 @@ export const AGENT_SKILLS: AgentSkill[] = [
   },
   {
     id:          "blue-build",
+    group:       "build",
     name:        "Build → Architecture",
     description: "Architecture, stack, folder structure, integrations, and test plan for Base projects",
     provider:    "Blue Agent",
@@ -84,6 +165,7 @@ export const AGENT_SKILLS: AgentSkill[] = [
   },
   {
     id:          "blue-audit",
+    group:       "build",
     name:        "Audit → Security",
     description: "500+ security checks · reentrancy, oracle, MEV, x402, Coinbase Smart Wallet",
     provider:    "Blue Agent",
@@ -95,6 +177,7 @@ export const AGENT_SKILLS: AgentSkill[] = [
   },
   {
     id:          "blue-ship",
+    group:       "build",
     name:        "Ship → Deploy",
     description: "Deployment checklist, verification steps, release notes, monitoring plan",
     provider:    "Blue Agent",
@@ -106,6 +189,7 @@ export const AGENT_SKILLS: AgentSkill[] = [
   },
   {
     id:          "blue-raise",
+    group:       "build",
     name:        "Raise → Pitch",
     description: "Fundraising narrative, investor deck, smart money map, competitive landscape",
     provider:    "Blue Agent",
@@ -201,6 +285,8 @@ export const AGENT_SKILLS: AgentSkill[] = [
   // ── Bundled Skills — curated tool groups that run together ──────────────────
   {
     id:          "bundle-token-safety",
+    group:       "check",
+    chains:      ["base"],
     name:        "Token Safety",
     description: "Safety sweep — risk score, honeypot, contract trust",
     provider:    "Bundled",
@@ -219,6 +305,8 @@ export const AGENT_SKILLS: AgentSkill[] = [
   // chat/integrations.ts.
   {
     id:          "bundle-trader-intel",
+    group:       "discover",
+    chains:      ["base"],
     name:        "Trader Intel",
     description: "Market facts — token pick, narrative pulse, momentum, DEX flow",
     provider:    "Bundled",
