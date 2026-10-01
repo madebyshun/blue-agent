@@ -78,8 +78,8 @@ export default function WatchesPanel() {
 
   return (
     <div className="shrink-0 px-5 py-4 border-b border-[#1A1A2E]">
-      <div className="flex items-center gap-3 mb-3">
-        <span className="font-mono text-[11px] font-semibold tracking-[0.14em] text-[#E2E8F0]">🔔 PRICE ALERTS</span>
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-3">
+        <span className="font-mono text-[11px] font-semibold tracking-[0.14em] text-[#E2E8F0] whitespace-nowrap">🔔 PRICE ALERTS</span>
         <span className="font-mono text-[10px] text-[#64748B]">checked every 5 min · free · up to {MAX_WATCHES_PER_WALLET} · or ask in chat: “alert me when ETH on Base goes above $3,000”</span>
       </div>
 
