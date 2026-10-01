@@ -104,8 +104,10 @@ export default function TopUpModal({
         await new Promise(r => setTimeout(r, 3000)); // still mining — keep waiting
         continue;
       }
-      // 409 (another verify in-flight) — also just wait it out.
-      if (res.status === 409) {
+      // 409 (another verify in-flight) or 503 (the route could not read its
+      // x402-settlement marker, so it would not mint on an unknown) — also
+      // just wait it out.
+      if (res.status === 409 || res.status === 503) {
         await new Promise(r => setTimeout(r, 3000));
         continue;
       }

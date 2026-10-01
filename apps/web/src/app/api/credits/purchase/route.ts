@@ -31,6 +31,31 @@
 //      `AuthorizationUsed(authorizer, nonce)`, so any tx where the caller
 //      authorized one is refused. Credit is never minted for a payment that
 //      already bought something.
+//
+//   5. …and the same holds for the OTHER x402 settlement shape (fixed
+//      2026-10-01). x402 v2 `exact` can also settle through Permit2: the
+//      reference facilitator in @x402/evm picks EIP-3009 or Permit2 from the
+//      shape of the CLIENT's payload, and x402/[tool] forwards that payload
+//      unchanged — so the payer, not us, chooses. A Permit2 settlement runs
+//      x402ExactPermit2Proxy → Permit2 → USDC.transferFrom(payer, treasury):
+//      the very Transfer rule 2 sums, and NO AuthorizationUsed, so rule 4
+//      alone let it through. The plain `transfer` TopUpModal sends never goes
+//      near either contract, so a receipt is refused when its top-level `to`
+//      is Permit2 or an x402 Permit2 proxy, OR when any of those contracts
+//      emitted a log in it (the proxy emits `Settled` / `SettledWithPermit`
+//      on every settle, which also catches a settlement batched behind some
+//      other wrapper). Addresses come from @x402/evm's own exports — the
+//      package that defines the settlement path — never a literal here.
+//
+//   6. Rules 4 and 5 are a list of settlement SHAPES, i.e. a blocklist that
+//      covers the methods someone thought of. The positive check: every x402
+//      settlement this app makes is marked `x402:settled:<tx>` by
+//      `recordSettlement` (lib/x402-settlements.ts — the one function both
+//      x402/[tool] and hub/community/[slug]/invoke call on settle.ok), and a
+//      marked hash is refused whatever its shape. An unreadable marker (KV
+//      error) is refused as retryable rather than read as "not a settlement":
+//      minting on an unknown is the direction that costs money. The marker is
+//      forward-only, which is why 4 and 5 stay.
 
 import { NextRequest, NextResponse } from "next/server";
 import {
@@ -47,6 +72,12 @@ import { base } from "viem/chains";
 import { topup } from "@/lib/credit-ledger";
 import { kvGet, kvSet, kvSetNX, kvDel } from "@/lib/kv";
 import { USDC_BASE, TOPUP_TREASURY, creditsForUsdc } from "@/lib/payments";
+import { isRecordedSettlement } from "@/lib/x402-settlements";
+import {
+  PERMIT2_ADDRESS,
+  x402ExactPermit2ProxyAddress,
+  x402UptoPermit2ProxyAddress,
+} from "@x402/evm";
 
 export const runtime = "nodejs";
 export const maxDuration = 20;
@@ -78,6 +109,21 @@ const AUTHORIZATION_USED_EVENT = [
     ],
   },
 ] as const;
+
+// Rule 5: the contracts an x402 Permit2 settlement runs through. `upto` is not
+// a scheme we sell, but its proxy settles into payTo the same way, and
+// refusing it costs a real top-up nothing.
+const PERMIT2_SETTLEMENT_CONTRACTS = new Set<string>(
+  [PERMIT2_ADDRESS, x402ExactPermit2ProxyAddress, x402UptoPermit2ProxyAddress].map((a) => getAddress(a)),
+);
+
+function touchesPermit2Settlement(receipt: { to?: string | null; logs: ReadonlyArray<{ address: string }> }): boolean {
+  const isSettlementContract = (a: string | null | undefined) => {
+    if (!a) return false;
+    try { return PERMIT2_SETTLEMENT_CONTRACTS.has(getAddress(a)); } catch { return false; }
+  };
+  return isSettlementContract(receipt.to) || receipt.logs.some((l) => isSettlementContract(l.address));
+}
 
 // Permanent processed-marker; also read on a duplicate call to return the
 // original credited amount idempotently. TTL long enough to be effectively
@@ -148,6 +194,26 @@ export async function POST(req: NextRequest) {
 
   // From here on, ANY verify-failure MUST release the lock so a real retry works.
   try {
+    // Rule 6: a hash this app recorded as an x402 settlement is never a top-up.
+    const recorded = await isRecordedSettlement(txHash);
+    if (recorded !== false) {
+      await kvDel(lockKey);
+      return recorded
+        ? NextResponse.json(
+            {
+              ok: false,
+              error:
+                "This transaction is an x402 payment for a Hub tool, not a top-up — it already paid for something. " +
+                "Top up with a direct USDC transfer from the Credits screen.",
+            },
+            { status: 400 },
+          )
+        : NextResponse.json(
+            { ok: false, error: "Could not check this transaction against x402 settlements — try again in a moment." },
+            { status: 503 },
+          );
+    }
+
     const client = createPublicClient({ chain: base, transport: http(RPC) });
 
     let receipt;
@@ -188,6 +254,21 @@ export async function POST(req: NextRequest) {
           ok: false,
           error:
             "This transaction is a signed USDC authorization (an x402 payment), not a top-up — it already paid for something. " +
+            "Top up with a direct USDC transfer from the Credits screen.",
+        },
+        { status: 400 },
+      );
+    }
+
+    // Rule 5: a Permit2-routed x402 settlement is a payment too, and emits no
+    // AuthorizationUsed for rule 4 to see.
+    if (touchesPermit2Settlement(receipt)) {
+      await kvDel(lockKey);
+      return NextResponse.json(
+        {
+          ok: false,
+          error:
+            "This transaction settled through Permit2 (an x402 payment), not a top-up — it already paid for something. " +
             "Top up with a direct USDC transfer from the Credits screen.",
         },
         { status: 400 },

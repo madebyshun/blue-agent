@@ -27,12 +27,27 @@
  * time. That is intentional and truthful — it is a live meter of CDP settlements,
  * not a backfilled historical total. A KV failure degrades every read to null so
  * /stats renders an honest "—", never a fabricated figure.
+ *
+ * ONE per-settlement key lives here too (added 2026-10-01): `x402:settled:<tx>`,
+ * a bare marker that the tx hash is an x402 settlement — no payer, no tool, no
+ * amount. It exists for /api/credits/purchase, which credits a USDC transfer to
+ * the same treasury and must never mint credits for a payment that already
+ * bought a tool. That route also refuses the settlement SHAPES it knows
+ * (EIP-3009 AuthorizationUsed, Permit2 proxy), but a shape list is a blocklist:
+ * it covers the methods we thought of. This marker is the positive check — it
+ * covers whatever method the facilitator used, because it is written at the
+ * one place every settlement passes through. Forward-only like the meter, so
+ * the shape checks stay as the guard for settlements made before it existed.
  */
-import { kv, kvGet } from "@/lib/kv";
+import { kv, kvGet, kvGetProbe } from "@/lib/kv";
 
 const K_COUNT = "x402:settle:count";  // # of confirmed CDP settlements
 const K_UNITS = "x402:settle:units";  // Σ USDC micro-units settled (6 decimals)
 const K_LASTTX = "x402:settle:lasttx"; // most-recent on-chain tx hash (Base)
+const settledTxKey = (tx: string) => `x402:settled:${tx.toLowerCase()}`;
+// Matches credits/purchase's processed-marker TTL: a settlement older than a
+// year that was never posted there is still caught by its shape checks.
+const SETTLED_TX_TTL = 365 * 24 * 3600;
 
 export interface X402Settlements {
   count: number;         // confirmed on-chain settlements via Coinbase CDP
@@ -53,8 +68,20 @@ export async function recordSettlement(units: number, tx?: string | null): Promi
       kv.incr(K_COUNT),
       kv.incrby(K_UNITS, Math.round(units)),
       tx ? kv.set(K_LASTTX, tx) : Promise.resolve(),
+      tx ? kv.set(settledTxKey(tx), 1, { ex: SETTLED_TX_TTL }) : Promise.resolve(),
     ]);
   } catch { /* bookkeeping is best-effort */ }
+}
+
+/**
+ * Was this tx hash recorded as an x402 settlement? `true` / `false` when KV
+ * answered, `null` when it could not be asked — the caller decides what an
+ * unknown means (credits/purchase refuses to mint on it), never this helper.
+ */
+export async function isRecordedSettlement(tx: string): Promise<boolean | null> {
+  const probe = await kvGetProbe<unknown>(settledTxKey(tx));
+  if (probe.status === "error") return null;
+  return probe.status === "hit";
 }
 
 /** Read the aggregate settlement meter. Null on total KV failure → /stats shows "—". */
