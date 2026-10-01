@@ -25,6 +25,21 @@ const UNDELIVERED =
   "record that nothing ever reads (inventory 2026-09-29). Halted rather than " +
   "left charging for it.";
 
+// F6 (lib/blue-hood/quarantine.ts). These two ids sell a direction hard-mapped
+// from the RH "DEX price" minus Chainlink, and that DEX price is GeckoTerminal's
+// token-level figure, not the pool's own rate. Their HANDLERS entries withhold
+// it, which is right for every door and wrong as a product: the route settles
+// on any 200, so a caller paid full price for a body whose advertised verdict
+// was INSUFFICIENT_DATA by construction. Same pattern as MORALIS above. The
+// Blue Hood recorder never comes through this route (callRecorderTool), so the
+// archive keeps recording while the door is shut.
+const F6_DRIFT =
+  "Robinhood Chain DEX leg under quarantine (F6, diagnosed 2026-09-30): this tool's " +
+  "product is a verdict hard-mapped from the RH DEX price vs Chainlink, and that DEX " +
+  "price is GeckoTerminal's token-level figure, not the pool's own rate, so it is " +
+  "withheld on every door. Answering 200 without it would charge for a verdict that " +
+  "cannot be given. Halted until the price source is fixed.";
+
 export const HALTED_TOOLS: Readonly<Record<string, string>> = {
   "wallet-holdings": MORALIS,
   "wallet-risk": MORALIS,
@@ -37,6 +52,8 @@ export const HALTED_TOOLS: Readonly<Record<string, string>> = {
   "base-activity-score": MORALIS,
   "rh-stock-alert": UNDELIVERED,
   "rh-rwa-dca": UNDELIVERED,
+  "rh-stock-arb": F6_DRIFT,
+  "rh-stock-agent-brief": F6_DRIFT,
 };
 
 /** The halt reason for `tool`, or null when it is not halted. */

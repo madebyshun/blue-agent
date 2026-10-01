@@ -17,7 +17,7 @@ import ArrowBriefBlock from "../ArrowBriefBlock";
 import HoodShellFrame from "../HoodShellFrame";
 import { useHoodShellData } from "../useHoodShellData";
 import ArrowsFrozenNotice from "@/components/ArrowsFrozenNotice";
-import { ARROWS_FROZEN } from "@/lib/blue-hood/arrow-freeze";
+import { ARROWS_FROZEN, ARROWS_FROZEN_NOTE } from "@/lib/blue-hood/arrow-freeze";
 
 const REFRESH_MS = 15_000;
 const PAGE_SIZE = 50;
@@ -507,8 +507,11 @@ function EmptyState({ allZero }: { allZero: boolean }) {
           {/* Short line stays mono; the ≥2-sentence paragraph takes the
               `hood-prose` token per T-V1. */}
           <div className="font-mono text-white text-[13px] mb-2">No graded arrows yet.</div>
+          {/* Frozen: no first receipt is coming. arrow-freeze-check §4.4. */}
           <p className="hood-prose max-w-md mx-auto text-[13.5px] leading-relaxed">
-            The engine fires on live setups and grades them automatically — first receipts land when NYSE opens Monday.
+            {ARROWS_FROZEN
+              ? ARROWS_FROZEN_NOTE
+              : "The engine fires on live setups and grades them automatically — first receipts land when NYSE opens Monday."}
           </p>
         </>
       ) : (

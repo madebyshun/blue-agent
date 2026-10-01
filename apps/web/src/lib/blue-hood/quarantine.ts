@@ -22,22 +22,36 @@
  * price source is fixed — that fix is a decision on the diagnosis, not part
  * of this module. Arrows are frozen (arrow-freeze.ts), so no RH arrow fires.
  *
- * THREE DOORS carry that leg, and each has its own publish function here:
+ * THE DOORS that carry that leg, and what closes each:
  *   • the latest snapshot (`KV_SNAPSHOT_LATEST`) — `publishDeskRow(s)`;
  *   • the permanent RH archive (`bh:series:day:*`, via `readSeriesDays`) —
  *     `publishRhArchivePoints`. The recorder keeps writing raw points; the
  *     routes that SERVE the archive withhold the DEX leg from them;
- *   • the paid M5 tool (`rh-stock-arb`), which does not read the snapshot at
- *     all — it IS the measurement, computed live — so it never showed up in a
- *     list of snapshot readers while it sold the exact number withheld
- *     everywhere else. Its HANDLERS entry publishes through `publishArbResult`;
- *     the raw reading is `measureRhStockArb`, reachable only through
- *     `callRecorderTool` (tool-caller.ts) by the poller and the grader.
+ *   • x402 handlers that read the leg LIVE — `resolvePrimaryPool` next to
+ *     `chainlinkLatest` — and so never appear among the snapshot's readers:
+ *       – M5 `rh-stock-arb`: HANDLERS publishes through `publishArbResult`;
+ *         the raw reading is `measureRhStockArb`, reachable only through
+ *         `callRecorderTool` (tool-caller.ts) by the poller and the grader;
+ *       – A4 `rh-stock-agent-brief` and A3 `rh-stock-report`: their `facts`
+ *         go through `publishRhFacts` BEFORE the verdict and BEFORE the prompt,
+ *         so neither the hard-mapped direction nor the model's prose can be
+ *         built on the withheld number;
+ *       – M5 and A4 are also HALTED at the route (lib/tool-halts.ts): their
+ *         product IS the direction, so a 200 without it charged full price for
+ *         nothing. A3's product is the brief, which stands without the leg.
  *
- * Every reader of each door either publishes through its function or is a
- * non-publishing reader whose property is asserted — enforced by
+ * NOT CLOSED, and said so rather than implied: the execution tools
+ * (`rh-stock-swap-quote`, `rh-stock-swap-prepare`, `rh-sector-basket`) size and
+ * quote trades from the same GeckoTerminal figure, and the two swap tools print
+ * its gap to Chainlink as a slippage cross-check. They sell no direction, and
+ * withholding the figure would remove the quote rather than a claim — so they
+ * stay as they are until the price-source fix decides what a quote is built
+ * on. That is part of the decision on the diagnosis, not of this module.
+ *
+ * Every reader of each door either publishes through its function, is halted,
+ * or is a reader whose property is asserted — enforced by
  * scripts/rh-quarantine-check.ts, which enumerates readers by what they call,
- * not by a list of files known today.
+ * not by a list of files known today (§1, §5, §6).
  */
 import type { M5Verdict, SeriesPoint, TickerSnapshot } from "./types";
 
@@ -132,8 +146,10 @@ const ARB_DEX_WITHHELD = ["price_usd", "change_1h", "change_24h", "change_24h_pc
 
 /**
  * An `rh-stock-arb` (M5) response body as it may be PUBLISHED — by
- * `HANDLERS["rh-stock-arb"]`, and therefore by every door that dispatches
- * through HANDLERS: the paid x402 route, a chat credit call, `blue_call`.
+ * `HANDLERS["rh-stock-arb"]`, and therefore by anything that dispatches
+ * through HANDLERS. The paid x402 route (and with it a chat credit call and
+ * `blue_call`) is HALTED for this id in lib/tool-halts.ts, so this is the
+ * defence in depth behind the halt, not the thing that stops the sale.
  *
  * Withholds the DEX price, the delta computed from it (`abs_usd`, `pct`) and the
  * verdict hard-mapped from that delta, exactly as `publishDeskRow` does for the
@@ -170,6 +186,43 @@ export function publishArbResult<T extends Record<string, unknown>>(
     verdict: "INSUFFICIENT_DATA" satisfies M5Verdict,
     dex: publishedDex,
     delta: publishedDelta,
+    provenance: "quarantined",
+    provenance_note: RH_DESK_QUARANTINE.note,
+  };
+}
+
+/** Keys of an RH `facts` block (A3 `rh-stock-report`, A4 `rh-stock-agent-brief`)
+ *  that are GeckoTerminal's token-level USD price of the stock, or a change
+ *  computed on it — the leg F6 found is not the pool's own rate. The Chainlink
+ *  fields, pool identity, depth and volume are real reads and are not here. */
+const FACTS_DEX_WITHHELD = ["dex_price_usd", "dex_change_24h_pct", "dex_change_1h_pct"] as const;
+
+/**
+ * An RH `facts` block as it may be USED — by the handler itself, before it
+ * hard-maps a verdict from the block or hands it to a model as "verified
+ * numbers, do not contradict them". Withholding on the way out would be too
+ * late for both: the verdict word and the prose are already built on the
+ * number by then. So the projection runs first and everything downstream sees
+ * only what may be published.
+ *
+ * `withheld` is true only when there WAS a DEX figure to withhold. A token with
+ * no dollar-anchored pool had no figure to begin with, and saying it was
+ * "withheld" would replace a true reason (no pool) with a different one.
+ *
+ * RH-only by construction: A3 and A4 read Robinhood Chain and nothing else.
+ */
+export function publishRhFacts<T extends { dex_price_usd: number | null }>(facts: T): {
+  facts: T;
+  withheld: boolean;
+  provenance: Provenance;
+  provenance_note?: string;
+} {
+  if (!isQuarantinedRow({ chain: "robinhood" })) return { facts, withheld: false, provenance: "measured" };
+  const f: Record<string, unknown> = { ...facts };
+  for (const k of FACTS_DEX_WITHHELD) if (k in f) f[k] = null;
+  return {
+    facts: f as T,
+    withheld: facts.dex_price_usd !== null,
     provenance: "quarantined",
     provenance_note: RH_DESK_QUARANTINE.note,
   };

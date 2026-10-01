@@ -15,10 +15,16 @@
  * The snapshot is not the only door, and §1 alone could not see the others —
  * that is how two of them stayed open after F6 shipped. Each has its own group,
  * enumerated by what the code CALLS, not by a list of files known today:
- *   §5  the paid M5 tool `rh-stock-arb`, which computes the RH drift live and
- *       never reads the snapshot: HANDLERS publishes through the quarantine
- *       (and so does the real x402 route in front of it), while the raw reading
- *       reaches the recorder — poller and grader — and nothing that serves
+ *   §5  the x402 handlers that read the DEX leg LIVE and never touch the
+ *       snapshot. M5 `rh-stock-arb`: HANDLERS publishes through the quarantine
+ *       and the paid route is HALTED (its product is the withheld verdict), while
+ *       the raw reading reaches the recorder — poller and grader — and nothing
+ *       that serves. A4 `rh-stock-agent-brief` (halted too) and A3
+ *       `rh-stock-report` withhold the leg before the verdict and before the
+ *       prompt — checked on what the model is actually sent. Then EVERY handler
+ *       that puts `resolvePrimaryPool` next to `chainlinkLatest` is enumerated by
+ *       those calls, and each must be halted, publish through the quarantine, or
+ *       be an execution quote whose property is asserted
  *   §6  the permanent RH archive (`readSeriesDays`), served by /api/hood/series
  *       and /api/hood/ticker-series: withheld on the way out, raw in KV
  *   §7  the board: a quarantined row is bucketed by its real liquidity, not as
@@ -169,7 +175,7 @@ const NON_PUBLISHING: Record<string, { why: string; holds: (src: string) => bool
   });
 
   // ── §5 ─────────────────────────────────────────────────────────────────────
-  console.log("\n5. the paid M5 tool (rh-stock-arb) publishes through the quarantine; the recorder reads raw");
+  console.log("\n5. the x402 handlers that read the DEX leg live: halted or published through the quarantine; the recorder reads raw");
 
   // Who may touch the raw reading. Property, not path: any file that names it
   // must be the handler that defines it or the recorder path that runs it, and
@@ -195,8 +201,19 @@ const NON_PUBLISHING: Record<string, { why: string; holds: (src: string) => bool
   const USDG = "0x5fc5360d0400a0fd4f2af552add042d716f1d168";
   const word = (n: bigint) => n.toString(16).padStart(64, "0");
   const realFetch = globalThis.fetch;
+  // Every prompt A3/A4 send to the gateway, verbatim — the model is a door too.
+  const prompts: string[] = [];
+  process.env.VIRTUALS_API_KEY = "rh-quarantine-check";
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input instanceof Request ? input.url : input);
+    if (url.startsWith("https://compute.virtuals.io/")) {
+      if (!url.endsWith("/chat/completions")) return new Response("{}", { status: 404 }); // catalog unknown → dispatch anyway
+      prompts.push(String(init?.body ?? ""));
+      return new Response(JSON.stringify({
+        choices: [{ finish_reason: "stop", message: { content: '{"one_line_context":"","risk_flags":[]}' } }],
+        usage: { total_tokens: 1 },
+      }), { status: 200, headers: { "content-type": "application/json" } });
+    }
     if (url.includes("geckoterminal.com") && url.includes(`/tokens/${NVDA}/pools`)) {
       return new Response(JSON.stringify({
         data: [{
@@ -260,17 +277,65 @@ const NON_PUBLISHING: Record<string, { why: string; holds: (src: string) => bool
     process.env.INTERNAL_SERVICE_KEY = "rh-quarantine-check";
     const x402 = await import("../src/app/api/x402/[tool]/route");
     const { NextRequest } = await import("next/server");
-    const viaRoute = (await (await x402.POST(
-      new NextRequest("https://blueagent.dev/api/x402/rh-stock-arb", {
-        method: "POST",
-        headers: { "content-type": "application/json", "x-blue-internal": "rh-quarantine-check", "x-blue-service": "internal" },
-        body: JSON.stringify({ ticker: "NVDA" }),
-      }),
-      { params: Promise.resolve({ tool: "rh-stock-arb" }) },
-    )).json()) as Arb;
-    ok("/api/x402/rh-stock-arb (the paid door) serves the quarantined body",
-      viaRoute.provenance === "quarantined" && viaRoute.delta?.pct === null && viaRoute.dex?.price_usd === null && viaRoute.verdict === "INSUFFICIENT_DATA",
-      JSON.stringify({ p: viaRoute.provenance, d: viaRoute.delta?.pct, v: viaRoute.verdict }));
+    // Withholding alone left the door CHARGING for the withheld verdict: the route
+    // settles on any 200. So the paid door must refuse before a payment
+    // requirement exists — on the POST path and on the GET (402 discovery) path.
+    const { haltReason } = await import("../src/lib/tool-halts");
+    for (const id of ["rh-stock-arb", "rh-stock-agent-brief"]) {
+      ok(`${id} is halted (its product is a direction built on the withheld leg)`, haltReason(id) !== null);
+      const post = await x402.POST(
+        new NextRequest(`https://blueagent.dev/api/x402/${id}`, {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-blue-internal": "rh-quarantine-check", "x-blue-service": "internal" },
+          body: JSON.stringify({ ticker: "NVDA" }),
+        }),
+        { params: Promise.resolve({ tool: id }) },
+      );
+      const postBody = (await post.json()) as { code?: string; verdict?: string };
+      ok(`/api/x402/${id} POST refuses (501 TOOL_HALTED) — nothing runs, nothing is charged`,
+        post.status === 501 && postBody.code === "TOOL_HALTED" && postBody.verdict === undefined, `${post.status} ${postBody.code}`);
+      const get = await x402.GET(new NextRequest(`https://blueagent.dev/api/x402/${id}`), { params: Promise.resolve({ tool: id }) });
+      ok(`/api/x402/${id} GET issues no payment requirement`, get.status === 501 && !get.headers.get("payment-required"), String(get.status));
+    }
+
+    // A4 — halted at the route, and what still reaches the handler without the
+    // route (Blue Hood's brief fetcher calls HANDLERS) gets the published block.
+    type Brief = { verdict?: string; verdict_note?: string; provenance?: string; provenance_note?: string; warnings?: string[];
+      facts?: { dex_price_usd?: number | null; dex_change_24h_pct?: number | null; chainlink_price_usd?: number | null; dex_tvl_usd?: number | null; dex_volume_24h_usd?: number | null } };
+    const callA = async <T,>(id: string) =>
+      (await (await HANDLERS[id](new Request(`https://blueagent.dev/api/x402/${id}`, { method: "POST", body: JSON.stringify({ ticker: "NVDA" }) }))).json()) as T;
+    prompts.length = 0;
+    const brief = await callA<Brief>("rh-stock-agent-brief");
+    ok("HANDLERS[rh-stock-agent-brief]: DEX price and its 24h change withheld; verdict INSUFFICIENT_DATA (not WATCH, not a drift), said why",
+      brief.facts?.dex_price_usd === null && brief.facts?.dex_change_24h_pct === null && brief.verdict === "INSUFFICIENT_DATA" &&
+        brief.verdict_note === RH_DESK_QUARANTINE.note && brief.provenance === "quarantined" &&
+        (brief.warnings ?? []).some((w) => w.startsWith(RH_DESK_QUARANTINE.code)),
+      JSON.stringify({ x: brief.facts?.dex_price_usd, v: brief.verdict, p: brief.provenance }));
+    ok("…the reads that are real stay: Chainlink price, pool depth and volume",
+      brief.facts?.chainlink_price_usd === 230.55 && brief.facts?.dex_tvl_usd === 5_000_000 && brief.facts?.dex_volume_24h_usd === 900_000);
+    ok("…and the model was never handed the withheld price (checked on the request sent)",
+      prompts.length === 1 && !prompts[0].includes("237.7") && prompts[0].includes('\\"dex_price_usd\\": null'),
+      `prompts=${prompts.length}`);
+
+    // A3 — not halted (its product is the brief), so it must withhold the leg
+    // BEFORE the prompt: a FACTS block the model is told not to contradict.
+    type Report = { provenance?: string; warnings?: string[];
+      facts?: { dex_price_usd?: number | null; dex_change_24h_pct?: number | null; dex_change_1h_pct?: number | null; chainlink_price_usd?: number | null; dex_tvl_usd?: number | null; dex_price_unavailable_reason?: string | null } };
+    prompts.length = 0;
+    const report = await callA<Report>("rh-stock-report");
+    ok("HANDLERS[rh-stock-report]: DEX price and the changes computed on it withheld, the reason is the quarantine note",
+      report.facts?.dex_price_usd === null && report.facts?.dex_change_24h_pct === null && report.facts?.dex_change_1h_pct === null &&
+        report.facts?.dex_price_unavailable_reason === RH_DESK_QUARANTINE.note && report.provenance === "quarantined" &&
+        (report.warnings ?? []).some((w) => w.startsWith(RH_DESK_QUARANTINE.code)),
+      JSON.stringify({ x: report.facts?.dex_price_usd, p: report.provenance }));
+    ok("…Chainlink and depth stay", report.facts?.chainlink_price_usd === 230.55 && report.facts?.dex_tvl_usd === 5_000_000);
+    ok("…and the model was never handed the withheld price", prompts.length === 1 && !prompts[0].includes("237.7"), `prompts=${prompts.length}`);
+
+    await withQuarantineLiftedForTest(async () => {
+      const b = await callA<Brief>("rh-stock-agent-brief");
+      ok("lifted (test only), A4 maps the drift again (AFTERHOURS/PREMARKET/ARB…, not INSUFFICIENT_DATA), marked measured",
+        b.facts?.dex_price_usd === 237.7 && b.verdict !== "INSUFFICIENT_DATA" && b.provenance === "measured", JSON.stringify({ v: b.verdict, p: b.provenance }));
+    });
 
     await withQuarantineLiftedForTest(async () => {
       const lifted = (await (await HANDLERS["rh-stock-arb"](new Request("https://blueagent.dev/api/x402/rh-stock-arb", { method: "POST", body: JSON.stringify({ ticker: "NVDA" }) }))).json()) as Arb;
@@ -280,6 +345,48 @@ const NON_PUBLISHING: Record<string, { why: string; holds: (src: string) => bool
     });
   } finally {
     globalThis.fetch = realFetch;
+    delete process.env.VIRTUALS_API_KEY;
+  }
+
+  // Every handler that reads the leg LIVE, enumerated by what it calls — the
+  // blind spot that let A4 sell the drift at 4× M5's price while a comment here
+  // said the class was closed. Each must be halted, publish through the
+  // quarantine, or be an execution quote whose property holds.
+  const { HALTED_TOOLS } = await import("../src/lib/tool-halts");
+  const HANDLERS_DIR = path.join(SRC, "app/api/x402/_handlers");
+  const liveLegReaders = all.filter((f) => {
+    const c = code(fs.readFileSync(f, "utf8"));
+    return /\bresolvePrimaryPool\s*\(/.test(c) && /\bchainlinkLatest\s*\(/.test(c);
+  });
+  ok(`found the live readers of the DEX leg (${liveLegReaders.length}) — the detector is alive`, liveLegReaders.length >= 6, liveLegReaders.map(rel).join(", "));
+  /** Not a direction, a QUOTE: the figure sizes a trade the user signs, and
+   *  withholding it removes the quote rather than a claim. Listed with the
+   *  property that makes that true, CHECKED; NOT CLOSED — quarantine.ts says
+   *  what stays open (the quote basis is the price-source fix's decision). */
+  const DIRECTION = /\b(LONG_DEX|SHORT_DEX|ARB_LONG_DEX|ARB_SHORT_DEX|PREMARKET_DRIFT|AFTERHOURS_DRIFT|FROZEN_ALIGNED)\b/;
+  const EXECUTION_QUOTE: Record<string, string> = {
+    "src/app/api/x402/_handlers/rh-stock-swap-quote.ts": "swap quote — the figure is the min_out basis",
+    "src/app/api/x402/_handlers/rh-stock-swap-prepare.ts": "swap calldata — the figure is the min_out basis",
+    "src/app/api/x402/_handlers/rh-sector-basket.ts": "buy plan — the figure sizes legs only when the oracle is stale or absent",
+  };
+  for (const f of liveLegReaders) {
+    const r = rel(f);
+    const src = fs.readFileSync(f, "utf8");
+    const c = code(src);
+    const id = path.dirname(f) === HANDLERS_DIR ? path.basename(f, ".ts") : null;
+    const halted = id !== null && Object.prototype.hasOwnProperty.call(HALTED_TOOLS, id);
+    const publishes = /from "@\/lib\/blue-hood\/quarantine"/.test(src) && /\bpublish(ArbResult|RhFacts)\(/.test(c);
+    if (EXECUTION_QUOTE[r]) {
+      ok(`${r}: ${EXECUTION_QUOTE[r]} — and it maps no direction from the gap`, !DIRECTION.test(c));
+      continue;
+    }
+    ok(`${r}: halted (${halted}) or publishes through the quarantine (${publishes})`, halted || publishes);
+    if (DIRECTION.test(c)) {
+      ok(`${r}: maps a direction from the leg, so it publishes through the quarantine even if halted (defence in depth)`, publishes);
+    }
+  }
+  for (const listed of Object.keys(EXECUTION_QUOTE)) {
+    ok(`exemption ${listed} still points at a live reader (no stale entry)`, liveLegReaders.map(rel).includes(listed));
   }
 
   // ── §6 ─────────────────────────────────────────────────────────────────────

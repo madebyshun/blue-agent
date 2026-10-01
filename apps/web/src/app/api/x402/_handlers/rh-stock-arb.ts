@@ -23,6 +23,12 @@
 //     and every free and ACP door already withheld it — this $0.05 door was
 //     still selling it, because it computes the number live and so never
 //     appeared among the readers of the snapshot the quarantine was wired into.
+//   • and the paid door is HALTED (lib/tool-halts.ts, F6_DRIFT). Withholding
+//     alone turned "sells the withheld number" into "charges $0.05 for a body
+//     whose verdict is INSUFFICIENT_DATA by construction" — the route settles
+//     on any 200. The halt refuses before a payment requirement is issued; the
+//     quarantined default export stays as defence in depth for anything that
+//     dispatches through HANDLERS without the route.
 
 import { findByTicker, RH_CHAIN } from "@/lib/robinhood/rwa-registry";
 import { chainlinkLatest } from "@/lib/robinhood/rwa-price";

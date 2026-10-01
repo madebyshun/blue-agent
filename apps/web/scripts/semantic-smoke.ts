@@ -12,6 +12,8 @@
  * to gate PR merge + on 6h cron to catch prod drift.
  */
 
+import { haltReason } from "../src/lib/tool-halts";
+
 const TARGET = process.env.TARGET ?? "";
 const INTERNAL_KEY = process.env.INTERNAL_SERVICE_KEY ?? "";
 const MODE: "http" | "local" = TARGET ? "http" : "local";
@@ -102,6 +104,21 @@ function must(ok: boolean, label: string, detail?: string) {
 // read the upstream error text before attributing it — which is why these
 // assertions now carry that text in their detail string.
 const SMOKE_MODE = (process.env.SMOKE_MODE ?? "monitor").toLowerCase() === "gate" ? "gate" : "monitor";
+/**
+ * A HALTED id (lib/tool-halts.ts) is refused by the route before anything runs,
+ * so over HTTP the correct behaviour IS the refusal: 501 `TOOL_HALTED`, "you
+ * were not charged". Asserting a 200 there would turn every scheduled run red
+ * for a pause that was decided, and asserting the body would read a refusal as
+ * a broken tool. Returns true when the caller should stop. Local mode imports
+ * HANDLERS (no route, no halt), so the handler's own behaviour is still checked.
+ */
+function haltedOverHttp(tool: string, label: string, r: { status: number; data: Record<string, unknown> }): boolean {
+  if (MODE !== "http" || !haltReason(tool)) return false;
+  must(r.status === 501 && r.data.code === "TOOL_HALTED", `${label} is halted: refused before payment (501 TOOL_HALTED)`,
+    `got ${r.status} ${String(r.data.code ?? "")}`);
+  return true;
+}
+
 const upstreamDown: string[] = [];
 function mustUpstream(ok: boolean, label: string, detail?: string) {
   if (ok || SMOKE_MODE === "monitor") return must(ok, label, detail);
@@ -112,6 +129,7 @@ function mustUpstream(ok: boolean, label: string, detail?: string) {
 async function m5AapleArb() {
   console.log("\n── M5 rh-stock-arb AAPL ──");
   const r = await call("rh-stock-arb", { ticker: "AAPL" });
+  if (haltedOverHttp("rh-stock-arb", "M5", r)) return;
   must(r.status === 200, "M5 status 200", `got ${r.status}`);
 
   const allowedVerdicts = ["ALIGNED", "LONG_DEX", "SHORT_DEX", "FROZEN_ALIGNED", "PREMARKET_DRIFT", "AFTERHOURS_DRIFT", "INSUFFICIENT_DATA"];
@@ -212,6 +230,7 @@ async function l4Verify() {
 async function a4Brief() {
   console.log("\n── A4 rh-stock-agent-brief AAPL ──");
   const r = await call("rh-stock-agent-brief", { ticker: "AAPL" });
+  if (haltedOverHttp("rh-stock-agent-brief", "A4", r)) return;
   must(r.status === 200, "A4 status 200", `got ${r.status}`);
   // Every assertion below reads the `llm` block of the response BODY. If the
   // call itself didn't succeed there is no body to read, and asserting on it

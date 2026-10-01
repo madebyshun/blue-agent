@@ -24,7 +24,9 @@
  * the alert sign-ups in the same header, the watch star on every row, a Telegram
  * /start that enrolled users in a broadcast that cannot flow ("you'll now get
  * every tradable signal as it fires"), and a chat instruction to close every
- * arrow answer with "Signals fire…". An alert is only ever made from a new
+ * arrow answer with "Signals fire…" — and the next fix left the inbox's empty
+ * state ("First delivery when NYSE opens Monday") under the header it had just
+ * changed to "alerts paused" (4.4). An alert is only ever made from a new
  * arrow, so none of those can deliver; each is checked here as a property or
  * by running the real handler.
  */
@@ -290,6 +292,25 @@ async function resetArrows() {
   const chatRoute = stripComments(read("src/app/api/chat/route.ts"));
   check("4.3 the chat route ends arrow answers with arrowAnswerCloser(), not a literal",
     /arrowAnswerCloser\(\)/.test(chatRoute) && !/Signals fire from oracle-vs-DEX drift/.test(chatRoute));
+
+  // 4.4 — empty states that promise the next delivery ("the moment the engine
+  // fires", "first receipts land when NYSE opens"). While frozen nothing fires,
+  // so every such sentence must sit in the live arm of a ternary whose frozen arm
+  // is ARROWS_FROZEN_NOTE. A property over every file under src/, like 4.1: the
+  // inbox's was missed by the commit that changed the header right above it.
+  const PROMISE = /engine fires|first (delivery|receipts?)\b/i;
+  let promises = 0;
+  for (const f of files) {
+    const lines = stripComments(readFileSync(f, "utf8")).split("\n");
+    lines.forEach((line, i) => {
+      if (!PROMISE.test(line)) return;
+      promises++;
+      const window = lines.slice(Math.max(0, i - 3), i + 1).join("\n");
+      check(`4.4 ${relative(ROOT, f)} promises a delivery only in the live arm (frozen arm is ARROWS_FROZEN_NOTE)`,
+        /ARROWS_FROZEN\s*\?\s*ARROWS_FROZEN_NOTE\s*:/.test(window), line.trim().slice(0, 90));
+    });
+  }
+  check("4.4 the delivery promises are still found (the detector is alive)", promises >= 3, `found ${promises}`);
 
   console.log(`\narrow-freeze-check: ${passes}/${passes + failures} passed`);
   if (failures > 0) process.exit(1);

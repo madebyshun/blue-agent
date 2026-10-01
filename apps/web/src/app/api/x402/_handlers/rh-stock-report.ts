@@ -28,11 +28,22 @@
 // therefore `resolvePrimaryPool` (dollar-anchored, USDG preferred), and when
 // no dollar market exists every `dex_*` field is null with an explicit
 // `dex_price_unavailable_reason` the model is told to report as a gap.
+//
+// F6 (lib/blue-hood/quarantine.ts) — the same "do not contradict them" is why
+// the DEX price leg is withheld HERE, before the prompt, not on the way out:
+// `dex_price_usd` and the changes computed on it are GeckoTerminal's
+// token-level figure, not the pool's rate, and section 3 below asks the model
+// to interpret exactly that figure against Chainlink — the RH drift every other
+// door withholds. `publishRhFacts` nulls them and the withholding note becomes
+// `dex_price_unavailable_reason`, which the prompt already tells the model to
+// quote as a gap. Not halted, unlike A4: this tool sells the brief (oracle,
+// depth, volume, labelled background), which stands without the leg.
 
 import { findByTicker, RH_CHAIN } from "@/lib/robinhood/rwa-registry";
 import { chainlinkLatest } from "@/lib/robinhood/rwa-price";
 import { resolvePrimaryPool } from "@/lib/robinhood/rwa-market";
 import { callLLM, NO_FABRICATION_RULE } from "@/app/api/_lib/llm";
+import { publishRhFacts, RH_DESK_QUARANTINE } from "@/lib/blue-hood/quarantine";
 
 export default async function handler(req: Request): Promise<Response> {
   try {
@@ -65,7 +76,7 @@ export default async function handler(req: Request): Promise<Response> {
       : primary.selection === "no_usd_anchored_pool"
         ? `${primary.pool_count} DEX pool(s) exist for this token on Robinhood Chain but none is quoted against a dollar-anchored asset (USDG/WETH). Their prices are exchange rates against another equity or a memecoin, not USD, so no dex_* figure is reported.`
         : "No DEX pool found for this token on Robinhood Chain.";
-    const facts = {
+    const rawFacts = {
       ticker: token.ticker,
       name: token.name,
       contract: token.contract,
@@ -89,6 +100,12 @@ export default async function handler(req: Request): Promise<Response> {
       anchored_pool_count: primary.anchored_pool_count,
       dex_price_unavailable_reason,
     };
+    // F6 — before the prompt. See the header.
+    const published = publishRhFacts(rawFacts);
+    const dex_withheld = published.withheld;
+    const facts = dex_withheld
+      ? { ...published.facts, dex_price_unavailable_reason: RH_DESK_QUARANTINE.note }
+      : published.facts;
 
     // ── LLM synthesis (Virtuals, NO web search) ──────────────────────────
     // This block was headed "Venice web-search + LLM synthesis" and the prompt
@@ -160,6 +177,8 @@ Do NOT recommend buy/sell — this is a brief, not a signal.`;
       name: token.name,
       contract: token.contract,
       facts,
+      provenance: published.provenance,
+      ...(published.provenance_note ? { provenance_note: published.provenance_note } : {}),
       report_markdown: markdown,
       llm: {
         provider: llm_provider,
@@ -174,7 +193,9 @@ Do NOT recommend buy/sell — this is a brief, not a signal.`;
         // "no_web_search_this_run" while the prompt was still ordering the model
         // to search and cite URLs.
         llm_provider !== null && !llm_web_search_used ? `no_web_search: ${llm_provider} has no web-search capability, so the report contains no news and no citations — only on-chain FACTS plus background the model is asked to label as unverified` : null,
-        dex_price_unavailable_reason ? `${primary.selection}: ${dex_price_unavailable_reason}` : null,
+        facts.dex_price_unavailable_reason
+          ? `${dex_withheld ? RH_DESK_QUARANTINE.code : primary.selection}: ${facts.dex_price_unavailable_reason}`
+          : null,
       ].filter((x): x is string => !!x),
       // Said "Virtuals (primary, sponsored) → Venice (web-search if reached) →
       // Bankr (fallback)" until 2026-09-18. There is no chain: callLLM is

@@ -399,8 +399,13 @@ function EmptyState() {
       {/* Empty-state title stays mono (short label). The paragraph below
           is a real ≥2-sentence run and takes the `hood-prose` token. */}
       <div className="font-mono text-white text-[13px] mb-2">Inbox empty.</div>
+      {/* While frozen nothing fires, so "the moment the engine fires" is a
+          delivery nobody performs — the header beside this already says
+          "alerts paused". scripts/arrow-freeze-check.ts §4.4. */}
       <p className="hood-prose max-w-md mx-auto text-[13.5px] leading-relaxed">
-        Arrows land here the moment the engine fires. First delivery when NYSE opens Monday.
+        {ARROWS_FROZEN
+          ? ARROWS_FROZEN_NOTE
+          : "Arrows land here the moment the engine fires. First delivery when NYSE opens Monday."}
       </p>
     </div>
   );

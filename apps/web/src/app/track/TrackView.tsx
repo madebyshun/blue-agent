@@ -30,6 +30,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { Arrow, HoodChain } from "@/lib/blue-hood/types";
 import { chainOf } from "@/lib/blue-hood/types";
+import { ARROWS_FROZEN, ARROWS_FROZEN_NOTE } from "@/lib/blue-hood/arrow-freeze";
 import type { PublicTrackRecord, PublicPerTypeStats } from "@/lib/blue-hood/track-record-public";
 // Type-only on purpose: both modules are server-side (cohort-read reaches KV),
 // and `import type` is erased by tsc, so nothing follows them into the bundle.
@@ -866,8 +867,11 @@ function EmptyState({ allZero }: { allZero: boolean }) {
       {allZero ? (
         <>
           <div className="font-mono text-white text-[13px] mb-2">No graded arrows yet.</div>
+          {/* Frozen: no first receipt is coming. arrow-freeze-check §4.4. */}
           <p className="mx-auto max-w-md text-[13.5px] leading-relaxed">
-            The engine fires on live Chainlink-vs-DEX setups and grades them automatically. First receipts land when NYSE opens.
+            {ARROWS_FROZEN
+              ? ARROWS_FROZEN_NOTE
+              : "The engine fires on live Chainlink-vs-DEX setups and grades them automatically. First receipts land when NYSE opens."}
           </p>
         </>
       ) : (
