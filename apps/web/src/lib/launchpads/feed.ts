@@ -12,7 +12,10 @@
  *      rare, meaningful event; listed by contract with its on-chain symbol.
  *   3. NEW POOLS above a liquidity floor, from GeckoTerminal's keyless
  *      new_pools, labelled with the launchpad only where GeckoTerminal's own
- *      dex id names one. Facts only — never a buy signal.
+ *      dex id names one (a "bankr" filing only after the on-chain integrator
+ *      check). Asked about ONE launchpad GeckoTerminal cannot attribute pools
+ *      to (Doppler, Flap, Clanker on Base), the feed says so instead of
+ *      reporting "no pool". Facts only — never a buy signal.
  * A part that could not be read says so; it is never shown as zero.
  */
 import { parseAbi, type Address, type Hex } from "viem";
@@ -47,22 +50,80 @@ const COUNT_SPECS: Record<LaunchChain, CountSpec[]> = {
   ],
 };
 
-/** GeckoTerminal dex ids that name a launchpad (listed 2026-10-01). */
-const GT_DEX_LAUNCHPAD: Record<string, string> = {
-  "pons-v2": "Pons (on curve)", "pons-v2-dex": "Pons (graduated)", "pons-dot-family": "Pons V1",
-  "bankr": "Bankr", "bankr-robinhood": "Bankr",
-  "virtuals-base": "Virtuals", "virtuals-unicorn-base": "Virtuals", "virtuals-robinhood": "Virtuals",
-  "clanker-robinhood": "Clanker", "uniswap-pools-trade": "Uniswap Liquidity Launcher",
+/**
+ * GeckoTerminal dex ids that name a launchpad (listed 2026-10-01), with the
+ * launchpad they attribute a pool to and the chain the dex id lives on. A
+ * launchpad with NO dex id on a chain (Doppler-generic, Flap, Zora, Clanker on
+ * Base) cannot have its new pools picked out of GeckoTerminal's list at all.
+ */
+const GT_DEX_LAUNCHPAD: Record<string, { label: string; id: LaunchpadId | null; chain: LaunchChain | null }> = {
+  "pons-v2":               { label: "Pons (on curve)", id: "pons", chain: "robinhood" },
+  "pons-v2-dex":           { label: "Pons (graduated)", id: "pons", chain: "robinhood" },
+  "pons-dot-family":       { label: "Pons V1", id: "pons", chain: "robinhood" },
+  // GeckoTerminal's own "bankr" filing — every such row is checked on-chain
+  // (Doppler integrator = Bankr's fee address) before it is shown as one.
+  "bankr":                 { label: "Bankr", id: "bankr", chain: "base" },
+  "bankr-robinhood":       { label: "Bankr", id: "bankr", chain: "robinhood" },
+  "virtuals-base":         { label: "Virtuals", id: "virtuals", chain: "base" },
+  "virtuals-unicorn-base": { label: "Virtuals", id: "virtuals", chain: "base" },
+  "virtuals-robinhood":    { label: "Virtuals", id: "virtuals", chain: "robinhood" },
+  "clanker-robinhood":     { label: "Clanker", id: "clanker", chain: "robinhood" },
+  "uniswap-pools-trade":   { label: "Uniswap Liquidity Launcher", id: null, chain: null },
 };
+
+/** Can GeckoTerminal's new-pools list attribute a pool to this launchpad on this chain? */
+export function gtAttributes(only: LaunchpadId, chain: LaunchChain): boolean {
+  return Object.values(GT_DEX_LAUNCHPAD).some((d) => d.id === only && d.chain === chain);
+}
+
+/** On-chain Bankr checks run this many at a time (public RPCs refuse bursts). */
+const BANKR_CHECK_CONCURRENCY = 4;
+/** …and at most this many rows are checked per list. */
+const BANKR_CHECK_MAX_ROWS = 16;
+const ADDR = /^0x[0-9a-fA-F]{40}$/;
 
 export interface LaunchFeed {
   chain: LaunchChain;
   windowMinutes: number;
   counts: Array<{ id: LaunchpadId; name: string; launches: number | null }>;
-  graduations: { windowHours: number; items: Array<{ launchpad: string; token: Address; symbol: string | null }>; unread: string[] };
-  newPools: { minReserveUsd: number; items: Array<{ name: string; launchpad: string | null; reserveUsd: number; volume24hUsd: number | null; ageMinutes: number | null; token: string | null }> | null };
+  /**
+   * `windowHours` is MEASURED from the start block's own timestamp (null when
+   * that read failed — then the window is only the ~24h block-time estimate).
+   */
+  graduations: { windowHours: number | null; items: Array<{ launchpad: string; token: Address; symbol: string | null }>; unread: string[] };
+  newPools: {
+    minReserveUsd: number;
+    /** Set when one launchpad was asked for and GeckoTerminal cannot attribute pools to it on this chain — its name. */
+    unattributableTo: string | null;
+    items: Array<{ name: string; launchpad: string | null; reserveUsd: number; volume24hUsd: number | null; ageMinutes: number | null; token: string | null; unconfirmed?: boolean }> | null;
+  };
   /** Only when one launchpad was asked for: its pools by 24h volume. */
   trending: { available: boolean; items: Array<{ name: string; reserveUsd: number; volume24hUsd: number | null; change24hPct: number | null; token: string | null; unconfirmed?: boolean }> | null };
+}
+
+/**
+ * Keep up to `max` rows, in order, after checking every row `isBankrRow`
+ * marks: a "no" (not a Doppler launch with Bankr's integrator) is dropped, an
+ * unread check is kept and flagged `unconfirmed`. Checks run in parallel
+ * batches of BANKR_CHECK_CONCURRENCY, stopping once `max` rows are kept.
+ */
+export async function keepCheckedBankr<T extends { token: string | null; unconfirmed?: boolean }>(
+  chain: LaunchChain, rows: T[], max: number, isBankrRow: (r: T) => boolean,
+  check: (chain: LaunchChain, token: Address) => Promise<boolean | null> = hasBankrIntegrator,
+): Promise<T[]> {
+  const out: T[] = [];
+  const candidates = rows.slice(0, BANKR_CHECK_MAX_ROWS);
+  for (let i = 0; i < candidates.length && out.length < max; i += BANKR_CHECK_CONCURRENCY) {
+    const batch = candidates.slice(i, i + BANKR_CHECK_CONCURRENCY);
+    const verdicts = await Promise.all(batch.map((r) =>
+      !isBankrRow(r) ? Promise.resolve(true as boolean | null)
+        : r.token && ADDR.test(r.token) ? check(chain, r.token as Address) : Promise.resolve(null)));
+    batch.forEach((r, j) => {
+      if (out.length >= max || verdicts[j] === false) return;
+      out.push(isBankrRow(r) ? { ...r, unconfirmed: verdicts[j] === null } : r);
+    });
+  }
+  return out;
 }
 
 const erc20 = parseAbi(["function symbol() view returns (string)"]);
@@ -141,17 +202,11 @@ async function trendingFor(chain: LaunchChain, only: LaunchpadId): Promise<Launc
   if (!readAny) return { available: true, items: null };
   const top = rows.sort((a, b) => (b.volume24hUsd ?? 0) - (a.volume24hUsd ?? 0));
   if (only !== "bankr") return { available: true, items: top.slice(0, 5) };
-  // GeckoTerminal's `bankr` listing also files pools Bankr did not launch
-  // (e.g. STONX/wtSPYM on the 2026-10-01 share). Each row is checked on-chain:
-  // a "no" is dropped, an unread check is kept and labelled.
-  const checked: typeof top = [];
-  for (const r of top) {
-    if (checked.length >= 5) break;
-    const v = r.token && /^0x[0-9a-fA-F]{40}$/.test(r.token) ? await hasBankrIntegrator(chain, r.token as Address) : null;
-    if (v === false) continue;
-    checked.push({ ...r, unconfirmed: v === null });
-  }
-  return { available: true, items: checked };
+  // GeckoTerminal's `bankr` listing also files pools with no Bankr-integrator
+  // Doppler record (e.g. STONX/wtSPYM on the 2026-10-01 share). Each row is
+  // checked on-chain, in parallel batches: a "no" is dropped, an unread check
+  // is kept and labelled.
+  return { available: true, items: await keepCheckedBankr(chain, top, 5, () => true) };
 }
 
 async function newPools(chain: LaunchChain, only?: LaunchpadId): Promise<LaunchFeed["newPools"]["items"]> {
@@ -159,16 +214,18 @@ async function newPools(chain: LaunchChain, only?: LaunchpadId): Promise<LaunchF
     const { body: j } = await gtJson<GtPools>(`/networks/${chain}/new_pools?include=dex`);
     if (!j) return null;
     const now = Date.now();
-    return (j.data ?? []).map((p) => {
+    type Row = NonNullable<LaunchFeed["newPools"]["items"]>[number] & { launchpadId: LaunchpadId | null };
+    const rows = (j.data ?? []).map((p): Row => {
       const a = p.attributes ?? {};
-      const dex = String(p.relationships?.dex?.data?.id ?? "");
+      const dex = GT_DEX_LAUNCHPAD[String(p.relationships?.dex?.data?.id ?? "")];
       const reserve = Number(a.reserve_in_usd);
       const vol = Number((a.volume_usd as Record<string, unknown> | undefined)?.h24);
       const created = Date.parse(String(a.pool_created_at ?? ""));
       const baseTok = String(p.relationships?.base_token?.data?.id ?? "");
       return {
         name: String(a.name ?? "?"),
-        launchpad: GT_DEX_LAUNCHPAD[dex] ?? null,
+        launchpadId: dex?.id ?? null,
+        launchpad: dex?.label ?? null,
         reserveUsd: Number.isFinite(reserve) ? reserve : 0,
         volume24hUsd: Number.isFinite(vol) ? vol : null,
         ageMinutes: Number.isFinite(created) ? Math.round((now - created) / 60_000) : null,
@@ -176,9 +233,18 @@ async function newPools(chain: LaunchChain, only?: LaunchpadId): Promise<LaunchF
       };
     })
       .filter((p) => p.reserveUsd >= NEW_POOL_MIN_RESERVE_USD)
-      .filter((p) => !only || (p.launchpad ?? "").toLowerCase().startsWith(LAUNCHPAD_INFO[only].name.split(" ")[0].toLowerCase()))
-      .sort((a, b) => b.reserveUsd - a.reserveUsd)
-      .slice(0, 5);
+      // By GeckoTerminal's dex id — the old label-prefix match never matched
+      // Doppler or Flap and then reported "no pool" for them (a false negative).
+      .filter((p) => !only || p.launchpadId === only)
+      .sort((a, b) => b.reserveUsd - a.reserveUsd);
+    // A pool GeckoTerminal files under its "bankr" dex is shown as Bankr only
+    // after the on-chain check (same rule as trending): dropped on a "no",
+    // flagged when the check could not be read.
+    const kept = await keepCheckedBankr(chain, rows, 5, (r) => r.launchpadId === "bankr");
+    return kept.map(({ launchpadId, ...r }) => ({
+      ...r,
+      launchpad: launchpadId === "bankr" && !r.unconfirmed ? LAUNCHPAD_INFO.bankr.name : r.launchpad,
+    }));
   } catch { return null; }
 }
 
@@ -189,9 +255,16 @@ export async function launchFeed(chain: LaunchChain, only?: LaunchpadId): Promis
   // The block time is an estimate; the window REPORTED is measured from the
   // two blocks' own timestamps, so "N launches in the last M minutes" is true.
   let windowMinutes = 60;
+  let headTs: bigint | null = null;
+  // Blocks per second MEASURED over the hour window — used to size the 24h
+  // graduation scan, whose reported window is then measured again below.
+  let blocksPerSec: number | null = null;
   try {
     const [a, b] = await Promise.all([c.getBlock({ blockNumber: head - hourBlocks }), c.getBlock({ blockNumber: head })]);
     windowMinutes = Math.max(1, Math.round(Number(b.timestamp - a.timestamp) / 60));
+    headTs = b.timestamp;
+    const secs = Number(b.timestamp - a.timestamp);
+    if (secs > 0) blocksPerSec = Number(hourBlocks) / secs;
   } catch { /* keep the estimate */ }
   // Bankr is a Doppler front-end: its launches are counted inside Doppler's.
   const specs = COUNT_SPECS[chain].filter((s) => !only || s.id === only || (only === "bankr" && s.id === "doppler"));
@@ -206,8 +279,18 @@ export async function launchFeed(chain: LaunchChain, only?: LaunchpadId): Promis
   // 22 calls against the public RPC's 2,000-block cap.
   const gradItems: LaunchFeed["graduations"]["items"] = [];
   const unread: string[] = [];
+  let gradWindowHours: number | null = null;
   if (chain === "robinhood") {
-    const dayBlocks = BigInt(Math.round((24 * 3600) / BLOCK_TIME_S.robinhood));
+    // Sized from the MEASURED block rate when there is one, and the window
+    // REPORTED is read from the start block's own timestamp — "the last 24h"
+    // from an assumed 0.1s block time could have been 10h or 60h.
+    const dayBlocks = BigInt(Math.round(24 * 3600 * (blocksPerSec ?? 1 / BLOCK_TIME_S.robinhood)));
+    try {
+      const start = await c.getBlock({ blockNumber: head - dayBlocks });
+      const end = headTs ?? (await c.getBlock({ blockNumber: head })).timestamp;
+      const secs = Number(end - start.timestamp);
+      if (secs > 0) gradWindowHours = Math.round((secs / 3600) * 10) / 10;
+    } catch { /* stays null — labelled as an estimate */ }
     const jobs: Array<[LaunchpadId, Address, Hex]> = [
       ["pons", PONS_V2_FACTORY, TOPICS.ponsGraduated],
       ["virtuals", VIRTUALS_BONDING.robinhood, TOPICS.virtualsGraduated],
@@ -224,10 +307,20 @@ export async function launchFeed(chain: LaunchChain, only?: LaunchpadId): Promis
     }
   }
 
+  const trending = only ? await trendingFor(chain, only) : { available: false, items: null };
+  // With one launchpad asked for, new pools are shown only when trending is
+  // not — and only when GeckoTerminal can attribute a pool to that launchpad
+  // at all. Otherwise saying "no pool" would be a false negative.
+  const unattributable = !!only && !gtAttributes(only, chain);
+  const showNewPools = !trending.available;
   return {
     chain, windowMinutes, counts,
-    graduations: { windowHours: 24, items: gradItems, unread },
-    newPools: { minReserveUsd: NEW_POOL_MIN_RESERVE_USD, items: await newPools(chain, only) },
-    trending: only ? await trendingFor(chain, only) : { available: false, items: null },
+    graduations: { windowHours: gradWindowHours, items: gradItems, unread },
+    newPools: {
+      minReserveUsd: NEW_POOL_MIN_RESERVE_USD,
+      unattributableTo: unattributable ? LAUNCHPAD_INFO[only!].name : null,
+      items: showNewPools && !unattributable ? await newPools(chain, only) : showNewPools ? [] : null,
+    },
+    trending,
   };
 }

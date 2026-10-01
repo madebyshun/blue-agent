@@ -347,7 +347,7 @@ export function buildLaunchpadSection(hasTools: boolean): string {
   return `${facts}
 - Use check_token for any question about ONE crypto token by address — "what is 0x…", "which launchpad", "is it still on the curve / graduated", and as the first look at a Robinhood Chain crypto token (there is no tax/honeypot check for Robinhood Chain; say so if asked whether one is safe). On Base, hub_honeypot measures sell tax.
 - "What is Pons / Flap / Bankr / Virtuals…?" is a knowledge question: answer from the facts above, call no tool.
-- Use new_tokens for "what launched today / new tokens on <launchpad> / what's new on Virtuals or Pons", and with \`launchpad\` set for "what's trending on Pons / Bankr / Virtuals". Pass the chain; if the user names Pons or Flap it is Robinhood Chain, Zora is Base.`;
+- Use new_tokens for "what launched today / new tokens on <launchpad> / what's new on Virtuals or Pons", and with \`launchpad\` set for "what's trending on Pons / Bankr / Virtuals". Pass the chain; if the user names Pons or Flap it is Robinhood Chain. new_tokens has NO feed for Zora or Flaunch — say so instead of answering with the chain-wide feed; for one Zora coin, check_token on its address names it.`;
 }
 
 /**

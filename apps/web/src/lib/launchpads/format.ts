@@ -72,7 +72,13 @@ export function formatFeed(f: LaunchFeed): string {
   }
 
   if (f.graduations.items.length > 0) {
-    lines.push(`**Graduated in the last ${f.graduations.windowHours}h** (filled their curve; newest first):`);
+    // The window is the one MEASURED from the scan's start block; when that
+    // read failed it is only an estimate from the block rate, and says so.
+    const w = f.graduations.windowHours;
+    const window = w == null
+      ? "about 24h (estimated from block time — the start block could not be read)"
+      : `${w}h`;
+    lines.push(`**Graduated in the last ${window}** (filled their curve; newest first):`);
     for (const g of f.graduations.items) lines.push(`- ${g.symbol ?? "?"} · ${g.launchpad} · \`${g.token}\``);
   }
   if (f.graduations.unread.length) lines.push(`Graduations could not be read for: ${f.graduations.unread.join(", ")}.`);
@@ -90,14 +96,19 @@ export function formatFeed(f: LaunchFeed): string {
   // Asked about ONE launchpad (trending shown): the chain-wide new-pools list
   // is noise there, so it is only shown for the chain-wide question.
   if (!f.trending.available) {
-    if (f.newPools.items == null) {
+    if (f.newPools.unattributableTo) {
+      // GeckoTerminal files this launchpad's pools under a generic DEX, so its
+      // new-pools list cannot be filtered to it. Say that — "no pool" would be
+      // a false negative.
+      lines.push(`New pools cannot be attributed to ${f.newPools.unattributableTo} on ${chain}: GeckoTerminal files its pools under a generic DEX, so none are listed here — that is not a sign there are none. Ask for an overview of a token's address to check which launchpad it came from.`);
+    } else if (f.newPools.items == null) {
       lines.push("New pools could not be read right now (GeckoTerminal).");
     } else if (f.newPools.items.length === 0) {
       lines.push(`No pool created in GeckoTerminal's latest batch has more than ${fmtUsd(f.newPools.minReserveUsd)} of liquidity.`);
     } else {
       lines.push(`**New pools with over ${fmtUsd(f.newPools.minReserveUsd)} liquidity** (GeckoTerminal's newest batch):`);
       for (const p of f.newPools.items) {
-        lines.push(`- ${p.name}${p.launchpad ? ` · ${p.launchpad}` : ""} · liquidity ${fmtUsd(p.reserveUsd)}${p.volume24hUsd != null ? ` · 24h volume ${fmtUsd(p.volume24hUsd)}` : ""}${p.ageMinutes != null ? ` · ${p.ageMinutes} min old` : ""}${p.token ? ` · \`${p.token}\`` : ""}`);
+        lines.push(`- ${p.name}${p.launchpad ? ` · ${p.launchpad}` : ""}${p.unconfirmed ? " (GeckoTerminal's label — not confirmed on-chain)" : ""} · liquidity ${fmtUsd(p.reserveUsd)}${p.volume24hUsd != null ? ` · 24h volume ${fmtUsd(p.volume24hUsd)}` : ""}${p.ageMinutes != null ? ` · ${p.ageMinutes} min old` : ""}${p.token ? ` · \`${p.token}\`` : ""}`);
       }
     }
   }

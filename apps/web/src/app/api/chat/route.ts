@@ -536,8 +536,8 @@ const ALL_HUB_TOOLS = [
     input_schema: {
       type: "object",
       properties: {
-        chain:     { type: "string", enum: ["base", "robinhood"], description: "Which chain. Pons and Flap are Robinhood Chain only; Zora is Base only." },
-        launchpad: { type: "string", enum: ["pons", "flap", "doppler", "bankr", "virtuals", "clanker"], description: "OPTIONAL — narrow to one launchpad." },
+        chain:     { type: "string", enum: ["base", "robinhood"], description: "Which chain. Pons and Flap are Robinhood Chain only." },
+        launchpad: { type: "string", enum: ["pons", "flap", "doppler", "bankr", "virtuals", "clanker"], description: "OPTIONAL — narrow to one launchpad. There is NO feed for Zora or Flaunch: do not call this tool for them, say so." },
       },
       required: ["chain"],
     },
@@ -2278,7 +2278,15 @@ async function callHubTool(
       return { text: `Ask the user: ${msg}`, staticReply: msg };
     }
     const allowed = ["pons", "flap", "doppler", "bankr", "virtuals", "clanker"] as const;
-    const only = allowed.find((x) => x === args.launchpad);
+    const raw = typeof args.launchpad === "string" ? args.launchpad.trim().toLowerCase() : "";
+    const only = allowed.find((x) => x === raw);
+    // A launchpad this feed does not read must be SAID, not silently answered
+    // chain-wide — "new Zora coins" used to come back as the Base-wide feed.
+    if (raw && !only && !["all", "any", "none"].includes(raw)) {
+      const named = raw.replace(/[^a-z0-9 ._-]/g, "").slice(0, 24) || "that launchpad";
+      const msg = `There is no launch feed for ${named} here — new_tokens reads Pons, Flap, Doppler (incl. Bankr-integrator launches), Virtuals and Clanker${named.startsWith("zora") || named.startsWith("flaunch") ? ". Zora and Flaunch launches are not counted (their pools are filed under plain Uniswap v4); for one coin, ask for an overview of its address" : ""}.`;
+      return { text: `${msg} Reply with this line.`, staticReply: msg };
+    }
     const { LAUNCHPAD_INFO } = await import("@/lib/launchpads/registry");
     if (only && !LAUNCHPAD_INFO[only].chains.includes(chain)) {
       const msg = `${LAUNCHPAD_INFO[only].name} is not on ${chain === "base" ? "Base" : "Robinhood Chain"} — it launches on ${LAUNCHPAD_INFO[only].chains.map((c) => (c === "base" ? "Base" : "Robinhood Chain")).join(" and ")}.`;

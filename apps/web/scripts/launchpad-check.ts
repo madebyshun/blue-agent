@@ -8,6 +8,11 @@
  *     negative; a revert is a plain miss.
  *  3. The replies say where each number came from, say "unread" for what was
  *     not read, never show a tax for Robinhood Chain, and never print a null as 0.
+ *     Review 2026-10-01: a probe the token alone can answer is not trusted
+ *     (Pons curve must point back, Zora asks its factory); a launchpad
+ *     GeckoTerminal cannot attribute is said, not reported as "no pool";
+ *     Bankr rows are checked on-chain in capped parallel batches; the
+ *     graduation window is the measured one; an unknown launchpad is answered.
  *  4. The prompt carries the launchpad facts even without tools (the
  *     "pons is part of the brainstem" answer came from a tool-free turn) and
  *     names the tools only when they are attached.
@@ -18,7 +23,8 @@ import { resolveLaunchpad, probesFor, type ProbeSet } from "../src/lib/launchpad
 import { formatOverview, formatFeed } from "../src/lib/launchpads/format";
 import { buildLaunchpadSection } from "../src/app/api/chat/system-prompt";
 import type { TokenOverview } from "../src/lib/token-overview";
-import type { LaunchFeed } from "../src/lib/launchpads/feed";
+import { keepCheckedBankr, gtAttributes, type LaunchFeed } from "../src/lib/launchpads/feed";
+import { NextRequest } from "next/server";
 
 let failures = 0;
 function ok(label: string, cond: boolean, detail = "") {
@@ -149,7 +155,7 @@ ok("Pons is Robinhood-only, Zora Base-only", LAUNCHPAD_INFO.pons.chains.join() =
     chain: "robinhood", windowMinutes: 60,
     counts: [{ id: "pons", name: "Pons (Pons Family)", launches: 146 }, { id: "flap", name: "Flap (flap.sh)", launches: null }],
     graduations: { windowHours: 24, items: [{ launchpad: "Pons (Pons Family)", token: "0xC00899951D84ee5aFb1BF22Df1d91d5206457D86", symbol: "ZIP" }], unread: [] },
-    newPools: { minReserveUsd: 10_000, items: null },
+    newPools: { minReserveUsd: 10_000, unattributableTo: null, items: null },
     trending: { available: true, items: [{ name: "VRAX / USDG", reserveUsd: 145296, volume24hUsd: 6115553, change24hPct: 12.5, token: "0xabc0000000000000000000000000000000000001" }] },
   };
   txt = formatFeed(feed);
@@ -162,6 +168,66 @@ ok("Pons is Robinhood-only, Zora Base-only", LAUNCHPAD_INFO.pons.chains.join() =
   ok("facts, not picks", /not picks/.test(txt));
   ok("trending pools ranked by 24h volume, sourced", txt.includes("top pools by 24h volume") && txt.includes("VRAX / USDG · 24h volume $6.12M"), txt);
   ok("a launchpad with no GT dex says nothing about trending", !formatFeed({ ...feed, trending: { available: false, items: null } }).includes("Trending"));
+
+  // Review 2026-10-01 — false negatives and unmeasured windows.
+  const unattr = formatFeed({ ...feed, trending: { available: false, items: null }, newPools: { minReserveUsd: 10_000, unattributableTo: "Doppler", items: [] } });
+  ok("a launchpad GeckoTerminal cannot attribute: says so, never 'no pool'", /cannot be attributed to Doppler/.test(unattr) && !/No pool created/.test(unattr), unattr);
+  ok("graduation window is the measured one", formatFeed({ ...feed, graduations: { ...feed.graduations, windowHours: 19.4 } }).includes("Graduated in the last 19.4h"));
+  ok("an unmeasured graduation window is labelled an estimate", /about 24h \(estimated from block time/.test(formatFeed({ ...feed, graduations: { ...feed.graduations, windowHours: null } })));
+  const unconfNew = formatFeed({ ...feed, trending: { available: false, items: null }, newPools: { minReserveUsd: 10_000, unattributableTo: null, items: [{ name: "Y / WETH", launchpad: "Bankr", reserveUsd: 20000, volume24hUsd: null, ageMinutes: 3, token: "0x1", unconfirmed: true }] } });
+  ok("an unconfirmed 'Bankr' new-pool row is labelled as GeckoTerminal's label", /Bankr \(GeckoTerminal's label — not confirmed on-chain\)/.test(unconfNew), unconfNew);
+
+  ok("GeckoTerminal attribution: Pons/RH, Bankr/Base, Virtuals/Base yes; Doppler, Flap, Clanker/Base no",
+    gtAttributes("pons", "robinhood") && gtAttributes("bankr", "base") && gtAttributes("virtuals", "base")
+    && !gtAttributes("doppler", "robinhood") && !gtAttributes("flap", "robinhood") && !gtAttributes("clanker", "base"));
+
+  console.log("3b. Bankr rows are checked on-chain, in parallel, capped");
+  const rowsIn = Array.from({ length: 12 }, (_, i) => ({ name: `R${i}`, token: `0x${String(i).padStart(40, "0")}`, bankr: i % 2 === 0, unconfirmed: undefined as boolean | undefined }));
+  let inFlight = 0, peak = 0, calls = 0;
+  const verdict = (i: number): boolean | null => (i === 0 ? false : i === 2 ? null : true);
+  const kept = await keepCheckedBankr("base", rowsIn, 5, (r) => r.bankr, async (_c, token) => {
+    calls++; inFlight++; peak = Math.max(peak, inFlight);
+    await new Promise((res) => setTimeout(res, 20));
+    inFlight--;
+    return verdict(parseInt(token.slice(2), 10));
+  });
+  ok("a 'no' is dropped", !kept.some((r) => r.name === "R0"), kept.map((r) => r.name).join());
+  ok("an unread check is kept and flagged", kept.find((r) => r.name === "R2")?.unconfirmed === true);
+  ok("non-Bankr rows are not checked and not flagged", kept.find((r) => r.name === "R1")?.unconfirmed === undefined);
+  ok("order kept, stops at 5", kept.length === 5 && kept.map((r) => r.name).join() === "R1,R2,R3,R4,R5", kept.map((r) => r.name).join());
+  ok("checks ran in parallel (peak > 1), capped at 4", peak > 1 && peak <= 4, `peak ${peak}`);
+  ok("no more checks than needed (two batches of 4 rows → 4 Bankr checks)", calls === 4, String(calls));
+
+  console.log("3c. new_tokens: an unknown launchpad is answered, not widened to the chain");
+  for (const k of ["KV_REST_API_URL", "KV_REST_API_TOKEN", "UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN"]) delete process.env[k];
+  process.env.INTERNAL_SERVICE_KEY = "test-internal-key-not-a-secret";
+  process.env.NEXT_PUBLIC_APP_URL = "https://app.invalid";
+  process.env.VIRTUALS_API_KEY = "test-virtuals-key";
+  let networkHit = "";
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = input instanceof Request ? input.url : String(input);
+    if (url.startsWith("https://compute.virtuals.io/")) {
+      const body = JSON.parse(String(init?.body ?? "{}")) as { stream?: boolean };
+      if (!body.stream) {
+        return Response.json({ choices: [{ finish_reason: "tool_calls", message: { content: null, tool_calls: [
+          { id: "c1", type: "function", function: { name: "new_tokens", arguments: JSON.stringify({ chain: "base", launchpad: "zora" }) } },
+        ] } }] });
+      }
+      return new Response("data: [DONE]\n\n", { status: 200, headers: { "Content-Type": "text/event-stream" } });
+    }
+    if (url.startsWith("https://app.invalid/api/credits/")) return Response.json({ ok: true });
+    networkHit = url;
+    throw new Error(`network blocked in test: ${url}`);
+  }) as typeof fetch;
+  const { POST } = await import("../src/app/api/chat/route");
+  const res = await POST(new NextRequest("http://localhost/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-blue-internal": "test-internal-key-not-a-secret", "x-blue-user": "0x3333333333333333333333333333333333333333" },
+    body: JSON.stringify({ messages: [{ role: "user", content: "new zora coins on base" }], tier: "fast" }),
+  }));
+  const sse = await res.text();
+  ok("launchpad 'zora' gets an explicit 'no feed' reply", /There is no launch feed for zora here/.test(sse), sse.slice(0, 300));
+  ok("…and no chain-wide read was made", networkHit === "", networkHit);
 
   console.log("4. prompt");
   const off = buildLaunchpadSection(false);
