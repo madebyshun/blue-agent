@@ -6,7 +6,7 @@
  * REAL USER CREDITS, and it runs against a KV budget that has been exceeded
  * three times (#148).
  *
- * ── Cost per idle tick: ONE read ─────────────────────────────────────────────
+ * ── Cost per idle tick: ONE read, ONE heartbeat write ────────────────────────
  * The first thing this route does is read `crons:next`, a single integer: the
  * earliest moment any owner has a task due. If that is in the future, it returns
  * immediately — it does not read the owners set, and it does not touch a single
@@ -14,6 +14,9 @@
  * many users enrol. The naive shape (scan every owner every 5 minutes) costs
  * 288 × N reads/day and would put the project back in suspension at a few
  * hundred users. `unset` means nobody has ever enrolled, and is also a return.
+ * Every invocation also writes the `crons:tick:last` heartbeat — another flat
+ * ~8.6k commands/month, the price §7.8 of the Scheduled research accepted so
+ * "is the tick alive?" has an answer. Still flat in the number of users.
  *
  * ── Missed windows are SKIPPED, never replayed ───────────────────────────────
  * `nextFireAt` always returns a future instant, so a task whose window passed
@@ -39,7 +42,7 @@
  * Auth: `Authorization: Bearer $CRON_SECRET` (or `?secret=`) — the house pattern.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { kvTryLock, kvDel, kvSet, kvSetNX } from "@/lib/kv";
+import { kvTryLock, kvDel, kvSet } from "@/lib/kv";
 import {
   listOwners,
   readOwnerTasks,
@@ -92,10 +95,30 @@ const MAX_RUNS_PER_TICK = 3;
 const RAN_TTL_S = 8 * 24 * 3600;
 const ranKey = (wallet: string, id: string, at: number) => `crons:ran:${wallet}:${id}:${at}`;
 
-/** Last-tick heartbeat (Scheduled research §7.8): the only way to answer "has
- *  the tick run at all?" without Vercel logs. Written on every tick that
- *  reaches the owner pass. */
-const HEARTBEAT_KEY = "crons:tick:last";
+/**
+ * Last-tick heartbeat (Scheduled research §7.8): the only way to answer "has
+ * the tick run at all?" without Vercel logs. Written on EVERY authorised
+ * invocation — idle, skipped, ok and error alike — because §7.8's acceptance
+ * test is that `at` advances every 5 minutes. It used to be written only after
+ * a full pass, which is almost never (the watermark is usually in the future),
+ * so a healthy scheduler read as dead and a failing one left no trace at all.
+ * Counts and reasons only, never a wallet address.
+ */
+const HEARTBEAT_KEY   = "crons:tick:last";
+const HEARTBEAT_TTL_S = 7 * 24 * 3600;
+
+type BeatStatus = "idle" | "skipped" | "ok" | "error";
+
+/** `kvSet`, which swallows: a heartbeat that cannot be written must never be
+ *  the reason a tick fails. */
+async function heartbeat(status: BeatStatus, detail: Record<string, unknown> = {}): Promise<void> {
+  await kvSet(HEARTBEAT_KEY, { at: Date.now(), status, ...detail }, HEARTBEAT_TTL_S);
+}
+
+/** Error text can quote a KV key, and those keys carry the owner's wallet. */
+function redactWallets(s: string): string {
+  return s.replace(/0x[a-fA-F0-9]{40}/g, "0x…").slice(0, 300);
+}
 
 function isAuthorized(req: NextRequest): boolean {
   if (!CRON_SECRET) return process.env.NODE_ENV !== "production";
@@ -175,6 +198,7 @@ interface TickSummary {
   paused:  number;
   owners:  number;
   skipped: number;   // owners whose record could not be read this cycle
+  deferred: number;  // due runs left due because their window could not be claimed
 }
 
 /**
@@ -202,7 +226,7 @@ async function patchTask(
 }
 
 async function tick(now: number): Promise<TickSummary & { nextAt: number | null }> {
-  const summary: TickSummary = { ran: 0, failed: 0, paused: 0, owners: 0, skipped: 0 };
+  const summary: TickSummary = { ran: 0, failed: 0, paused: 0, owners: 0, skipped: 0, deferred: 0 };
 
   const owners = await listOwners();
   summary.owners = owners.length;
@@ -227,7 +251,14 @@ async function tick(now: number): Promise<TickSummary & { nextAt: number | null 
     if (read.status === "empty") {
       // In the owners set with no record: a half-finished un-enrol, or a wiped
       // key. Drop the membership so it stops costing a read every pass.
-      await unenroll(wallet);
+      // Best effort: `unenroll` throws on a KV failure (so the user-facing
+      // DELETE can report it), but here a failure only means the same cleanup
+      // is tried next pass — it must not abort every other owner's runs.
+      try {
+        await unenroll(wallet);
+      } catch (e) {
+        console.error(`[cron:user-tasks] stale owner not removed: ${(e as Error).message}`);
+      }
       continue;
     }
 
@@ -259,7 +290,20 @@ async function tick(now: number): Promise<TickSummary & { nextAt: number | null 
       if (!live || !live.active || !Number.isFinite(live.nextAt) || live.nextAt > now) continue;
 
       // One run per window, even across a crash between charging and saving.
-      if (!(await kvSetNX(ranKey(wallet, live.id, live.nextAt), Date.now(), RAN_TTL_S))) {
+      // `kvTryLock`, not `kvSetNX`: the boolean folds "the marker exists" and
+      // "the KV command failed" into one `false`, and treating a blip as "already
+      // ran" advanced `nextAt` past a window that never ran, with no lastError —
+      // the run vanished without a trace. Only `held` is evidence of a run.
+      const claim = await kvTryLock(ranKey(wallet, live.id, live.nextAt), Date.now(), RAN_TTL_S);
+      if (claim === "error") {
+        // We learned nothing. Do NOT run (no marker would stop a second charge)
+        // and do NOT advance (it may never have run). Leave it due and come
+        // back next tick to claim again.
+        summary.deferred++;
+        soonest = soonest === null ? now + 60_000 : Math.min(soonest, now + 60_000);
+        continue;
+      }
+      if (claim === "held") {
         // Already ran (or is running) for this window — only advance it.
         const windowAt = live.nextAt;
         await patchTask(wallet, live.id, (t) => {
@@ -338,12 +382,15 @@ export async function GET(req: NextRequest) {
     // task at most 5 minutes of lateness, and guessing "probably due" would run
     // a full owner scan on every throttled tick — exactly the load that caused
     // the throttle.
+    await heartbeat("skipped", { reason: "watermark unavailable" });
     return NextResponse.json({ status: "skipped", reason: "watermark unavailable" }, { status: 200 });
   }
   if (mark.status === "unset") {
+    await heartbeat("idle", { reason: "no schedules" });
     return NextResponse.json({ status: "idle", reason: "no schedules" });
   }
   if (mark.at > now) {
+    await heartbeat("idle", { nextAt: mark.at });
     return NextResponse.json({ status: "idle", nextAt: mark.at });
   }
 
@@ -352,12 +399,13 @@ export async function GET(req: NextRequest) {
   //    double-charging a task, so both decline.
   const lock = await kvTryLock(LOCK_KEY, { at: now }, LOCK_TTL_S);
   if (lock !== "acquired") {
+    await heartbeat("skipped", { reason: `lock ${lock}` });
     return NextResponse.json({ status: "skipped", reason: `lock ${lock}` }, { status: 200 });
   }
 
   try {
     const result = await tick(now);
-    await kvSet(HEARTBEAT_KEY, { at: Date.now(), status: "ok", ...result }, 7 * 24 * 3600);
+    await heartbeat("ok", { ...result });
 
     // 3. Move the wake-up to the next real deadline. `writeWatermark` clamps it
     //    to at most an hour out, so even a wrong answer here self-corrects.
@@ -367,6 +415,7 @@ export async function GET(req: NextRequest) {
   } catch (e) {
     // Leave the watermark in the past so the next tick retries rather than
     // sleeping on a half-finished pass.
+    await heartbeat("error", { reason: redactWallets((e as Error).message) });
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   } finally {
     await kvDel(LOCK_KEY);

@@ -20,6 +20,7 @@ import { enabledConnectorsForChat } from "./connectors";
 import { resolvePresetDispatch, VIRTUALS_PRESETS_V1 } from "./components/presets";
 import { useWorkspaceSync, WORKSPACE_HYDRATED_EVENT, type UseWorkspaceSync } from "./workspace-sync";
 import { useScheduleSync, type UseScheduleSync } from "./use-schedule-sync";
+import { patchById } from "./schedule-merge";
 import { useSiweSignIn } from "./use-siwe-signin";
 import { useEnsureSession, invalidateSessionCache } from "@/hooks/useEnsureSession";
 import {
@@ -364,9 +365,19 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setCreonsState(loaded);
   }, [walletAddr]);
 
-  const setCrons = useCallback((cs: CronTask[]) => {
-    setCreonsState(cs);
-    saveCrons(cs, walletAddr);
+  // The ONE way the task list changes: a functional update against the list as
+  // it is NOW, persisted in the same step. Never `crons.map(…)` over the list a
+  // render closed over — a loop of those keeps only its last patch, and a
+  // "Run now" that waits 100 s would write the click-time list back over a
+  // delete made meanwhile (see schedule-merge.ts for both, and what they cost).
+  // Returning `prev` unchanged skips the write.
+  const mutateCrons = useCallback((fn: (prev: CronTask[]) => CronTask[]) => {
+    setCreonsState(prev => {
+      const next = fn(prev);
+      if (next === prev) return prev;
+      saveCrons(next, walletAddr);
+      return next;
+    });
   }, [walletAddr]);
 
   // ── Cross-device sync ─────────────────────────────────────────────────────
@@ -409,16 +420,18 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       // silently re-price a standing task. See CronTask.tier.
       tier: c.tier ?? chatTier,
     };
-    setCrons([...crons, newCron]);
-  }, [crons, chatTier]); // eslint-disable-line react-hooks/exhaustive-deps
+    mutateCrons(prev => [...prev, newCron]);
+  }, [mutateCrons, chatTier]);
 
+  // A patch for a task that no longer exists is dropped, not re-applied — so a
+  // run finishing after its task was deleted cannot bring it back.
   const updateCron = useCallback((id: string, patch: Partial<CronTask>) => {
-    setCrons(crons.map(c => c.id === id ? { ...c, ...patch } : c));
-  }, [crons]); // eslint-disable-line react-hooks/exhaustive-deps
+    mutateCrons(prev => patchById(prev, id, patch));
+  }, [mutateCrons]);
 
   const deleteCron = useCallback((id: string) => {
-    setCrons(crons.filter(c => c.id !== id));
-  }, [crons]); // eslint-disable-line react-hooks/exhaustive-deps
+    mutateCrons(prev => (prev.some(c => c.id === id) ? prev.filter(c => c.id !== id) : prev));
+  }, [mutateCrons]);
 
   // `interactive` is false for the on-load auto-run below: work nobody clicked
   // must not pop a signature request, so without a session it records why it
@@ -427,12 +440,22 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     const cron = crons.find(c => c.id === id);
     if (!cron) return;
     setCronRunning(id);
+    // Whether /api/cron/run was actually called. Only then is there a run to
+    // record: stamping `lastRun` on a run that was never attempted showed
+    // "Ran <time>" for nothing and, through `isDue`, skipped the task for a
+    // whole day or week — a user who signed in a minute later lost the run.
+    let dispatched = false;
     try {
       if (!walletAddr) throw new Error("Connect a wallet to run a task — a run is billed like a chat message.");
       // cron/run bills the SIGNED-IN wallet (2026-09-30), so sign in first.
       if (!interactive && !(await hasSession(walletAddr))) {
         throw new Error("Not run — sign in with your wallet (Run now) so tasks can bill it.");
       }
+      // Get the signature (if one is needed) BEFORE counting the run as sent, so
+      // a refused prompt is recorded as "not run". Cached, so fetchWithSession's
+      // own check below costs nothing.
+      if (interactive) await ensureSession(walletAddr);
+      dispatched = true;
       const res = await fetchWithSession(walletAddr, "/api/cron/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -473,11 +496,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         lastError:  data.result ? undefined : (data.error ?? "The model returned nothing."),
       });
     } catch (e) {
-      updateCron(id, { lastRun: Date.now(), lastError: (e as Error).message || "Error running task" });
+      // A dispatched run that then failed (timeout, bad JSON) may still have
+      // been charged, so it counts as a run — the auto-run must not fire it
+      // again. One that never left the browser records only why.
+      updateCron(id, {
+        ...(dispatched ? { lastRun: Date.now() } : {}),
+        lastError: (e as Error).message || "Error running task",
+      });
     } finally {
       setCronRunning(null);
     }
-  }, [crons, chatTier, walletAddr, hasSession, fetchWithSession]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [crons, chatTier, walletAddr, hasSession, ensureSession, fetchWithSession, updateCron]);
 
   // Auto-run due crons — once, after wallet detection settles.
   //
@@ -500,18 +529,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, [walletReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Keep the server's copy of the background tasks in step with this one, and
-  // adopt whatever the tick did while the tab was closed.
-  // A task the server runs but this browser has never seen (another device, or
-  // cleared storage) is added here so it can be seen and switched off (L4).
-  const adoptCron = useCallback((task: CronTask) => {
-    setCreonsState(prev => {
-      if (prev.some(c => c.id === task.id)) return prev;
-      const next = [...prev, task];
-      saveCrons(next, walletAddr);
-      return next;
-    });
-  }, [walletAddr]);
-  const schedule = useScheduleSync(walletAddr, crons, updateCron, signIn, adoptCron);
+  // adopt whatever the tick did while the tab was closed — including tasks the
+  // server runs that this browser has never seen (another device, or cleared
+  // storage), so they can be seen and switched off (L4). It writes through
+  // `mutateCrons` so a whole pull lands as one update.
+  const schedule = useScheduleSync(walletAddr, crons, mutateCrons, signIn);
 
   // ── Chat state ─────────────────────────────────────────────────────────────
   const [streaming,    setStreaming]    = useState(false);

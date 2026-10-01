@@ -323,6 +323,21 @@ export async function kvSetOrThrow(key: string, value: unknown, ttlSeconds?: num
 }
 
 /**
+ * The same contract for removal. `kvDel` / `kvSRem` swallow, which is right for
+ * a cache eviction and wrong when the removal IS the user's instruction — "stop
+ * running my background tasks" (`unenroll` in lib/scheduled-tasks.ts) must not
+ * answer "done" while the owner record and its `crons:owners` membership are
+ * still there for the next tick to read and bill.
+ */
+export async function kvDelOrThrow(...keys: string[]): Promise<void> {
+  await kv.del(...keys);
+}
+export async function kvSRemOrThrow(key: string, ...members: string[]): Promise<void> {
+  if (members.length === 0) return;
+  await kv.srem(key, ...members);
+}
+
+/**
  * Outcome of an atomic SET-NX. Distinguishes the two cases `kvSetNX` collapses
  * into `false`:
  *   • acquired — the key was free, we own it until the TTL expires

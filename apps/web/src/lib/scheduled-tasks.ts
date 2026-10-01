@@ -46,8 +46,8 @@
  */
 
 import {
-  kvGetProbe, kvSetOrThrow, kvDel,
-  kvSAdd, kvSRem, kvSMembers,
+  kvGetProbe, kvSetOrThrow, kvDelOrThrow,
+  kvSAdd, kvSRemOrThrow, kvSMembers,
 } from "@/lib/kv";
 import { nextFireAt, normalizeTz, parseHHMM, type Cadence } from "@/lib/cron-schedule";
 
@@ -242,10 +242,21 @@ export async function putSchedule(wallet: string, tasks: ScheduledTask[]): Promi
  * Leave the background scheduler. Deletes the SERVER copy only — the browser
  * keeps its tasks, exactly as turning off workspace sync keeps conversations.
  * Nothing a user turns off should cost them data.
+ *
+ * THROWS if either write fails. This used to go through `kvSRem`/`kvDel`, which
+ * log and return, so DELETE /api/chat/schedule answered `deleted` during a KV
+ * throttle while the record and the owners membership survived — the client
+ * then switched every task to "on open" and stopped retrying, and the tick kept
+ * running (and billing) them. A caller that only wants best-effort cleanup
+ * catches; the route turns it into a 503 so the browser keeps its switches.
+ *
+ * SREM first: once the wallet is out of `crons:owners` the tick no longer reads
+ * it, so a failure on the DEL that follows still leaves nothing running — and a
+ * retry is safe, both commands are idempotent.
  */
 export async function unenroll(wallet: string): Promise<void> {
-  await kvSRem(OWNERS_KEY, wallet.toLowerCase());
-  await kvDel(ownerKey(wallet));
+  await kvSRemOrThrow(OWNERS_KEY, wallet.toLowerCase());
+  await kvDelOrThrow(ownerKey(wallet));
 }
 
 // ─── Watermark ───────────────────────────────────────────────────────────────

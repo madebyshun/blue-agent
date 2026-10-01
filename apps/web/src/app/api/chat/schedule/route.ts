@@ -18,6 +18,17 @@
  * That is also why enabling background runs is the one Blue Chat feature that
  * requires a signature. It is a real cost to the user and it is worth it.
  *
+ * ── …and it must be the wallet the browser is connected as ──────────────────
+ * The client sends `?address=<connected wallet>` on every verb. It is NEVER
+ * used as the owner — only compared with the session, as `lib/acting-wallet.ts`
+ * does for every other route that charges a wallet. A different wallet is a
+ * 401 `wallet_mismatch`. Without it, a user who signed in as A and then switched
+ * the extension to B had B's local tasks PUT into `crons:w:A` (overwriting A's,
+ * and billing B's prompts to A), and A's tasks pulled into B's browser — which
+ * uploaded them under B on its next sign-in, so they ran on both wallets.
+ * A missing `address` is accepted (the same rule as `resolveActingWallet`): a
+ * tab loaded before this check shipped keeps working until it reloads.
+ *
  * ── What the client may decide, and what it may not ──────────────────────────
  * It may decide label / schedule / time / tz / prompt / tier / active. It may
  * NOT decide `nextAt`, `lastRun`, `lastResult` or `pausedReason` — those are the
@@ -34,6 +45,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
 import { readSession } from "@/lib/session";
+import { normalizeWallet, actingWalletRefusal } from "@/lib/acting-wallet";
 import {
   readOwnerTasks,
   putSchedule,
@@ -47,7 +59,12 @@ export const runtime = "nodejs";
 
 const NO_STORE = { "Cache-Control": "no-store" } as const;
 
-/** Resolve the caller, or the response to return instead. Three-way, on purpose. */
+/**
+ * Resolve the caller, or the response to return instead. Three-way, on purpose,
+ * plus the claimed-wallet comparison described in the header. Deliberately NOT
+ * `resolveActingWallet`: that also accepts the internal service key, and no
+ * background job has any business rewriting a user's standing instructions.
+ */
 async function requireWallet(req: NextRequest): Promise<{ wallet: string } | { res: NextResponse }> {
   const session = await readSession(req);
   if (session.status === "unavailable") {
@@ -61,6 +78,12 @@ async function requireWallet(req: NextRequest): Promise<{ wallet: string } | { r
       { error: "Sign in with your wallet to run tasks in the background." },
       { status: 401, headers: NO_STORE },
     ) };
+  }
+  const claimed = normalizeWallet(new URL(req.url).searchParams.get("address"));
+  if (claimed && claimed !== session.wallet.toLowerCase()) {
+    const refusal = actingWalletRefusal({ status: "mismatch", sessionWallet: session.wallet });
+    refusal.headers.set("Cache-Control", "no-store");
+    return { res: refusal };
   }
   return { wallet: session.wallet };
 }
@@ -143,11 +166,14 @@ export async function PUT(req: NextRequest) {
   const tasks = sanitizeTasks(body.tasks, previous);
   const dropped = body.tasks.length - tasks.length;
 
+  // An empty list goes through `unenroll`, which throws on a failed SREM/DEL —
+  // so "stop them all" can no longer report ok while the tick keeps the tasks.
+  // The client does not record the fingerprint on a non-2xx, so it retries.
   try {
     await putSchedule(auth.wallet, tasks);
   } catch (e) {
     return NextResponse.json(
-      { error: "Save failed — nothing was changed.", detail: (e as Error).message },
+      { error: "Save failed — your schedule may not have changed. Try again.", detail: (e as Error).message },
       { status: 503, headers: NO_STORE },
     );
   }
@@ -176,6 +202,16 @@ export async function DELETE(req: NextRequest) {
   const auth = await requireWallet(req);
   if ("res" in auth) return auth.res;
 
-  await unenroll(auth.wallet);
+  // `deleted` only when it is true. The client flips every local switch to
+  // "on open" and stops retrying on a 2xx, so a 200 over a failed SREM/DEL
+  // would leave the tick running — and billing — tasks the UI calls off.
+  try {
+    await unenroll(auth.wallet);
+  } catch (e) {
+    return NextResponse.json(
+      { error: "Couldn't stop your background tasks — the scheduler may still run them. Try again.", detail: (e as Error).message },
+      { status: 503, headers: NO_STORE },
+    );
+  }
   return NextResponse.json({ status: "deleted" }, { headers: NO_STORE });
 }

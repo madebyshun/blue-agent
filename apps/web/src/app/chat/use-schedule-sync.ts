@@ -27,10 +27,26 @@
  * Same rule as `/api/workspace`: on "could not check", do nothing. Rendering
  * "no scheduled tasks" during a KV throttle is how a user re-creates tasks that
  * already exist and gets billed for both.
+ *
+ * ── Only as the CONNECTED wallet ─────────────────────────────────────────────
+ * Every request carries `?address=<walletAddr>`, which the route compares with
+ * the session (401 `wallet_mismatch` on a difference), and neither the pull nor
+ * the push starts without `hasSession(walletAddr)`. A session left over from a
+ * different wallet used to be enough: B's tasks were uploaded under A, and A's
+ * were adopted into B's browser.
+ *
+ * ── Every list change is ONE functional update ───────────────────────────────
+ * `mutateCrons(prev => …)` with the pure helpers in `schedule-merge.ts`, never
+ * a loop of per-task patches over the `crons` this render saw — see that file's
+ * header for the two ways the loop lost writes and re-enrolled tasks.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { CronTask, CronSchedule } from "./types";
+import type { CronTask } from "./types";
 import { isBackground } from "./storage";
+import {
+  applyServerPull, applyServerNextAt, patchById, switchAllToForeground,
+  FOREGROUND_PATCH, type ServerTask,
+} from "./schedule-merge";
 import { useEnsureSession } from "@/hooks/useEnsureSession";
 
 export type ScheduleState =
@@ -59,23 +75,6 @@ export interface UseScheduleSync {
   disableAll: () => Promise<void>;
 }
 
-/** A task as a GET returns it: the client-owned fields plus the server-owned ones. */
-interface ServerTask {
-  id:            string;
-  label?:        string;
-  schedule?:     string;
-  time?:         string;
-  tz?:           string;
-  prompt?:       string;
-  tier?:         string;
-  active?:       boolean;
-  nextAt?:       number;
-  lastRun?:      number;
-  lastResult?:   string;
-  lastError?:    string;
-  pausedReason?: string;
-}
-
 /** Only what the server needs. Everything else stays in the browser. */
 function toPayload(c: CronTask) {
   return {
@@ -98,10 +97,9 @@ function fingerprint(s: string): string {
 export function useScheduleSync(
   walletAddr: string | undefined,
   crons: CronTask[],
-  patchCron: (id: string, patch: Partial<CronTask>) => void,
+  /** Apply `fn` to the CURRENT list (a functional update that also persists). */
+  mutateCrons: (fn: (prev: CronTask[]) => CronTask[]) => void,
   signIn: () => Promise<string>,
-  /** Add a task the SERVER runs but this browser has never seen (L4). */
-  adoptCron: (task: CronTask) => void,
 ): UseScheduleSync {
   const [state, setState] = useState<ScheduleState>({ phase: "off" });
   const { hasSession } = useEnsureSession();
@@ -111,6 +109,11 @@ export function useScheduleSync(
 
   const background = crons.filter(isBackground);
   const payload    = JSON.stringify(background.map(toPayload));
+  // The connected wallet, for the route to compare with the session. Never the
+  // owner — the route takes that from the session cookie only.
+  const scheduleUrl = walletAddr
+    ? `/api/chat/schedule?address=${encodeURIComponent(walletAddr)}`
+    : "/api/chat/schedule";
 
   // ── Pull: adopt whatever the scheduler did while we were away ──────────────
   //
@@ -123,16 +126,23 @@ export function useScheduleSync(
   // before localStorage was cleared, kept running and charging with no way to
   // see or stop them here. Without a session there is nothing to ask — and no
   // prompt is shown on open.
+  //
+  // The session must be THIS wallet's whether or not background tasks exist
+  // locally: with one present this used to GET under whatever session the
+  // cookie held, and adopt that other wallet's tasks into this wallet's list.
   useEffect(() => {
     if (!walletAddr) return;
     if (pulled.current === walletAddr) return;
 
     let cancelled = false;
     void (async () => {
-      if (background.length === 0 && !(await hasSession(walletAddr))) return;
+      if (!(await hasSession(walletAddr))) {
+        if (!cancelled && background.length > 0) setState({ phase: "signed-out" });
+        return;
+      }
       if (cancelled) return;
       pulled.current = walletAddr;
-      return fetch("/api/chat/schedule", { cache: "no-store" })
+      return fetch(scheduleUrl, { cache: "no-store" })
       .then(async r => ({ status: r.status, body: await r.json().catch(() => ({})) }))
       .then(({ status, body }) => {
         if (cancelled) return;
@@ -144,47 +154,11 @@ export function useScheduleSync(
           return;
         }
         const tasks = Array.isArray(body?.tasks) ? (body.tasks as ServerTask[]) : [];
-        const localIds = new Set(crons.map(c => c.id));
-        for (const t of tasks) {
-          if (!t?.id) continue;
-          if (!localIds.has(t.id) && typeof t.prompt === "string") {
-            // Server-only: show it, marked background, so it can be seen and
-            // switched off from here.
-            adoptCron({
-              id: t.id,
-              label: t.label ?? "Scheduled task",
-              schedule: (t.schedule === "weekly" ? "weekly" : "daily") as CronSchedule,
-              time: t.time ?? "09:00",
-              tz: t.tz,
-              prompt: t.prompt,
-              tier: t.tier,
-              active: t.pausedReason ? false : t.active !== false,
-              background: true,
-              nextAt: t.nextAt,
-              lastRun: t.lastRun,
-              lastResult: t.lastResult,
-              lastError: t.lastError,
-              pausedReason: t.pausedReason,
-            });
-            continue;
-          }
-          const patch: Partial<CronTask> = {
-            nextAt:     t.nextAt,
-            lastRun:    t.lastRun,
-            lastResult: t.lastResult,
-            lastError:  t.lastError,
-          };
-          // A pause is a fact about a run that already happened, so it wins over
-          // the local `active`. A bare `active:false` is not — it may simply be
-          // an older copy of a task the user re-enabled on this device.
-          if (t.pausedReason) {
-            patch.pausedReason = t.pausedReason;
-            patch.active = false;
-          } else {
-            patch.pausedReason = undefined;
-          }
-          patchCron(t.id, patch);
-        }
+        // Every patch and every adoption in ONE update, against the list as it
+        // is now. A pause wins over the local `active`; a bare `active:false`
+        // does not; server-only tasks are adopted as background so they can be
+        // seen and switched off here. See `applyServerPull`.
+        if (tasks.length > 0) mutateCrons(prev => applyServerPull(prev, tasks));
         setState({ phase: "idle", at: Date.now() });
       })
       .catch(() => {
@@ -212,31 +186,40 @@ export function useScheduleSync(
 
     let cancelled = false;
     setState({ phase: "syncing" });
-    fetch("/api/chat/schedule", {
-      method:  "PUT",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ tasks: JSON.parse(payload) }),
-    })
-      .then(async r => ({ status: r.status, body: await r.json().catch(() => ({})) }))
-      .then(({ status, body }) => {
-        if (cancelled) return;
-        if (status === 401) { setState({ phase: "signed-out" }); return; }
-        if (!(status >= 200 && status < 300)) {
-          // Do NOT record the fingerprint — the next change retries.
-          setState({ phase: "error", message: body?.error ?? "Couldn't save your schedule." });
-          return;
-        }
-        lastSent.current = fp;
-        // Adopt the server's `nextAt`, so the panel shows the instant the cron
-        // will actually use rather than one the browser computed separately.
-        for (const t of (body?.tasks ?? []) as ServerTask[]) {
-          if (t?.id && typeof t.nextAt === "number") patchCron(t.id, { nextAt: t.nextAt });
-        }
-        setState(background.length === 0 ? { phase: "off" } : { phase: "idle", at: Date.now() });
+    void (async () => {
+      // Same gate as the pull: never upload this wallet's tasks under a session
+      // that belongs to another one. The route refuses a mismatch too; this
+      // just doesn't send the request. The fingerprint is not recorded, so the
+      // next change after signing in retries.
+      if (!(await hasSession(walletAddr))) {
+        if (!cancelled) setState({ phase: "signed-out" });
+        return;
+      }
+      if (cancelled) return;
+      return fetch(scheduleUrl, {
+        method:  "PUT",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ tasks: JSON.parse(payload) }),
       })
-      .catch(() => {
-        if (!cancelled) setState({ phase: "error", message: "Couldn't reach the scheduler." });
-      });
+        .then(async r => ({ status: r.status, body: await r.json().catch(() => ({})) }))
+        .then(({ status, body }) => {
+          if (cancelled) return;
+          if (status === 401) { setState({ phase: "signed-out" }); return; }
+          if (!(status >= 200 && status < 300)) {
+            // Do NOT record the fingerprint — the next change retries.
+            setState({ phase: "error", message: body?.error ?? "Couldn't save your schedule." });
+            return;
+          }
+          lastSent.current = fp;
+          // Adopt the server's `nextAt`, so the panel shows the instant the cron
+          // will actually use rather than one the browser computed separately.
+          const saved = Array.isArray(body?.tasks) ? (body.tasks as ServerTask[]) : [];
+          if (saved.length > 0) mutateCrons(prev => applyServerNextAt(prev, saved));
+          setState(background.length === 0 ? { phase: "off" } : { phase: "idle", at: Date.now() });
+        });
+    })().catch(() => {
+      if (!cancelled) setState({ phase: "error", message: "Couldn't reach the scheduler." });
+    });
     return () => { cancelled = true; };
   }, [walletAddr, payload]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -257,33 +240,39 @@ export function useScheduleSync(
       }
     }
     pulled.current = null;   // let the next pull adopt this task's run history
-    patchCron(id, { background: true });
-  }, [walletAddr, state.phase, signIn, patchCron]);
+    mutateCrons(prev => patchById(prev, id, { background: true }));
+  }, [walletAddr, state.phase, signIn, mutateCrons]);
 
   const disable = useCallback(async (id: string) => {
     // Clears the server-owned fields too: leaving a stale `nextAt` behind would
     // make the card claim a firing time nothing is going to honour.
-    patchCron(id, { background: false, nextAt: undefined, pausedReason: undefined });
-  }, [patchCron]);
+    mutateCrons(prev => patchById(prev, id, FOREGROUND_PATCH));
+  }, [mutateCrons]);
 
   const disableAll = useCallback(async () => {
+    if (!walletAddr) {
+      setState({ phase: "error", message: "Connect a wallet to manage background tasks." });
+      return;
+    }
     // DELETE first: it stops tasks this browser cannot see, which the per-task
     // switch never could. Only on success are the local switches flipped, so
-    // the UI never claims "all off" while the server is still running them.
+    // the UI never claims "all off" while the server is still running them —
+    // and the route now answers 503, not 200, when the KV delete did not land.
     try {
-      const r = await fetch("/api/chat/schedule", { method: "DELETE" });
+      const r = await fetch(scheduleUrl, { method: "DELETE" });
       if (r.status === 401) { setState({ phase: "signed-out" }); return; }
       if (!r.ok) { setState({ phase: "error", message: "Couldn't stop the background tasks — try again." }); return; }
     } catch {
       setState({ phase: "error", message: "Couldn't reach the scheduler." });
       return;
     }
-    for (const c of crons) {
-      if (isBackground(c)) patchCron(c.id, { background: false, nextAt: undefined, pausedReason: undefined });
-    }
+    // Every background task in ONE update, so the payload this produces is
+    // "[]" by construction and the push effect has nothing to re-upload. (A
+    // per-task loop kept only its last patch and PUT the rest straight back.)
+    mutateCrons(switchAllToForeground);
     lastSent.current = fingerprint("[]");
     setState({ phase: "off" });
-  }, [crons, patchCron]);
+  }, [walletAddr, scheduleUrl, mutateCrons]);
 
   return { state, count: background.length, enable, disable, disableAll };
 }
