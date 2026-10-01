@@ -133,7 +133,7 @@ const FREE_DAILY = 500; // WALLET_DAILY (credits.ts) — free credits per wallet
 // No id from lib/tool-halts.ts: a halted tool refuses every call, so listing it
 // here sells something the Hub will not run (pinned by token-pick-facts-test).
 const HUB_CATEGORIES = [
-  { label: "RH RWA",       tools: "rh-stock-arb · rh-stock-movers · rh-stock-swap · rh-rwa-verify" },
+  { label: "RH RWA",       tools: "rh-stock-quote · rh-stock-movers · rh-stock-swap · rh-rwa-verify" },
   { label: "On-chain",     tools: "token price · pool scan · gas tracker · bridge route" },
   { label: "Security",     tools: "honeypot · risk gate · scam detector · scam-clone check" },
   { label: "Intelligence", tools: "base alpha · narrative pulse · protocol health" },
@@ -899,10 +899,10 @@ export default function Home() {
                 <span className="font-mono text-[11px] text-slate-600 ml-2">terminal</span>
               </div>
               <pre className="p-4 sm:p-5 overflow-x-auto font-mono text-[12px] leading-relaxed m-0">
-<span className="text-slate-600">$ </span><span className="text-[#4FC3F7]">curl</span><span className="text-slate-300"> https://blueagent.dev/api/x402/rh-stock-arb \</span>
+<span className="text-slate-600">$ </span><span className="text-[#4FC3F7]">curl</span><span className="text-slate-300"> https://blueagent.dev/api/x402/rh-stock-quote \</span>
 {"\n"}<span className="text-slate-500">    -d </span><span className="text-slate-300">{'\'{"ticker":"NVDA"}\''}</span>
-{"\n"}<span className="text-slate-500">→ </span><span className="text-slate-300">{'{"verdict":"ALIGNED","oracle":208.37,"dex":210.38,"drift":0.97,...}'}</span>
-{"\n"}<span className="text-slate-600">Charged: </span><span className="text-[#4FC3F7]">$0.05 USDC · Base</span>
+{"\n"}<span className="text-slate-500">→ </span><span className="text-slate-300">{'{"ticker":"NVDA","price_usd":230.55,"source":"chainlink","is_stale":false,...}'}</span>
+{"\n"}<span className="text-slate-600">Charged: </span><span className="text-[#4FC3F7]">$0.03 USDC · Base</span>
               </pre>
             </div>
           </Reveal>
@@ -910,7 +910,7 @@ export default function Home() {
             <Reveal>
               <div className="ba-card h-full rounded-2xl p-6 flex flex-col">
                 <div className="flex flex-wrap gap-1.5 mb-4">
-                  {["Self-hosted x402", "EIP-3009", "Coinbase CDP facilitator", "USDC · Base 8453", "from $0.05 / call"].map((f) => (
+                  {["Self-hosted x402", "EIP-3009", "Coinbase CDP facilitator", "USDC · Base 8453", "pay per call"].map((f) => (
                     <span key={f} className="font-mono text-[10px] ln-accent border border-[#4FC3F7]/25 bg-[#4FC3F7]/5 rounded px-2 py-1">{f}</span>
                   ))}
                 </div>
