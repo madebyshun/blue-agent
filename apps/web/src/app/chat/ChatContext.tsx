@@ -559,11 +559,26 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // Fired price alerts → the "🔔 Price alerts" conversation (use-price-alerts).
   // Appended through the functional updater so a sync landing mid-stream
   // cannot overwrite the message being written in another conversation.
+  //  • Deduplicated by alert id INSIDE the updater: another tab or device may
+  //    already have copied the same alert into this (synced) conversation.
+  //  • While a reply streams into THIS conversation its placeholder is the
+  //    last message, and every stream updater writes to msgs[length-1] — so
+  //    alerts go in before it, never after (review 2026-10-01).
+  const streamingRef = useRef(false);
+  const activeTaskRef = useRef<string | null>(null);
   const appendToAlertsTask = useCallback((wallet: string, msgs: Message[]) => {
     setTasksState((prev) => {
       const id = `${ALERTS_TASK_PREFIX}${wallet.toLowerCase()}`;
       const existing = prev.find((t) => t.id === id) ?? alertsTask(wallet, chatTier);
-      const updated = { ...existing, messages: [...existing.messages, ...msgs], updatedAt: Date.now() };
+      const have = new Set(existing.messages.map((m) => m.alertId).filter(Boolean));
+      const add = msgs.filter((m) => !m.alertId || !have.has(m.alertId));
+      if (add.length === 0) return prev;
+      const last = existing.messages[existing.messages.length - 1];
+      const streamingHere = streamingRef.current && activeTaskRef.current === id && last?.role === "assistant";
+      const messages = streamingHere
+        ? [...existing.messages.slice(0, -1), ...add, last]
+        : [...existing.messages, ...add];
+      const updated = { ...existing, messages, updatedAt: Date.now() };
       const next = [updated, ...prev.filter((t) => t.id !== id)];
       saveTasks(next, walletAddr);
       return next;
@@ -573,6 +588,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   // ── Chat state ─────────────────────────────────────────────────────────────
   const [streaming,    setStreaming]    = useState(false);
+  useEffect(() => { streamingRef.current = streaming; }, [streaming]);
+  useEffect(() => { activeTaskRef.current = activeTaskId; }, [activeTaskId]);
   const [error,        setError]       = useState<string | null>(null);
   const [input,        setInput]       = useState("");
   const [sidebarTab,   setSidebarTab]  = useState<SidebarTab>("none");

@@ -62,16 +62,18 @@ function ChatShell() {
   // "🔔 Price alerts" conversation, where a fired automation's trade card waits
   // for a signature. Waits for the wallet's conversations to load; the param
   // is dropped once it has been honoured.
+  // Consumed on the FIRST attempt after the wallet's conversations load,
+  // found or not — a param left waiting would yank the user into the alerts
+  // conversation hours later, mid-typing, when the next alert arrives.
   useEffect(() => {
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || !walletReady || tasks.length === 0) return;
     const url = new URL(window.location.href);
     if (url.searchParams.get("alerts") !== "1") return;
     const t = tasks.find((x) => x.id.startsWith(ALERTS_TASK_PREFIX) && x.messages.length > 0);
-    if (!t) return;
-    selectTask(t.id);
+    if (t) selectTask(t.id);
     url.searchParams.delete("alerts");
     window.history.replaceState({}, "", url.pathname + url.search);
-  }, [tasks, selectTask]);
+  }, [tasks, selectTask, walletReady]);
 
   // Register Blue Chat's sub-nav, recents and credit chip into the shell —
   // desktop sidebar and mobile drawer both read this. Re-runs when the

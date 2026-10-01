@@ -41,6 +41,9 @@ export interface InsufficientCreditsNotice {
 export interface Message {
   role:             "user" | "assistant";
   content:          string;
+  /** Set on a message copied from a fired price alert — the alert's own id, so
+   *  the same alert is never appended twice (another tab, another device). */
+  alertId?:         string;
   createdAt?:       number;   // epoch ms — for timestamp display
   thinkingContent?: string;   // Venice reasoning trace (inside <think>…</think>)
   isThinking?:      boolean;  // true while the <think> block is still streaming

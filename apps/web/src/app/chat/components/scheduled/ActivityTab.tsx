@@ -5,9 +5,10 @@
  * source its number came from. A source the server could not read is named
  * above the list — never shown as "nothing happened".
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useEnsureSession } from "@/hooks/useEnsureSession";
+import { useEnsureSession, useSessionEpoch, invalidateSessionCache } from "@/hooks/useEnsureSession";
+import { sessionFetch } from "@/lib/session-client";
 import type { ActivityItem } from "@/lib/activity";
 import { C, ChainBadge } from "./ui";
 
@@ -38,27 +39,42 @@ function day(at: number): string {
 }
 
 export default function ActivityTab({ walletAddr }: { walletAddr?: string | null }) {
-  const { hasSession, ensureSession, fetchWithSession } = useEnsureSession();
+  const { ensureSession } = useEnsureSession();
+  const epoch = useSessionEpoch();
   const [st, setSt] = useState<State>({ s: "loading" });
   const [filter, setFilter] = useState<(typeof FILTERS)[number]["id"]>("all");
+  const [signErr, setSignErr] = useState<string | null>(null);
+  const current = useRef(walletAddr);
+  current.current = walletAddr;
 
-  const load = useCallback(async (interactive = false) => {
-    if (!walletAddr) { setSt({ s: "no-wallet" }); return; }
-    if (!interactive && !(await hasSession(walletAddr))) { setSt({ s: "signed-out" }); return; }
+  // Background read: plain sessionFetch, a 401 is "signed out" — never a
+  // signature prompt nobody clicked. Answers for a wallet that is no longer
+  // the connected one are dropped (review 2026-10-01).
+  const load = useCallback(async () => {
+    const asked = walletAddr;
+    if (!asked) { setSt({ s: "no-wallet" }); return; }
     try {
-      const r = await fetchWithSession(walletAddr, `/api/timeline?address=${walletAddr}`, { cache: "no-store" });
+      const r = await sessionFetch(`/api/timeline?address=${asked}`, { cache: "no-store" });
+      if (current.current !== asked) return;
+      if (r.status === 401) { invalidateSessionCache(); setSt({ s: "signed-out" }); return; }
       const j = await r.json().catch(() => ({}));
+      if (current.current !== asked) return;
       if (!r.ok) { setSt({ s: "error", msg: j.error ?? `HTTP ${r.status}` }); return; }
       setSt({ s: "ok", items: j.items ?? [], unavailable: j.unavailable ?? [] });
-    } catch (e) { setSt({ s: "error", msg: (e as Error).message.slice(0, 120) }); }
-  }, [walletAddr, hasSession, fetchWithSession]);
-  useEffect(() => { void load(false); }, [load]);
+    } catch (e) { if (current.current === asked) setSt({ s: "error", msg: (e as Error).message.slice(0, 120) }); }
+  }, [walletAddr]);
+  useEffect(() => { void load(); }, [load, epoch]);
 
   if (st.s === "no-wallet") return <Note>Connect your wallet to see its activity.</Note>;
   if (st.s === "signed-out") return (
     <Note>
       Activity is private to your wallet.{" "}
-      <button className="underline text-[#4FC3F7]" onClick={async () => { if (walletAddr) { await ensureSession(walletAddr); await load(true); } }}>Sign in</button> to see it.
+      <button className="underline text-[#4FC3F7]" onClick={async () => {
+        if (!walletAddr) return;
+        try { await ensureSession(walletAddr); setSignErr(null); await load(); }
+        catch (e) { setSignErr((e as Error).message || "Sign-in was not completed."); }
+      }}>Sign in</button> to see it.
+      {signErr && <span className="block text-amber-400 mt-1">{signErr}</span>}
     </Note>
   );
   if (st.s === "loading") return <Note>Loading activity…</Note>;
@@ -82,7 +98,7 @@ export default function ActivityTab({ walletAddr }: { walletAddr?: string | null
             {f.label}
           </button>
         ))}
-        <button onClick={() => void load(true)} className="ml-auto font-mono text-[10px] text-[#64748B] hover:text-white">↻ Refresh</button>
+        <button onClick={() => void load()} className="ml-auto font-mono text-[10px] text-[#64748B] hover:text-white">↻ Refresh</button>
       </div>
       {st.unavailable.length > 0 && (
         <p className="font-mono text-[10px] text-amber-400 mb-3">Could not read: {st.unavailable.join(", ")} — those entries are missing below, not absent.</p>

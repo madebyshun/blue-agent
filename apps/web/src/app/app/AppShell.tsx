@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { usePolling } from "@/hooks/usePolling";
 import { sessionFetch } from "@/lib/session-client";
+import { useWallet } from "@/hooks/useWallet";
 import { AppChromeProvider, useAppChrome } from "./AppChrome";
 import LanguageToggle from "@/components/LanguageToggle";
 import AccountMenu from "@/components/AccountMenu";
@@ -62,15 +63,19 @@ const ALERTS_BADGE_POLL_MS = 60_000;
 
 function AlertsNavBadge() {
   const [n, setN] = useState<number | null>(null);
+  // The CONNECTED wallet's count: the server 401s a session for another
+  // wallet, which hides the badge, instead of showing that wallet's alerts.
+  const { address } = useWallet();
   const load = useCallback(async (signal: AbortSignal) => {
+    if (!address) { setN(null); return; }
     try {
-      const r = await sessionFetch("/api/watches?unread=1", { cache: "no-store", signal });
+      const r = await sessionFetch(`/api/watches?unread=1&address=${address}`, { cache: "no-store", signal });
       if (r.status === 401) { setN(null); return; }
       if (!r.ok) return;
       const body = (await r.json()) as { unread?: number };
       if (typeof body.unread === "number") setN(body.unread);
     } catch { /* keep the last count */ }
-  }, []);
+  }, [address]);
   usePolling(load, ALERTS_BADGE_POLL_MS);
   if (!n) return null;
   return (

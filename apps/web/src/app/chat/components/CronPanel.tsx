@@ -173,7 +173,7 @@ export default function CronPanel() {
   // stay lit until the next load, so what was new is still visible now.
   const unread = w.state.s === "ok" ? w.state.unread : 0;
   useEffect(() => {
-    if (tab === "alerts" && unread > 0) void w.markSeen();
+    if (tab === "alerts" && unread > 0 && w.state.s === "ok") void w.markSeen(w.state.alerts[0]?.at ?? 0);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, unread]);
 

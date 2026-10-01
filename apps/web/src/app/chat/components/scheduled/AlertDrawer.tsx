@@ -36,8 +36,10 @@ export default function AlertDrawer({ open, onClose, create }: {
   const n = Number(threshold);
   const direction = kind === "price" ? (dir === "up" ? "above" : "below") : dir;
   const tradeOk = onFire === "alert"
-    || (onFire === "buy" && Number(tradeAmt) > 0)
-    || (onFire === "sell" && ((QUANTITY_WORD_RE.test(tradeAmt.trim()) && wordToBps(tradeAmt.trim()) != null) || Number(tradeAmt) > 0));
+    || (onFire === "buy" && Number(tradeAmt.trim().replace(/^\$/, "")) >= 0.01)
+    // Same rule as the server's parseTrade: a quantity word, never over 100%.
+    || (onFire === "sell" && ((QUANTITY_WORD_RE.test(tradeAmt.trim()) && wordToBps(tradeAmt.trim()) != null
+          && !(tradeAmt.trim().endsWith("%") && parseFloat(tradeAmt) > 100)) || /^\d+(\.\d+)?$/.test(tradeAmt.trim()) && Number(tradeAmt) > 0));
   const trade: WatchTrade | undefined = onFire === "alert" ? undefined : { side: onFire, amount: tradeAmt.trim().replace(/^\$/, "") };
   const checkAt: WatchCheckAt | undefined = when === "scheduled" ? { schedule: sched, time } : undefined;
   const valid = token.trim().length > 0 && Number.isFinite(n) && n > 0 && (kind === "price" || (n >= 1 && n <= 1000)) && tradeOk;
@@ -67,13 +69,15 @@ export default function AlertDrawer({ open, onClose, create }: {
     <Drawer open={open} title="// NEW ALERT OR AUTOMATION" onClose={() => { setMsg(null); onClose(); }}>
       <form onSubmit={submit} className="space-y-4">
         <Field label="CHAIN">
-          <Segmented value={chain} onChange={setChain} options={[{ value: "base", label: "Base" }, { value: "robinhood", label: "Robinhood Chain" }]} />
+          {/* An address means nothing on the other chain (hard rule 2): a chain
+              switch clears a typed 0x… rather than carrying it across. */}
+          <Segmented value={chain} onChange={(c) => { setChain(c); if (/^0x/i.test(token.trim())) setToken(""); }} options={[{ value: "base", label: "Base" }, { value: "robinhood", label: "Robinhood Chain" }]} />
         </Field>
         <Field label="TOKEN" hint="0x address, stock ticker, or ETH / USDC">
           <input className={inputCls} value={token} onChange={(e) => setToken(e.target.value)} placeholder={chain === "base" ? "ETH · NVDA · 0x…" : "NVDA · TSLA · 0x…"} />
         </Field>
         <Field label="ALERT WHEN">
-          <Segmented value={kind} onChange={setKind} options={[{ value: "price", label: "Price crosses a level" }, { value: "change", label: "Moves by %" }]} />
+          <Segmented value={kind} onChange={(k) => { if (k !== kind) setThreshold(""); setKind(k); }} options={[{ value: "price", label: "Price crosses a level" }, { value: "change", label: "Moves by %" }]} />
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="DIRECTION">
@@ -81,7 +85,7 @@ export default function AlertDrawer({ open, onClose, create }: {
               ? [{ value: "up", label: "Above" }, { value: "down", label: "Below" }]
               : [{ value: "up", label: "Up" }, { value: "down", label: "Down" }]} />
           </Field>
-          <Field label={kind === "price" ? "LEVEL (USD)" : "MOVE (%)"}>
+          <Field label={kind === "price" ? "LEVEL (USD)" : "MOVE (%)"} hint={kind === "change" ? "1–1000" : undefined}>
             <input className={inputCls} inputMode="decimal" value={threshold} onChange={(e) => setThreshold(e.target.value.replace(/[^0-9.]/g, ""))} placeholder={kind === "price" ? "3000" : "20"} />
           </Field>
         </div>

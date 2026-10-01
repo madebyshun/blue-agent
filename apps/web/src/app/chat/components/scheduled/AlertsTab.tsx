@@ -4,6 +4,7 @@
  * the same live reading the 5-minute tick uses. Right: what fired. Every
  * number on a card names nothing it did not read — an unread price is "—".
  */
+import { useState } from "react";
 import Link from "next/link";
 import { describeRule, describeTrade, describeCheck, MAX_WATCHES_PER_WALLET, type Watch, type WatchAlert, type WatchReading } from "@/lib/watches/types";
 import type { useWatches } from "../../use-watches";
@@ -106,14 +107,16 @@ function AlertRow({ a, unread }: { a: WatchAlert; unread: boolean }) {
 
 export default function AlertsTab({ w, onNew }: { w: ReturnType<typeof useWatches>; onNew: () => void }) {
   const st = w.state;
+  const [signErr, setSignErr] = useState<string | null>(null);
   if (st.s === "no-wallet") return <Empty title="Connect your wallet" body="Price alerts belong to a wallet — connect one to set and see them." />;
   if (st.s === "signed-out") return (
     <Empty title="Sign in to see your alerts" body="One signature proves the wallet is yours. Alerts are free and checked every 5 minutes.">
-      <button onClick={() => void w.signIn()} className="font-mono text-[11px] font-semibold rounded-lg px-3.5 py-2" style={{ color: C.page, background: C.accent }}>Sign in</button>
+      <button onClick={async () => { setSignErr(await w.signIn()); }} className="font-mono text-[11px] font-semibold rounded-lg px-3.5 py-2" style={{ color: C.page, background: C.accent }}>Sign in</button>
+      {signErr && <p className="font-mono text-[10px] text-amber-400 mt-2">{signErr}</p>}
     </Empty>
   );
   if (st.s === "loading") return <p className="font-mono text-[11px] text-slate-600 py-8 text-center">Loading alerts…</p>;
-  if (st.s === "error") return <Empty title="Could not load alerts" body={st.msg}><button onClick={() => void w.refresh(true)} className="font-mono text-[11px] underline text-slate-400">Retry</button></Empty>;
+  if (st.s === "error") return <Empty title="Could not load alerts" body={st.msg}><button onClick={() => void w.refresh()} className="font-mono text-[11px] underline text-slate-400">Retry</button></Empty>;
 
   if (st.watches.length === 0 && st.alerts.length === 0) {
     return (

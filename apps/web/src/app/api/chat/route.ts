@@ -2178,7 +2178,10 @@ async function callHubTool(
     if ("error" in resolved) return fail(resolved.error);
     if (rule.kind === "change" && !resolved.target.pool) return fail("There is no pool to read a % change from for this token.");
     const ruleText = describeWatch({ ...rule, symbol: resolved.target.symbol, chain, trade: tr.trade, checkAt: ca.checkAt });
-    const now = resolved.priceNow != null ? ` It is ${fmtPrice(resolved.priceNow)} now (${resolved.priceSource ?? "source unknown"}).` : "";
+    const now = resolved.priceNow == null ? ""
+      : resolved.priceStale
+        ? ` The oracle last read ${fmtPrice(resolved.priceNow)} and is not updating (market closed) — a price alert cannot fire until it moves again.`
+        : ` It is ${fmtPrice(resolved.priceNow)} now (${resolved.priceSource ?? "source unknown"}).`;
     const sentence = ruleText.charAt(0).toUpperCase() + ruleText.slice(1);
     const how = ca.checkAt ? "checked at that time" : "checked every 5 minutes";
     const guard = tr.trade ? " When it fires, the trade card waits for your signature — nothing executes on its own." : "";
@@ -2192,7 +2195,9 @@ async function callHubTool(
         priceNow: resolved.priceNow,
         automation: !!(tr.trade || ca.checkAt),
         // The browser's own zone for a scheduled check, filled in by the card.
-        body: { chain, token: resolved.target.token, kind: rule.kind, direction: rule.direction, threshold: rule.threshold, window: rule.window,
+        // "ETH" goes back as "ETH" so the API sets the native flag itself; a
+        // contract address would arm WETH (review 2026-10-01).
+        body: { chain, token: resolved.target.native ? "ETH" : resolved.target.token, kind: rule.kind, direction: rule.direction, threshold: rule.threshold, window: rule.window,
           ...(typeof args.repeat === "boolean" ? { repeat: args.repeat } : {}),
           ...(tr.trade ? { trade: tr.trade } : {}),
           ...(ca.checkAt ? { check_at: ca.checkAt } : {}) },

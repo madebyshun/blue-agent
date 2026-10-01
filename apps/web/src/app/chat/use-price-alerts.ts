@@ -36,8 +36,9 @@ export function tradeToolLog(a: WatchAlert): ToolLog | null {
   const cash = pinnedTokenFor(a.chain, a.chain === "base" ? "USDC" : "USDG");
   if (!cash) return null;
   if (a.chain === "base") {
-    // A watch asked for as "ETH" prices WETH's pool; the trade is in ETH itself.
-    const tok = a.symbol === "ETH" ? NATIVE_ETH : a.token;
+    // Native ETH only on the server-set flag — never from a symbol, which a
+    // token's deployer chooses (review 2026-10-01).
+    const tok = a.native ? NATIVE_ETH : a.token;
     const result = t.side === "buy"
       ? { kind: "swap", tokenIn: "USDC", tokenOut: a.symbol, amountIn: t.amount, network: "base", tokenInAddress: cash, tokenOutAddress: tok }
       : { kind: "swap", tokenIn: a.symbol, tokenOut: "USDC", amountIn: t.amount, network: "base", tokenInAddress: tok, tokenOutAddress: cash };
@@ -60,17 +61,26 @@ function writeSynced(w: string, at: number) {
   try { localStorage.setItem(syncedKey(w), String(at)); } catch { /* best effort */ }
 }
 
-export function alertMessages(alerts: WatchAlert[], since: number): Message[] {
+/** A prepared trade card is offered only this long after its alert fired:
+ *  the condition that fired it may no longer hold, and a backlog of live
+ *  cards would each fetch a quote and a pre-trade check on open. */
+export const CARD_FRESH_MS = 24 * 60 * 60 * 1000;
+
+export function alertMessages(alerts: WatchAlert[], since: number, now = Date.now()): Message[] {
   return alerts
     .filter((a) => a.at > since)
     .sort((a, b) => a.at - b.at)
     .map((a) => {
-      const log = tradeToolLog(a);
-      const prepared = a.trade
-        ? `\n\nPrepared: ${describeTrade(a.trade, a.symbol, a.chain)}. Review the live quote and the pre-trade check on the card, then sign — nothing executes unless you do.`
-        : "";
+      const fresh = now - a.at < CARD_FRESH_MS;
+      const log = fresh ? tradeToolLog(a) : null;
+      const what = a.trade ? describeTrade(a.trade, a.symbol, a.chain).replace(/^prepare /, "") : "";
+      const prepared = !a.trade ? ""
+        : fresh
+          ? `\n\nPrepared trade: ${what}. Review the live quote and the pre-trade check on the card, then sign — nothing executes unless you do.`
+          : `\n\nA trade was prepared (${what}) on ${new Date(a.at).toLocaleString()}, but that was over a day ago and the condition may no longer hold — ask for it again to get a fresh card.`;
       return {
         role: "assistant" as const,
+        alertId: a.id,
         createdAt: a.at,
         content: `🔔 ${a.text}${prepared}\n↳ Check ${a.token} on ${a.chain === "base" ? "Base" : "Robinhood Chain"}`,
         ...(log ? { toolLogs: [log] } : {}),
