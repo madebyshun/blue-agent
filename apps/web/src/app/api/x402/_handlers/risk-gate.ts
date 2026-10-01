@@ -10,7 +10,7 @@
 // forbidden by CLAUDE.md. `measuredRiskVerdict` below decides from:
 //   • what the transaction does   — value moved? calldata present? an
 //     unlimited approve / permit / Permit2 / setApprovalForAll decoded from
-//     the calldata? or a plain ERC-20 transfer / bounded approve?
+//     the calldata? a bounded one? or a plain ERC-20 transfer / revoke?
 //   • what the target is          — EOA / 7702 wallet / contract, verified?
 //   • if the target is a token    — the measured honeypot verdict (tax read)
 // The model still writes the assessment and its flags, labelled as its own.
@@ -19,13 +19,17 @@
 // "PROCEED — no measured risk signal", reached by anything the branches above
 // did not recognise. Two unmeasured shapes fell through to SAFE_TO_EXECUTE:
 //   • a failed eth_getCode read as "EOA" (getTokenIdentity now returns null on
-//     that, and `isContract` is null here), so a drainer contract skipped both
-//     the honeypot read and the unverified-contract branch;
+//     that — and on an ERC-20 metadata multicall that never reached the
+//     contract — and `isContract` is null here), so a drainer contract skipped
+//     both the honeypot read and the unverified-contract branch;
 //   • calldata the decoder did not know — e.g. a Permit2 unlimited approve into
 //     the verified Permit2 contract — read as "nothing wrong measured".
 // PROCEED now needs a shape that was actually read: a no-op, a plain value send
-// with no calldata, or a decoded ERC-20 transfer / bounded approve into a token
-// whose tax measured SAFE. Undecoded calldata into anything with code is UNKNOWN.
+// with no calldata, or a decoded ERC-20 transfer / zero-amount approve into a
+// token whose tax measured SAFE. Undecoded calldata into anything with code is
+// UNKNOWN — and so is a BOUNDED non-zero approve, which briefly earned PROCEED
+// on the same day: "bounded" only meant below 2^255, so approve(drainer, 2^254)
+// qualified, and no bounded amount says anything about the spender.
 
 import { getTokenIdentity } from "@/lib/onchain";
 import { callLLM } from "@/app/api/_lib/llm";
@@ -34,49 +38,72 @@ import { measuredHoneypotVerdict, type HoneypotVerdict } from "./honeypot-check"
 
 export type RiskGateVerdict = "PROCEED" | "CAUTION" | "ABORT" | "UNKNOWN";
 
-const MAX_UINT_HALF = 2n ** 255n; // "unlimited" approvals are max-uint or close to it
-// Permit2 allowances are uint160, so its "unlimited" is max-uint160, not max-uint256.
-const MAX_UINT160_HALF = 2n ** 159n;
+// An allowance at or above 2^128 base units is treated as UNLIMITED. This used
+// to be 2^255 (and 2^159 for Permit2's uint160), so approve(drainer, 2^254)
+// decoded as "bounded" — and a bounded approve was a PROCEED shape. 2^128 is
+// ~3.4e20 whole tokens even at 18 decimals, above any real supply, so no
+// honest bounded approve reaches it, and it sits below Permit2's uint160 max.
+const EFFECTIVELY_UNLIMITED = 2n ** 128n;
 
-/**
- * Decode the approval shapes that hand a spender the wallet's tokens: ERC-20
- * approve / increaseAllowance, ERC-2612 permit, ERC-721/1155 setApprovalForAll,
- * and Permit2's approve and permit(PermitSingle). Anything else is null here —
- * and null is NOT "benign": `isKnownTokenCall` below is what says a
- * non-approval was actually read.
- */
-export function decodeApproval(data: string): "unlimited" | "operator" | null {
+/** The allowance-granting shapes this file reads, with the amount granted. */
+function readGrant(data: string): { kind: "allowance"; amount: bigint } | { kind: "operator"; on: boolean } | null {
   const d = (data ?? "").toLowerCase();
   if (!/^0x[0-9a-f]*$/.test(d) || d.length < 10) return null;
   const sel = d.slice(0, 10);
-  const word = (i: number) => d.slice(10 + i * 64, 10 + (i + 1) * 64);
+  const word = (i: number) => BigInt("0x" + (d.slice(10 + i * 64, 10 + (i + 1) * 64) || "0"));
   try {
-    if (sel === "0x095ea7b3" || sel === "0x39509351") {        // approve / increaseAllowance
-      const amt = BigInt("0x" + (word(1) || "0"));
-      return amt >= MAX_UINT_HALF ? "unlimited" : null;
+    if (sel === "0x095ea7b3" || sel === "0x39509351") {        // approve / increaseAllowance(spender, amount)
+      return { kind: "allowance", amount: word(1) };
     }
     if (sel === "0xd505accf") {                                 // ERC-2612 permit(owner, spender, value, …)
-      return BigInt("0x" + (word(2) || "0")) >= MAX_UINT_HALF ? "unlimited" : null;
+      return { kind: "allowance", amount: word(2) };
     }
     if (sel === "0x87517c45") {                                 // Permit2 approve(token, spender, uint160, uint48)
-      return BigInt("0x" + (word(2) || "0")) >= MAX_UINT160_HALF ? "unlimited" : null;
+      return { kind: "allowance", amount: word(2) };
     }
     if (sel === "0x2b67b570") {                                 // Permit2 permit(owner, PermitSingle, sig) — word 2 is details.amount
-      return BigInt("0x" + (word(2) || "0")) >= MAX_UINT160_HALF ? "unlimited" : null;
+      return { kind: "allowance", amount: word(2) };
     }
-    if (sel === "0xa22cb465") {                                 // setApprovalForAll
-      return BigInt("0x" + (word(1) || "0")) !== 0n ? "operator" : null;
+    if (sel === "0xa22cb465") {                                 // setApprovalForAll(operator, bool)
+      return { kind: "operator", on: word(1) !== 0n };
     }
   } catch { /* malformed calldata: not an approval we can read */ }
   return null;
 }
 
 /**
+ * Decode the approval shapes that hand a spender the wallet's tokens: ERC-20
+ * approve / increaseAllowance, ERC-2612 permit, ERC-721/1155 setApprovalForAll,
+ * and Permit2's approve and permit(PermitSingle). Anything else — a bounded
+ * grant included, see isBoundedApproval — is null here, and null is NOT
+ * "benign": `isKnownTokenCall` below is what says a call was actually read.
+ */
+export function decodeApproval(data: string): "unlimited" | "operator" | null {
+  const g = readGrant(data);
+  if (!g) return null;
+  if (g.kind === "operator") return g.on ? "operator" : null;
+  return g.amount >= EFFECTIVELY_UNLIMITED ? "unlimited" : null;
+}
+
+/**
+ * A non-zero allowance below the unlimited line. Bounded is not the same as
+ * measured: the amount can still cover the whole balance, and who the spender
+ * is was not read — so this is never a PROCEED shape (2026-10-01; it used to
+ * be one, via isKnownTokenCall).
+ */
+export function isBoundedApproval(data: string): boolean {
+  const g = readGrant(data);
+  return g?.kind === "allowance" && g.amount > 0n && g.amount < EFFECTIVELY_UNLIMITED;
+}
+
+/**
  * True only for calldata whose whole effect this file can state: an ERC-20
- * `transfer(to, amount)` or a BOUNDED `approve` / `increaseAllowance` (the
- * unlimited ones are decodeApproval's). It means something only when the
- * target is a token — the same selector on a router means whatever the router
- * says it means, which is why measuredRiskVerdict also requires `isToken`.
+ * `transfer(to, amount)`, or an `approve` / `increaseAllowance` of ZERO (a
+ * revoke, or a no-op — it grants nothing). A non-zero approve is not here:
+ * granting an unassessed spender an allowance is a measured SHAPE but not a
+ * measured RISK. It means something only when the target is a token — the
+ * same selector on a router means whatever the router says it means, which is
+ * why measuredRiskVerdict also requires `isToken`.
  */
 export function isKnownTokenCall(data: string): boolean {
   const d = (data ?? "").toLowerCase();
@@ -84,19 +111,26 @@ export function isKnownTokenCall(data: string): boolean {
   if (!/^0x[0-9a-f]*$/.test(d) || d.length !== 10 + 2 * 64) return false;
   const sel = d.slice(0, 10);
   if (sel === "0xa9059cbb") return true;                        // transfer
-  return (sel === "0x095ea7b3" || sel === "0x39509351") && decodeApproval(d) === null;
+  if (sel !== "0x095ea7b3" && sel !== "0x39509351") return false;
+  const g = readGrant(d);
+  return g?.kind === "allowance" && g.amount === 0n;
 }
 
 export interface RiskFacts {
   movesValue: boolean;
   hasCalldata: boolean;
-  /** null ⇒ eth_getCode failed: the target's type was NOT measured. */
+  /**
+   * null ⇒ the target's identity was not read (eth_getCode failed, or the
+   * ERC-20 metadata multicall never reached it): its type was NOT measured.
+   */
   isContract: boolean | null;
   isToken: boolean;
   verified: boolean;
   isDelegatedEoa: boolean;
   approval: "unlimited" | "operator" | null;
-  /** The calldata is a decoded ERC-20 transfer / bounded approve (isKnownTokenCall). */
+  /** A non-zero allowance below the unlimited line (isBoundedApproval). */
+  boundedApproval: boolean;
+  /** The calldata is a decoded ERC-20 transfer or zero-amount approve (isKnownTokenCall). */
   knownTokenCall: boolean;
   /** Only for a token target; null when the target is not a token. */
   honeypot: HoneypotVerdict | null;
@@ -123,11 +157,14 @@ export function measuredRiskVerdict(f: RiskFacts): { verdict: RiskGateVerdict; r
     return { verdict: "UNKNOWN", reasons: ["the target token's buy/sell tax could not be read — nothing measured either way"] };
   }
   if (f.isContract === null) {
-    return { verdict: "UNKNOWN", reasons: ["the target's code could not be read (eth_getCode failed) — whether it is a wallet, a token or a contract was not measured"] };
+    return { verdict: "UNKNOWN", reasons: ["the target could not be read on-chain (eth_getCode or its ERC-20 metadata read failed) — whether it is a wallet, a token or a contract was not measured"] };
   }
   if (f.hasCalldata && (f.isContract || f.isDelegatedEoa)) {
     if (f.isToken && f.knownTokenCall && f.honeypot === "SAFE") {
-      return { verdict: "PROCEED", reasons: ["a decoded ERC-20 transfer / bounded approve on a token whose tax was read and measures clean"] };
+      return { verdict: "PROCEED", reasons: ["a decoded ERC-20 transfer (or a zero-amount approve) on a token whose tax was read and measures clean"] };
+    }
+    if (f.boundedApproval && f.isContract) {
+      return { verdict: "UNKNOWN", reasons: ["the calldata grants a token allowance to a spender this gate did not assess — a bounded amount can still cover the whole balance"] };
     }
     if (f.isDelegatedEoa) {
       // A 7702 wallet is not "an unverified contract" (lib/onchain.ts), and
@@ -232,7 +269,8 @@ export default async function handler(req: Request): Promise<Response> {
     // eth_getCode alone decides the target type. An EIP-7702 delegated EOA has
     // bytecode, so `addrInfo` (Basescan ABI/verified) reads it as an unverified
     // contract; getTokenIdentity resolves the designator and returns
-    // isContract:false. When getCode FAILS, identity is null and so is this —
+    // isContract:false. When getCode FAILS (or the ERC-20 metadata multicall
+    // does not reach the contract), identity is null and so is this —
     // it used to fall back to `addrInfo.isContract`, which is false whenever
     // Basescan has no ABI or did not answer, and that is how a failed read
     // became "EOA → PROCEED" (see the header).
@@ -332,6 +370,7 @@ Schema: {
       verified: addrInfo.verified,
       isDelegatedEoa: !!delegation,
       approval: decodeApproval(data),
+      boundedApproval: isBoundedApproval(data),
       knownTokenCall: isKnownTokenCall(data),
       honeypot,
     });

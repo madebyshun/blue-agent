@@ -18,10 +18,13 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { measuredHoneypotVerdict } from "../src/app/api/x402/_handlers/honeypot-check";
-import { measuredRiskVerdict, decodeApproval, isKnownTokenCall, type RiskFacts } from "../src/app/api/x402/_handlers/risk-gate";
+import { measuredRiskVerdict, decodeApproval, isKnownTokenCall, isBoundedApproval, type RiskFacts } from "../src/app/api/x402/_handlers/risk-gate";
 import { measuredTrustVerdict } from "../src/app/api/x402/_handlers/contract-trust";
 import { quickVerdict } from "../src/app/api/x402/_handlers/quick-safety";
 import { parseEtherscanSource } from "../src/lib/moralis";
+import { contractAnswered } from "../src/lib/onchain";
+import { createPublicClient, custom, encodeFunctionResult, parseAbi } from "viem";
+import { base as baseChain } from "viem/chains";
 
 let failures = 0;
 let passes = 0;
@@ -50,7 +53,7 @@ ok("approve(spender, 100) → not an unlimited grant", decodeApproval(`0x095ea7b
 ok("setApprovalForAll(op, true) → operator", decodeApproval(`0xa22cb465${SPENDER}${"0".repeat(63)}1`) === "operator");
 ok("setApprovalForAll(op, false) → nothing granted", decodeApproval(`0xa22cb465${SPENDER}${"0".repeat(64)}`) === null);
 ok("garbage calldata → null", decodeApproval("0xzz") === null && decodeApproval("") === null);
-const base: RiskFacts = { movesValue: true, hasCalldata: false, isContract: false, isToken: false, verified: false, isDelegatedEoa: false, approval: null, knownTokenCall: false, honeypot: null };
+const base: RiskFacts = { movesValue: true, hasCalldata: false, isContract: false, isToken: false, verified: false, isDelegatedEoa: false, approval: null, boundedApproval: false, knownTokenCall: false, honeypot: null };
 ok("plain value send to a wallet → PROCEED", measuredRiskVerdict(base).verdict === "PROCEED");
 ok("nothing moves, nothing executes → PROCEED", measuredRiskVerdict({ ...base, movesValue: false }).verdict === "PROCEED");
 ok("into a measured honeypot → ABORT", measuredRiskVerdict({ ...base, isToken: true, isContract: true, honeypot: "HONEYPOT" }).verdict === "ABORT");
@@ -82,9 +85,29 @@ ok("eth_getCode failed (isContract null) → UNKNOWN, never PROCEED", unread.ver
 ok("…even for a plain value send", measuredRiskVerdict({ ...base, isContract: null }).verdict === "UNKNOWN");
 ok("…but a no-op still moves nothing → PROCEED", measuredRiskVerdict({ ...base, isContract: null, movesValue: false }).verdict === "PROCEED");
 const transfer = `0xa9059cbb${ADDR("d")}${"0".repeat(62)}64`;
-ok("isKnownTokenCall: ERC-20 transfer and a bounded approve are read; an unlimited approve and garbage are not",
-  isKnownTokenCall(transfer) && isKnownTokenCall(`0x095ea7b3${SPENDER}${"0".repeat(62)}64`) &&
+const approveOf = (amtHex: string) => `0x095ea7b3${SPENDER}${amtHex.padStart(64, "0")}`;
+const approve100 = approveOf("64");
+const approveZero = approveOf("0");
+const approve2e254 = approveOf((2n ** 254n).toString(16));
+ok("isKnownTokenCall: ERC-20 transfer and a zero-amount approve (revoke) are read; a non-zero approve, an unlimited one and garbage are not",
+  isKnownTokenCall(transfer) && isKnownTokenCall(approveZero) && !isKnownTokenCall(approve100) &&
   !isKnownTokenCall(`0x095ea7b3${SPENDER}${MAX}`) && !isKnownTokenCall(permit2Approve) && !isKnownTokenCall("0x"));
+// Review r2 #2 — "bounded" used to mean < 2^255, and a bounded approve was a PROCEED shape.
+ok("approve(drainer, 2^254) → unlimited (the line is 2^128 now, not 2^255)", decodeApproval(approve2e254) === "unlimited" && !isBoundedApproval(approve2e254));
+ok("approve(spender, 2^127) → bounded, not unlimited",
+  decodeApproval(approveOf((2n ** 127n).toString(16))) === null && isBoundedApproval(approveOf((2n ** 127n).toString(16))));
+ok("isBoundedApproval: approve(100) yes; approve(0), a transfer, setApprovalForAll no",
+  isBoundedApproval(approve100) && !isBoundedApproval(approveZero) && !isBoundedApproval(transfer) && !isBoundedApproval(`0xa22cb465${SPENDER}${"0".repeat(63)}1`));
+const tokenSafe = { ...base, movesValue: false, hasCalldata: true, isContract: true, isToken: true, verified: true, honeypot: "SAFE" as const };
+const factsFor = (d: string): RiskFacts => ({ ...tokenSafe, approval: decodeApproval(d), boundedApproval: isBoundedApproval(d), knownTokenCall: isKnownTokenCall(d) });
+ok("approve(drainer, 2^254) on a token whose tax read SAFE → CAUTION, not PROCEED", measuredRiskVerdict(factsFor(approve2e254)).verdict === "CAUTION");
+const bounded = measuredRiskVerdict(factsFor(approve100));
+ok("approve(unassessed spender, 100) on that SAFE token → UNKNOWN, not PROCEED, and says why",
+  bounded.verdict === "UNKNOWN" && /allowance/.test(bounded.reasons[0]), bounded.reasons.join(" | "));
+ok("approve(spender, 0) — a revoke — on that SAFE token → PROCEED", measuredRiskVerdict(factsFor(approveZero)).verdict === "PROCEED");
+ok("a bounded Permit2 approve into the verified Permit2 contract → UNKNOWN",
+  measuredRiskVerdict({ ...base, movesValue: false, hasCalldata: true, isContract: true, verified: true,
+    boundedApproval: isBoundedApproval(`0x87517c45${ADDR("a")}${ADDR("d")}${"0".repeat(62)}64${"0".repeat(64)}`) }).verdict === "UNKNOWN");
 ok("a decoded transfer on a token whose tax measured SAFE → PROCEED",
   measuredRiskVerdict({ ...base, movesValue: false, hasCalldata: true, isContract: true, isToken: true, verified: true, knownTokenCall: true, honeypot: "SAFE" }).verdict === "PROCEED");
 ok("an undecoded call on that same SAFE token → UNKNOWN",
@@ -137,6 +160,50 @@ ok("getCode's failure is a null sentinel that returns null (viem maps an EOA's \
   idFn.length > 0 && /getCode\(\{ address \}\)\.catch\(\(\) => null\)/.test(idFn) && /if \(code === null\) return null;/.test(idFn) && !/getCode\([^)]*\)\.catch\(\(\) => undefined\)/.test(idFn));
 ok("risk-gate does not fall back to Basescan for the target type",
   /const isContract: boolean \| null = identity \? identity\.isContract : null;/.test(H0("risk-gate.ts")));
+// Review r2 #1 — the multicall is the second way a failed read became a negative.
+ok("getTokenIdentity: a metadata multicall the contract did not ANSWER is a null identity, not isToken:false",
+  /if \(!contractAnswered\(res\[1\], "symbol"\) \|\| !contractAnswered\(res\[2\], "decimals"\)\) return null;/.test(idFn) &&
+  /\} catch \{ return null; \}/.test(idFn) && !/leave metadata null/.test(idFn));
+ok("contract-trust reads the tax for a null identity (unread is not 'not a token')",
+  /identity == null \|\| identity\.isToken \? measuredHoneypotVerdict/.test(H("contract-trust.ts")));
+
+// contractAnswered against REAL viem multicall results, over a custom transport
+// that plays the RPC — no network. The three shapes a getTokenIdentity read can
+// come back in: the contract answered (data, revert, or empty return) or the
+// transport failed, which with allowFailure:true is ALSO status "failure".
+const ERC20 = parseAbi(["function symbol() view returns (string)", "function decimals() view returns (uint8)"]);
+const AGG3 = parseAbi(["function aggregate3((address target, bool allowFailure, bytes callData)[] calls) payable returns ((bool success, bytes returnData)[] returnData)"]);
+const TOKEN = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
+const rpc = (onCall: () => unknown) => createPublicClient({
+  chain: baseChain,
+  transport: custom({ async request({ method }) { if (method === "eth_call") return onCall(); throw new Error(`unexpected ${method}`); } }, { retryCount: 0 }),
+});
+const agg3 = (entries: { success: boolean; returnData: `0x${string}` }[]) =>
+  encodeFunctionResult({ abi: AGG3, functionName: "aggregate3", result: entries });
+const readMeta = (c: ReturnType<typeof rpc>) => c.multicall({
+  allowFailure: true,
+  contracts: [
+    { address: TOKEN, abi: ERC20, functionName: "symbol" },
+    { address: TOKEN, abi: ERC20, functionName: "decimals" },
+  ],
+});
+async function multicallCases() {
+  const answered = await readMeta(rpc(() => agg3([
+    { success: true, returnData: encodeFunctionResult({ abi: ERC20, functionName: "symbol", result: "USDC" }) },
+    { success: true, returnData: encodeFunctionResult({ abi: ERC20, functionName: "decimals", result: 6 }) },
+  ])));
+  ok("a token that answered → both entries answered", contractAnswered(answered[0], "symbol") && contractAnswered(answered[1], "decimals"));
+  const reverted = await readMeta(rpc(() => agg3([{ success: false, returnData: "0x" }, { success: false, returnData: "0x" }])));
+  ok("a contract that REVERTED symbol()/decimals() → answered (a measured non-token)",
+    reverted[0].status === "failure" && contractAnswered(reverted[0], "symbol") && contractAnswered(reverted[1], "decimals"));
+  const empty = await readMeta(rpc(() => agg3([{ success: true, returnData: "0x" }, { success: true, returnData: "0x" }])));
+  ok("a contract whose fallback returned NOTHING → answered (a measured non-token)",
+    empty[0].status === "failure" && contractAnswered(empty[0], "symbol") && contractAnswered(empty[1], "decimals"));
+  const down = await readMeta(rpc(() => { throw new Error("429 Too Many Requests"); }));
+  ok("the RPC rate-limited the multicall → status failure on every entry, but NOT answered",
+    down.every((e) => e.status === "failure") && !contractAnswered(down[0], "symbol") && !contractAnswered(down[1], "decimals"));
+  ok("a missing entry is not an answer", !contractAnswered(undefined, "symbol"));
+}
 
 console.log("\n5. each handler's verdict comes from its measured function");
 
@@ -148,5 +215,8 @@ ok("contract-trust: no 'final arbiter' model call left",
   !/final arbiter/i.test(H("contract-trust.ts").replace(/\/\/.*$/gm, "")) && /verdict: measured\.verdict/.test(H("contract-trust.ts")));
 ok("quick-safety: no model call at all", !/callLLM/.test(H("quick-safety.ts").replace(/\/\/.*$/gm, "")));
 
-console.log(`\nsafety-verdicts-test: ${passes}/${passes + failures} passed`);
-if (failures > 0) process.exit(1);
+console.log("\n6. contractAnswered — real viem multicall results, no network");
+multicallCases().catch((e) => { ok("multicall cases ran", false, String(e)); }).finally(() => {
+  console.log(`\nsafety-verdicts-test: ${passes}/${passes + failures} passed`);
+  if (failures > 0) process.exit(1);
+});

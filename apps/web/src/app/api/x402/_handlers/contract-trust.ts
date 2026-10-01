@@ -177,7 +177,7 @@ export default async function handler(req: Request): Promise<Response> {
     // EOA short-circuit — a wallet has no contract code to trust-check. Without
     // this, the LLM treats "no metadata" as red flags and emits a scary verdict
     // on a plain wallet. Only a MEASURED "no code" lands here: a failed
-    // eth_getCode is `identity === null` (lib/onchain.ts), never isContract:false,
+    // read is `identity === null` (lib/onchain.ts), never isContract:false,
     // so an unread drainer is not answered NOT_A_CONTRACT at confidence 100.
     if (identity && identity.isContract === false) {
       // An EIP-7702 delegated EOA lands here too, and must not be described as
@@ -284,8 +284,10 @@ Schema: {
 
     // Step 4: the verdict — arithmetic on what was measured (W0-19). For a
     // token, the same tax read honeypot-check uses. A null identity (eth_getCode
-    // failed) is "not known to be a non-token", so the tax is read for it too —
-    // skipping it would hand a verified token SAFE on a read that never happened.
+    // failed, OR the ERC-20 metadata multicall never reached the contract — see
+    // contractAnswered in lib/onchain.ts) is "not known to be a non-token", so
+    // the tax is read for it too — skipping it would hand a verified token SAFE
+    // on a read that never happened. `isToken === false` now means MEASURED.
     const honeypot = identity == null || identity.isToken ? measuredHoneypotVerdict(await readTokenTax(address)).verdict : null;
     const measured = measuredTrustVerdict({
       basescanAvailable: basescan.available,

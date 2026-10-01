@@ -218,7 +218,7 @@ export interface Delegation {
 export interface TokenIdentity {
   address: string;
   isContract: boolean;          // eth_getCode returned bytecode (7702 EOAs excluded — see below)
-  isToken: boolean;             // standard ERC-20 metadata readable
+  isToken: boolean;             // standard ERC-20 metadata readable (false = the contract ANSWERED without it; unread ⇒ the whole identity is null)
   name: string | null;
   symbol: string | null;
   decimals: number | null;
@@ -226,6 +226,26 @@ export interface TokenIdentity {
   market: TokenMarket | null;   // DexScreener Base pair, null if unlisted
   /** Non-null only for an EIP-7702 delegated EOA. `isContract` is false here. */
   delegation: Delegation | null;
+}
+
+/**
+ * Did the CONTRACT answer this multicall entry — return data, revert, or
+ * return nothing — or did the read never reach it? Only an answer is evidence
+ * about the contract. viem builds a per-call failure with the requested
+ * `functionName` ("symbol"); a transport failure (rate limit, timeout, RPC
+ * error) is the rejected aggregate3 call itself, copied onto every entry, so
+ * its functionName is "aggregate3". Anything not positively a per-call answer
+ * counts as unread: the wrong way to err here is a confident "not a token".
+ * Pure and exported so scripts/safety-verdicts-test.ts pins it against real
+ * viem multicall results.
+ */
+export function contractAnswered(
+  entry: { status: "success" | "failure"; error?: unknown } | undefined,
+  functionName: string,
+): boolean {
+  if (!entry) return false;
+  if (entry.status === "success") return true;
+  return (entry.error as { functionName?: unknown } | null | undefined)?.functionName === functionName;
 }
 
 export async function getTokenIdentity(rawAddr: string): Promise<TokenIdentity | null> {
@@ -257,8 +277,20 @@ export async function getTokenIdentity(rawAddr: string): Promise<TokenIdentity |
       decimals: number | null = null, totalSupply: number | null = null;
 
   if (isContract) {
+    // The SECOND way a failed read became a confident negative (2026-10-01).
+    // With `allowFailure: true` viem's multicall does not throw on a transport
+    // failure: it settles the one aggregate3 call and marks EVERY entry
+    // `status: "failure"` — the same status a contract with no symbol() earns.
+    // Reading both as "no metadata" made a real token `isToken: false`
+    // whenever mainnet.base.org rate-limited the multicall after getCode had
+    // succeeded: contract-trust then skipped the tax read and called a
+    // verified token SAFE, honeypot-check said NOT_A_TOKEN, and deep-analysis
+    // took its non-token short-circuit. symbol + decimals decide `isToken`, so
+    // if the contract did not ANSWER either one the whole identity is unread —
+    // null, exactly as for a failed getCode. See contractAnswered.
+    let res;
     try {
-      const res = await client.multicall({
+      res = await client.multicall({
         allowFailure: true,
         contracts: [
           { address, abi: ERC20, functionName: "name" } as const,
@@ -267,13 +299,14 @@ export async function getTokenIdentity(rawAddr: string): Promise<TokenIdentity |
           { address, abi: ERC20, functionName: "totalSupply" } as const,
         ],
       });
-      if (res[0]?.status === "success") name = res[0].result as string;
-      if (res[1]?.status === "success") symbol = res[1].result as string;
-      if (res[2]?.status === "success") decimals = Number(res[2].result as number);
-      if (res[3]?.status === "success" && decimals != null) {
-        totalSupply = +(+formatUnits(res[3].result as bigint, decimals)).toFixed(2);
-      }
-    } catch { /* leave metadata null */ }
+    } catch { return null; }
+    if (!contractAnswered(res[1], "symbol") || !contractAnswered(res[2], "decimals")) return null;
+    if (res[0]?.status === "success") name = res[0].result as string;
+    if (res[1]?.status === "success") symbol = res[1].result as string;
+    if (res[2]?.status === "success") decimals = Number(res[2].result as number);
+    if (res[3]?.status === "success" && decimals != null) {
+      totalSupply = +(+formatUnits(res[3].result as bigint, decimals)).toFixed(2);
+    }
   }
 
   const isToken = isContract && symbol != null && decimals != null;
