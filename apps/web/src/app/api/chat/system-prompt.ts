@@ -319,3 +319,33 @@ export function buildB20Section(hasTools: boolean): string {
     ? `${b20Knowledge(true)}\n\n${b20Dispatch()}`
     : b20Knowledge(false);
 }
+
+/**
+ * Launchpads on Base and Robinhood Chain (2026-10-01). The FACTS go out with or
+ * without tools — "what is Pons?" was answered as "part of the brainstem" on a
+ * tool-free turn, and a model with no tools still has to know the landscape.
+ * Measured activity is dated on purpose: it is a snapshot, and the text says
+ * so instead of passing it off as current. The "Use <tool>" lines ship only
+ * when the tools are attached (same rule as buildB20Section).
+ *
+ * Bankr is named here as a FACT about where tokens come from, read on-chain;
+ * Blue Agent has no Bankr integration and says so (CLAUDE.md, ShunTr
+ * 2026-10-01).
+ */
+export function buildLaunchpadSection(hasTools: boolean): string {
+  const facts = `## Token launchpads on Base and Robinhood Chain (snapshot measured on-chain 2026-10-01)
+- **Pons (Pons Family)** — the largest launchpad on Robinhood Chain (not on Base). V2 is a bonding curve quoted in ETH, USDG or a stock token; a token that fills its curve (4.2 ETH on the ETH quote) GRADUATES into a Uniswap v4 pool with locked LP. ~6.9k launches and ~77 graduations a day.
+- **Flap (flap.sh)** — bonding-curve launchpad, second on Robinhood Chain by count (~5k/day).
+- **Doppler** — a launch PROTOCOL on both chains that front-ends build on; tokens start in a Uniswap v4 multicurve position. **Bankr** is one Doppler front-end, on both Base and Robinhood Chain: Bankr launches go straight into that v4 position — no curve, no graduation. (Blue Agent identifies a Bankr launch from Doppler's on-chain integrator field; it has no Bankr integration.)
+- **Virtuals** — AI-agent launchpad on BOTH chains: a bonding curve priced in VIRTUAL that graduates to a Uniswap V2 pool.
+- **Clanker** — Base (and a small Robinhood Chain deployment): no curve, a Uniswap v4 pool from launch.
+- **Zora** — Base only: content and creator coins (the coins Base App posts are), each its own Uniswap v4 pool from creation.
+- **Flaunch** — Base: a 30-minute fair-launch window, then Uniswap v4.
+- Launch counts are spam-scale. A launch, a graduation or a trending pool is activity, never a recommendation.
+- Blue Hood (/hood) is about STOCK tokens only. Never send a question about a crypto or memecoin token to /hood.`;
+  if (!hasTools) return facts;
+  return `${facts}
+- Use check_token for any question about ONE crypto token by address — "what is 0x…", "which launchpad", "is it still on the curve / graduated", and as the first look at a Robinhood Chain crypto token (there is no tax/honeypot check for Robinhood Chain; say so if asked whether one is safe). On Base, hub_honeypot measures sell tax.
+- "What is Pons / Flap / Bankr / Virtuals…?" is a knowledge question: answer from the facts above, call no tool.
+- Use new_tokens for "what launched today / new tokens on <launchpad> / what's new on Virtuals or Pons". Pass the chain; if the user names Pons or Flap it is Robinhood Chain, Zora is Base.`;
+}

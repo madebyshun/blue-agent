@@ -93,6 +93,13 @@ const LOOP_SKILLS: AgentSkill[] = [
     // api/chat/route.ts), so there is no tool fee and no usage:<id> counter.
     trigger: "ETH price", tools: ["hub_token_price"] },
   // CHECK
+  { id: "discover-new-tokens", group: "discover", chains: ["base", "robinhood"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR,
+    name: "New launches", description: "What launched in the last hour per launchpad (Pons, Flap, Doppler/Bankr, Virtuals, Clanker), recent graduations, new pools above a liquidity floor",
+    // Server-read in chat (new_tokens) — no x402 tool, no fee, no usage counter.
+    trigger: "What launched on Robinhood Chain today?", tools: ["new_tokens"] },
+  { id: "check-token", group: "check", chains: ["base", "robinhood"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR,
+    name: "Check a token", description: "Any token by address — which launchpad, still on its curve or graduated, supply, deepest pools; the first look at a Robinhood Chain crypto token",
+    trigger: "Check this token: 0x", tools: ["check_token"] },
   { id: "check-honeypot", group: "check", chains: ["base"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR,
     name: "Can I sell it?", description: "Honeypot check — buy/sell tax and blacklist read on-chain; unread stays UNKNOWN, never SAFE",
     trigger: "Is this token a honeypot? ", tools: ["hub_honeypot"], meterIds: ["honeypot-check"] },
@@ -134,6 +141,8 @@ const LOOP_SKILLS: AgentSkill[] = [
 export const NO_FEE_CHAT_TOOLS: ReadonlySet<string> = new Set([
   "prepare_swap", "prepare_send", "robinhood_swap", "robinhood_send", "robinhood_bridge",
   "check_wallet", "hub_token_price", "hub_crypto_rpc",
+  // Server-read in chat (lib/token-overview.ts, lib/launchpads/feed.ts).
+  "check_token", "new_tokens",
 ]);
 
 export const AGENT_SKILLS: AgentSkill[] = [

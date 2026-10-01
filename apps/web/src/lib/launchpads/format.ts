@@ -1,0 +1,92 @@
+/**
+ * The chat replies for `check_token` and `new_tokens`, written in CODE from
+ * the reads (same rule as lib/chat/card-replies.ts): every number is copied
+ * from a source and named with it, nothing is ranked as a pick, and anything
+ * unread is said to be unread.
+ */
+import type { TokenOverview } from "@/lib/token-overview";
+import type { LaunchFeed } from "./feed";
+import { fmtPct, fmtUsd } from "@/lib/chat/card-replies";
+
+const CHAIN_NAME = { base: "Base", robinhood: "Robinhood Chain" } as const;
+const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
+
+const STAGE: Record<string, string> = {
+  bonding_curve: "still on its bonding curve",
+  graduated: "graduated to its DEX pool",
+  pool_from_launch: "a DEX pool from launch (no curve)",
+  unknown: "stage unknown",
+};
+
+export function formatOverview(o: TokenOverview): string {
+  const chain = CHAIN_NAME[o.chain];
+  if (o.onchain.isContract === false) return `${o.token} has no contract code on ${chain} — it is not a token there (wrong chain, or a wallet address).`;
+  const label = o.onchain.symbol ? `**${o.onchain.symbol}**${o.onchain.name && o.onchain.name !== o.onchain.symbol ? ` (${o.onchain.name})` : ""}` : `**${short(o.token)}**`;
+  const lines: string[] = [`${label} on ${chain} — \`${o.token}\``];
+
+  if (o.stockToken) {
+    lines.push(`- ${o.stockToken.venue} tracking ${o.stockToken.ticker} (${o.stockToken.name}) — verified by contract in BlueAgent's registry.`);
+  }
+  if (o.onchain.totalSupply) lines.push(`- Supply ${o.onchain.totalSupply}${o.onchain.symbol ? ` ${o.onchain.symbol}` : ""} (read on-chain)`);
+
+  const lp = o.launchpad;
+  if (lp) {
+    if (lp.launchpad) {
+      const facts = lp.facts.filter((f) => !/^curve 0x/.test(f));
+      lines.push(`- Launchpad: **${lp.name}** — ${facts.length ? facts.join("; ") : STAGE[lp.stage] ?? lp.stage}.`);
+    } else {
+      lines.push(`- Launchpad: ${lp.facts[0]}.`);
+    }
+  }
+
+  const m = o.market;
+  if (m.status === "ok" && m.pools.length > 0) {
+    const price = fmtUsd(m.priceUsd);
+    lines.push(`- Price ${price ?? "unknown"} from its deepest pool (GeckoTerminal). Pools:`);
+    for (const p of m.pools) {
+      lines.push(`  - ${p.name} · ${p.dex} · liquidity ${fmtUsd(p.reserveUsd) ?? "?"} · 24h volume ${fmtUsd(p.volume24hUsd) ?? "?"}${fmtPct(p.change24hPct) ? ` · 24h ${fmtPct(p.change24hPct)}` : ""}`);
+    }
+  } else if (m.status === "none_listed") {
+    lines.push("- No pool listed on GeckoTerminal yet — that is not proof there is none (fresh launches and curve-only tokens often are not indexed).");
+  } else {
+    lines.push("- Market data could not be read right now (GeckoTerminal).");
+  }
+
+  lines.push(o.chain === "robinhood"
+    ? "- Not measured here: buy/sell tax and honeypot behaviour — there is no tax check for Robinhood Chain yet. Treat an unknown token as unverified."
+    : "- For a sell-tax / honeypot measurement ask for a honeypot check on this address.");
+  return lines.join("\n");
+}
+
+export function formatFeed(f: LaunchFeed): string {
+  const chain = CHAIN_NAME[f.chain];
+  const lines: string[] = [];
+  const counted = f.counts.filter((c) => c.launches != null);
+  if (counted.length > 0) {
+    lines.push(`**Launches on ${chain}, last ${f.windowMinutes} min** (counted from each launchpad's own launch events): ${counted.map((c) => `${c.name} ${c.launches}`).join(" · ")}.`);
+  }
+  const unreadCounts = f.counts.filter((c) => c.launches == null).map((c) => c.name);
+  if (unreadCounts.length) lines.push(`Could not count: ${unreadCounts.join(", ")}.`);
+  if (f.chain === "robinhood" || f.counts.some((c) => c.id === "doppler")) {
+    lines.push("Most launches never trade meaningfully — a launch count is activity, not a list of picks.");
+  }
+
+  if (f.graduations.items.length > 0) {
+    lines.push(`**Graduated in the last ${f.graduations.windowHours}h** (filled their curve; newest first):`);
+    for (const g of f.graduations.items) lines.push(`- ${g.symbol ?? "?"} · ${g.launchpad} · \`${g.token}\``);
+  }
+  if (f.graduations.unread.length) lines.push(`Graduations could not be read for: ${f.graduations.unread.join(", ")}.`);
+
+  if (f.newPools.items == null) {
+    lines.push("New pools could not be read right now (GeckoTerminal).");
+  } else if (f.newPools.items.length === 0) {
+    lines.push(`No pool created in GeckoTerminal's latest batch has more than ${fmtUsd(f.newPools.minReserveUsd)} of liquidity.`);
+  } else {
+    lines.push(`**New pools with over ${fmtUsd(f.newPools.minReserveUsd)} liquidity** (GeckoTerminal's newest batch):`);
+    for (const p of f.newPools.items) {
+      lines.push(`- ${p.name}${p.launchpad ? ` · ${p.launchpad}` : ""} · liquidity ${fmtUsd(p.reserveUsd)}${p.volume24hUsd != null ? ` · 24h volume ${fmtUsd(p.volume24hUsd)}` : ""}${p.ageMinutes != null ? ` · ${p.ageMinutes} min old` : ""}${p.token ? ` · \`${p.token}\`` : ""}`);
+    }
+  }
+  lines.push("Facts, not picks — ask for an overview of any address before trading it.");
+  return lines.join("\n");
+}

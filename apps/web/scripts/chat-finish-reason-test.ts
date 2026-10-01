@@ -89,7 +89,7 @@ async function run(text: string, tier = "fast") {
   const short = streamMaxTokens;
   await run("blue audit a vault contract");
   const long = streamMaxTokens;
-  check("5.1 a short question keeps the preset's cap", short === 768, String(short));
+  check("5.1 a short question keeps the preset's cap", short === 1536, String(short));
   check("5.2 a founder command gets the long-form budget", (long ?? 0) >= 4096, String(long));
 
   console.log(failures === 0 ? "\nchat-finish-reason-test: PASS" : `\nchat-finish-reason-test: FAIL — ${failures}`);

@@ -26,7 +26,7 @@ import { getRobinhoodAddressBalances } from "@/lib/robinhood/blockscout";
 import { mcpCallTool } from "@/lib/mcp-client";
 import { SOUL_MD } from "@/lib/soul";
 import { VIRTUALS_PRESETS } from "@/app/api/_lib/llm";
-import { buildBaseSystem, buildAgentCapabilities, buildB20Section } from "./system-prompt";
+import { buildBaseSystem, buildAgentCapabilities, buildB20Section, buildLaunchpadSection } from "./system-prompt";
 import { normalizeWallet, resolveActingWallet } from "@/lib/acting-wallet";
 import { findByTicker as findRwaByTicker, findByContract as findRwaByContract } from "@/lib/robinhood/rwa-registry";
 import { CHAT_HIDDEN_TOOLS } from "@/lib/chat-hidden-tools";
@@ -270,7 +270,11 @@ const LONG_FORM_MAX_TOKENS = 4096;
 const FOUNDER_COMMAND_RE = /^\s*\/?blue\s+(idea|build|audit|ship|raise)\b/i;
 
 const MODELS: Record<string, { maxTokens: number }> = {
-  fast:     { maxTokens: 768  },  // was 1024
+  // 768 until 2026-10-01. Fast's model reasons before it answers, and the
+  // reasoning counts against this cap: "what is pons?" came back EMPTY 2/2 at
+  // 768 (finish_reason "length", zero content) and answered 3/3 at 1536.
+  // The prompt still asks for short answers; this is headroom, not length.
+  fast:     { maxTokens: 1536 },
   pro:      { maxTokens: 1200 },  // was 2048 — also the fallback for every unlisted tier
   max:      { maxTokens: 2400 },
   deepseek: { maxTokens: 2400 },
@@ -509,6 +513,33 @@ const ALL_HUB_TOOLS = [
         min_liquidity_usd: { type: "number", description: "Liquidity floor, USD (default 500000)." },
         limit:             { type: "number", description: "Max tokens (default 10)." },
       },
+    },
+  },
+  // ── Crypto tokens + launchpads (2026-10-01) ─────────────────────────────
+  // Server-read, free, answered in code (lib/launchpads/format.ts). Until now
+  // RH crypto tokens had no reader at all and no tool knew a launchpad.
+  {
+    name: "check_token",
+    description: "Overview of ONE token by contract address on Base (8453) or Robinhood Chain (4663): on-chain name/symbol/supply, whether it is a verified stock token, WHICH LAUNCHPAD it came from (Pons, Bankr, Doppler, Virtuals, Clanker, Zora) and whether it is still on its bonding curve or graduated, plus its deepest pools (GeckoTerminal). Use for 'what is 0x…', 'which launchpad is this token from', 'is it bonded/graduated', 'tell me about this Robinhood token', and as the first look at any crypto token on Robinhood Chain. It measures NO tax and gives NO verdict. If the user did not name a chain, omit `chain` — the server checks both.",
+    input_schema: {
+      type: "object",
+      properties: {
+        address: { type: "string", description: "Token contract 0x… (40 hex). Never invent one." },
+        chain:   { type: "string", enum: ["base", "robinhood"], description: "OPTIONAL — omit when the user did not say; the server finds which chain has the contract." },
+      },
+      required: ["address"],
+    },
+  },
+  {
+    name: "new_tokens",
+    description: "What is launching right now on Base or Robinhood Chain: per-launchpad launch counts for the last hour (from each launchpad's own on-chain events), recent graduations (Pons and Virtuals on Robinhood Chain), and the newest pools above a liquidity floor. Use for 'what launched today', 'new tokens on Pons', 'what's new on Virtuals', 'new launches on Base'. Facts only — never present a launch as a pick.",
+    input_schema: {
+      type: "object",
+      properties: {
+        chain:     { type: "string", enum: ["base", "robinhood"], description: "Which chain. Pons and Flap are Robinhood Chain only; Zora is Base only." },
+        launchpad: { type: "string", enum: ["pons", "flap", "doppler", "bankr", "virtuals", "clanker"], description: "OPTIONAL — narrow to one launchpad." },
+      },
+      required: ["chain"],
     },
   },
   {
@@ -2082,6 +2113,68 @@ async function callHubTool(
       result: { kind: "authorization_result", ...r },
     };
   }
+  if (toolName === "check_token") {
+    const addr = typeof args.address === "string" ? args.address.trim() : "";
+    if (!/^0x[a-fA-F0-9]{40}$/.test(addr)) {
+      const msg = "That is not a token contract address — paste the full 0x… address.";
+      return { text: `${msg} Reply with this line.`, staticReply: msg };
+    }
+    const { tokenOverview } = await import("@/lib/token-overview");
+    const { formatOverview } = await import("@/lib/launchpads/format");
+    const { launchClient } = await import("@/lib/launchpads/resolve");
+    let chains: Array<"base" | "robinhood"> = args.chain === "base" || args.chain === "robinhood" ? [args.chain] : [];
+    if (chains.length === 0) {
+      // No chain named: look for the contract on both. An address can exist
+      // on both (same deployer + nonce), in which case both are reported.
+      const has = await Promise.all((["base", "robinhood"] as const).map(async (c) => {
+        try { const code = await launchClient(c).getCode({ address: addr as `0x${string}` }); return !!code && code !== "0x"; }
+        catch { return true; /* unread — check it rather than skip it */ }
+      }));
+      chains = (["base", "robinhood"] as const).filter((_, i) => has[i]);
+      if (chains.length === 0) {
+        const msg = `${addr} has no contract code on Base or Robinhood Chain — it is not a token on either (a wallet address, or another chain).`;
+        return { text: `${msg} Reply with this line.`, staticReply: msg };
+      }
+    }
+    try {
+      const overviews = await Promise.all(chains.map((c) => tokenOverview(c, addr)));
+      const line = overviews.map(formatOverview).join("\n\n");
+      return {
+        text: `${line}\n\n[These facts are the whole answer — do not add a verdict, a tax figure or a price target.]`,
+        staticReply: line,
+        result: { kind: "check_token", overviews },
+      };
+    } catch (e) {
+      return { text: toolFailed(toolName, (e as Error).message) };
+    }
+  }
+  if (toolName === "new_tokens") {
+    const chain = args.chain === "robinhood" ? "robinhood" : args.chain === "base" ? "base" : null;
+    if (!chain) {
+      const msg = "Which chain — Base or Robinhood Chain?";
+      return { text: `Ask the user: ${msg}`, staticReply: msg };
+    }
+    const allowed = ["pons", "flap", "doppler", "bankr", "virtuals", "clanker"] as const;
+    const only = allowed.find((x) => x === args.launchpad);
+    const { LAUNCHPAD_INFO } = await import("@/lib/launchpads/registry");
+    if (only && !LAUNCHPAD_INFO[only].chains.includes(chain)) {
+      const msg = `${LAUNCHPAD_INFO[only].name} is not on ${chain === "base" ? "Base" : "Robinhood Chain"} — it launches on ${LAUNCHPAD_INFO[only].chains.map((c) => (c === "base" ? "Base" : "Robinhood Chain")).join(" and ")}.`;
+      return { text: `${msg} Reply with this line.`, staticReply: msg };
+    }
+    try {
+      const { launchFeed } = await import("@/lib/launchpads/feed");
+      const { formatFeed } = await import("@/lib/launchpads/format");
+      const feed = await launchFeed(chain, only);
+      const line = formatFeed(feed);
+      return {
+        text: `${line}\n\n[These facts are the whole answer — never recommend one of these tokens.]`,
+        staticReply: line,
+        result: { kind: "new_tokens", feed },
+      };
+    } catch (e) {
+      return { text: toolFailed(toolName, (e as Error).message) };
+    }
+  }
   if (toolName === "hub_b20_inspect" && typeof args.address === "string" && !/^0x/i.test(args.address.trim())) {
     // A ticker instead of an address ("inspect the NVDA B20"). Resolved ONLY
     // from the verified Base stock registry (lib/base-stocks/registry.ts —
@@ -3281,6 +3374,7 @@ export async function POST(req: NextRequest) {
     // private key), but the "Use <tool> when the user asks X" dispatch table
     // only ships when those tools are actually attached.
     buildB20Section(hasTools),
+    buildLaunchpadSection(hasTools),
     skills   ? `## Installed Skills\nThe user has installed these skill packs — use their tools / knowledge when relevant:\n\n${skills}` : "",
     // `&& hasTools` covers the Phase-1-failed rebuild: connectors ride the same
     // tool call, so when it doesn't happen they are as absent as the Hub tools.
