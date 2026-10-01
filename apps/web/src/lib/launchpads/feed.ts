@@ -16,7 +16,7 @@
  * A part that could not be read says so; it is never shown as zero.
  */
 import { parseAbi, type Address, type Hex } from "viem";
-import { launchClient } from "./resolve";
+import { isBankrLaunch, launchClient } from "./resolve";
 import { gtJson } from "./gt";
 import {
   CLANKER_FACTORY, DOPPLER_AIRLOCK, FLAP_RH, LAUNCHPAD_INFO, PONS_V2_FACTORY, TOPICS,
@@ -27,6 +27,9 @@ import {
 const BLOCK_TIME_S: Record<LaunchChain, number> = { base: 2, robinhood: 0.1 };
 /** Liquidity floor for the "new pools" part, USD. */
 export const NEW_POOL_MIN_RESERVE_USD = 10_000;
+/** A pool with less 24h volume than this is not "trending" — the 2026-10-01
+ *  test share listed four Virtuals pools at $0–$3 under that word. */
+export const TRENDING_MIN_VOLUME_USD = 1_000;
 
 type CountSpec = { id: LaunchpadId; address: Address; topic: Hex };
 const COUNT_SPECS: Record<LaunchChain, CountSpec[]> = {
@@ -59,7 +62,7 @@ export interface LaunchFeed {
   graduations: { windowHours: number; items: Array<{ launchpad: string; token: Address; symbol: string | null }>; unread: string[] };
   newPools: { minReserveUsd: number; items: Array<{ name: string; launchpad: string | null; reserveUsd: number; volume24hUsd: number | null; ageMinutes: number | null; token: string | null }> | null };
   /** Only when one launchpad was asked for: its pools by 24h volume. */
-  trending: { available: boolean; items: Array<{ name: string; reserveUsd: number; volume24hUsd: number | null; change24hPct: number | null; token: string | null }> | null };
+  trending: { available: boolean; items: Array<{ name: string; reserveUsd: number; volume24hUsd: number | null; change24hPct: number | null; token: string | null; unconfirmed?: boolean }> | null };
 }
 
 const erc20 = parseAbi(["function symbol() view returns (string)"]);
@@ -126,6 +129,7 @@ async function trendingFor(chain: LaunchChain, only: LaunchpadId): Promise<Launc
       const ch = Number((a.price_change_percentage as Record<string, unknown> | undefined)?.h24);
       const baseTok = String(p.relationships?.base_token?.data?.id ?? "");
       if (!Number.isFinite(reserve) || reserve < NEW_POOL_MIN_RESERVE_USD) continue;
+      if (!Number.isFinite(vol) || vol < TRENDING_MIN_VOLUME_USD) continue;
       rows.push({
         name: String(a.name ?? "?"), reserveUsd: reserve,
         volume24hUsd: Number.isFinite(vol) ? vol : null,
@@ -135,7 +139,19 @@ async function trendingFor(chain: LaunchChain, only: LaunchpadId): Promise<Launc
     }
   }
   if (!readAny) return { available: true, items: null };
-  return { available: true, items: rows.sort((a, b) => (b.volume24hUsd ?? 0) - (a.volume24hUsd ?? 0)).slice(0, 5) };
+  const top = rows.sort((a, b) => (b.volume24hUsd ?? 0) - (a.volume24hUsd ?? 0));
+  if (only !== "bankr") return { available: true, items: top.slice(0, 5) };
+  // GeckoTerminal's `bankr` listing also files pools Bankr did not launch
+  // (e.g. STONX/wtSPYM on the 2026-10-01 share). Each row is checked on-chain:
+  // a "no" is dropped, an unread check is kept and labelled.
+  const checked: typeof top = [];
+  for (const r of top) {
+    if (checked.length >= 5) break;
+    const v = r.token && /^0x[0-9a-fA-F]{40}$/.test(r.token) ? await isBankrLaunch(chain, r.token as Address) : null;
+    if (v === false) continue;
+    checked.push({ ...r, unconfirmed: v === null });
+  }
+  return { available: true, items: checked };
 }
 
 async function newPools(chain: LaunchChain, only?: LaunchpadId): Promise<LaunchFeed["newPools"]["items"]> {

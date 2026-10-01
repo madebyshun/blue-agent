@@ -115,6 +115,8 @@ export async function resolveWatchTarget(chain: LaunchChain, raw: string): Promi
   if (!symbol) {
     try { symbol = await launchClient(chain).readContract({ address: token, abi: erc20, functionName: "symbol" }); } catch { symbol = null; }
   }
+  // Asked for "ETH": the watch prices WETH's pool, but the user said ETH.
+  if (raw.trim().replace(/^\$/, "").toUpperCase() === "ETH") symbol = "ETH";
   const target: WatchTarget = {
     chain, token, symbol: (symbol ?? token.slice(0, 8)).slice(0, 24),
     asset: stock ? "stock" : "crypto",

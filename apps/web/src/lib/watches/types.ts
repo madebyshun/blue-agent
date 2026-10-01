@@ -80,8 +80,13 @@ export interface WatchReading {
 
 export const CHAIN_NAME: Record<LaunchChain, string> = { base: "Base", robinhood: "Robinhood Chain" };
 
+function usd(n: number): string {
+  if (n >= 1000) return `$${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+  return n >= 1 ? `$${n}` : `$${n.toPrecision(3)}`;
+}
+
 export function describeRule(w: Pick<Watch, "kind" | "direction" | "threshold" | "window" | "symbol" | "chain">): string {
   const who = `${w.symbol} on ${CHAIN_NAME[w.chain]}`;
-  if (w.kind === "price") return `${who} ${w.direction === "above" ? "rises to or above" : "falls to or below"} $${w.threshold}`;
+  if (w.kind === "price") return `${who} ${w.direction === "above" ? "rises to or above" : "falls to or below"} ${usd(w.threshold)}`;
   return `${who} is ${w.direction === "up" ? "up" : "down"} ${w.threshold}% or more over ${w.window === "1h" ? "1 hour" : "24 hours"}`;
 }

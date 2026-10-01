@@ -69,6 +69,7 @@ ok("change needs a window", "error" in parseRule({ kind: "change", direction: "u
 ok("change under 1% refused", "error" in parseRule({ kind: "change", direction: "up", threshold: 0.5, window: "1h" }));
 ok("change valid", "kind" in parseRule({ kind: "change", direction: "down", threshold: 10, window: "24h" }));
 ok("rule text", describeRule({ ...ch, threshold: 20 }) === "ZIP on Robinhood Chain is up 20% or more over 1 hour");
+ok("price rule text uses thousands separators", describeRule({ ...base, symbol: "ETH", chain: "base", direction: "above", threshold: 3000 }) === "ETH on Base rises to or above $3,000");
 
 console.log("3. identity");
 ok("an unknown symbol is refused, asking for the address", "error" in identify("base", "DEGEN") && /paste its 0x/.test((identify("base", "DEGEN") as { error: string }).error));

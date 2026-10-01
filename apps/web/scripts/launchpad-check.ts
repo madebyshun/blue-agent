@@ -108,7 +108,9 @@ ok("Pons is Robinhood-only, Zora Base-only", LAUNCHPAD_INFO.pons.chains.join() =
   ok("counts name their source and window", txt.includes("last 60 min") && txt.includes("Pons (Pons Family) 146"), txt);
   ok("an unread count is said, never shown as 0", txt.includes("Could not count: Flap (flap.sh)") && !/Flap \(flap\.sh\) 0/.test(txt));
   ok("graduations listed by contract", txt.includes("ZIP · Pons (Pons Family) · `0xC008"));
-  ok("unread new pools are said", txt.includes("New pools could not be read"));
+  ok("with one launchpad asked, the chain-wide new-pools line is left out", !txt.includes("New pools"));
+  ok("chain-wide: unread new pools are said", formatFeed({ ...feed, trending: { available: false, items: null } }).includes("New pools could not be read"));
+  ok("an unconfirmed Bankr row is labelled", formatFeed({ ...feed, trending: { available: true, items: [{ name: "X / WETH", reserveUsd: 20000, volume24hUsd: 5000, change24hPct: null, token: "0x1", unconfirmed: true }] } }).includes("launchpad not confirmed on-chain"));
   ok("facts, not picks", /not picks/.test(txt));
   ok("trending pools ranked by 24h volume, sourced", txt.includes("top pools by 24h volume") && txt.includes("VRAX / USDG · 24h volume $6.12M"), txt);
   ok("a launchpad with no GT dex says nothing about trending", !formatFeed({ ...feed, trending: { available: false, items: null } }).includes("Trending"));

@@ -195,6 +195,18 @@ async function probeZora(c: PublicClient, token: Address): Promise<Probe> {
   } };
 }
 
+/**
+ * Is this token a Bankr launch? One Airlock read: true / false, or null when
+ * the read failed (never treated as "no"). Used to check GeckoTerminal's
+ * `bankr` pool listing, which also files pools Bankr did not launch.
+ */
+export async function isBankrLaunch(chain: LaunchChain, token: Address): Promise<boolean | null> {
+  try {
+    const d = await launchClient(chain).readContract({ address: DOPPLER_AIRLOCK[chain], abi: ABI.airlock, functionName: "getAssetData", args: [token] });
+    return d[9].toLowerCase() === BANKR_INTEGRATOR.toLowerCase();
+  } catch (e) { return isMiss(e) ? false : null; }
+}
+
 /** Injectable for tests: the probes to run, in priority order. */
 export type ProbeSet = Array<[string, () => Promise<Probe>]>;
 

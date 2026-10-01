@@ -79,22 +79,26 @@ export function formatFeed(f: LaunchFeed): string {
 
   if (f.trending.available) {
     if (f.trending.items == null) lines.push("Trending pools could not be read right now (GeckoTerminal).");
-    else if (f.trending.items.length === 0) lines.push(`No pool of this launchpad on ${chain} has more than ${fmtUsd(f.newPools.minReserveUsd)} of liquidity right now.`);
+    else if (f.trending.items.length === 0) lines.push(`Nothing is trending on this launchpad on ${chain} right now — no pool has both ${fmtUsd(f.newPools.minReserveUsd)} of liquidity and $1,000 of 24h volume.`);
     else {
       lines.push(`**Trending on this launchpad — top pools by 24h volume, over ${fmtUsd(f.newPools.minReserveUsd)} liquidity** (GeckoTerminal):`);
       for (const p of f.trending.items) {
-        lines.push(`- ${p.name} · 24h volume ${fmtUsd(p.volume24hUsd) ?? "?"} · liquidity ${fmtUsd(p.reserveUsd)}${fmtPct(p.change24hPct) ? ` · 24h ${fmtPct(p.change24hPct)}` : ""}${p.token ? ` · \`${p.token}\`` : ""}`);
+        lines.push(`- ${p.name} · 24h volume ${fmtUsd(p.volume24hUsd) ?? "?"} · liquidity ${fmtUsd(p.reserveUsd)}${fmtPct(p.change24hPct) ? ` · 24h ${fmtPct(p.change24hPct)}` : ""}${p.token ? ` · \`${p.token}\`` : ""}${p.unconfirmed ? " · (launchpad not confirmed on-chain)" : ""}`);
       }
     }
   }
-  if (f.newPools.items == null) {
-    lines.push("New pools could not be read right now (GeckoTerminal).");
-  } else if (f.newPools.items.length === 0) {
-    lines.push(`No pool created in GeckoTerminal's latest batch has more than ${fmtUsd(f.newPools.minReserveUsd)} of liquidity.`);
-  } else {
-    lines.push(`**New pools with over ${fmtUsd(f.newPools.minReserveUsd)} liquidity** (GeckoTerminal's newest batch):`);
-    for (const p of f.newPools.items) {
-      lines.push(`- ${p.name}${p.launchpad ? ` · ${p.launchpad}` : ""} · liquidity ${fmtUsd(p.reserveUsd)}${p.volume24hUsd != null ? ` · 24h volume ${fmtUsd(p.volume24hUsd)}` : ""}${p.ageMinutes != null ? ` · ${p.ageMinutes} min old` : ""}${p.token ? ` · \`${p.token}\`` : ""}`);
+  // Asked about ONE launchpad (trending shown): the chain-wide new-pools list
+  // is noise there, so it is only shown for the chain-wide question.
+  if (!f.trending.available) {
+    if (f.newPools.items == null) {
+      lines.push("New pools could not be read right now (GeckoTerminal).");
+    } else if (f.newPools.items.length === 0) {
+      lines.push(`No pool created in GeckoTerminal's latest batch has more than ${fmtUsd(f.newPools.minReserveUsd)} of liquidity.`);
+    } else {
+      lines.push(`**New pools with over ${fmtUsd(f.newPools.minReserveUsd)} liquidity** (GeckoTerminal's newest batch):`);
+      for (const p of f.newPools.items) {
+        lines.push(`- ${p.name}${p.launchpad ? ` · ${p.launchpad}` : ""} · liquidity ${fmtUsd(p.reserveUsd)}${p.volume24hUsd != null ? ` · 24h volume ${fmtUsd(p.volume24hUsd)}` : ""}${p.ageMinutes != null ? ` · ${p.ageMinutes} min old` : ""}${p.token ? ` · \`${p.token}\`` : ""}`);
+      }
     }
   }
   lines.push("Facts, not picks — ask for an overview of any address before trading it.");
