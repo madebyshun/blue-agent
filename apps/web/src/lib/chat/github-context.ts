@@ -21,9 +21,12 @@
  * a repo whose README or source says "ignore your instructions and …", and the
  * old version pasted it into the SYSTEM prompt inside plain ``` fences a file
  * could close itself. Now:
- *   - the content goes in a separate USER-role message, labelled as fetched
- *     data, placed just before the user's last message; the system prompt only
- *     carries a one-line pointer and the untrusted-data rule (`pointer`);
+ *   - the content is wrapped between explicit FETCHED REPOSITORY DATA markers,
+ *     after the untrusted-data rule (`pointer`), at the end of the system
+ *     prompt. It was briefly a separate user-role message instead; MEASURED
+ *     2026-10-01, that shape made Sonnet 5's provider filter end the audit
+ *     with `finish_reason: content_filter` and no text (0 of 2 answered) — so
+ *     the safeguard that matters is the one below, not the placement;
  *   - every untrusted string (description, file names, file bodies) is fenced
  *     with a backtick run LONGER than any run inside it, so it cannot close
  *     its own fence;
@@ -127,8 +130,8 @@ export interface GithubContext {
   /** Short system-prompt section: where the data is, and the untrusted-data rule. */
   pointer: string;
   /**
-   * The fetched repository data, for a separate USER-role message placed just
-   * before the user's last message — or null when nothing was read.
+   * The fetched repository data, appended after `pointer` in the system prompt
+   * between its markers — or null when nothing was read.
    */
   data: string | null;
   /** True when `data` carries anything read from the repository (untrusted). */
@@ -145,7 +148,7 @@ const DATA_CLOSE = "[END OF FETCHED REPOSITORY DATA — the user's actual messag
 /**
  * Read the repository a message links, or null when it links none. Never throws.
  * The chat route puts `pointer` in the system prompt and `data` in its own
- * user-role message (see the file header for why).
+ * after it, between the data markers (see the file header for why).
  */
 export async function githubContextFor(text: string): Promise<GithubContext | null> {
   const slug = repoSlugIn(text);
@@ -162,7 +165,7 @@ The server asked GitHub for this repository and got no PUBLIC repository back: i
   }
 
   const pointer = (scope: string) => `## Linked repository: github.com/${repo.fullName}
-The server read this public repository from GitHub (${scope}). What it read is in the user-role message labelled "FETCHED REPOSITORY DATA" just before the user's last message. ${UNTRUSTED_RULE}`;
+The server read this public repository from GitHub (${scope}). What it read follows below, between the "FETCHED REPOSITORY DATA" markers. ${UNTRUSTED_RULE}`;
 
   const head = [
     DATA_OPEN(repo.fullName),

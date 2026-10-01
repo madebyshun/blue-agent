@@ -133,12 +133,16 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   ok("no tools attached on a repo-content turn", !!req && !req.tools);
   const msgs = req?.messages ?? [];
   const sys = msgs.find((m) => m.role === "system")?.content ?? "";
-  ok("the system prompt points at the data but holds none of it", /FETCHED REPOSITORY DATA/.test(sys) && !sys.includes("pragma solidity") && !sys.includes("admin mode"));
+  const open = sys.indexOf("[FETCHED REPOSITORY DATA");
+  const close = sys.indexOf("[END OF FETCHED REPOSITORY DATA");
+  const hostile = sys.indexOf("admin mode");
+  ok("repo text sits only between the data markers, after the untrusted-data rule",
+    open > 0 && close > open && sys.includes("pragma solidity") && hostile > open && hostile < close && sys.indexOf("untrusted DATA") < open);
   ok("the system prompt says it has no tools", !/Use check_token/.test(sys));
   const last = msgs[msgs.length - 1];
   const beforeLast = msgs[msgs.length - 2];
   ok("the user's own message is still last", last?.role === "user" && last.content === "blue audit https://github.com/acme/vault");
-  ok("the repo data is a user-role message just before it", beforeLast?.role === "user" && beforeLast.content.startsWith("[FETCHED REPOSITORY DATA") && beforeLast.content.includes("pragma solidity"));
+  ok("no extra message carries repo data (it is in the system prompt)", !(beforeLast?.content ?? "").includes("FETCHED REPOSITORY DATA"));
 
   console.log(failures === 0 ? "\nchat-github-context-test: PASS" : `\nchat-github-context-test: FAIL — ${failures}`);
   process.exit(failures === 0 ? 0 : 1);

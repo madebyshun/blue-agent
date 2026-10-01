@@ -3624,13 +3624,11 @@ export async function POST(req: NextRequest) {
   // half wins, and prod says it guesses the tool list.
   const longForm = !!github || (typeof lastUser?.content === "string" && FOUNDER_COMMAND_RE.test(lastUser.content));
 
-  // The repository data rides in its OWN user-role message, just before the
-  // user's last message — never in the system prompt, where repo text would
-  // speak with the system's authority. The system prompt only points at it.
-  const withRepoData = <T extends { role: string; content: unknown }>(msgs: T[]): T[] =>
-    github?.data && msgs.length > 0
-      ? [...msgs.slice(0, -1), { role: "user", content: github.data } as T, msgs[msgs.length - 1]]
-      : msgs;
+  // Repository data goes at the end of the system prompt, between explicit
+  // FETCHED REPOSITORY DATA markers after the untrusted-data rule (see
+  // lib/chat/github-context.ts for the measurement behind the placement). The
+  // safeguard that matters is that a repo turn carries NO tools.
+  const withRepoData = <T extends { role: string; content: unknown }>(msgs: T[]): T[] => msgs;
 
   const buildSystem = (hasTools: boolean, toolsUnreachable = false) => [
     // SOUL.md goes FIRST — it's the identity layer (who Blue Agent is, how it
@@ -3660,7 +3658,7 @@ export async function POST(req: NextRequest) {
     // see with their own eyes, which is why it must never contradict the
     // screen — see the caller's label.
     pageContext ?? "",
-    github?.pointer ?? "",
+    github ? [github.pointer, github.data ?? ""].filter(Boolean).join("\n\n") : "",
     cmdPrompt ?? "",
   ].filter(Boolean).join("\n\n");
 
