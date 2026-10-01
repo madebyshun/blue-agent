@@ -5,14 +5,14 @@
  * number on a card names nothing it did not read — an unread price is "—".
  */
 import Link from "next/link";
-import { describeRule, MAX_WATCHES_PER_WALLET, type Watch, type WatchAlert, type WatchReading } from "@/lib/watches/types";
+import { describeRule, describeTrade, describeCheck, MAX_WATCHES_PER_WALLET, type Watch, type WatchAlert, type WatchReading } from "@/lib/watches/types";
 import type { useWatches } from "../../use-watches";
 import { C, ChainBadge, SectionLabel } from "./ui";
 
 const EXAMPLES = [
   "Alert me when ETH on Base goes above $3,000",
-  "Báo tôi khi NVDA trên Robinhood xuống dưới $220",
-  "Alert me if 0x… on Robinhood is up 20% in 1 hour",
+  "Every day at 9:00, if ETH on Base is below $2,500, buy $50",
+  "Báo tôi khi NVDA trên Robinhood xuống dưới $220 rồi bán một nửa",
 ];
 
 function price(n: number | null | undefined): string {
@@ -32,7 +32,8 @@ const ago = (at: number) => {
 };
 
 function WatchCard({ w, r, onToggle, onDelete }: { w: Watch; r?: WatchReading; onToggle: () => void; onDelete: () => void }) {
-  const status = w.active ? (w.armed ? { t: "watching", c: C.green } : { t: "fired · waiting to re-arm", c: C.amber })
+  const status = w.active && w.checkAt ? { t: "scheduled", c: C.green }
+    : w.active ? (w.armed ? { t: "watching", c: C.green } : { t: "fired · waiting to re-arm", c: C.amber })
     : w.lastTriggeredAt ? { t: "fired", c: C.accent } : { t: "paused", c: C.dim };
   const src = r?.priceSource === "chainlink" ? (r.stale ? "Chainlink · market closed" : "Chainlink oracle")
     : r?.priceSource === "dexscreener" ? "DexScreener" : r?.priceSource === "geckoterminal" ? "GeckoTerminal" : null;
@@ -46,7 +47,21 @@ function WatchCard({ w, r, onToggle, onDelete }: { w: Watch; r?: WatchReading; o
           {status.t}
         </span>
       </div>
-      <p className="text-[12.5px] text-[#94A3B8] mt-1.5 leading-snug">{describeRule(w)}{w.repeat ? " · repeats" : ""}</p>
+      <p className="text-[12.5px] text-[#94A3B8] mt-1.5 leading-snug">{w.checkAt ? "If " : "When "}{describeRule(w)}{!w.checkAt && w.repeat ? " · repeats" : ""}</p>
+      {(w.trade || w.checkAt) && (
+        <div className="flex flex-wrap gap-1.5 mt-2">
+          {w.checkAt && (
+            <span className="font-mono text-[9.5px] rounded-md px-1.5 py-[2px]" style={{ color: C.sub, background: "#ffffff0a" }}>
+              ⏱ {describeCheck(w.checkAt)}{w.active && w.nextCheckAt ? ` · next ${new Date(w.nextCheckAt).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" })}` : ""}
+            </span>
+          )}
+          {w.trade && (
+            <span className="font-mono text-[9.5px] rounded-md px-1.5 py-[2px]" style={{ color: C.accent, background: "#4FC3F714" }}>
+              ⚙ {describeTrade(w.trade, w.symbol, w.chain)} · you sign
+            </span>
+          )}
+        </div>
+      )}
       <div className="flex items-end gap-4 mt-3">
         <div>
           <p className="font-mono text-[9px] tracking-[0.12em] text-[#475569]">NOW</p>
@@ -81,7 +96,9 @@ function AlertRow({ a, unread }: { a: WatchAlert; unread: boolean }) {
       <p className={`text-[12.5px] leading-snug ${unread ? "text-[#E2E8F0]" : "text-[#94A3B8]"}`}>{a.text}</p>
       <p className="font-mono text-[9.5px] text-[#475569] mt-1 flex items-center gap-2">
         <span>{ago(a.at)}</span>
-        <Link className="hover:text-[#4FC3F7]" href={`/chat?prefill=${encodeURIComponent(`Check ${a.token} on ${chainName(a.chain)}`)}`}>Open in chat →</Link>
+        {a.trade
+          ? <Link className="text-[#4FC3F7] hover:underline" href="/chat?alerts=1">Review &amp; sign the prepared trade →</Link>
+          : <Link className="hover:text-[#4FC3F7]" href={`/chat?prefill=${encodeURIComponent(`Check ${a.token} on ${chainName(a.chain)}`)}`}>Open in chat →</Link>}
       </p>
     </li>
   );
@@ -100,7 +117,7 @@ export default function AlertsTab({ w, onNew }: { w: ReturnType<typeof useWatche
 
   if (st.watches.length === 0 && st.alerts.length === 0) {
     return (
-      <Empty title="No price alerts yet" body="Watch a token or stock token for a price level or a % move. Checked every 5 minutes, free, up to 20.">
+      <Empty title="No alerts or automations yet" body="Watch a token or stock token for a price level or a % move — and optionally prepare a buy or sell for when it happens. You always sign; nothing executes on its own. Free, up to 20.">
         <button onClick={onNew} className="font-mono text-[11px] font-semibold rounded-lg px-3.5 py-2" style={{ color: C.page, background: C.accent }}>+ Price alert</button>
         <div className="flex flex-wrap justify-center gap-1.5 mt-4">
           {EXAMPLES.map((e) => (
@@ -118,7 +135,7 @@ export default function AlertsTab({ w, onNew }: { w: ReturnType<typeof useWatche
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
       <section>
-        <SectionLabel right={`${st.watches.length}/${MAX_WATCHES_PER_WALLET} · checked every 5 min`}>WATCHING</SectionLabel>
+        <SectionLabel right={`${st.watches.length}/${MAX_WATCHES_PER_WALLET} · free`}>ALERTS &amp; AUTOMATIONS</SectionLabel>
         {st.watches.length === 0 ? (
           <button onClick={onNew} className="w-full border border-dashed border-[#1A1A2E] rounded-2xl px-4 py-6 font-mono text-[11px] text-[#64748B] hover:border-[#4FC3F7]/30">+ Add a price alert</button>
         ) : (
@@ -132,7 +149,7 @@ export default function AlertsTab({ w, onNew }: { w: ReturnType<typeof useWatche
         )}
       </section>
       <section>
-        <SectionLabel right={st.unread > 0 ? `${st.unread} new` : undefined}>ALERTS</SectionLabel>
+        <SectionLabel right={st.unread > 0 ? `${st.unread} new` : undefined}>FIRED</SectionLabel>
         <div className="rounded-2xl border border-[#1A1A2E] bg-[#0D0D14] px-4 py-4">
           {st.alerts.length === 0 ? (
             <p className="font-mono text-[11px] text-[#475569]">Nothing has fired yet. When one does it lands here and in the “🔔 Price alerts” chat.</p>

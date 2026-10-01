@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useWatches } from "../use-watches";
 import AlertsTab from "./scheduled/AlertsTab";
 import AlertDrawer from "./scheduled/AlertDrawer";
+import ActivityTab from "./scheduled/ActivityTab";
 import { Drawer, StatTile } from "./scheduled/ui";
 import { MAX_WATCHES_PER_WALLET } from "@/lib/watches/types";
 import { useChat } from "../ChatContext";
@@ -166,7 +167,7 @@ export default function CronPanel() {
 
   // ── Price alerts — one loader for the stat strip, the cards and the feed.
   const w = useWatches(walletAddr);
-  const [tab, setTab] = useState<"alerts" | "tasks">("alerts");
+  const [tab, setTab] = useState<"alerts" | "tasks" | "activity">("alerts");
   const [alertOpen, setAlertOpen] = useState(false);
   // Looking at the Alerts tab is reading it: clear the nav badge. The dots
   // stay lit until the next load, so what was new is still visible now.
@@ -185,7 +186,7 @@ export default function CronPanel() {
     <>
       <button onClick={() => setAlertOpen(true)}
         className="font-mono text-[10.5px] font-semibold rounded-[7px] px-[11px] py-[6px]" style={{ color: "#050508", background: "#4FC3F7" }}>
-        + Price alert
+        + Alert / automation
       </button>
       <button onClick={() => { setTab("tasks"); setShowForm(true); }}
         className="font-mono text-[10.5px] font-semibold rounded-[7px] px-[11px] py-[6px] border border-[#2A2A4E] text-[#E2E8F0] hover:border-[#4FC3F7]/40">
@@ -203,7 +204,7 @@ export default function CronPanel() {
            two actions move into the body there. ─── */}
       <div className="hidden lg:flex items-center gap-3.5 flex-wrap shrink-0 min-h-[56px] px-5 py-2 border-b border-[#1A1A2E]">
         <span className="font-mono text-[11px] font-semibold tracking-[0.16em] text-[#E2E8F0]">// SCHEDULED</span>
-        <span className="font-mono text-[10.5px] text-[#64748B]">price alerts every 5 min · recurring agent runs, even with the tab closed</span>
+        <span className="font-mono text-[10.5px] text-[#64748B]">alerts · automations that prepare trades you sign · recurring runs</span>
         <span className="ml-auto flex gap-2">{actions}</span>
       </div>
 
@@ -212,7 +213,8 @@ export default function CronPanel() {
 
         {/* ── Stat strip ─── */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <StatTile label="WATCHING" value={watching == null ? "—" : `${watching}/${MAX_WATCHES_PER_WALLET}`} sub="active price alerts" />
+          <StatTile label="WATCHING" value={watching == null ? "—" : `${watching}/${MAX_WATCHES_PER_WALLET}`}
+            sub={w.state.s === "ok" ? `${w.state.watches.filter((x) => x.active && (x.trade || x.checkAt)).length} automations` : "alerts & automations"} />
           <StatTile label="NEW ALERTS" value={w.state.s === "ok" ? unread : "—"} tone={unread > 0 ? "#4FC3F7" : undefined}
             sub={lastAlert ? `last ${new Date(lastAlert.at).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}` : "none fired yet"} />
           <StatTile label="RECURRING" value={crons.length} sub={`${bgCount} in the background`} />
@@ -222,7 +224,7 @@ export default function CronPanel() {
 
         {/* ── Tabs ─── */}
         <div className="flex items-center gap-1 mt-6 mb-4 border-b border-[#1A1A2E]">
-          {([["alerts", "Price alerts", w.state.s === "ok" ? w.state.watches.length : null], ["tasks", "Recurring tasks", crons.length]] as const).map(([id, label, count]) => (
+          {([["alerts", "Alerts & automations", w.state.s === "ok" ? w.state.watches.length : null], ["tasks", "Recurring tasks", crons.length], ["activity", "Activity", null]] as const).map(([id, label, count]) => (
             <button key={id} onClick={() => setTab(id)}
               className="relative font-mono text-[11.5px] px-3.5 py-2.5 -mb-px border-b-2 transition-colors"
               style={tab === id ? { color: "#E2E8F0", borderColor: "#4FC3F7" } : { color: "#64748B", borderColor: "transparent" }}>
@@ -234,6 +236,8 @@ export default function CronPanel() {
 
         {tab === "alerts" ? (
           <AlertsTab w={w} onNew={() => setAlertOpen(true)} />
+        ) : tab === "activity" ? (
+          <ActivityTab walletAddr={walletAddr} />
         ) : (
           <>
             {/* ── Stop everything the server runs for this wallet — including
