@@ -250,9 +250,26 @@ export async function getBasescanSource(address: string): Promise<Record<string,
       { signal: AbortSignal.timeout(8000) }
     );
     if (!res.ok) return null;
-    const data = await res.json() as { result?: Record<string, unknown>[] };
-    return data.result?.[0] ?? null;
+    return parseEtherscanSource(await res.json());
   } catch {
     return null;
   }
+}
+
+/**
+ * The `getsourcecode` row, or null when Etherscan did not answer the question.
+ * Etherscan reports rate limits, a bad/missing key and similar errors as HTTP
+ * 200 `{status:"0", result:"Max calls per sec rate limit reached…"}` — a
+ * STRING. `data.result?.[0]` indexed that string and handed callers "M", which
+ * every reader took as an answer with no SourceCode, i.e. "not verified": a
+ * rate-limited lookup of USDC came back from contract-trust as "source not
+ * verified on Basescan". An unverified contract is `status:"1"` with a row
+ * whose SourceCode is "", so status "1" + an object row is the whole test.
+ * Exported (pure) so scripts/safety-verdicts-test.ts pins it without network.
+ */
+export function parseEtherscanSource(data: unknown): Record<string, unknown> | null {
+  const d = data as { status?: unknown; result?: unknown } | null;
+  if (!d || d.status !== "1" || !Array.isArray(d.result)) return null;
+  const row = d.result[0];
+  return row && typeof row === "object" && !Array.isArray(row) ? (row as Record<string, unknown>) : null;
 }

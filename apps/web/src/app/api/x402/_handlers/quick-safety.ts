@@ -46,7 +46,12 @@ export function quickVerdict(f: QuickFacts): { verdict: QuickVerdict; flags: str
   if (f.honeypot === "SUSPICIOUS" || f.basePairs === 0 || (f.liquidityUsd != null && f.liquidityUsd < THIN_LIQUIDITY_USD)) {
     return { verdict: "CAUTION", flags };
   }
-  if (f.verified === true && f.liquidityUsd != null) return { verdict: "SAFE", flags };
+  // SAFE needs the sell side READ, not just verified source + a market: an
+  // owner-only sell block verifies like anything else. Until 2026-10-01 this
+  // line accepted honeypot UNKNOWN — so nearly every verified Base token came
+  // back `safe: true` while its own flags said the tax was unreadable and
+  // honeypot-check called it UNKNOWN. Unmeasured is UNKNOWN (W0-19).
+  if (f.verified === true && f.liquidityUsd != null && f.honeypot === "SAFE") return { verdict: "SAFE", flags };
   return { verdict: "UNKNOWN", flags };
 }
 

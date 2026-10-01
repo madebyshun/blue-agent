@@ -232,7 +232,16 @@ export async function getTokenIdentity(rawAddr: string): Promise<TokenIdentity |
   const address = normalizeAddress(rawAddr);
   if (!address) return null;
 
-  const code = await client.getCode({ address }).catch(() => undefined);
+  // A FAILED read is null for the whole identity, per this module's header.
+  // It used to be `.catch(() => undefined)` — and viem's getCode ALSO returns
+  // `undefined` for an EOA (it maps "0x" to undefined), so a rate-limited or
+  // timed-out RPC came back as a confident `isContract: false`. Every caller
+  // then short-circuited a possibly-malicious contract as "a wallet":
+  // risk-gate to PROCEED, contract-trust to NOT_A_CONTRACT at confidence 100.
+  // Each caller already handles null as "identity unread, do NOT assume EOA".
+  // `null` is a safe sentinel: getCode itself returns a hex string or undefined.
+  const code = await client.getCode({ address }).catch(() => null);
+  if (code === null) return null;
   const hasCode = !!code && code !== "0x";
 
   // Read the designator first: a delegated EOA has code, but is not a contract.

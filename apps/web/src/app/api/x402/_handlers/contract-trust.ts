@@ -26,7 +26,10 @@ export interface TrustFacts {
   basescanAvailable: boolean;
   verified: boolean;
   isProxy: boolean;
-  /** For a token contract; null otherwise. */
+  /**
+   * For a token contract — or one whose identity could not be read, since that
+   * may be a token; null only for a contract MEASURED not to be a token.
+   */
   honeypot: HoneypotVerdict | null;
 }
 
@@ -46,6 +49,15 @@ export function measuredTrustVerdict(f: TrustFacts): { verdict: TrustVerdict; re
   }
   if (!f.verified) {
     return { verdict: "UNKNOWN", reasons: ["source not verified on Basescan — the code cannot be read, and nothing measured is wrong with it"] };
+  }
+  // A token is SAFE only when its sell side was READ. Verified source says the
+  // code is public, not that it lets holders out: an owner-only sell block
+  // compiles and verifies like anything else. Until 2026-10-01 a verified token
+  // with an unread tax — nearly every Base token that is not a Virtuals
+  // template — came back SAFE / PROCEED / 80 while honeypot-check called the
+  // same address UNKNOWN. Unmeasured is UNKNOWN (W0-19), in every tool.
+  if (f.honeypot === "UNKNOWN") {
+    return { verdict: "UNKNOWN", reasons: ["source verified on Basescan", "but the token's buy/sell tax could not be read — whether holders can sell was not measured"] };
   }
   return {
     verdict: "SAFE",
@@ -164,7 +176,9 @@ export default async function handler(req: Request): Promise<Response> {
 
     // EOA short-circuit — a wallet has no contract code to trust-check. Without
     // this, the LLM treats "no metadata" as red flags and emits a scary verdict
-    // on a plain wallet.
+    // on a plain wallet. Only a MEASURED "no code" lands here: a failed
+    // eth_getCode is `identity === null` (lib/onchain.ts), never isContract:false,
+    // so an unread drainer is not answered NOT_A_CONTRACT at confidence 100.
     if (identity && identity.isContract === false) {
       // An EIP-7702 delegated EOA lands here too, and must not be described as
       // "no code" — it has code, it is just not a contract. See the designator
@@ -269,8 +283,10 @@ Schema: {
     };
 
     // Step 4: the verdict — arithmetic on what was measured (W0-19). For a
-    // token, the same tax read honeypot-check uses.
-    const honeypot = identity?.isToken ? measuredHoneypotVerdict(await readTokenTax(address)).verdict : null;
+    // token, the same tax read honeypot-check uses. A null identity (eth_getCode
+    // failed) is "not known to be a non-token", so the tax is read for it too —
+    // skipping it would hand a verified token SAFE on a read that never happened.
+    const honeypot = identity == null || identity.isToken ? measuredHoneypotVerdict(await readTokenTax(address)).verdict : null;
     const measured = measuredTrustVerdict({
       basescanAvailable: basescan.available,
       verified: basescan.verified,

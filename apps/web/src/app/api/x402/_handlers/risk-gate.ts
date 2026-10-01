@@ -9,10 +9,23 @@
 // verdict chosen by a model, and a negative inferred from absent data — both
 // forbidden by CLAUDE.md. `measuredRiskVerdict` below decides from:
 //   • what the transaction does   — value moved? calldata present? an
-//     unlimited approve / setApprovalForAll decoded from the calldata?
+//     unlimited approve / permit / Permit2 / setApprovalForAll decoded from
+//     the calldata? or a plain ERC-20 transfer / bounded approve?
 //   • what the target is          — EOA / 7702 wallet / contract, verified?
 //   • if the target is a token    — the measured honeypot verdict (tax read)
 // The model still writes the assessment and its flags, labelled as its own.
+//
+// 🔴 PROCEED IS EARNED, NOT DEFAULTED (2026-10-01). The last branch used to be
+// "PROCEED — no measured risk signal", reached by anything the branches above
+// did not recognise. Two unmeasured shapes fell through to SAFE_TO_EXECUTE:
+//   • a failed eth_getCode read as "EOA" (getTokenIdentity now returns null on
+//     that, and `isContract` is null here), so a drainer contract skipped both
+//     the honeypot read and the unverified-contract branch;
+//   • calldata the decoder did not know — e.g. a Permit2 unlimited approve into
+//     the verified Permit2 contract — read as "nothing wrong measured".
+// PROCEED now needs a shape that was actually read: a no-op, a plain value send
+// with no calldata, or a decoded ERC-20 transfer / bounded approve into a token
+// whose tax measured SAFE. Undecoded calldata into anything with code is UNKNOWN.
 
 import { getTokenIdentity } from "@/lib/onchain";
 import { callLLM } from "@/app/api/_lib/llm";
@@ -22,8 +35,16 @@ import { measuredHoneypotVerdict, type HoneypotVerdict } from "./honeypot-check"
 export type RiskGateVerdict = "PROCEED" | "CAUTION" | "ABORT" | "UNKNOWN";
 
 const MAX_UINT_HALF = 2n ** 255n; // "unlimited" approvals are max-uint or close to it
+// Permit2 allowances are uint160, so its "unlimited" is max-uint160, not max-uint256.
+const MAX_UINT160_HALF = 2n ** 159n;
 
-/** Decode the approval shapes that hand a spender the wallet's tokens. */
+/**
+ * Decode the approval shapes that hand a spender the wallet's tokens: ERC-20
+ * approve / increaseAllowance, ERC-2612 permit, ERC-721/1155 setApprovalForAll,
+ * and Permit2's approve and permit(PermitSingle). Anything else is null here —
+ * and null is NOT "benign": `isKnownTokenCall` below is what says a
+ * non-approval was actually read.
+ */
 export function decodeApproval(data: string): "unlimited" | "operator" | null {
   const d = (data ?? "").toLowerCase();
   if (!/^0x[0-9a-f]*$/.test(d) || d.length < 10) return null;
@@ -34,6 +55,15 @@ export function decodeApproval(data: string): "unlimited" | "operator" | null {
       const amt = BigInt("0x" + (word(1) || "0"));
       return amt >= MAX_UINT_HALF ? "unlimited" : null;
     }
+    if (sel === "0xd505accf") {                                 // ERC-2612 permit(owner, spender, value, …)
+      return BigInt("0x" + (word(2) || "0")) >= MAX_UINT_HALF ? "unlimited" : null;
+    }
+    if (sel === "0x87517c45") {                                 // Permit2 approve(token, spender, uint160, uint48)
+      return BigInt("0x" + (word(2) || "0")) >= MAX_UINT160_HALF ? "unlimited" : null;
+    }
+    if (sel === "0x2b67b570") {                                 // Permit2 permit(owner, PermitSingle, sig) — word 2 is details.amount
+      return BigInt("0x" + (word(2) || "0")) >= MAX_UINT160_HALF ? "unlimited" : null;
+    }
     if (sel === "0xa22cb465") {                                 // setApprovalForAll
       return BigInt("0x" + (word(1) || "0")) !== 0n ? "operator" : null;
     }
@@ -41,14 +71,33 @@ export function decodeApproval(data: string): "unlimited" | "operator" | null {
   return null;
 }
 
+/**
+ * True only for calldata whose whole effect this file can state: an ERC-20
+ * `transfer(to, amount)` or a BOUNDED `approve` / `increaseAllowance` (the
+ * unlimited ones are decodeApproval's). It means something only when the
+ * target is a token — the same selector on a router means whatever the router
+ * says it means, which is why measuredRiskVerdict also requires `isToken`.
+ */
+export function isKnownTokenCall(data: string): boolean {
+  const d = (data ?? "").toLowerCase();
+  // selector + exactly two 32-byte words; anything longer is not the plain call.
+  if (!/^0x[0-9a-f]*$/.test(d) || d.length !== 10 + 2 * 64) return false;
+  const sel = d.slice(0, 10);
+  if (sel === "0xa9059cbb") return true;                        // transfer
+  return (sel === "0x095ea7b3" || sel === "0x39509351") && decodeApproval(d) === null;
+}
+
 export interface RiskFacts {
   movesValue: boolean;
   hasCalldata: boolean;
-  isContract: boolean;
+  /** null ⇒ eth_getCode failed: the target's type was NOT measured. */
+  isContract: boolean | null;
   isToken: boolean;
   verified: boolean;
   isDelegatedEoa: boolean;
   approval: "unlimited" | "operator" | null;
+  /** The calldata is a decoded ERC-20 transfer / bounded approve (isKnownTokenCall). */
+  knownTokenCall: boolean;
   /** Only for a token target; null when the target is not a token. */
   honeypot: HoneypotVerdict | null;
 }
@@ -73,10 +122,32 @@ export function measuredRiskVerdict(f: RiskFacts): { verdict: RiskGateVerdict; r
   if (f.honeypot === "UNKNOWN") {
     return { verdict: "UNKNOWN", reasons: ["the target token's buy/sell tax could not be read — nothing measured either way"] };
   }
-  if (f.isContract && !f.isToken && !f.isDelegatedEoa && f.hasCalldata && !f.verified) {
-    return { verdict: "UNKNOWN", reasons: ["calldata into an UNVERIFIED contract — what it executes cannot be read from source"] };
+  if (f.isContract === null) {
+    return { verdict: "UNKNOWN", reasons: ["the target's code could not be read (eth_getCode failed) — whether it is a wallet, a token or a contract was not measured"] };
   }
-  return { verdict: "PROCEED", reasons: ["no measured risk signal for this transaction"] };
+  if (f.hasCalldata && (f.isContract || f.isDelegatedEoa)) {
+    if (f.isToken && f.knownTokenCall && f.honeypot === "SAFE") {
+      return { verdict: "PROCEED", reasons: ["a decoded ERC-20 transfer / bounded approve on a token whose tax was read and measures clean"] };
+    }
+    if (f.isDelegatedEoa) {
+      // A 7702 wallet is not "an unverified contract" (lib/onchain.ts), and
+      // must not be described as one — but calldata sent to it runs its
+      // delegate's code (a batch can carry an approve), and that was not decoded.
+      return { verdict: "UNKNOWN", reasons: ["calldata into an EIP-7702 delegated wallet runs its delegate's code — what this call does was not decoded"] };
+    }
+    if (!f.isToken && !f.verified) {
+      return { verdict: "UNKNOWN", reasons: ["calldata into an UNVERIFIED contract — what it executes cannot be read from source"] };
+    }
+    return { verdict: "UNKNOWN", reasons: ["calldata into a contract this gate did not decode — what it grants or moves was not measured"] };
+  }
+  // Only the measured shapes reach here: a plain value send with no calldata
+  // (to a wallet, or a contract's receive), or calldata to an address with no code.
+  return {
+    verdict: "PROCEED",
+    reasons: [f.hasCalldata
+      ? "the target has no code — the calldata executes nothing"
+      : "a plain value send with no calldata — the transfer is the whole effect"],
+  };
 }
 
 type Msg = { role: string; content: string };
@@ -158,15 +229,20 @@ export default async function handler(req: Request): Promise<Response> {
       getAddressInfo(to),
       getTokenIdentity(to),
     ]);
-    const isContract = identity?.isContract ?? addrInfo.isContract;
-    // An EIP-7702 delegated EOA has bytecode, so `addrInfo` (Basescan ABI/verified)
-    // reads it as an unverified contract. getTokenIdentity resolves the designator
-    // and returns isContract:false, which is why identity wins the `??` above.
+    // eth_getCode alone decides the target type. An EIP-7702 delegated EOA has
+    // bytecode, so `addrInfo` (Basescan ABI/verified) reads it as an unverified
+    // contract; getTokenIdentity resolves the designator and returns
+    // isContract:false. When getCode FAILS, identity is null and so is this —
+    // it used to fall back to `addrInfo.isContract`, which is false whenever
+    // Basescan has no ABI or did not answer, and that is how a failed read
+    // became "EOA → PROCEED" (see the header).
+    const isContract: boolean | null = identity ? identity.isContract : null;
     const delegation = identity?.delegation ?? null;
     const tokenDesc = identity?.isToken
       ? `Target is an ERC-20 token: ${identity.name ?? "?"} (${identity.symbol ?? "?"})`
       : delegation
       ? `Target is an externally-owned account (EOA / wallet) that has delegated its code to ${delegation.address} under EIP-7702${delegation.label ? ` ("${delegation.label}", verified on Basescan)` : " (delegate source unverified)"}. This is a normal wallet upgrade. Do NOT call it an unverified contract and do NOT raise the risk score because it has code.`
+      : isContract === null ? "Target type UNKNOWN — the on-chain code read failed. Do NOT assume it is a wallet, and do NOT assume it is a contract."
       : isContract ? "Target is a smart contract (non-token or unrecognized)" : "Target is an externally-owned account (EOA / wallet)";
 
     const txCtx = `
@@ -175,7 +251,7 @@ Action: ${action}
 Target address: ${to}
 Value: ${value || "0 ETH"}
 Calldata present: ${data ? "yes" : "no"}
-Target type (from on-chain eth_getCode — authoritative): ${delegation ? "EOA with an EIP-7702 delegation" : isContract ? "contract" : "EOA"}
+Target type (from on-chain eth_getCode — authoritative): ${delegation ? "EOA with an EIP-7702 delegation" : isContract === null ? "unknown (read failed)" : isContract ? "contract" : "EOA"}
 ${tokenDesc}
 Basescan source verified: ${addrInfo.verified}
 Contract name: ${addrInfo.contractName ?? "unknown"}
@@ -256,6 +332,7 @@ Schema: {
       verified: addrInfo.verified,
       isDelegatedEoa: !!delegation,
       approval: decodeApproval(data),
+      knownTokenCall: isKnownTokenCall(data),
       honeypot,
     });
     const verdict = measured.verdict;
@@ -282,7 +359,7 @@ Schema: {
       chainId: 8453,
       target: {
         isContract,
-        account_type: delegation ? "eoa_7702" : isContract ? "contract" : "eoa",
+        account_type: delegation ? "eoa_7702" : isContract === null ? "unknown" : isContract ? "contract" : "eoa",
         delegate: delegation
           ? { address: delegation.address, label: delegation.label, verified: delegation.verified, explorer: `https://basescan.org/address/${delegation.address}` }
           : null,
