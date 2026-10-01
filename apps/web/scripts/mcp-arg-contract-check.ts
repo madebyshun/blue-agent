@@ -170,8 +170,10 @@ for (const id of REMAP.keys()) {
 }
 
 // ── 5. the bypass asymmetry at the payment door ──────────────────────────────
-// `callHubTool` attaches internalX402Headers(); `callPaidTool` deliberately does
-// not, and that omission IS the x402 payment path. Unlike everything above it,
+// `callHubTool` runs the tool in-process as a free service job (runInternalTool,
+// lib/x402-internal-run.ts — until 2026-10-01 a fetch carrying
+// internalX402Headers()); `callPaidTool` deliberately does neither, and that
+// omission IS the x402 payment path. Unlike everything above it,
 // this property is not recoverable by reading a manifest — it lives in which
 // helper a dispatch branch happens to call.
 //
@@ -184,7 +186,7 @@ for (const id of REMAP.keys()) {
 // are the assertions that replaced them, and they are why it can now name maps
 // instead of quantities.
 //
-// Comments are stripped first: that block cites `internalX402Headers()` in prose,
+// Comments are stripped first: that block cites `runInternalTool` in prose,
 // so a raw text count of the call site would read 3 and the guard would be
 // measuring its own documentation. Whole-line comments only — a line starting
 // `//` is never code, while a trailing one might sit beside some.
@@ -216,8 +218,12 @@ for (const name of dispatched) {
   check(`5.2 dispatched ${name} is advertised in MCP_TOOLS`, advertised.has(name));
 }
 
-const bypassSites = [...codeOnly.matchAll(/internalX402Headers\(/g)].map((m) => m.index ?? 0);
-check(`5.3 internalX402Headers has exactly one call site (${bypassSites.length})`, bypassSites.length === 1);
+// The free bypass is now `runInternalTool(` — the function, not a header set.
+// The old helper must not come back beside it: a second, HTTP-shaped bypass is
+// a second door the single-call-site assertion below could not see.
+check("5.3a the route no longer attaches internalX402Headers anywhere", !/internalX402Headers\(/.test(codeOnly));
+const bypassSites = [...codeOnly.matchAll(/runInternalTool\(/g)].map((m) => m.index ?? 0);
+check(`5.3 runInternalTool has exactly one call site (${bypassSites.length})`, bypassSites.length === 1);
 const hubStart = codeOnly.indexOf("async function callHubTool");
 const hubEnd = codeOnly.indexOf("async function callConsole");
 check(
@@ -245,6 +251,19 @@ check(`5.7 callPaidTool body located (${paidBody.length} chars)`, paidBody.lengt
 check(
   "5.8 callPaidTool does NOT attach internalX402Headers",
   paidBody.length > 200 && !paidBody.includes("internalX402Headers"),
+);
+check(
+  "5.9 …and does NOT run the tool in-process either",
+  paidBody.length > 200 && !paidBody.includes("runInternalTool"),
+);
+// The free run is a SERVICE run: no `user`, so nothing is billed on a surface
+// with no wallet proof, and `service: true`, so the guest guard does not turn
+// every paid HUB_MAP tool into WALLET_REQUIRED (the Jul → Sep MCP outage, back
+// when this was the X-Blue-Service header).
+const bypassCall = bypassSites.length === 1 ? codeOnly.slice(bypassSites[0], codeOnly.indexOf(")", bypassSites[0])) : "";
+check(
+  `5.10 the free run is a service run with no user (${bypassCall.replace(/\s+/g, " ")})`,
+  /service:\s*true/.test(bypassCall) && !/\buser\b/.test(bypassCall),
 );
 
 console.log(`\nmcp arg-contract guard: ${pass} passed, ${failures.length} failed`);

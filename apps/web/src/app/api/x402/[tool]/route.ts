@@ -16,6 +16,7 @@ import { recordCall } from "@/lib/usage-daily";
 import { kv } from "@/lib/kv";
 import { declareBuilderCodeExtension } from "@x402/extensions/builder-code";
 import { haltReason } from "@/lib/tool-halts";
+import { PRICE_UNITS, unavailableAnswer, haltedAnswer, runInternalTool } from "@/lib/x402-internal-run";
 
 const BUILDER_CODE_EXT = declareBuilderCodeExtension("bc_2ejr35xc");
 
@@ -24,17 +25,8 @@ export const maxDuration = 120;
 
 const INTERNAL_KEY = process.env.INTERNAL_SERVICE_KEY ?? "";
 
-// tool id → price in USDC micro-units (6 decimals), parsed from "$0.20"
-function priceToUnits(price?: string): number | null {
-  if (!price) return null;
-  const n = parseFloat(price.replace("$", "").trim());
-  return Number.isNaN(n) ? null : Math.round(n * 1_000_000);
-}
-const PRICE_UNITS = new Map<string, number>(
-  AGENT_TOOLS
-    .map(t => [t.id, priceToUnits(t.price)] as const)
-    .filter((e): e is readonly [string, number] => e[1] !== null)
-);
+// tool id → price in USDC micro-units: PRICE_UNITS, from lib/x402-internal-run.ts
+// (shared so the in-process runner refuses exactly the ids this route refuses).
 
 /**
  * Build the Bazaar extension object for a tool.
@@ -106,84 +98,23 @@ function buildPaymentRequired(
   };
 }
 
-// TWO different failures reach here, and until 2026-09-28 they shared one
-// message that was only ever true of the rarer one. Originally this was a 503
-// with a terse "Tool not available", which agents read as an intermittent
-// upstream error and retried in a loop; the status was fixed to 501 and the
-// prose was not, so it went on producing a wrong CONCLUSION instead of a wrong
-// retry. Both branches still say "you were not charged" — nothing is settled on
-// either path, and no `payment-required` header is sent.
-//
-// 🔴 The old hint asserted "this id exists in the public catalog" unconditionally,
-// and that case is provably EMPTY in production while the other is unbounded.
-// `/api/catalog` reports `{listed: 114, withHandler: 114, noOrphans: true}` and
-// dead-tool-check.ts pins catalog == handlers in CI, so essentially all real
-// traffic here is a typo'd or hallucinated id being told the id is RIGHT and the
-// server is at fault. That is the direction that costs the caller: the agent
-// concludes "transient outage" and retries or reports a false failure, instead
-// of re-checking the id. The mirror-image bug is written up in the header of
-// `.well-known/ai-tool/[tool]/route.ts` — "the reader is a machine that will
-// conclude the id is wrong and stop asking". This was that, inverted.
-//
-// 404 for the unknown id, because 501 means "the server does not support this
-// functionality" and that misdescribes a resource which simply does not exist.
-// Checked against consumers first: no test and none of the four published
-// manifests encode 501, and `scripts/p4-x402-smoke.ts` — named in the comment
-// this replaces — only iterates AGENT_TOOLS, so it never reached this branch at
-// all. `packages/agentkit` did branch on 501 and now accepts both.
+// An id that cannot run: 404 UNKNOWN_TOOL_ID when it is in no catalog, 501
+// TOOL_UNAVAILABLE when it is listed with no handler. Both bodies — and the
+// measurement behind telling those two apart — live in unavailableAnswer() in
+// lib/x402-internal-run.ts, so chat and MCP (which run tools in-process) and
+// this door answer an unrunnable id identically. This adds only the CORS header.
 function honestUnavailable(tool: string) {
-  // Looked up live rather than hoisted into a module-level Set on purpose: a
-  // Set built at import cannot be given a synthetic orphan, and production has
-  // no real one to test against (see case 7 in x402-free-and-validation-test).
-  if (!AGENT_TOOLS.some(t => t.id === tool)) {
-    return NextResponse.json(
-      {
-        error: "Unknown tool id — you were not charged.",
-        code:  "UNKNOWN_TOOL_ID",
-        tool,
-        hint:  "This id is not in the Blue Hub catalog. Do not retry — re-check the id against the authoritative list at https://blueagent.dev/api/catalog.",
-        catalogUrl: "https://blueagent.dev/api/catalog",
-      },
-      {
-        status: 404,
-        headers: { "Access-Control-Allow-Origin": "*" },
-      },
-    );
-  }
-
-  return NextResponse.json(
-    {
-      error: "Tool temporarily unavailable — you were not charged.",
-      code:  "TOOL_UNAVAILABLE",
-      tool,
-      hint:  "This tool id exists in the public catalog but is not currently implemented. Do not retry; the catalog listing will be removed shortly.",
-    },
-    {
-      status: 501,
-      headers: { "Access-Control-Allow-Origin": "*" },
-    },
-  );
+  const { status, body } = unavailableAnswer(tool);
+  return NextResponse.json(body, { status, headers: { "Access-Control-Allow-Origin": "*" } });
 }
 
 // A listed id that is paused (lib/tool-halts.ts). Answered BEFORE any payment
 // requirement is issued and before the chat credit-debit path, so nothing is
-// settled and no credit is debited. 501 with an explicit "do not retry", for the
-// same reason honestUnavailable() moved off 503: agents read 503 as a transient
-// outage and retry in a loop.
+// settled and no credit is debited. 501 with an explicit "do not retry" — see
+// haltedAnswer() in lib/x402-internal-run.ts for the body.
 function haltedResponse(tool: string, reason: string) {
-  return NextResponse.json(
-    {
-      error: "Tool halted — you were not charged.",
-      code:  "TOOL_HALTED",
-      tool,
-      reason,
-      hint:  "Do not retry: this id is paused until the reason above is resolved. The live catalog is at https://blueagent.dev/api/catalog.",
-    },
-    {
-      status: 501,
-      headers: { "Access-Control-Allow-Origin": "*" },
-    },
-  );
+  const { status, body } = haltedAnswer(tool, reason);
+  return NextResponse.json(body, { status, headers: { "Access-Control-Allow-Origin": "*" } });
 }
 
 // GET with no X-Payment → 402 (Bazaar discovery + browser preview)
@@ -321,119 +252,33 @@ async function handle(
   //   w/ user  → debit credits from that user's ledger; on insufficient
   //              balance return 402 INSUFFICIENT_CREDITS so the chat UI
   //              can surface a top-up CTA.
+  //
+  // The branch itself is runInternalTool() in lib/x402-internal-run.ts — the
+  // halt check, the ref'd Credit-debit path with its refund on a failed run,
+  // the WALLET_REQUIRED guest guard and the free service bypass. Chat and MCP
+  // call that function directly instead of fetching this URL (which pointed at
+  // PRODUCTION from every preview); this branch stays for network callers that
+  // hold the key (the Hood tool-caller's http mode, the semantic and p4 smokes)
+  // and only translates headers in and HTTP out. The key check is HERE and not in the function,
+  // because only here is the caller a stranger until proven otherwise.
   if (INTERNAL_KEY && xInternal === INTERNAL_KEY) {
     let body: Record<string, unknown> = {};
     try { body = await req.json(); } catch {}
 
-    // Credit-debit path (chat user calling a tool). Tracks the actually-
-    // debited amount so we can echo it back in an X-Credits-Debited header
-    // — the chat backend reads that header to populate the in-message
-    // credit chip with the real spend, not just the chat-message cost.
-    let creditsDebited = 0;
-    // The debit happens BEFORE the handler (so a failing call cannot serve
-    // free compute), which made it the one rail that charged for failures: the
-    // USDC path settles only after a successful run, this one kept the credits
-    // when the handler threw or answered an error (Scheduled research L-table,
-    // W0-6(f), 2026-09-30). Each debit now carries a ref, and a failed run
-    // returns exactly that debit through the ledger's idempotent refund().
-    let creditRef: string | undefined;
-    if (xBlueUser && /^0x[a-fA-F0-9]{40}$/.test(xBlueUser)) {
-      const { fetchBlueBalance, getTierInfo } = await import("@/lib/credits");
-      const { toolCreditCost }                = await import("@/lib/credit-pricing");
-      const { spend }                         = await import("@/lib/credit-ledger");
-
-      const blueBalance = await fetchBlueBalance(xBlueUser);
-      const holderTier  = getTierInfo(blueBalance);
-      const cost        = toolCreditCost(tool, holderTier);
-
-      if (cost > 0) {
-        const ref = `tool:${tool}:${crypto.randomUUID()}`;
-        try {
-          await spend(xBlueUser, cost, `tool:${tool}`, ref);
-          creditsDebited = cost;
-          creditRef = ref;
-        } catch (e) {
-          const err = e as Error & { code?: string };
-          if (err.code === "INSUFFICIENT_CREDITS") {
-            // The REAL balance, read now. Callers used to fill this in with a
-            // hard-coded 0 (chat → "balance was 0" in every Scheduled pause
-            // note, whatever the wallet held). Unreadable → omitted, not 0.
-            let balance: number | undefined;
-            try {
-              const { getBalance } = await import("@/lib/credit-ledger");
-              balance = (await getBalance(xBlueUser)).balance;
-            } catch { /* leave it out rather than invent one */ }
-            return NextResponse.json(
-              {
-                error:  "Insufficient credits to call this tool",
-                code:   "INSUFFICIENT_CREDITS",
-                tool,
-                needed: cost,
-                ...(typeof balance === "number" ? { balance } : {}),
-                // Was "…or stake more BLUE for a bigger daily accrual." Staking
-                // stopped feeding credits before the stake surface was retired;
-                // the daily bucket is flat per wallet and extra is bought in USDC.
-                hint:   "Top up credits in USDC, or wait for the 24h daily allowance to refresh.",
-              },
-              { status: 402 },
-            );
-          }
-          // Non-payment error during spend — log + degrade to free bypass
-          // rather than block the chat experience.
-          console.error("[x402] credit debit failed:", err.message);
-        }
-      }
-    } else if ((req.headers.get("x-blue-service") ?? "") !== "internal") {
-      // No user AND not an authorized internal service job (cron). Free utility
-      // tools ($0) still run for anyone, but PAID tools require a connected
-      // wallet — closes the guest free-tool loophole. (Cron sets X-Blue-Service
-      // = "internal", which only our own server can produce, so it falls through
-      // and free-bypasses; a browser guest can never set it.)
-      const { toolCreditCostFor } = await import("@/lib/credit-pricing");
-      if (toolCreditCostFor(tool, 0) > 0) {
-        return NextResponse.json(
-          { error: "This tool requires a connected wallet.", code: "WALLET_REQUIRED", tool },
-          { status: 402 },
-        );
-      }
-    }
-
-    const innerReq = new Request(`https://blueagent.dev/api/x402/${tool}`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
+    const r = await runInternalTool({
+      tool,
+      body,
+      user:    xBlueUser,
+      service: (req.headers.get("x-blue-service") ?? "") === "internal",
     });
-    // Give back THIS request's debit, if it made one. Never throws: a refund
-    // that fails is logged and the error response still goes out.
-    const returnCredits = async () => {
-      if (!creditRef || !xBlueUser) return false;
-      try {
-        const { refund } = await import("@/lib/credit-ledger");
-        const r = await refund(xBlueUser, creditRef);
-        return r.status === "refunded" || r.status === "already";
-      } catch (err) {
-        console.error("[x402] tool credit refund failed:", (err as Error).message, creditRef);
-        return false;
-      }
-    };
-    try {
-      const resp = await handler(innerReq);
-      const data = await resp.json().catch(() => ({}));
-      if (!resp.ok && (await returnCredits())) creditsDebited = 0;
-      return NextResponse.json(data, {
-        status:  resp.ok ? 200 : resp.status,
-        headers: { "X-Credits-Debited": String(creditsDebited) },
-      });
-    } catch (e) {
-      const refunded = await returnCredits();
-      return NextResponse.json(
-        {
-          error: refunded ? "Tool failed — your credits were returned" : "Tool failed",
-          message: (e as Error).message,
-        },
-        { status: 502, headers: { "X-Credits-Debited": String(refunded ? 0 : creditsDebited) } }
-      );
-    }
+    // X-Credits-Debited only on an answer the handler produced (or failed to),
+    // never on a refusal — the shape this branch has always had.
+    return NextResponse.json(r.body, {
+      status: r.status,
+      ...(r.creditsDebited !== undefined
+        ? { headers: { "X-Credits-Debited": String(r.creditsDebited) } }
+        : {}),
+    });
   }
 
   // ── A tool priced at $0.00 must never ask anyone to sign anything ─────────

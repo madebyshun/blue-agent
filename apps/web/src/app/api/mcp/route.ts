@@ -50,12 +50,13 @@
  *
  * PAYMENT: every tool advertised here is free on this surface EXCEPT `blue_call`.
  *        "Free" is not one mechanism, which is why it is not one number: HUB_MAP
- *        goes through callHubTool and the INTERNAL_KEY bypass below; CONSOLE_MAP
+ *        goes through callHubTool, which runs the handler in-process as an internal
+ *        service job (runInternalTool, lib/x402-internal-run.ts); CONSOLE_MAP
  *        hits /api/console; the three *_tx primitives and hub_hood_arrow hit
  *        ordinary routes that never charged; b20_encode_payment never leaves the
- *        process. `blue_call` is the deliberate exception and the ONLY one: it omits
- *        the bypass headers so the x402 route answers 402 with real payment
- *        requirements, which the calling agent settles from its own wallet. That
+ *        process. `blue_call` is the deliberate exception and the ONLY one: it calls
+ *        the x402 route over HTTP with no bypass, so the route answers 402 with real
+ *        payment requirements, which the calling agent settles from its own wallet. That
  *        asymmetry is the point — a curated free set to make the agent useful, and a
  *        paid door to every catalog id HUB_MAP does not preload. The full reasoning,
  *        and why the counts that used to sit in this paragraph are gone, is in the
@@ -66,7 +67,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { rateLimit, getIdentifier } from "@/lib/rate-limit";
 import { kv } from "@/lib/kv";
 import { recordCall, recordMcpHandshake } from "@/lib/usage-daily";
-import { internalX402Headers, hasInternalKey } from "@/lib/x402-internal";
+import { runInternalTool } from "@/lib/x402-internal-run";
 import { encodeTransferWithMemo, isValidMemo } from "@/lib/b20/encode";
 import { MCP_TOOLS } from "@/lib/mcp-tools";
 import {
@@ -101,11 +102,6 @@ export const runtime = "nodejs";
 // (Said "Bankr LLM" until 2026-09-18. Bankr has not been in the inference path
 // since 2026-07-20; the gateway is Virtuals via api/_lib/llm.ts → callLLM.)
 export const maxDuration = 120;
-
-// Free-tier internal bypass — MCP calls don't require x402 payment.
-// Set INTERNAL_SERVICE_KEY in Vercel; the /api/x402/[tool] route accepts it
-// via X-Blue-Internal and skips the USDC settlement step.
-const INTERNAL_KEY = process.env.INTERNAL_SERVICE_KEY ?? "";
 
 // ─── Tool definitions ─────────────────────────────────────────────────────────
 // The manifest lives in @/lib/mcp-tools so /docs/mcp renders the SAME array this
@@ -199,17 +195,21 @@ const ARG_REMAP: Record<string, (a: Record<string, unknown>) => Record<string, u
  * "answered" with instructions to set env vars. isError kills that path.
  *
  * `code` categories:
- *   WALLET_REQUIRED       — bypass headers correct, but no user connected +
- *                           tool costs credits. Real fix is server-side
- *                           (this is what MCP tripped on Jul → now).
- *   INSUFFICIENT_CREDITS  — user connected via chat has empty ledger.
- *   MISSING_KEY           — INTERNAL_SERVICE_KEY unset in this deploy; free
- *                           bypass impossible; user should pay via /hub.
- *   PAYMENT_REQUIRED      — generic 402 fallback.
- *   UPSTREAM              — non-402 non-2xx from x402 route.
+ *   PAYMENT_REQUIRED      — the run was refused with a 402. Cannot happen today
+ *                           (a service run is never billed — see callHubTool);
+ *                           kept so a future change that makes it possible
+ *                           fails loudly instead of returning a 402 body as
+ *                           if it were tool output.
+ *   UPSTREAM              — any other non-2xx from the tool run.
+ *
+ * WALLET_REQUIRED, INSUFFICIENT_CREDITS and MISSING_KEY are gone (2026-10-01).
+ * All three were answers to an HTTP round trip through the x402 route's key
+ * check — a missing X-Blue-Service header, a credit ledger this surface never
+ * bills, an INTERNAL_SERVICE_KEY absent from the deployment — and an in-process
+ * run has no key to be missing and no header to forget.
  */
 class HubToolError extends Error {
-  code: "WALLET_REQUIRED" | "INSUFFICIENT_CREDITS" | "MISSING_KEY" | "PAYMENT_REQUIRED" | "UPSTREAM";
+  code: "PAYMENT_REQUIRED" | "UPSTREAM";
   constructor(code: HubToolError["code"], message: string) {
     super(message);
     this.code = code;
@@ -219,78 +219,53 @@ class HubToolError extends Error {
 async function callHubTool(toolId: string, rawArgs: Record<string, unknown>): Promise<string> {
   const args = ARG_REMAP[toolId] ? ARG_REMAP[toolId](rawArgs) : rawArgs;
 
-  // Single source of truth for server-to-server x402 bypass headers. Ships
-  // BOTH X-Blue-Internal AND X-Blue-Service:internal — the x402 route's
-  // WALLET_REQUIRED guard needs the second header even when the first is
-  // correct. See apps/web/src/lib/x402-internal.ts.
-  const res = await fetch(`${BASE}/api/x402/${toolId}`, {
-    method: "POST",
-    headers: internalX402Headers(),
-    body: JSON.stringify(args),
-    signal: AbortSignal.timeout(90_000),
-  });
-  const text = await res.text();
+  // In-process, as an internal service job: the same function the x402 route's
+  // internal branch runs (lib/x402-internal-run.ts), minus the HTTP hop. This
+  // was `fetch(`${BASE}/api/x402/<id>`)` with internalX402Headers(), and BASE
+  // defaults to https://blueagent.dev — so a preview or a localhost MCP server
+  // answered every hub_* call with PRODUCTION's build, and only when it held
+  // prod's exact INTERNAL_SERVICE_KEY (else MISSING_KEY). `service: true` is the
+  // old X-Blue-Service: internal; no `user`, because this surface bills nobody.
+  //
+  // ⚠️ This is the free set's mechanism and must stay the only call site here.
+  // `blue_call` must never reach it — see the block above `callPaidTool`, and
+  // Group 5 of scripts/mcp-arg-contract-check.ts, which asserts both.
+  const r = await runInternalTool({ tool: toolId, body: args, service: true, timeoutMs: 90_000 });
+  const body = r.body;
 
-  if (res.status === 402) {
-    // Parse the x402 route's structured error so a specific message reaches
-    // the LLM instead of the misleading "set INTERNAL_SERVICE_KEY" stub the
-    // old code returned for every 402.
-    let parsed: { code?: string; error?: string } = {};
-    try { parsed = JSON.parse(text) as typeof parsed; } catch {}
-    const code = parsed.code ?? "";
-    if (code === "WALLET_REQUIRED") {
-      throw new HubToolError(
-        "WALLET_REQUIRED",
-        `Tool "${toolId}" is a paid tool. Server-side config gap: MCP call reached the internal bypass but was blocked by the wallet guard. If you're an operator, verify both X-Blue-Internal and X-Blue-Service:internal are attached (see @/lib/x402-internal). If you're an agent, pay via https://blueagent.dev/hub.`,
-      );
-    }
-    if (code === "INSUFFICIENT_CREDITS") {
-      throw new HubToolError(
-        "INSUFFICIENT_CREDITS",
-        // No "stake more BLUE for a bigger daily accrual" — staking has not fed
-        // credits for a long time and the surface selling it is retired. Every
-        // connected wallet gets the same daily bucket; more than that is bought.
-        `Insufficient credits to call "${toolId}". Your daily allowance refreshes every 24h — top up in USDC at https://blueagent.dev/chat to keep going now.`,
-      );
-    }
-    if (!hasInternalKey()) {
-      throw new HubToolError(
-        "MISSING_KEY",
-        `Tool "${toolId}" requires payment (x402). Free MCP bypass is unavailable in this deployment (INTERNAL_SERVICE_KEY unset). Pay via https://blueagent.dev/hub.`,
-      );
-    }
+  if (r.status === 402) {
+    // Unreachable for a service run today; see HubToolError. Pass the route's
+    // own code and message through rather than a stub the LLM would relay.
+    const code = typeof body.code === "string" ? ` [${body.code}]` : "";
     throw new HubToolError(
       "PAYMENT_REQUIRED",
-      `Tool "${toolId}" returned 402 Payment Required. ${parsed.error ?? "Pay via https://blueagent.dev/hub."}`,
+      `Tool "${toolId}" was refused with 402${code}. ${typeof body.error === "string" ? body.error : "Pay via https://blueagent.dev/hub."}`,
     );
   }
-  if (res.status === 429) {
+  if (r.status === 429) {
     throw new HubToolError("UPSTREAM", `Tool "${toolId}" rate-limited (429). Back off and retry.`);
   }
-  if (!res.ok) {
+  if (r.status < 200 || r.status >= 300) {
     // Surface the handler's own error contract. A bare "returned 502" tells the
     // agent nothing it can act on, and the fail-loud handlers put the whole
     // diagnosis in the body — `{ error: { source, code, message } }` — so that
     // the MCP wrapper and the x402 endpoint describe a failure identically
     // instead of the MCP caller getting a strictly worse story.
     let detail = "";
-    try {
-      const parsed = JSON.parse(text) as { error?: unknown; message?: unknown };
-      const e = parsed.error;
-      if (e && typeof e === "object") {
-        const { source, code, message } = e as Record<string, unknown>;
-        detail = [code, message].filter(Boolean).join(": ") + (source ? ` (source: ${String(source)})` : "");
-      } else if (typeof e === "string") {
-        detail = e;
-      } else if (typeof parsed.message === "string") {
-        detail = parsed.message;
-      }
-    } catch {}
-    throw new HubToolError("UPSTREAM", `Tool "${toolId}" returned ${res.status}.${detail ? ` ${detail}` : ""}`);
+    const e = body.error;
+    if (e && typeof e === "object") {
+      const { source, code, message } = e as Record<string, unknown>;
+      detail = [code, message].filter(Boolean).join(": ") + (source ? ` (source: ${String(source)})` : "");
+    } else if (typeof e === "string") {
+      detail = e;
+    } else if (typeof body.message === "string") {
+      detail = body.message;
+    }
+    throw new HubToolError("UPSTREAM", `Tool "${toolId}" returned ${r.status}.${detail ? ` ${detail}` : ""}`);
   }
   // Track MCP usage (paid path tracks via x402 route; internal path doesn't, so track here)
   try { await kv.incr(`usage:${toolId}`); } catch {}
-  try { return JSON.stringify(JSON.parse(text), null, 2); } catch { return text; }
+  return JSON.stringify(body, null, 2);
 }
 
 async function callConsole(command: string, prompt: string): Promise<string> {
@@ -421,13 +396,15 @@ async function callB20Native(name: string, args: Record<string, unknown>): Promi
 //
 // THE ONE PLACE ON THIS SURFACE THAT DOES NOT TAKE THE INTERNAL BYPASS.
 //
-// `callHubTool` above attaches `internalX402Headers()`, and it is the only call
-// site in this file. Every OTHER dispatch branch is free for a different reason —
+// `callHubTool` above runs the tool in-process as an internal service job
+// (`runInternalTool` with `service: true`), and it is the only call site in this
+// file. Every OTHER dispatch branch is free for a different reason —
 // CONSOLE_MAP hits /api/console, the three *_tx primitives and hub_hood_arrow hit
 // routes that never charged, b20_encode_payment never leaves the process — so the
 // free set is four mechanisms, not one list, and `blue_call` is the only advertised
-// name outside all four. It deliberately omits the bypass, so the x402 route
-// answers a real 402 carrying real `paymentRequirements` (USDC on Base 8453,
+// name outside all four. It deliberately calls the x402 route over HTTP with no
+// bypass (and never runInternalTool), so the route answers a real 402 carrying
+// real `paymentRequirements` (USDC on Base 8453,
 // EIP-3009 transferWithAuthorization, payTo + exact amount + nonce). The agent
 // signs that authorization with ITS OWN wallet and calls again with the resulting
 // header in `payment`.
@@ -460,8 +437,8 @@ async function callB20Native(name: string, args: Record<string, unknown>): Promi
 // 1 / 4 names (HUB_MAP / CONSOLE_MAP / encoder / inline branches) = 18 of the 19
 // advertised, with `blue_call` the only one left over. Group 5 of
 // scripts/mcp-arg-contract-check.ts recomputes that on every `npm test` and
-// asserts the two things that must stay true — one `internalX402Headers` call
-// site, and `blue_call` as the only advertised name reaching `callPaidTool`.
+// asserts the two things that must stay true — one `runInternalTool` call site,
+// and `blue_call` as the only advertised name reaching `callPaidTool`.
 //
 // ⚠️ We relay the 402 body VERBATIM. Do not summarise, re-wrap, or "helpfully"
 // restate the payment requirements — an agent has to sign the exact struct the
@@ -1121,8 +1098,8 @@ export async function POST(req: NextRequest) {
       }
 
       // blue_call — the paid door to every catalog id HUB_MAP does not preload.
-      // ⚠️ Deliberately NOT routed through HUB_MAP/callHubTool: that path attaches
-      // `internalX402Headers()` and the tool runs free. This one attaches nothing
+      // ⚠️ Deliberately NOT routed through HUB_MAP/callHubTool: that path runs the
+      // tool in-process as a service job, free. This one attaches nothing
       // but what the CALLER handed us, so an unpaid call gets a real 402 back and
       // the agent settles it with its own wallet. Keep the two paths apart.
       if (name === "blue_call") {
@@ -1180,8 +1157,8 @@ export async function POST(req: NextRequest) {
       // counter reading zero. That is the shape most likely to get a tool
       // retired for the wrong reason.
       await recordCall(meterId, "mcp", "err");
-      // HubToolError carries a machine-readable code (WALLET_REQUIRED,
-      // INSUFFICIENT_CREDITS, MISSING_KEY, PAYMENT_REQUIRED, UPSTREAM); prefix
+      // HubToolError carries a machine-readable code (PAYMENT_REQUIRED,
+      // UPSTREAM); prefix
       // it so agents can dispatch on the code without regex-scraping the msg.
       const prefix = err.code ? `[${err.code}] ` : "Error: ";
       return ok(id, { content: [{ type: "text", text: `${prefix}${err.message}` }], isError: true }, useSse);

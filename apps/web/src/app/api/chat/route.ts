@@ -33,6 +33,7 @@ import { CHAT_HIDDEN_TOOLS } from "@/lib/chat-hidden-tools";
 import { cardReply, CARD_ALREADY_SHOWN } from "@/lib/chat/card-replies";
 import { baseStockByTickerOrSymbol, dollarAmount } from "@/lib/chat/trade-intent";
 import { githubContextFor } from "@/lib/chat/github-context";
+import { runInternalTool } from "@/lib/x402-internal-run";
 
 export const runtime = "nodejs";
 // Vercel kills serverless functions at 60s by default — explicit budget so
@@ -1316,7 +1317,7 @@ interface ToolCallResult {
   staticReply?: string;
   /**
    * Credits actually debited from the user's ledger for this tool call.
-   * Read off the X-Credits-Debited response header set by the x402 route.
+   * runInternalTool's creditsDebited (what the x402 route sends as X-Credits-Debited).
    * Zero for free/non-priced tools (e.g. hub_crypto_rpc) or guest sessions.
    */
   credits?: number;
@@ -1492,7 +1493,7 @@ function toolFailed(toolName: string, why: string): string {
 async function callHubTool(
   toolName: string,
   args:     Record<string, unknown>,
-  // Connected wallet of the chat user. When present, the x402 route debits
+  // Connected wallet of the chat user. When present, runInternalTool debits
   // toolCreditCost(toolId, tier) from their credit ledger instead of free-
   // bypassing on the dev's pocket.
   userAddress?: string,
@@ -2155,22 +2156,11 @@ async function callHubTool(
   const endpoint = TOOL_ENDPOINT[toolName];
   if (!endpoint) return { text: `[Unknown tool: ${toolName}]` };
 
-  // Internal bypass: call /api/x402/<id> directly with X-Blue-Internal header.
-  // If userAddress is set, the x402 route will additionally debit credits.
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (INTERNAL_KEY)  headers["X-Blue-Internal"] = INTERNAL_KEY;
-  if (userAddress && /^0x[a-fA-F0-9]{40}$/.test(userAddress)) {
-    headers["X-Blue-User"] = userAddress;
-  } else if (isInternal) {
-    // Authorized server job (cron) with no end-user → may free-bypass paid
-    // tools. Set only when the inbound /api/chat request carried the internal
-    // key, so a browser guest can never reach this branch.
-    headers["X-Blue-Service"] = "internal";
-  }
-
   // Free utility tools route directly (no x402 payment gate). These are
   // public-ish data providers we proxy ourselves (Venice RPC, CoinGecko).
-  // Everything else still flows through /api/x402/<endpoint>.
+  // None of these routes reads the internal-bypass headers, so none is sent:
+  // the internal key has no business travelling to whatever host
+  // NEXT_PUBLIC_APP_URL names.
   const FREE_DIRECT: Record<string, string> = {
     hub_crypto_rpc:  "/api/crypto-rpc",
     hub_token_price: "/api/token-price",
@@ -2181,25 +2171,54 @@ async function callHubTool(
     // route, which serves the same `{ handle }` input.
     hub_builder_score: "/api/builder-score",
   };
-  const apiPath = FREE_DIRECT[toolName]
-    ? `${BASE_URL}${FREE_DIRECT[toolName]}`
-    : `${BASE_URL}/api/x402/${endpoint}`;
 
   try {
-    const res = await fetch(apiPath, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(args),
-      signal: AbortSignal.timeout(30_000),
-    });
+    let status: number;
+    let data: unknown;
+    // Surface the actual credit debit so the chat UI can show the real
+    // total spend (chat message + tool calls), not just the message cost.
+    let credits = 0;
+    if (FREE_DIRECT[toolName]) {
+      const res = await fetch(`${BASE_URL}${FREE_DIRECT[toolName]}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(args),
+        signal: AbortSignal.timeout(30_000),
+      });
+      status = res.status;
+      data = await res.json().catch(() => null);
+    } else {
+      // Every catalog tool runs IN THIS PROCESS, through the same function the
+      // x402 route's internal branch calls (lib/x402-internal-run.ts). It used
+      // to be a fetch of BASE_URL + /api/x402/<id> with X-Blue-Internal, and
+      // BASE_URL defaults to https://blueagent.dev — so on a preview or on
+      // localhost every Hub tool in chat ran PRODUCTION's build, and answered
+      // "payment required" unless the deployment held prod's exact internal
+      // key. MEASURED on the rebuild preview 2026-09-30: honeypot / risk-gate
+      // came back with prod's "SAFE 70%" while the branch said UNKNOWN.
+      //
+      // Billing is unchanged: a proven `userAddress` is debited (and refunded
+      // when the run fails or times out); `isInternal` — set only when the
+      // inbound /api/chat request carried the internal key — free-bypasses
+      // paid tools for a cron job with no end user; anyone else is a guest
+      // and gets WALLET_REQUIRED on a paid tool.
+      const r = await runInternalTool({
+        tool:      endpoint,
+        body:      args,
+        user:      userAddress,
+        service:   isInternal,
+        timeoutMs: 30_000,
+      });
+      status  = r.status;
+      data    = r.body;
+      credits = r.creditsDebited ?? 0;
+    }
 
-    if (res.status === 402) {
+    if (status === 402) {
       // Distinguish credit-ledger 402 from "payment gate not bypassed" 402:
       // ours carries code: "INSUFFICIENT_CREDITS" + a needed field.
-      const data = await res.json().catch(() => ({})) as {
-        code?: string; needed?: number; balance?: number;
-      };
-      if (data?.code === "WALLET_REQUIRED") {
+      const d = (data ?? {}) as { code?: string; needed?: number; balance?: number };
+      if (d.code === "WALLET_REQUIRED") {
         // Guest tried a paid tool. Flag it so the stream short-circuits to a
         // fixed "connect wallet" message — models can't be trusted to relay it.
         return {
@@ -2207,20 +2226,19 @@ async function callHubTool(
           walletRequired: true,
         };
       }
-      if (data?.code === "INSUFFICIENT_CREDITS" && typeof data.needed === "number") {
+      if (d.code === "INSUFFICIENT_CREDITS" && typeof d.needed === "number") {
         return {
-          text: `[${toolName}: not enough credits — need ${data.needed}, top up to continue]`,
-          // `balance` is whatever the x402 route read — never a stand-in 0.
-          insufficient: { needed: data.needed, balance: typeof data.balance === "number" ? data.balance : undefined, tool: toolName },
+          text: `[${toolName}: not enough credits — need ${d.needed}, top up to continue]`,
+          // `balance` is whatever the ledger read — never a stand-in 0.
+          insufficient: { needed: d.needed, balance: typeof d.balance === "number" ? d.balance : undefined, tool: toolName },
         };
       }
-      return { text: `[${toolName}: payment required — set INTERNAL_SERVICE_KEY env var to enable]` };
+      return { text: toolFailed(toolName, "the service asked for payment") };
     }
-    if (!res.ok) {
-      return { text: toolFailed(toolName, `the service returned HTTP ${res.status}`) };
+    if (status < 200 || status >= 300) {
+      return { text: toolFailed(toolName, `the service returned HTTP ${status}`) };
     }
 
-    const data = await res.json().catch(() => null);
     // Unwrap nested { result: ... } if present — EXCEPT for a JSON-RPC reply.
     //
     // Two protocols, one key name. In our x402 envelope `result` means "the
@@ -2238,9 +2256,6 @@ async function callHubTool(
     const isJsonRpc = !!data && typeof data === "object" && "jsonrpc" in data;
     const payload = isJsonRpc ? data : ((data as Record<string, unknown>)?.result ?? data);
     const text = typeof payload === "string" ? payload : JSON.stringify(payload, null, 2);
-    // Surface the actual credit debit so the chat UI can show the real
-    // total spend (chat message + tool calls), not just the message cost.
-    const credits = Number(res.headers.get("x-credits-debited") ?? 0) || 0;
     return { text, result: payload, credits };
   } catch (e) {
     return { text: toolFailed(toolName, `the call did not complete (${(e as Error).message})`) };

@@ -167,10 +167,17 @@ async function sseEvents(res: Response): Promise<Array<Record<string, unknown>>>
   console.log("\n6. Discovery: every mutator route shows its proof");
   const ROOT = process.cwd();
   const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-  const MUTATOR = /\b(spend|topup|refund|addTicker|removeTicker|issueTgLinkCode|debitChatCredits)\s*\(/;
+  // `runInternalTool` is a mutator by proxy: it debits whatever `user` it is
+  // handed (lib/x402-internal-run.ts — the x402 route's internal branch, called
+  // in-process by chat and MCP since 2026-10-01). Its `spend(` lives in a lib,
+  // which this walk does not read, so the CALL is what has to show its proof.
+  const MUTATOR = /\b(spend|topup|refund|addTicker|removeTicker|issueTgLinkCode|debitChatCredits|runInternalTool)\s*\(/;
   // Routes that prove the wallet some OTHER way — each with the proof it must show.
   const OTHER_PROOF: Record<string, [RegExp, string]> = {
-    "src/app/api/x402/[tool]/route.ts": [/xInternal === INTERNAL_KEY[\s\S]*xBlueUser[\s\S]*await spend\(/, "X-Blue-User only under the internal key"],
+    "src/app/api/x402/[tool]/route.ts": [/xInternal === INTERNAL_KEY\)[\s\S]*runInternalTool\(\{[^)]*user:\s*xBlueUser/, "X-Blue-User only under the internal key"],
+    // Runs its free HUB_MAP set as a service job and bills nobody: no `user` in
+    // the call at all, so there is no wallet for it to have to prove.
+    "src/app/api/mcp/route.ts": [/runInternalTool\(\{(?![^)]*\buser\b)[^)]*service:\s*true/, "a service run that names no wallet"],
     "src/app/api/credits/spend/route.ts": [/if \(!INTERNAL_KEY \|\| auth !== INTERNAL_KEY\)/, "internal key, fail-closed"],
     "src/app/api/credits/topup/route.ts": [/if \(!INTERNAL_KEY \|\| auth !== INTERNAL_KEY\)/, "internal key, fail-closed"],
     "src/app/api/credits/refund/route.ts": [/if \(!INTERNAL_KEY \|\| auth !== INTERNAL_KEY\)/, "internal key, fail-closed"],

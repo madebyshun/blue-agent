@@ -11,9 +11,10 @@
  *   X-Blue-Service:  internal                 // proves this isn't a browser
  *                                             //   guest replaying a stolen key
  *
- * See apps/web/src/app/api/x402/[tool]/route.ts:188 (key check) and 229-241
- * (guard that returns 402 WALLET_REQUIRED for paid tools when the second
- * header is missing — the guard that MCP tripped over from Jul → now).
+ * See the key check in handle() of apps/web/src/app/api/x402/[tool]/route.ts,
+ * and the guard in runInternalTool (lib/x402-internal-run.ts) that returns 402
+ * WALLET_REQUIRED for paid tools when the second header is missing — the guard
+ * that MCP tripped over from Jul → Sep 2026.
  *
  * Historically each caller assembled these headers inline, and the MCP route
  * shipped the first header but not the second when the guard was added.
@@ -23,8 +24,15 @@
  *
  * If INTERNAL_SERVICE_KEY is unset, the bypass headers are OMITTED — the
  * request falls through to normal x402 payment. Callers stay responsible for
- * handling the resulting 402 (MCP surfaces it as an isError; crons should
- * abort with a clear log).
+ * handling the resulting 402 (crons should abort with a clear log).
+ *
+ * ⚠️ Code running INSIDE this app should not use these headers at all. Since
+ * 2026-10-01 chat and MCP run catalog tools in-process via `runInternalTool`
+ * (lib/x402-internal-run.ts): a fetch to `${NEXT_PUBLIC_APP_URL}/api/x402/…`
+ * reaches PRODUCTION from every preview and localhost — and so runs prod's
+ * build and needs prod's key. These headers are for callers that genuinely
+ * cross the network to a chosen target: the Hood tool-caller's http mode
+ * (BH_TOOL_TARGET) and the smoke scripts.
  */
 
 /** Returns true when the runtime has a real internal-service key. */

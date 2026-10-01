@@ -5,8 +5,10 @@
  *      that was retired or renamed pauses nothing and reads as if it did.
  *   2. The x402 route consults haltReason() in BOTH handlers (GET discovery and
  *      the POST path), so a halted id neither advertises a price nor runs.
- *   3. In the POST path the halt check comes BEFORE the chat credit-debit
- *      branch, so a chat user is never debited for a halted id.
+ *   3. In the POST path the halt check comes BEFORE the internal branch, and
+ *      inside lib/x402-internal-run.ts (which that branch, chat and MCP all
+ *      call) it comes BEFORE the credit debit — so a chat user is never
+ *      debited for a halted id, by either door.
  *
  * Hermetic — imports modules and reads files off disk, no network. Discovered
  * automatically by run-tests.ts (every `scripts/*-check.ts` runs in CI).
@@ -37,11 +39,24 @@ if (uses < 2) failures.push(`2 x402 route calls haltReason(tool) ${uses}× — n
 
 const handleStart = src.indexOf("async function handle(");
 const haltInHandle = src.indexOf("haltReason(tool)", handleStart);
-const debitBranch = src.indexOf("Credit-debit path", handleStart);
-if (handleStart < 0 || haltInHandle < 0 || debitBranch < 0) {
-  failures.push("3 could not locate handle(), its halt check, or the credit-debit branch in the x402 route");
-} else if (haltInHandle > debitBranch) {
-  failures.push("3 the POST halt check runs AFTER the credit-debit branch — a chat user could be debited for a halted id");
+const internalCall = src.indexOf("runInternalTool(", handleStart);
+if (handleStart < 0 || haltInHandle < 0 || internalCall < 0) {
+  failures.push("3 could not locate handle(), its halt check, or the runInternalTool call in the x402 route");
+} else if (haltInHandle > internalCall) {
+  failures.push("3 the POST halt check runs AFTER the internal branch — a chat user could be debited for a halted id");
+}
+// Since 2026-10-01 chat and MCP call runInternalTool directly, never passing
+// through the route's own check — so the function must hold the line itself.
+// Positions are taken on code only: its comments mention spend() first.
+const RUNNER = path.resolve(SCRIPTS_DIR, "..", "src", "lib", "x402-internal-run.ts");
+const runner = readFileSync(RUNNER, "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, "");
+const runStart = runner.indexOf("export async function runInternalTool(");
+const haltInRun = runner.indexOf("haltReason(tool)", runStart);
+const spendInRun = runner.indexOf("await spend(", runStart);
+if (runStart < 0 || haltInRun < 0 || spendInRun < 0) {
+  failures.push("3 could not locate runInternalTool, its halt check, or its spend() in lib/x402-internal-run.ts");
+} else if (haltInRun > spendInRun) {
+  failures.push("3 runInternalTool debits BEFORE its halt check — chat and MCP could be charged for a halted id");
 }
 
 // 4. Chat must not OFFER a halted id. Parsed from the route's source because

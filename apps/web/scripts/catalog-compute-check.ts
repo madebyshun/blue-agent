@@ -118,8 +118,12 @@ function stripComments(s: string): string {
 const SYNTHESIZES =
   /\b(callLLM|callVirtualsLLM|callBankrLLM|callVeniceLLM|runBlueSkill|runAeonSkill|runMiroSharkSkill)\s*\(/;
 
-/** Evidence the file hands the id to its real implementation instead of answering itself. */
-const DELEGATES = /\bHANDLERS\b|\binternalX402Headers\b/;
+/**
+ * Evidence the file hands the id to its real implementation instead of answering
+ * itself. `runInternalTool` (lib/x402-internal-run.ts) is the in-process form of
+ * the internal bypass that chat and MCP use since 2026-10-01.
+ */
+const DELEGATES = /\bHANDLERS\b|\binternalX402Headers\b|\brunInternalTool\b/;
 
 const READS_CATALOG = /\bAGENT_TOOLS\b/;
 
@@ -157,8 +161,8 @@ check(
   "no route outside api/x402 turns an AGENT_TOOLS entry into LLM output itself",
   offenders.length === 0,
   offenders.map((o) => path.relative(WEB, o.f)).join("\n        ") +
-    "\n        Dispatch to the id's handler (HANDLERS, or fetch /api/x402/<id>" +
-    "\n        with internalX402Headers) instead of prompting from tool metadata.",
+    "\n        Dispatch to the id's handler (HANDLERS, runInternalTool, or fetch" +
+    "\n        /api/x402/<id> with internalX402Headers) instead of prompting from tool metadata.",
 );
 
 // ── the pairing ─────────────────────────────────────────────────────────────
