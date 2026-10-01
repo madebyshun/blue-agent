@@ -31,7 +31,10 @@ export interface InsufficientCreditsNotice {
   kind:    "chat" | "tool";   // what ran out: a chat-message debit or a tool debit
   tool?:   string;            // present when kind === "tool"
   needed:  number;            // credits required
-  balance: number;            // credits available at the time of the attempt
+  // Credits available at the time of the attempt — ABSENT when the server
+  // could not read the balance (a tool's x402 route omits it rather than send
+  // a stand-in 0). Render it as unknown, never as "have 0".
+  balance?: number;
   message?: string;           // server-provided human copy (fallback locally)
 }
 

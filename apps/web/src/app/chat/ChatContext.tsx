@@ -21,6 +21,9 @@ import { resolvePresetDispatch, VIRTUALS_PRESETS_V1 } from "./components/presets
 import { useWorkspaceSync, WORKSPACE_HYDRATED_EVENT, type UseWorkspaceSync } from "./workspace-sync";
 import { useScheduleSync, type UseScheduleSync } from "./use-schedule-sync";
 import { patchById } from "./schedule-merge";
+import {
+  readNoticeBalance, singleFlight, turnCreditsUsed, turnProducedAnswer, turnRanModel,
+} from "./turn-outcome";
 import { useSiweSignIn } from "./use-siwe-signin";
 import { useEnsureSession, invalidateSessionCache } from "@/hooks/useEnsureSession";
 import {
@@ -564,7 +567,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
 
   // ── send() ────────────────────────────────────────────────────────────────
-  const send = useCallback(async (text: string) => {
+  // Re-entry guard. `streaming` alone cannot be it: it is React state, set only
+  // once the turn is underway — AFTER `await ensureSession(...)`, which is a
+  // whoami round-trip on a cold cache or a whole SIWE signature on first use.
+  // Through that window the input still held the text and Send was live, so a
+  // second Enter passed the `streaming` check, and both calls went on to POST
+  // /api/chat: the same message sent, and debited, twice. A ref is set
+  // synchronously, so the second call sees it before its first await.
+  const sendingRef = useRef(false);
+  const sendOnce = useCallback(async (text: string) => {
     const userMsg = text.trim();
     if (!userMsg || streaming) return;
 
@@ -766,6 +777,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       // whose credits were just handed back, and a guest (who is metered only
       // in localStorage) gets that local charge returned below.
       let upstreamFailed = false;
+      // Set when the server refused to charge this wallet without a session
+      // (auth_required). No model ran and nothing was debited, so the bubble
+      // holds the server's refusal, not an answer: the chip must not bill it
+      // and it must not enter conversation memory as a remembered Q/A.
+      let authBlocked = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -892,6 +908,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
               // session expired or belongs to another wallet). Nothing was
               // charged. Forget the cached "signed in" so the next send asks
               // for the signature, and say so in the reply bubble.
+              authBlocked = true;
               invalidateSessionCache();
               const msg = (parsed as unknown as { message?: string }).message
                 ?? "Sign in with your wallet to use credits, then send again.";
@@ -916,6 +933,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                 balance?: number;
                 message?: string;
               };
+              const noticeBalance = readNoticeBalance(p.balance);
               setTasksState(prev => {
                 const task = prev.find(t => t.id === tid);
                 if (!task) return prev;
@@ -928,7 +946,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                       kind:    p.kind ?? "chat",
                       tool:    p.tool,
                       needed:  p.needed ?? 0,
-                      balance: p.balance ?? 0,
+                      // Carried only when the server actually read one — a
+                      // tool's event omits it rather than send a stand-in 0,
+                      // and `?? 0` here used to put that 0 straight back.
+                      ...(noticeBalance !== undefined ? { balance: noticeBalance } : {}),
                       message: p.message,
                     },
                   };
@@ -975,23 +996,32 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         const last     = task.messages[lastIdx];
 
         // Stamp model + timing on the completed assistant message.
-        // Three turns cost nothing and must not print a price: local dev
-        // (isUnlimited, unmetered), the connect-wallet wall, and a gateway
-        // failure that produced no answer — the last two were refunded, in the
-        // server ledger for a connected wallet and locally for a guest.
+        // Four turns cost nothing and must not print a price: local dev
+        // (isUnlimited, unmetered), the connect-wallet wall, a gateway failure
+        // that produced no answer — those two were refunded, in the server
+        // ledger for a connected wallet and locally for a guest — and an
+        // auth_required refusal, which was never debited at all. That last one
+        // also gets no model label or timing: the server refused before any
+        // model call, so "<model> · 0.4s" under it would describe a run that
+        // did not happen (the metadata row renders only when modelUsed is set).
+        // The rules live in turn-outcome.ts, where they are tested.
+        const flags = { walletBlocked, upstreamFailed, authBlocked };
         const finalMsgs = task.messages.map((m, i) =>
           i === lastIdx && m.role === "assistant"
             ? {
                 ...m,
-                modelUsed: chatTier,
-                responseMs,
-                creditsUsed: (isUnlimited || walletBlocked || upstreamFailed) ? 0 : cost,
+                ...(turnRanModel(flags) ? { modelUsed: chatTier, responseMs } : {}),
+                creditsUsed: turnCreditsUsed(flags, cost, isUnlimited),
                 isThinking: false,
               }
             : m
         );
 
-        if (last?.role === "assistant" && last.content) {
+        // Only an ANSWER is remembered. The wall, the gateway's error notice
+        // and the sign-in refusal are not — stored as "Q: … A: Couldn't verify
+        // your sign-in…", `recentChunks` fed them back into later prompts as
+        // if the assistant had said it.
+        if (turnProducedAnswer(flags) && last?.role === "assistant" && last.content) {
           updateMemoryAfterChat(walletAddr, userMsg, last.content);
           const chunkText = `Q: ${userMsg.slice(0, 200)}\nA: ${last.content.slice(0, 400)}`;
           // Stored for recency recall. A background POST to /api/memory/embed
@@ -1026,6 +1056,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     isUnlimited,
     webSearch, pendingFiles, ensureSession,
   ]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const send = useCallback(async (text: string) => {
+    await singleFlight(sendingRef, () => sendOnce(text));
+  }, [sendOnce]);
 
   const stop = useCallback(() => abortRef.current?.abort(), []);
 

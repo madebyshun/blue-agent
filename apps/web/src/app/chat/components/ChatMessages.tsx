@@ -773,7 +773,9 @@ export default function ChatMessages() {
                               </p>
                               <p className="font-mono text-[11px] text-slate-300 leading-relaxed">
                                 {msg.insufficientCredits.message ?? (
-                                  <>Need <span className="text-white font-medium">{msg.insufficientCredits.needed}</span> cr · have <span className="text-white font-medium">{msg.insufficientCredits.balance}</span></>
+                                  // An unread balance shows as "—", not 0: the
+                                  // wallet may hold 15 of the 20 it needs.
+                                  <>Need <span className="text-white font-medium">{msg.insufficientCredits.needed}</span> cr · have <span className="text-white font-medium">{msg.insufficientCredits.balance ?? "—"}</span></>
                                 )}
                               </p>
                               <div className="flex gap-2 mt-2 flex-wrap items-center">
