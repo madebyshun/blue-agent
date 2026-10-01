@@ -388,7 +388,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     () => siweSignIn(walletAddr as string),
     [siweSignIn, walletAddr],
   );
-  const sync = useWorkspaceSync(walletAddr, signIn);
+  // Turning sync off deletes the SIWE session every charge on this page relies
+  // on, so the "signed in" cache goes with it.
+  const sync = useWorkspaceSync(walletAddr, signIn, invalidateSessionCache);
 
   // Re-read localStorage after sync has merged a remote copy in underneath us.
   //

@@ -30,8 +30,9 @@ import { useWallet } from "@/hooks/useWallet";
 import { WalletPickerModal } from "@/components/WalletPicker";
 import TopUpModal from "@/components/TopUpModal";
 import SpendConsole, { useSpendSummary, scopeLabel } from "@/components/SpendConsole";
-import { useEnsureSession } from "@/hooks/useEnsureSession";
+import { useEnsureSession, invalidateSessionCache } from "@/hooks/useEnsureSession";
 import ActionHistory from "@/components/wallet/ActionHistory";
+import { loadBalance } from "./load-balance";
 import type { BalanceSummary, LedgerEvent } from "@/lib/credit-ledger";
 
 // Compact "time ago" for ledger rows (ms epoch → "3m", "2h", "5d").
@@ -110,7 +111,9 @@ export default function UsagePage() {
 
   // The balance aggregate is public; the per-event `recent` list is owner-only
   // since 2026-09-30 (`?detail=1`, SIWE). Without a session the KPIs still
-  // render and Recent activity offers the one signature instead.
+  // render and Recent activity offers the one signature instead. A stale
+  // "signed in" (the session ended after useEnsureSession cached it) falls back
+  // to that public aggregate — see load-balance.ts.
   const { hasSession, ensureSession } = useEnsureSession();
   const [signedIn, setSignedIn] = useState<boolean | null>(null);
   const load = useCallback(async () => {
@@ -119,10 +122,9 @@ export default function UsagePage() {
     try {
       const mine = await hasSession(address);
       setSignedIn(mine);
-      const res = await fetch(`/api/credits/balance/${address}${mine ? "?detail=1" : ""}`);
-      if (!res.ok) throw new Error(`Couldn't load balance (HTTP ${res.status}).`);
-      const body = (await res.json()) as Omit<BalanceSummary, "recent"> & { recent?: BalanceSummary["recent"] };
-      setData({ ...body, recent: body.recent ?? [] });
+      const got = await loadBalance(address, mine, { onStaleSession: invalidateSessionCache });
+      setSignedIn(got.signedIn);
+      setData(got.data);
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -158,7 +160,9 @@ export default function UsagePage() {
     :                          "chat + tool runs";
 
   const fmt = (n: number) => n.toLocaleString();
-  const dash = (v: string) => (loading && !data ? "…" : v);
+  // No balance read yet: "…" while one is in flight, "—" once it failed. Never
+  // the `?? 0` defaults above — an unread balance is unknown, not zero.
+  const dash = (v: string) => (data ? v : loading ? "…" : "—");
 
   return (
     <div className="flex flex-col h-full bg-[#050508] text-white overflow-hidden">
@@ -219,7 +223,7 @@ export default function UsagePage() {
               <Kpi
                 label="DAILY LEFT"
                 value={dash(fmt(dailyLeft))}
-                sub={`of ${fmt(dailyCr)} · resets 00:00 UTC`}
+                sub={`of ${dash(fmt(dailyCr))} · resets 00:00 UTC`}
                 bar={
                   <div className="h-[3px] rounded-[2px] bg-[#1A1A2E] mt-2">
                     <div className="h-full rounded-[2px] bg-[#4FC3F7]" style={{ width: `${dailyPct}%` }} />
@@ -256,7 +260,9 @@ export default function UsagePage() {
                         <button onClick={signInForActivity} className="underline text-[#4FC3F7]">Sign in to see it</button>
                         {" "}— one signature, no transaction.
                       </p>
-                    ) : (data?.recent?.length ?? 0) === 0 ? (
+                    ) : !data ? (
+                      <p className="font-mono text-[11px] text-[#64748B] px-4 py-6 text-center">—</p>
+                    ) : data.recent.length === 0 ? (
                       <p className="font-mono text-[11px] text-[#64748B] px-4 py-6 text-center">
                         No activity yet. Credits spent on chat and tool runs show up here.
                       </p>

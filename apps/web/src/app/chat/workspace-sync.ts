@@ -207,10 +207,18 @@ export interface UseWorkspaceSync {
  * `signIn` is injected rather than imported so this module never pulls in wagmi
  * — it stays testable and does not drag a wallet stack into anything that only
  * wants the snapshot/merge helpers.
+ *
+ * `onSessionEnded` is injected for the same reason. Since 2026-09-30 the SIWE
+ * session is not only sync's: it is what lets chat, tools and the usage page
+ * act for this wallet, and `useEnsureSession` caches "this wallet is signed in"
+ * for five minutes. `disable` deletes that session, so it must also drop the
+ * cache — otherwise every page that trusts it keeps sending owner-only requests
+ * the server now refuses (the usage page lost its whole balance to a 401).
  */
 export function useWorkspaceSync(
   walletAddr: string | undefined,
   signIn: () => Promise<string>,   // resolves to the signed-in wallet
+  onSessionEnded?: () => void,     // called after the server session is deleted
 ): UseWorkspaceSync {
   const [enabled, setEnabledState] = useState(false);
   const [state, setState]          = useState<SyncState>({ phase: "off" });
@@ -348,8 +356,11 @@ export function useWorkspaceSync(
     lastSent.current = "";
     setState({ phase: "off" });
     // End the server session. The workspace record is left alone — see `forget`.
+    // The cache is dropped AFTER the delete lands: dropped before, a whoami in
+    // between would still see the live session and cache it again.
     await fetch("/api/auth/session", { method: "DELETE" }).catch(() => null);
-  }, [walletAddr]);
+    onSessionEnded?.();
+  }, [walletAddr, onSessionEnded]);
 
   const forget = useCallback(async () => {
     await fetch("/api/workspace", { method: "DELETE" }).catch(() => null);
