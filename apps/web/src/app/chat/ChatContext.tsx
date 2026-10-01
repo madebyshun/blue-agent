@@ -446,6 +446,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const runCron = useCallback(async (id: string, interactive = true) => {
     const cron = crons.find(c => c.id === id);
     if (!cron) return;
+    // A foreground run reports itself to the wallet's activity feed (the
+    // background tick writes its own). Best effort, never a prompt: the run
+    // already holds a session when it gets this far.
+    const report = (kind: "task_run" | "task_failed", text: string) => {
+      if (!walletAddr) return;
+      void sessionFetch(`/api/timeline?address=${walletAddr}`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind, label: cron.label, text: text.replace(/[#*_`>]/g, "").slice(0, 280) }),
+      }).catch(() => {});
+    };
     setCronRunning(id);
     // Whether /api/cron/run was actually called. Only then is there a run to
     // record: stamping `lastRun` on a run that was never attempted showed
@@ -492,6 +502,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           lastRun:   Date.now(),
           lastError: data.insufficientCredits.message ?? "Not enough credits to run this task.",
         });
+        report("task_failed", "not enough credits");
         return;
       }
       // Keep the full markdown report (capped to bound localStorage) so the
@@ -502,6 +513,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         lastResult: data.result?.slice(0, 4000),
         lastError:  data.result ? undefined : (data.error ?? "The model returned nothing."),
       });
+      if (data.result) report("task_run", data.result);
+      else report("task_failed", data.error ?? "the model returned nothing");
     } catch (e) {
       // A dispatched run that then failed (timeout, bad JSON) may still have
       // been charged, so it counts as a run — the auto-run must not fire it
@@ -510,6 +523,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         ...(dispatched ? { lastRun: Date.now() } : {}),
         lastError: (e as Error).message || "Error running task",
       });
+      if (dispatched) report("task_failed", (e as Error).message || "error running task");
     } finally {
       setCronRunning(null);
     }

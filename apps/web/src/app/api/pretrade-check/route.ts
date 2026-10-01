@@ -15,6 +15,8 @@ import { preTradeCheck } from "@/lib/pre-trade-check";
 import { recordPreTradeBlock } from "@/lib/action-stats";
 import { parseTxChain } from "@/lib/tx-chains";
 import { rateLimit, getIdentifier } from "@/lib/rate-limit";
+import { readSession } from "@/lib/session";
+import { pushFeed } from "@/lib/activity";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,5 +40,17 @@ export async function POST(req: NextRequest) {
   // The public meter (G4) counts only what this server measured: a token
   // refused on evidence (lib/action-stats.ts).
   await recordPreTradeBlock(check, { chain, token });
+  // A BLOCK is also written to the caller's own activity feed (lib/activity)
+  // — only when a SIWE session is present, and the session is read only for a
+  // BLOCK, so an ordinary check stays a free, anonymous read.
+  if (check.verdict === "BLOCK") {
+    try {
+      const s = await readSession(req);
+      if (s.status === "active") {
+        const why = check.reasons.filter((r) => r.level === "BLOCK").map((r) => r.text).join(" ");
+        await pushFeed(s.wallet, [{ at: Date.now(), kind: "blocked", chain, token, text: `${kind} of ${check.label || token} refused — ${why}`.slice(0, 400) }]);
+      }
+    } catch { /* bookkeeping; the refusal itself already happened */ }
+  }
   return NextResponse.json(check, { headers: { "Cache-Control": "no-store" } });
 }

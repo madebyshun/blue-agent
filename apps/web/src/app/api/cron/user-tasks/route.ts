@@ -43,6 +43,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { runWatchTick } from "@/lib/watches/tick";
+import { pushFeed } from "@/lib/activity";
 import { kvTryLock, kvDel, kvSet } from "@/lib/kv";
 import {
   listOwners,
@@ -348,6 +349,16 @@ async function tick(now: number): Promise<TickSummary & { nextAt: number | null 
         // user changed mid-run is the one the next window uses.
         t.nextAt = nextFireAt(t, ranAt);
       });
+      // The activity feed (lib/activity): one line per background run, so the
+      // timeline on the Scheduled page shows it next to alerts and trades.
+      await pushFeed(wallet, [{
+        at: ranAt,
+        kind: outcome.kind === "ok" ? "task_run" : "task_failed",
+        text: outcome.kind === "ok"
+          ? `${live.label} — ${outcome.text.replace(/[#*_`>]/g, "").replace(/\s+/g, " ").slice(0, 200)}`
+          : outcome.kind === "insufficient" ? `${live.label} — paused: not enough credits`
+          : `${live.label} — ${outcome.message.slice(0, 200)}`,
+      }]);
       if (saved !== "ok") {
         // The run happened and was paid for. The window marker above already
         // stops a second charge; losing the result is the smaller harm.

@@ -24,6 +24,7 @@
  * button on — false while the answer for the CURRENT input is loading.
  */
 import { useEffect, useState } from "react";
+import { sessionFetch } from "@/lib/session-client";
 
 /** Backoff between attempts after a transient failure (429 / 5xx / network). */
 const RETRY_DELAYS_MS = [1_000, 3_000, 8_000];
@@ -67,7 +68,9 @@ export function usePreTradeCheck(input: {
         timer = setTimeout(() => attempt(n + 1), RETRY_DELAYS_MS[n]);
         return true;
       };
-      fetch("/api/pretrade-check", {
+      // sessionFetch: in the embedded mini-app the session rides a header, and
+      // a BLOCK is logged to that wallet's own activity feed (2026-10-01).
+      sessionFetch("/api/pretrade-check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ chain, kind, token, ...(cost != null ? { bridge_cost_percent: cost } : {}) }),
