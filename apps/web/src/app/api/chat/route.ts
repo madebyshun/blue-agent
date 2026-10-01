@@ -30,6 +30,8 @@ import { buildBaseSystem, buildAgentCapabilities, buildB20Section } from "./syst
 import { normalizeWallet, resolveActingWallet } from "@/lib/acting-wallet";
 import { findByTicker as findRwaByTicker, findByContract as findRwaByContract } from "@/lib/robinhood/rwa-registry";
 import { CHAT_HIDDEN_TOOLS } from "@/lib/chat-hidden-tools";
+import { cardReply, CARD_ALREADY_SHOWN } from "@/lib/chat/card-replies";
+import { baseStockByTickerOrSymbol, dollarAmount } from "@/lib/chat/trade-intent";
 
 export const runtime = "nodejs";
 // Vercel kills serverless functions at 60s by default — explicit budget so
@@ -1026,7 +1028,7 @@ Testnets are reachable by full id: base-sepolia, ethereum-sepolia, robinhood-tes
   },
   {
     name: "hub_hood_arrow",
-    description: "Open the Blue Hood arrow card for a specific fired arrow — renders serial + ticker + signal + verdict_note + facts_at_fire. Blue Hood stopped publishing new arrows on 2026-09-30, so every arrow this returns is from before that date. Use when the user asks about a specific arrow ('what was #0007 about?', 'show me the AAPL arrow', 'why is Blue Hood shorting NVDA?') OR wants to inspect the most recent arrow for a ticker. Three shapes: (a) by id — { arrow_id: 'uuid' } — most precise; (b) by serial — { serial: '#0007' } — server resolves serial → id; (c) by ticker — { ticker: 'AAPL' } — newest engine arrow for that ticker.\n\n⚠️ CHAIN IS PART OF THE QUESTION. Blue Hood runs TWO desks — Robinhood Chain (4663) and Base (8453) — and NVDA / META / GOOGL / AAPL exist on BOTH. A bare ticker therefore does NOT identify an arrow. If the user names a chain ('NVDA on Base', 'the Base arrow for META', 'drift on Robinhood'), you MUST pass { chain: 'base' | 'robinhood' }; leaving it out will hand you the newest arrow from EITHER desk and you will answer about the wrong chain. If the user names no chain, leave it out and report whichever chain the returned arrow says it is.\n\nWhen the tool returns not_found, say so plainly — including the case where a chain simply has no arrows yet — and NEVER substitute the other chain's arrow. The tool result always carries `chain`, `status` and `age_hours`: a graded arrow is HISTORY, so describe it in the past tense and say how old it is. The card is read-only: trading straight from an arrow is off, so never offer to trade one — if the user wants to swap, they state the trade and you use the normal swap tools. NEVER fabricate an arrow; the LLM must NOT invent numbers.",
+    description: "Open the Blue Hood arrow card for a specific fired arrow — renders serial + ticker + signal + verdict_note + facts_at_fire. Blue Hood stopped publishing new arrows on 2026-09-30, so every arrow this returns is from before that date. Use when the user asks about a specific arrow ('what was #0007 about?', 'show me the AAPL arrow', 'why is Blue Hood shorting NVDA?') OR wants to inspect the most recent arrow for a ticker. NOT for 'what is the drift/spread of X now?' — that is a live reading this tool does not have; point the user at the Blue Hood board (/hood) instead. Three shapes: (a) by id — { arrow_id: 'uuid' } — most precise; (b) by serial — { serial: '#0007' } — server resolves serial → id; (c) by ticker — { ticker: 'AAPL' } — newest engine arrow for that ticker.\n\n⚠️ CHAIN IS PART OF THE QUESTION. Blue Hood runs TWO desks — Robinhood Chain (4663) and Base (8453) — and NVDA / META / GOOGL / AAPL exist on BOTH. A bare ticker therefore does NOT identify an arrow. If the user names a chain ('NVDA on Base', 'the Base arrow for META', 'drift on Robinhood'), you MUST pass { chain: 'base' | 'robinhood' }; leaving it out will hand you the newest arrow from EITHER desk and you will answer about the wrong chain. If the user names no chain, leave it out and report whichever chain the returned arrow says it is.\n\nWhen the tool returns not_found, say so plainly — including the case where a chain simply has no arrows yet — and NEVER substitute the other chain's arrow. The tool result always carries `chain`, `status` and `age_hours`: a graded arrow is HISTORY, so describe it in the past tense and say how old it is. The card is read-only: trading straight from an arrow is off, so never offer to trade one — if the user wants to swap, they state the trade and you use the normal swap tools. NEVER fabricate an arrow; the LLM must NOT invent numbers.",
     input_schema: {
       type: "object",
       properties: {
@@ -1063,7 +1065,7 @@ Testnets are reachable by full id: base-sepolia, ethereum-sepolia, robinhood-tes
     input_schema: {
       type: "object",
       properties: {
-        direction:     { type: "string", enum: ["buy", "sell"], description: "buy = spend ETH to receive the token; sell = spend the token to receive ETH. Default buy. Ignored when token_in is set." },
+        direction:     { type: "string", enum: ["buy", "sell"], description: "buy = spend ETH to receive the token; sell = spend the token to receive ETH. Default buy. Ignored when token_in is set. A DOLLAR buy ('buy $5 of TSLA on robinhood') is token↔token: { token_in: 'USDG', token: 'TSLA', amount: '5' } — USDG is Robinhood Chain's dollar stable." },
         token:         { type: "string", description: "Token contract address (0x…) on Robinhood Chain, OR a ticker in the Robinhood Chain token registry (stock/ETF tokens such as NVDA or TSLA, plus WETH and USDG). For token↔token this is tokenOut. Any other token must be given by contract address — the server never resolves a name by search. Never invent addresses." },
         token_in:      { type: "string", description: "OPTIONAL. When set, switches to token↔token mode. tokenIn contract address (0x…) OR a registry ticker (same rule as token). Never invent addresses." },
         slippage_bps:  { type: "number", description: "OPTIONAL. Slippage tolerance in basis points (e.g. 50 = 0.5%). Default 50. Only honoured in token↔token mode; ETH↔token uses the card's built-in picker." },
@@ -1110,7 +1112,7 @@ Testnets are reachable by full id: base-sepolia, ethereum-sepolia, robinhood-tes
     input_schema: {
       type: "object",
       properties: {
-        address: { type: "string", description: "0x-prefixed B20 token address on Base (40 hex chars)" },
+        address: { type: "string", description: "0x-prefixed B20 token address on Base (40 hex chars), OR the ticker of a Base stock token (e.g. 'NVDA', 'NVDAc') — a ticker is resolved server-side from BlueAgent's verified Base stock registry only; anything else needs its address. Never invent an address." },
         network: { type: "string", enum: ["mainnet", "sepolia"], description: "mainnet (default) or sepolia" },
       },
       required: ["address"],
@@ -1157,7 +1159,7 @@ Testnets are reachable by full id: base-sepolia, ethereum-sepolia, robinhood-tes
   },
   {
     name: "check_wallet",
-    description: "Show ALL tokens the CONNECTED wallet currently holds (balance > 0) on Base — native ETH plus every ERC-20 it owns. Uses Moralis for the full live portfolio (no hardcoded token list); ZERO LLM. Use when the user asks: 'check my balance', \"what's in my wallet\", 'my portfolio', 'my tokens', 'my holdings', 'show my tokens', '查询余额', '我的资产', 'how much ETH do I have'. CRITICAL: only call when a wallet is connected — it auto-uses the connected address (no address argument). NEVER show tokens with zero balance and NEVER invent balances; reply with the EXACT figures from the result card and do NOT add USD totals of your own.",
+    description: "Show ALL tokens the CONNECTED wallet currently holds (balance > 0) on BOTH Base (8453) and Robinhood Chain (4663) — native ETH plus every ERC-20 it owns on each, grouped by chain on the card. Read live from the chains' indexers (no hardcoded token list); ZERO LLM. Use when the user asks: 'check my balance', \"what's in my wallet\", 'my portfolio', 'my tokens', 'my holdings', 'show my tokens', '查询余额', '我的资产', 'how much ETH do I have'. CRITICAL: only call when a wallet is connected — it auto-uses the connected address (no address argument). NEVER show tokens with zero balance and NEVER invent balances; reply with the EXACT figures from the result card and do NOT add USD totals of your own.",
     input_schema: {
       type: "object",
       properties: {
@@ -1172,9 +1174,9 @@ Testnets are reachable by full id: base-sepolia, ethereum-sepolia, robinhood-tes
     input_schema: {
       type: "object",
       properties: {
-        tokenIn:  { type: "string", description: "Token to SELL — one of the majors ETH/WETH/USDC/cbBTC, or a 0x… contract address on Base. Never invent an address." },
-        tokenOut: { type: "string", description: "Token to RECEIVE — one of the majors ETH/WETH/USDC/cbBTC, or a 0x… contract address on Base. Never invent an address." },
-        amountIn: { type: "string", description: "Amount of tokenIn as a decimal string ('0.1'), OR a quantity word — 'all', 'max', 'half', '50%' — passed through verbatim for the card to resolve against the live balance. Never turn a word into a number yourself." },
+        tokenIn:  { type: "string", description: "Token to SELL — one of the majors ETH/WETH/USDC/cbBTC, the ticker of a verified Base stock token (e.g. NVDA), or a 0x… contract address on Base. Never invent an address." },
+        tokenOut: { type: "string", description: "Token to RECEIVE — one of the majors ETH/WETH/USDC/cbBTC, the ticker of a verified Base stock token (e.g. NVDA, resolved server-side from BlueAgent's Base stock registry), or a 0x… contract address on Base. Never invent an address." },
+        amountIn: { type: "string", description: "Amount of tokenIn as a decimal string ('0.1'), OR a quantity word — 'all', 'max', 'half', '50%' — passed through verbatim for the card to resolve against the live balance. Never turn a word into a number yourself. For a DOLLAR amount ('buy $5 of NVDA on Base') pass tokenIn 'USDC' and amountIn '5'." },
       },
       required: ["tokenIn", "tokenOut", "amountIn"],
     },
@@ -1447,12 +1449,20 @@ const SWAP_TOKENS: Record<string, string> = {
 };
 
 /** Resolve a Base swap token: 0x… address → as-is; one of the four majors →
- *  its verified address; anything else → "" so the card asks the user. */
+ *  its verified address; the exact ticker (or `<TICKER>c` symbol) of a stock
+ *  in the verified Base stock registry → its B20 contract (2026-10-01 — each
+ *  row there is cross-checked against base.org/stocks and asserted on-chain,
+ *  so this is a registry lookup, never a name search); anything else → "" so
+ *  the card asks the user. */
 function resolveSwapToken(token: string): string {
   const t = (token || "").trim();
   if (/^0x[a-fA-F0-9]{40}$/.test(t)) return t;
-  return SWAP_TOKENS[t.toUpperCase().replace(/^\$/, "")] ?? "";
+  const sym = t.replace(/^\$/, "");
+  const major = SWAP_TOKENS[sym.toUpperCase()];
+  if (major) return major;
+  return baseStockByTickerOrSymbol(sym)?.token ?? "";
 }
+
 
 /**
  * What the model is told when a tool call fails.
@@ -1535,10 +1545,14 @@ async function callHubTool(
     // testnet label over a real-funds path. The card carries the chain picker
     // now, so the chain is the user's choice on screen instead of a parameter
     // the model guesses and nothing honours.
-    const tokenIn  = typeof args.tokenIn  === "string" ? args.tokenIn.trim()  : "";
+    let tokenIn  = typeof args.tokenIn  === "string" ? args.tokenIn.trim()  : "";
     const tokenOut = typeof args.tokenOut === "string" ? args.tokenOut.trim() : "";
-    const amountIn = typeof args.amountIn === "string" ? args.amountIn.trim()
+    let amountIn = typeof args.amountIn === "string" ? args.amountIn.trim()
       : typeof args.amountIn === "number" ? String(args.amountIn) : "";
+    // "buy $5 of NVDA": the dollar leg on Base is USDC. Only when the model
+    // left the sell side empty or as a bare "USD" — an explicit token wins.
+    const usdIn = dollarAmount(amountIn);
+    if (usdIn && (!tokenIn || /^(usd|\$)$/i.test(tokenIn))) { tokenIn = "USDC"; amountIn = usdIn; }
     return {
       text: "Convert card rendered on BASE MAINNET (8453) — real funds, not a testnet. The card fetches a live 0x quote and the user reviews the rate and SIGNS in their own wallet (non-custodial). Do NOT quote a rate or output amount yourself, do NOT claim the swap happened, and do NOT describe this as a test. Reply with one short line: tell the user to review the quote in the card and sign.",
       staticReply: "Your convert card is above — review the live quote, then sign the swap in your own wallet.",
@@ -1792,8 +1806,17 @@ async function callHubTool(
     //    `direction` ignored. `slippage_bps` optional (card default 50).
     const direction = args.direction === "sell" ? "sell" : "buy";
     const rawToken = typeof args.token === "string" ? args.token.trim() : "";
-    const rawTokenIn = typeof args.token_in === "string" ? args.token_in.trim() : "";
-    const amount = args.amount != null ? String(args.amount) : "";
+    let rawTokenIn = typeof args.token_in === "string" ? args.token_in.trim() : "";
+    let amount = args.amount != null ? String(args.amount) : "";
+    // "buy $5 of TSLA on robinhood": the dollar leg on Robinhood Chain is USDG,
+    // so a dollar amount with no explicit tokenIn becomes USDG → token. Without
+    // this the ETH↔token shape read "$5" as five ETH-or-nothing and the model
+    // routed the request to a price lookup instead (test share 2026-09-30).
+    const usdAmt = dollarAmount(amount);
+    if (usdAmt && direction === "buy" && (!rawTokenIn || /^(usd|\$)$/i.test(rawTokenIn))) {
+      rawTokenIn = "USDG";
+      amount = usdAmt;
+    }
     const slippage_bps = typeof args.slippage_bps === "number" ? args.slippage_bps : undefined;
 
     // Local resolver — extracted so token↔token can reuse it for tokenIn.
@@ -2052,6 +2075,25 @@ async function callHubTool(
       text,
       result: { kind: "authorization_result", ...r },
     };
+  }
+  if (toolName === "hub_b20_inspect" && typeof args.address === "string" && !/^0x/i.test(args.address.trim())) {
+    // A ticker instead of an address ("inspect the NVDA B20"). Resolved ONLY
+    // from the verified Base stock registry (lib/base-stocks/registry.ts —
+    // each row cross-checked against base.org/stocks and asserted on-chain),
+    // by exact ticker; the token's own symbol ("NVDAc") is accepted too. Never
+    // a name search: the #280 impostor got in by matching a name. Anything
+    // else asks for the address, and the inspect itself still reads isB20 on
+    // the Factory, so a registry row is re-proven on every call.
+    const raw = args.address.trim().replace(/^\$/, "");
+    const hit = baseStockByTickerOrSymbol(raw);
+    const testnet = typeof args.network === "string" && args.network !== "mainnet";
+    if (!hit || testnet) {
+      const msg = hit
+        ? `BlueAgent's Base stock registry covers Base mainnet only — paste the token's 0x… address to inspect it on ${String(args.network)}.`
+        : `"${raw}" is not a stock token in BlueAgent's verified Base registry — paste the token's 0x… address to inspect it.`;
+      return { text: `${msg} Reply with this one line; do NOT guess an address.`, staticReply: `⚠️ ${msg}` };
+    }
+    args = { ...args, address: hit.token, network: "mainnet" };
   }
   if (toolName === "check_wallet") {
     // Server-executed read of the CONNECTED wallet's FULL token list (Moralis,
@@ -2378,6 +2420,16 @@ async function veniceToolStream(
           const out = mcpEntry
             ? await callMcpConnectorTool(mcpEntry, args)
             : await callHubTool(tc.function.name, args, userAddress);
+          // Card-first (lib/chat/card-replies.ts): a read tool whose result
+          // renders as a card gets its one-liner from code, and the model is
+          // told not to re-list it if Phase 2 runs for another tool anyway.
+          if (!mcpEntry && !out.staticReply && out.result && !out.insufficient && !out.walletRequired) {
+            const line = cardReply(tc.function.name, out.result, args);
+            if (line) {
+              out.staticReply = line;
+              out.text = CARD_ALREADY_SHOWN + out.text;
+            }
+          }
           return { tc, out };
         }));
         const elapsed = Date.now() - t0;
