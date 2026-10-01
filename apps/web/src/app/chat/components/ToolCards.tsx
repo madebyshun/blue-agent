@@ -80,6 +80,7 @@ import BankRhSwapCard from "@/app/app/bank/RhSwapCard";
 import BankBridgeCard from "@/app/app/bank/BridgeCard";
 import DcaCard, { type DcaResult } from "./DcaCard";
 import { HoodArrowCard, type HoodArrowResult } from "./HoodArrowCard";
+import { PriceAlertCard, type PriceAlertDraft } from "./PriceAlertCard";
 import { DiscoveryCard, discoveryRows, type DiscoveryRow } from "./DiscoveryCard";
 import { WALLET_CHAINS } from "@/lib/wallet/chains";
 
@@ -2523,6 +2524,7 @@ export function ToolResultCard({ tool, result }: { tool: string; result: Record<
     // No "hub_b20_launch" case — the tool was retired 2026-09-08 along with its
     // card. Chat has no token-deploy path; /app/b20 is the one that exists.
     case "hub_hood_arrow":       return <HoodArrowCard   result={r as unknown as HoodArrowResult} />;
+    case "set_price_alert":      return r.kind === "price_alert_draft" ? <PriceAlertCard result={r as unknown as PriceAlertDraft} account={account} /> : null;
 
     // ── The four money cards: chat mounts the WALLET's own editors ───────────
     //

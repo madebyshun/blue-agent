@@ -97,6 +97,9 @@ const LOOP_SKILLS: AgentSkill[] = [
     name: "New launches", description: "What launched in the last hour per launchpad (Pons, Flap, Doppler/Bankr, Virtuals, Clanker), recent graduations, new pools above a liquidity floor",
     // Server-read in chat (new_tokens) — no x402 tool, no fee, no usage counter.
     trigger: "What launched on Robinhood Chain today?", tools: ["new_tokens"] },
+  { id: "check-price-alert", group: "check", chains: ["base", "robinhood"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR,
+    name: "Price alert", description: "Get told when a token or stock token crosses a price, or moves N% in 1h/24h — checked every 5 minutes, free, lands in Scheduled → Alerts and the Price alerts chat",
+    trigger: "Alert me when ETH on Base goes above $", tools: ["set_price_alert", "my_alerts"] },
   { id: "check-token", group: "check", chains: ["base", "robinhood"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR,
     name: "Check a token", description: "Any token by address — which launchpad, still on its curve or graduated, supply, deepest pools; the first look at a Robinhood Chain crypto token",
     trigger: "Check this token: 0x", tools: ["check_token"] },
@@ -143,6 +146,9 @@ export const NO_FEE_CHAT_TOOLS: ReadonlySet<string> = new Set([
   "check_wallet", "hub_token_price", "hub_crypto_rpc",
   // Server-read in chat (lib/token-overview.ts, lib/launchpads/feed.ts).
   "check_token", "new_tokens",
+  // Price alerts (lib/watches) — drafted and listed in the route, armed via
+  // /api/watches; checked by the 5-minute tick with no model call.
+  "set_price_alert", "my_alerts",
 ]);
 
 export const AGENT_SKILLS: AgentSkill[] = [

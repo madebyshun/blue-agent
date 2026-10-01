@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { usePolling } from "@/hooks/usePolling";
+import { sessionFetch } from "@/lib/session-client";
 import { AppChromeProvider, useAppChrome } from "./AppChrome";
 import LanguageToggle from "@/components/LanguageToggle";
 import AccountMenu from "@/components/AccountMenu";
@@ -49,6 +50,36 @@ function HoodNavBadge() {
       aria-label={`${n} unread`}
     >
       {label}
+    </span>
+  );
+}
+
+// Unread price alerts (lib/watches) on the Scheduled item. Same loop and the
+// same rules as the Hood badge above: `usePolling` stops while the tab is
+// hidden, and a non-OK answer keeps the last count instead of showing 0. A
+// signed-out visitor gets a 401 and no badge — reading never asks to sign.
+const ALERTS_BADGE_POLL_MS = 60_000;
+
+function AlertsNavBadge() {
+  const [n, setN] = useState<number | null>(null);
+  const load = useCallback(async (signal: AbortSignal) => {
+    try {
+      const r = await sessionFetch("/api/watches?unread=1", { cache: "no-store", signal });
+      if (r.status === 401) { setN(null); return; }
+      if (!r.ok) return;
+      const body = (await r.json()) as { unread?: number };
+      if (typeof body.unread === "number") setN(body.unread);
+    } catch { /* keep the last count */ }
+  }, []);
+  usePolling(load, ALERTS_BADGE_POLL_MS);
+  if (!n) return null;
+  return (
+    <span
+      className="absolute -top-1 -right-2 min-w-[14px] h-[14px] px-1 rounded-full flex items-center justify-center font-mono text-[9px] font-bold"
+      style={{ backgroundColor: "#4FC3F7", color: "#050508", boxShadow: "0 0 0 2px #050508" }}
+      aria-label={`${n} unread price alerts`}
+    >
+      {n > 99 ? "99+" : n}
     </span>
   );
 }
@@ -119,7 +150,7 @@ const IconHome = svg(<path strokeLinecap="round" strokeLinejoin="round" d="m2.25
 // That keeps the 1958-line catalog out of the client bundle and adds no fetch
 // — which matters here specifically, because anything mounted in this nav runs
 // on every /app page (see HoodNavBadge's warning above).
-type NavItem = { id: string; href: string; icon: ReactNode; badge?: "hood"; meta?: "hubCount" };
+type NavItem = { id: string; href: string; icon: ReactNode; badge?: "hood" | "alerts"; meta?: "hubCount" };
 type NavGroup = { id: string; items: NavItem[] };
 
 const NAV_GROUPS: NavGroup[] = [
@@ -134,7 +165,7 @@ const NAV_GROUPS: NavGroup[] = [
       { id: "chat", href: "/chat", icon: IconChat },
       { id: "models", href: "/models", icon: IconModels },
       { id: "wallet", href: "/wallet", icon: IconWallet },
-      { id: "cron", href: "/cron", icon: IconCron },
+      { id: "cron", href: "/cron", icon: IconCron, badge: "alerts" },
       { id: "usage", href: "/usage", icon: IconUsage },
     ],
   },
@@ -255,7 +286,7 @@ function AppSideNav({ toolCount }: { toolCount: number }) {
               handoff draws it in. Unread receipts are an ALERT, not metadata:
               rendered as grey 9.5px meta it would read as a static count, and
               at the collapsed width there is no meta column at all. */}
-          {item.badge === "hood" && <HoodNavBadge />}
+          {item.badge === "hood" && <HoodNavBadge />}{item.badge === "alerts" && <AlertsNavBadge />}
         </span>
         {!collapsed && (
           <>
@@ -702,7 +733,7 @@ function MobileDrawer({ toolCount }: { toolCount: number }) {
                   >
                     <span className="relative shrink-0" style={{ color: active ? "#4FC3F7" : "#64748B" }}>
                       {item.icon}
-                      {item.badge === "hood" && <HoodNavBadge />}
+                      {item.badge === "hood" && <HoodNavBadge />}{item.badge === "alerts" && <AlertsNavBadge />}
                     </span>
                     <span className="font-mono text-[13px] flex-1 min-w-0 truncate" style={{ color: active ? "#4FC3F7" : "#E2E8F0" }}>
                       {t(`nav.${item.id}`)}

@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import WatchesPanel from "./WatchesPanel";
 import { useChat } from "../ChatContext";
 import { isBackground, nextRunLabel } from "../storage";
 import { localTz, nextFireAt } from "@/lib/cron-schedule";
@@ -32,6 +33,9 @@ const SCHEDULES: { value: CronSchedule; label: string }[] = [
 const CRON_PRESETS = [
   { label: "Weekly Base digest",      prompt: "What happened on Base this week?",          schedule: "weekly" as CronSchedule, time: "09:00" },
   { label: "Daily narrative scan",    prompt: "What narratives are running on Base now?",  schedule: "daily"  as CronSchedule, time: "08:00" },
+  // Uses the my_alerts chat tool. A prompt run, so it costs chat credits like
+  // any scheduled task — the alerts themselves stay free.
+  { label: "Daily price-alert summary", prompt: "Summarize my price alerts: each watched token's current price and 1h/24h change, and every alert that fired in the last 24 hours.", schedule: "daily" as CronSchedule, time: "09:00" },
 ];
 
 // Grid geometry shared by the header row and every data row — one string so the
@@ -175,6 +179,9 @@ export default function CronPanel() {
           {showForm ? "✕ Cancel" : "+ Add task"}
         </button>
       </div>
+
+      {/* ── Price alerts (lib/watches) — checked in code every 5 min, free. ─── */}
+      <WatchesPanel />
 
       {/* ── Stop everything the server runs for this wallet — including tasks
            this browser never saw (L4). ─── */}

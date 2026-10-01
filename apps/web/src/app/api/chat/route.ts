@@ -26,7 +26,7 @@ import { getRobinhoodAddressBalances } from "@/lib/robinhood/blockscout";
 import { mcpCallTool } from "@/lib/mcp-client";
 import { SOUL_MD } from "@/lib/soul";
 import { VIRTUALS_PRESETS } from "@/app/api/_lib/llm";
-import { buildBaseSystem, buildAgentCapabilities, buildB20Section, buildLaunchpadSection } from "./system-prompt";
+import { buildBaseSystem, buildAgentCapabilities, buildB20Section, buildLaunchpadSection, buildAlertsSection } from "./system-prompt";
 import { normalizeWallet, resolveActingWallet } from "@/lib/acting-wallet";
 import { findByTicker as findRwaByTicker, findByContract as findRwaByContract } from "@/lib/robinhood/rwa-registry";
 import { CHAT_HIDDEN_TOOLS } from "@/lib/chat-hidden-tools";
@@ -541,6 +541,32 @@ const ALL_HUB_TOOLS = [
       },
       required: ["chain"],
     },
+  },
+  // ── Price alerts (2026-10-01) — lib/watches. Checked every 5 min in code,
+  // free, max 20 per wallet; fired alerts land in Scheduled → Alerts and in the
+  // "Price alerts" chat. Chat only DRAFTS a watch: the card's Arm button is
+  // what saves it, under the user's own signed-in session.
+  {
+    name: "set_price_alert",
+    description: "Draft a PRICE ALERT the user arms with one click: 'tell me when NVDA on robinhood drops below $220', 'alert me if ETH on base goes above 3000', 'báo tôi nếu ZIP tăng 20% trong 1 giờ', 'notify me when 0x… is down 10% in 24h'. Two kinds: price (above/below a USD level) and change (up/down N% over 1h or 24h). Checked every 5 minutes, free, up to 20 per wallet; alerts appear in Scheduled → Alerts and in the 'Price alerts' chat. Token: a 0x address, a verified stock ticker (NVDA, TSLA…) or ETH/USDC/WETH/cbBTC/USDG. NEVER invent a level or percentage the user did not state — ask. Chain is required: if the user did not say and the token could be on both, ask.",
+    input_schema: {
+      type: "object",
+      properties: {
+        token:     { type: "string", description: "0x contract, a verified stock ticker, or ETH/USDC/WETH/cbBTC/USDG. Never invent an address." },
+        chain:     { type: "string", enum: ["base", "robinhood"] },
+        kind:      { type: "string", enum: ["price", "change"], description: "price = a USD level; change = % move over a window." },
+        direction: { type: "string", enum: ["above", "below", "up", "down"], description: "above/below for price; up/down for change." },
+        threshold: { type: "number", description: "USD level for price; percent (e.g. 20) for change. Exactly what the user said." },
+        window:    { type: "string", enum: ["1h", "24h"], description: "Change alerts only. If the user gave no window, use 24h and say so." },
+        repeat:    { type: "boolean", description: "true = keep alerting each time it re-crosses (with a cooldown); default false = alert once." },
+      },
+      required: ["token", "chain", "kind", "direction", "threshold"],
+    },
+  },
+  {
+    name: "my_alerts",
+    description: "The connected wallet's price alerts: each watch with its current price / 1h / 24h change, and the alerts fired in the last 24 hours. Use for 'my alerts', 'what am I watching', 'summarize my watchlist', and for a daily summary of watched tokens.",
+    input_schema: { type: "object", properties: {} },
   },
   {
     name: "hub_narrative",
@@ -2113,6 +2139,68 @@ async function callHubTool(
       result: { kind: "authorization_result", ...r },
     };
   }
+  if (toolName === "set_price_alert") {
+    const { parseRule } = await import("@/lib/watches/rules");
+    const { resolveWatchTarget } = await import("@/lib/watches/prices");
+    const { describeRule } = await import("@/lib/watches/types");
+    const { fmtPrice } = await import("@/lib/watches/evaluate");
+    const chain = args.chain === "base" || args.chain === "robinhood" ? args.chain : null;
+    const token = typeof args.token === "string" ? args.token.trim() : "";
+    const ruleArgs = { ...args, window: args.kind === "change" ? (args.window ?? "24h") : undefined };
+    const rule = parseRule(ruleArgs);
+    const fail = (msg: string) => ({ text: `${msg} Reply with this line.`, staticReply: `⚠️ ${msg}` });
+    if (!chain) return fail("Which chain should I watch — Base or Robinhood Chain?");
+    if (!token) return fail("Which token? Give its 0x address or a verified stock ticker.");
+    if ("error" in rule) return fail(`I can't set that alert: ${rule.error}.`);
+    const resolved = await resolveWatchTarget(chain, token);
+    if ("error" in resolved) return fail(resolved.error);
+    if (rule.kind === "change" && !resolved.target.pool) return fail("There is no pool to read a % change from for this token.");
+    const ruleText = describeRule({ ...rule, symbol: resolved.target.symbol, chain });
+    const now = resolved.priceNow != null ? ` It is ${fmtPrice(resolved.priceNow)} now (${resolved.priceSource ?? "source unknown"}).` : "";
+    const line = `Alert me when ${ruleText}.${now} Press **Arm alert** on the card to start — checked every 5 minutes, free.`;
+    return {
+      text: `${line}\n[Card rendered. Do not claim the alert is active until the user arms it.]`,
+      staticReply: line,
+      result: {
+        kind: "price_alert_draft",
+        rule: ruleText,
+        priceNow: resolved.priceNow,
+        body: { chain, token: resolved.target.token, kind: rule.kind, direction: rule.direction, threshold: rule.threshold, window: rule.window, repeat: args.repeat === true },
+      },
+    };
+  }
+  if (toolName === "my_alerts") {
+    if (!userAddress || !/^0x[a-fA-F0-9]{40}$/.test(userAddress)) {
+      const msg = "Connect and sign in with your wallet to see your price alerts.";
+      return { text: `${msg} Reply with this line.`, staticReply: msg };
+    }
+    const { readWatches, readAlerts } = await import("@/lib/watches/store");
+    const { readReadings } = await import("@/lib/watches/prices");
+    const { describeRule } = await import("@/lib/watches/types");
+    const { fmtPrice } = await import("@/lib/watches/evaluate");
+    const [w, a] = await Promise.all([readWatches(userAddress), readAlerts(userAddress)]);
+    if (w.status === "unavailable" || a.status === "unavailable") {
+      return { text: toolFailed(toolName, "the alert store could not be read") };
+    }
+    if (w.value.length === 0) {
+      const msg = "You have no price alerts yet — ask me to set one, e.g. \"alert me when ETH on Base goes above $3,000\".";
+      return { text: `${msg} Reply with this line.`, staticReply: msg };
+    }
+    const readings = await readReadings(w.value);
+    const pct = (n: number | null) => (n == null ? "?" : `${n > 0 ? "+" : ""}${n.toFixed(2)}%`);
+    const lines = [`**Your price alerts** (${w.value.filter((x) => x.active).length} active of ${w.value.length}):`];
+    for (const x of w.value) {
+      const r = readings.get(x.id);
+      const price = r?.priceUsd != null ? fmtPrice(r.priceUsd) : "price unread";
+      lines.push(`- ${x.active ? "" : "(paused) "}${describeRule(x)} — now ${price}${r?.stale ? " (oracle stale — market closed)" : ""} · 1h ${pct(r?.change1h ?? null)} · 24h ${pct(r?.change24h ?? null)}`);
+    }
+    const day = Date.now() - 86_400_000;
+    const recent = a.value.alerts.filter((x) => x.at >= day);
+    lines.push(recent.length ? `**Fired in the last 24h:**` : "No alert fired in the last 24 hours.");
+    for (const x of recent.slice(0, 10)) lines.push(`- ${new Date(x.at).toISOString().slice(11, 16)} UTC — ${x.text}`);
+    const line = lines.join("\n");
+    return { text: `${line}\n[These are the whole facts — no verdicts.]`, staticReply: line, result: { kind: "my_alerts", count: w.value.length } };
+  }
   if (toolName === "check_token") {
     const addr = typeof args.address === "string" ? args.address.trim() : "";
     if (!/^0x[a-fA-F0-9]{40}$/.test(addr)) {
@@ -3383,6 +3471,7 @@ export async function POST(req: NextRequest) {
     // only ships when those tools are actually attached.
     buildB20Section(hasTools),
     buildLaunchpadSection(hasTools),
+    buildAlertsSection(hasTools),
     skills   ? `## Installed Skills\nThe user has installed these skill packs — use their tools / knowledge when relevant:\n\n${skills}` : "",
     // `&& hasTools` covers the Phase-1-failed rebuild: connectors ride the same
     // tool call, so when it doesn't happen they are as absent as the Hub tools.

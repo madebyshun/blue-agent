@@ -18,6 +18,7 @@ import { extractArtifacts } from "./artifacts";
 import { enabledSkillsPrompt, loadIntegrations, runSkillCommand } from "./integrations";
 import { enabledConnectorsForChat } from "./connectors";
 import { resolvePresetDispatch, VIRTUALS_PRESETS_V1, DEFAULT_CHAT_PRESET } from "./components/presets";
+import { usePriceAlertsSync, alertsTask, ALERTS_TASK_PREFIX } from "./use-price-alerts";
 import { useWorkspaceSync, WORKSPACE_HYDRATED_EVENT, type UseWorkspaceSync } from "./workspace-sync";
 import { useScheduleSync, type UseScheduleSync } from "./use-schedule-sync";
 import { patchById } from "./schedule-merge";
@@ -540,6 +541,21 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // storage), so they can be seen and switched off (L4). It writes through
   // `mutateCrons` so a whole pull lands as one update.
   const schedule = useScheduleSync(walletAddr, crons, mutateCrons, signIn);
+
+  // Fired price alerts → the "🔔 Price alerts" conversation (use-price-alerts).
+  // Appended through the functional updater so a sync landing mid-stream
+  // cannot overwrite the message being written in another conversation.
+  const appendToAlertsTask = useCallback((wallet: string, msgs: Message[]) => {
+    setTasksState((prev) => {
+      const id = `${ALERTS_TASK_PREFIX}${wallet.toLowerCase()}`;
+      const existing = prev.find((t) => t.id === id) ?? alertsTask(wallet, chatTier);
+      const updated = { ...existing, messages: [...existing.messages, ...msgs], updatedAt: Date.now() };
+      const next = [updated, ...prev.filter((t) => t.id !== id)];
+      saveTasks(next, walletAddr);
+      return next;
+    });
+  }, [chatTier, walletAddr]);
+  usePriceAlertsSync({ walletAddr, hasSession, appendToAlertsTask });
 
   // ── Chat state ─────────────────────────────────────────────────────────────
   const [streaming,    setStreaming]    = useState(false);

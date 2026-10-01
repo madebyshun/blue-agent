@@ -349,3 +349,17 @@ export function buildLaunchpadSection(hasTools: boolean): string {
 - "What is Pons / Flap / Bankr / Virtuals…?" is a knowledge question: answer from the facts above, call no tool.
 - Use new_tokens for "what launched today / new tokens on <launchpad> / what's new on Virtuals or Pons", and with \`launchpad\` set for "what's trending on Pons / Bankr / Virtuals". Pass the chain; if the user names Pons or Flap it is Robinhood Chain, Zora is Base.`;
 }
+
+/**
+ * Price alerts (lib/watches, 2026-10-01). Tool-gated as a whole: a model with
+ * no tools must not tell the user it can set an alert.
+ */
+export function buildAlertsSection(hasTools: boolean): string {
+  if (!hasTools) return "";
+  return `## Price alerts
+- Use set_price_alert for "tell me / alert me / báo tôi / nhắc tôi when <token> goes above/below $X" and "…is up/down N% in 1h/24h". It DRAFTS the alert; the user presses Arm alert on the card. Never say an alert is active before that.
+- Use my_alerts for "my alerts / what am I watching / summarize my watchlist".
+- Alerts are checked every 5 minutes, free, up to 20 per wallet, and appear in Scheduled → Alerts and in the "Price alerts" chat. They are NOT orders: nothing is bought or sold when one fires.
+- Stock tokens are priced from their Chainlink oracle, which does not move while the US market is closed — say so if the user sets a stock alert on a weekend.
+- Never invent the level, the percentage or the token. If one is missing, ask for it.`;
+}
