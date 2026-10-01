@@ -77,6 +77,16 @@ export function formatFeed(f: LaunchFeed): string {
   }
   if (f.graduations.unread.length) lines.push(`Graduations could not be read for: ${f.graduations.unread.join(", ")}.`);
 
+  if (f.trending.available) {
+    if (f.trending.items == null) lines.push("Trending pools could not be read right now (GeckoTerminal).");
+    else if (f.trending.items.length === 0) lines.push(`No pool of this launchpad on ${chain} has more than ${fmtUsd(f.newPools.minReserveUsd)} of liquidity right now.`);
+    else {
+      lines.push(`**Trending on this launchpad — top pools by 24h volume, over ${fmtUsd(f.newPools.minReserveUsd)} liquidity** (GeckoTerminal):`);
+      for (const p of f.trending.items) {
+        lines.push(`- ${p.name} · 24h volume ${fmtUsd(p.volume24hUsd) ?? "?"} · liquidity ${fmtUsd(p.reserveUsd)}${fmtPct(p.change24hPct) ? ` · 24h ${fmtPct(p.change24hPct)}` : ""}${p.token ? ` · \`${p.token}\`` : ""}`);
+      }
+    }
+  }
   if (f.newPools.items == null) {
     lines.push("New pools could not be read right now (GeckoTerminal).");
   } else if (f.newPools.items.length === 0) {

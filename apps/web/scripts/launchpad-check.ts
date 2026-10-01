@@ -102,6 +102,7 @@ ok("Pons is Robinhood-only, Zora Base-only", LAUNCHPAD_INFO.pons.chains.join() =
     counts: [{ id: "pons", name: "Pons (Pons Family)", launches: 146 }, { id: "flap", name: "Flap (flap.sh)", launches: null }],
     graduations: { windowHours: 24, items: [{ launchpad: "Pons (Pons Family)", token: "0xC00899951D84ee5aFb1BF22Df1d91d5206457D86", symbol: "ZIP" }], unread: [] },
     newPools: { minReserveUsd: 10_000, items: null },
+    trending: { available: true, items: [{ name: "VRAX / USDG", reserveUsd: 145296, volume24hUsd: 6115553, change24hPct: 12.5, token: "0xabc0000000000000000000000000000000000001" }] },
   };
   txt = formatFeed(feed);
   ok("counts name their source and window", txt.includes("last 60 min") && txt.includes("Pons (Pons Family) 146"), txt);
@@ -109,6 +110,8 @@ ok("Pons is Robinhood-only, Zora Base-only", LAUNCHPAD_INFO.pons.chains.join() =
   ok("graduations listed by contract", txt.includes("ZIP · Pons (Pons Family) · `0xC008"));
   ok("unread new pools are said", txt.includes("New pools could not be read"));
   ok("facts, not picks", /not picks/.test(txt));
+  ok("trending pools ranked by 24h volume, sourced", txt.includes("top pools by 24h volume") && txt.includes("VRAX / USDG · 24h volume $6.12M"), txt);
+  ok("a launchpad with no GT dex says nothing about trending", !formatFeed({ ...feed, trending: { available: false, items: null } }).includes("Trending"));
 
   console.log("4. prompt");
   const off = buildLaunchpadSection(false);

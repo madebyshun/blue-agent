@@ -17,6 +17,7 @@
  */
 import { parseAbi, type Address, type Hex } from "viem";
 import { launchClient } from "./resolve";
+import { gtJson } from "./gt";
 import {
   CLANKER_FACTORY, DOPPLER_AIRLOCK, FLAP_RH, LAUNCHPAD_INFO, PONS_V2_FACTORY, TOPICS,
   VIRTUALS_BONDING, type LaunchChain, type LaunchpadId,
@@ -57,6 +58,8 @@ export interface LaunchFeed {
   counts: Array<{ id: LaunchpadId; name: string; launches: number | null }>;
   graduations: { windowHours: number; items: Array<{ launchpad: string; token: Address; symbol: string | null }>; unread: string[] };
   newPools: { minReserveUsd: number; items: Array<{ name: string; launchpad: string | null; reserveUsd: number; volume24hUsd: number | null; ageMinutes: number | null; token: string | null }> | null };
+  /** Only when one launchpad was asked for: its pools by 24h volume. */
+  trending: { available: boolean; items: Array<{ name: string; reserveUsd: number; volume24hUsd: number | null; change24hPct: number | null; token: string | null }> | null };
 }
 
 const erc20 = parseAbi(["function symbol() view returns (string)"]);
@@ -92,13 +95,53 @@ async function symbolOf(chain: LaunchChain, token: Address): Promise<string | nu
   catch { return null; }
 }
 
+type GtPools = { data?: Array<{ attributes?: Record<string, unknown>; relationships?: Record<string, { data?: { id?: string } }> }> };
+
+/**
+ * GeckoTerminal dex ids that ARE a launchpad's own pools, per chain (listed
+ * 2026-10-01). Only these can answer "what's trending on <launchpad>" — Flap,
+ * Zora, Doppler-generic and Clanker-on-Base pools are filed under plain
+ * uniswap-v4 there, so for them trending is said to be unavailable.
+ */
+const LAUNCHPAD_GT_DEXES: Partial<Record<LaunchpadId, Partial<Record<LaunchChain, string[]>>>> = {
+  pons:     { robinhood: ["pons-v2-dex", "pons-v2"] },
+  bankr:    { base: ["bankr"], robinhood: ["bankr-robinhood"] },
+  virtuals: { base: ["virtuals-base"], robinhood: ["virtuals-robinhood"] },
+  clanker:  { robinhood: ["clanker-robinhood"] },
+};
+
+async function trendingFor(chain: LaunchChain, only: LaunchpadId): Promise<LaunchFeed["trending"]> {
+  const dexes = LAUNCHPAD_GT_DEXES[only]?.[chain];
+  if (!dexes) return { available: false, items: null };
+  const rows: NonNullable<LaunchFeed["trending"]["items"]> = [];
+  let readAny = false;
+  for (const dex of dexes) {
+    const { body } = await gtJson<GtPools>(`/networks/${chain}/dexes/${dex}/pools?sort=h24_volume_usd_desc&page=1`);
+    if (!body) continue;
+    readAny = true;
+    for (const p of body.data ?? []) {
+      const a = p.attributes ?? {};
+      const reserve = Number(a.reserve_in_usd);
+      const vol = Number((a.volume_usd as Record<string, unknown> | undefined)?.h24);
+      const ch = Number((a.price_change_percentage as Record<string, unknown> | undefined)?.h24);
+      const baseTok = String(p.relationships?.base_token?.data?.id ?? "");
+      if (!Number.isFinite(reserve) || reserve < NEW_POOL_MIN_RESERVE_USD) continue;
+      rows.push({
+        name: String(a.name ?? "?"), reserveUsd: reserve,
+        volume24hUsd: Number.isFinite(vol) ? vol : null,
+        change24hPct: Number.isFinite(ch) ? ch : null,
+        token: baseTok.includes("_") ? baseTok.split("_").pop() ?? null : null,
+      });
+    }
+  }
+  if (!readAny) return { available: true, items: null };
+  return { available: true, items: rows.sort((a, b) => (b.volume24hUsd ?? 0) - (a.volume24hUsd ?? 0)).slice(0, 5) };
+}
+
 async function newPools(chain: LaunchChain, only?: LaunchpadId): Promise<LaunchFeed["newPools"]["items"]> {
   try {
-    const r = await fetch(`https://api.geckoterminal.com/api/v2/networks/${chain}/new_pools?include=dex`, {
-      headers: { Accept: "application/json" }, signal: AbortSignal.timeout(6_000), cache: "no-store",
-    });
-    if (!r.ok) return null;
-    const j = (await r.json()) as { data?: Array<{ attributes?: Record<string, unknown>; relationships?: Record<string, { data?: { id?: string } }> }> };
+    const { body: j } = await gtJson<GtPools>(`/networks/${chain}/new_pools?include=dex`);
+    if (!j) return null;
     const now = Date.now();
     return (j.data ?? []).map((p) => {
       const a = p.attributes ?? {};
@@ -169,5 +212,6 @@ export async function launchFeed(chain: LaunchChain, only?: LaunchpadId): Promis
     chain, windowMinutes, counts,
     graduations: { windowHours: 24, items: gradItems, unread },
     newPools: { minReserveUsd: NEW_POOL_MIN_RESERVE_USD, items: await newPools(chain, only) },
+    trending: only ? await trendingFor(chain, only) : { available: false, items: null },
   };
 }

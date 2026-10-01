@@ -532,7 +532,7 @@ const ALL_HUB_TOOLS = [
   },
   {
     name: "new_tokens",
-    description: "What is launching right now on Base or Robinhood Chain: per-launchpad launch counts for the last hour (from each launchpad's own on-chain events), recent graduations (Pons and Virtuals on Robinhood Chain), and the newest pools above a liquidity floor. Use for 'what launched today', 'new tokens on Pons', 'what's new on Virtuals', 'new launches on Base'. Facts only — never present a launch as a pick.",
+    description: "What is launching right now on Base or Robinhood Chain: per-launchpad launch counts for the last hour (from each launchpad's own on-chain events), recent graduations (Pons and Virtuals on Robinhood Chain), and the newest pools above a liquidity floor. Use for 'what launched today', 'new tokens on Pons', 'what's new on Virtuals', 'new launches on Base', and 'what's trending on Pons / Bankr / Virtuals' — pass `launchpad` and the reply adds that launchpad's pools ranked by 24h volume. Facts only — never present a launch or a trending pool as a pick.",
     input_schema: {
       type: "object",
       properties: {
@@ -2877,7 +2877,15 @@ async function callVeniceStream(
           else controller.enqueue(encoder.encode(`data: ${JSON.stringify({ delta: { text: msg } })}\n\n`));
           return;
         }
-        if (!cutAtLength) return;
+        if (!cutAtLength) {
+          // A clean stop with NOTHING in it (seen 2026-10-01 on a typo'd
+          // "ell my NVDA"): still a blank bubble without this line.
+          if (!emittedOutput && contentChars === 0) {
+            noted = true;
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ delta: { text: "The model returned an empty answer. Nothing was charged — send it again, or rephrase." } })}\n\n`));
+          }
+          return;
+        }
         noted = true;
         if (contentChars > 0) {
           emit({ delta: { text: "\n\n_(Cut off at this preset's length limit — say \"continue\" for the rest, or switch to Deep for longer answers.)_" } });

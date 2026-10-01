@@ -78,6 +78,12 @@ async function run(text: string, tier = "fast") {
   check("3.1 the user is told the provider's filter declined it", /filter declined/.test(r.text), r.text);
   check("3.2 flagged as no-output (refund path)", r.upstreamError);
 
+  console.log("3b. a clean stop with NO content");
+  script = { content: "", finish: "stop" };
+  r = await run("ell my NVDA");
+  check("3b.1 the bubble is not blank", /empty answer/.test(r.text), r.text);
+  check("3b.2 flagged as no-output (refund path)", r.upstreamError);
+
   console.log("4. a normal stop adds nothing");
   script = { content: "All good.", finish: "stop" };
   r = await run("hello there");

@@ -23,6 +23,7 @@ import { launchClient, resolveLaunchpad, type LaunchpadResolution } from "@/lib/
 import type { LaunchChain } from "@/lib/launchpads/registry";
 import { findByContract as findRhToken } from "@/lib/robinhood/rwa-registry";
 import { BASE_STOCKS } from "@/lib/base-stocks/registry";
+import { gtJson } from "@/lib/launchpads/gt";
 
 export interface TokenOverview {
   chain: LaunchChain;
@@ -75,12 +76,10 @@ async function readOnchain(chain: LaunchChain, token: Address): Promise<TokenOve
 
 async function readMarket(chain: LaunchChain, token: Address): Promise<TokenOverview["market"]> {
   try {
-    const r = await fetch(`https://api.geckoterminal.com/api/v2/networks/${chain}/tokens/${token}/pools?page=1`, {
-      headers: { Accept: "application/json" }, signal: AbortSignal.timeout(6_000), cache: "no-store",
-    });
-    if (r.status === 404) return { priceUsd: null, pools: [], status: "none_listed" };
-    if (!r.ok) return { priceUsd: null, pools: [], status: "unread" };
-    const j = (await r.json()) as { data?: Array<{ attributes?: Record<string, unknown>; relationships?: Record<string, { data?: { id?: string } }> }> };
+    const { status, body: j } = await gtJson<{ data?: Array<{ attributes?: Record<string, unknown>; relationships?: Record<string, { data?: { id?: string } }> }> }>(
+      `/networks/${chain}/tokens/${token}/pools?page=1`);
+    if (status === 404) return { priceUsd: null, pools: [], status: "none_listed" };
+    if (!j) return { priceUsd: null, pools: [], status: "unread" };
     const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : null; };
     const rows = (j.data ?? []).map((p) => {
       const a = p.attributes ?? {};
