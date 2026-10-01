@@ -383,6 +383,9 @@ const NON_PUBLISHING: Record<string, { why: string; holds: (src: string) => bool
     ok(`${r}: halted (${halted}) or publishes through the quarantine (${publishes})`, halted || publishes);
     if (DIRECTION.test(c)) {
       ok(`${r}: maps a direction from the leg, so it publishes through the quarantine even if halted (defence in depth)`, publishes);
+      // A4's ARB notes read "real arb: consider buying DEX" until 2026-10-01 —
+      // a trade call riding on the leg, live again the day the quarantine lifts.
+      ok(`${r}: names the gap, never tells the reader to buy or sell`, !/consider (buying|selling)|real arb:/i.test(c));
     }
   }
   for (const listed of Object.keys(EXECUTION_QUOTE)) {

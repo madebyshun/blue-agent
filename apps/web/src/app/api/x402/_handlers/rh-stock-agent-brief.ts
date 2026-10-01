@@ -164,8 +164,12 @@ Do NOT invent numbers, headlines, or URLs. Empty values are acceptable and prefe
       // A withheld price is INSUFFICIENT_DATA for a different reason than the
       // stock note below ("neither a feed nor a pool"), so it says its own.
       verdict_note: dex_withheld && verdict === "INSUFFICIENT_DATA" ? RH_DESK_QUARANTINE.note : {
-        ARB_LONG_DEX: "Market OPEN + DEX materially below Chainlink oracle — real arb: consider buying DEX (basis narrow).",
-        ARB_SHORT_DEX: "Market OPEN + DEX materially above Chainlink oracle — real arb: consider selling DEX (basis narrow).",
+        // These two said "real arb: consider buying / selling DEX" until
+        // 2026-10-01 — a trade call, which the rebuild strips everywhere
+        // (token-pick-signal, plan §3 fix 3). The verdict names the measured
+        // gap; whether to act on it is the reader's, not this note's.
+        ARB_LONG_DEX: "Market OPEN + DEX ≥0.5% below the Chainlink oracle — a measured gap while the feed is live. Not a recommendation to trade.",
+        ARB_SHORT_DEX: "Market OPEN + DEX ≥0.5% above the Chainlink oracle — a measured gap while the feed is live. Not a recommendation to trade.",
         WATCH: "Market OPEN + DEX/oracle aligned. No immediate directional signal.",
         PREMARKET_DRIFT: "Market CLOSED (premarket). Chainlink is frozen on the last regular-hours print; DEX has drifted — this is on-chain price discovery, NOT arb. Expect a snap toward the feed at 9:30 ET open.",
         AFTERHOURS_DRIFT: "Market CLOSED (afterhours/weekend). Chainlink frozen; DEX drift reflects overnight sentiment, not arb.",
