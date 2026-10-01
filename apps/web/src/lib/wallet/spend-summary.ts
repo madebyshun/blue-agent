@@ -84,7 +84,7 @@ export interface SpendSummary {
   };
   credits: {
     status: RailStatus;
-    /** Σ of spend events in the recorded window. A floor. */
+    /** Σ of spend events in the recorded window, each net of its refund. A floor. */
     spentInWindow: number;
     callsInWindow: number;
     /**
@@ -236,6 +236,26 @@ export async function getSpendSummary(address: string): Promise<SpendSummary> {
   }
 
   // ── credits rail: metered units, NOT money (see header) ───────────────────
+  //
+  // Refunds net out of the spend they reverse (2026-10-01). A failed tool or
+  // chat call is debited, then `refund()` returns the debit and writes a
+  // `kind: "refund"` event pointing back at it (`refundOf` = the spend's ref).
+  // Counting only `spend` events kept every refunded call in its tool's row, in
+  // the window total and in the day chart — "rh-stock-movers · N cr · 1 call"
+  // for a call that errored and cost nothing — while `paidAllTime`, which
+  // refund() does reduce, said otherwise. What a call cost is its debit minus
+  // what came back: a full refund removes the call; a partial one (the daily
+  // half had already expired, so refund() could not return it) leaves exactly
+  // the part that really left the balance. A refund whose spend has aged out of
+  // the capped history has nothing to net against and is ignored — it is
+  // returned credit, never negative spending.
+  const refundedByRef = new Map<string, number>();
+  for (const e of ledger?.history ?? []) {
+    if (e.kind !== "refund" || !e.refundOf) continue;
+    const back = Number.isFinite(e.amount) ? e.amount : 0;
+    if (back > 0) refundedByRef.set(e.refundOf, (refundedByRef.get(e.refundOf) ?? 0) + back);
+  }
+
   let creditsInWindow = 0;
   let creditCalls = 0;
   let chatCredits = 0;
@@ -244,7 +264,9 @@ export async function getSpendSummary(address: string): Promise<SpendSummary> {
   let otherCalls = 0;
   for (const e of ledger?.history ?? []) {
     if (e.kind !== "spend") continue;              // top-ups are not spending
-    const amount = Number.isFinite(e.amount) ? e.amount : 0;
+    const gross = Number.isFinite(e.amount) ? e.amount : 0;
+    const back = e.ref ? (refundedByRef.get(e.ref) ?? 0) : 0;
+    const amount = gross - Math.min(back, gross);  // net of its refund, if any
     if (amount <= 0) continue;
     const what = parseReason(e.reason);
 
