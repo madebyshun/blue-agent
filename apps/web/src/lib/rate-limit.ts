@@ -53,6 +53,10 @@ export const RATE_LIMITS = {
   // the line mid-send is refused here and retried user-paid by the card
   // (sendWithSponsorFallback, hooks/useSponsoredGas.ts). A STRICT tier.
   paymaster: { limit: 40, windowSeconds: 3600 },
+  // /api/devices/* (BlueBot linking + its read-only feed), per IP for the
+  // unauthenticated code/token steps and per wallet/device after. A device
+  // polls the token step every TOKEN_POLL_S (5 s) for at most 10 minutes.
+  device: { limit: 30, windowSeconds: 60 },
 } as const;
 
 export type RateLimitKey = keyof typeof RATE_LIMITS;

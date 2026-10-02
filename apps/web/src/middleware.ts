@@ -112,6 +112,7 @@ const APP_SEGMENTS = new Set([
   "trade",
   "bridge",
   "tasks",
+  "link",         // approve / unlink BlueBot devices (lib/devices.ts)
 ]);
 
 /**
