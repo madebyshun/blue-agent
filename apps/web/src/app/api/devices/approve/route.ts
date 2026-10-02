@@ -1,9 +1,9 @@
 /**
  * /api/devices/approve — step 2, the person on app.blueagent.dev/link (SIWE).
  *   GET  ?code=XXXX-XXXX → which device is asking (name, kind, age)
- *   POST { code, scopes?, chatDailyCap? } → approve it for THIS session's wallet,
- *        with the scopes the person ticked (lib/devices.ts cleanGrant: `read`
- *        always, `chat`/`alerts` only if asked, cap clamped)
+ *   POST { code, scopes? } → approve it for THIS session's wallet, with the
+ *        scopes the person ticked (lib/devices.ts cleanGrant: `read` always,
+ *        `chat`/`alerts` only if asked)
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { rateLimit } from "@/lib/rate-limit";
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
   try { b = await req.json(); } catch { return BAD_CODE; }
   const code = normalizeUserCode(b.code);
   if (!code) return BAD_CODE;
-  const r = await approveCode(code, auth.wallet, cleanGrant(b.scopes, b.chatDailyCap));
+  const r = await approveCode(code, auth.wallet, cleanGrant(b.scopes));
   if ("error" in r) return NextResponse.json({ error: r.error }, { status: r.status, headers: NO_STORE });
   return NextResponse.json({ ok: true, name: r.name }, { headers: NO_STORE });
 }

@@ -16,8 +16,9 @@
  * (scopes, 2026-10-02; ShunTr: "link, don't make a new wallet"):
  *   • `read`   (always) — the wallet's timeline, its watches and alerts;
  *   • `chat`   — chat as the wallet through /api/devices/chat, on the
- *              wallet's credits, under a per-device DAILY CAP the person set
- *              (default DEFAULT_CHAT_CAP). Counted in `dev:spend:<id>:<day>`;
+ *              wallet's credits. No per-device cap (ShunTr 2026-10-02: "trong
+ *              ví có bao nhiêu sử dụng bấy nhiêu, hết thì mua thêm") — the
+ *              wallet's own balance is the limit, enforced by /api/chat's debit;
  *   • `alerts` — create, pause and delete watches in /api/watches.
  * And the line that must not move: it is NOT a session. `readSession` never
  * accepts it, it can never sign or move funds, and every route that honours
@@ -49,17 +50,11 @@ export type DeviceKind = "mac" | "bot";
 
 export type DeviceScope = "read" | "chat" | "alerts";
 export const OPTIONAL_SCOPES: readonly DeviceScope[] = ["chat", "alerts"];
-export const DEFAULT_CHAT_CAP = 500;
-export const MAX_CHAT_CAP = 5000;
-
 /** What the approve screen sent → a clean grant. `read` is always in it; an
- *  unknown scope is dropped, never widened. The cap is whole credits, clamped. */
-export function cleanGrant(scopes: unknown, cap: unknown): { scopes: DeviceScope[]; chatDailyCap: number } {
+ *  unknown scope is dropped, never widened. */
+export function cleanGrant(scopes: unknown): { scopes: DeviceScope[] } {
   const asked = Array.isArray(scopes) ? scopes : [];
-  const out: DeviceScope[] = ["read", ...OPTIONAL_SCOPES.filter((s) => asked.includes(s))];
-  const n = typeof cap === "number" ? cap : typeof cap === "string" ? Number(cap) : NaN;
-  const chatDailyCap = Number.isFinite(n) ? Math.max(0, Math.min(MAX_CHAT_CAP, Math.floor(n))) : DEFAULT_CHAT_CAP;
-  return { scopes: out, chatDailyCap };
+  return { scopes: ["read", ...OPTIONAL_SCOPES.filter((s) => asked.includes(s))] };
 }
 
 /** Pre-scope tokens carry no `scopes` field: they are read-only. */
@@ -113,9 +108,9 @@ export function cleanDeviceName(raw: unknown, kind: DeviceKind): string {
 
 export const isTokenShaped = (t: string) => TOKEN_RE.test(t);
 
-interface CodeRecord { dcHash: string; name: string; kind: DeviceKind; createdAt: number; wallet?: string; approvedAt?: number; scopes?: DeviceScope[]; chatDailyCap?: number }
-export interface DeviceRecord { id: string; wallet: string; name: string; kind: DeviceKind; createdAt: number; expiresAt: number; scopes?: DeviceScope[]; chatDailyCap?: number }
-export interface DeviceListEntry { id: string; hash: string; name: string; kind: DeviceKind; createdAt: number; expiresAt: number; scopes?: DeviceScope[]; chatDailyCap?: number }
+interface CodeRecord { dcHash: string; name: string; kind: DeviceKind; createdAt: number; wallet?: string; approvedAt?: number; scopes?: DeviceScope[] }
+export interface DeviceRecord { id: string; wallet: string; name: string; kind: DeviceKind; createdAt: number; expiresAt: number; scopes?: DeviceScope[] }
+export interface DeviceListEntry { id: string; hash: string; name: string; kind: DeviceKind; createdAt: number; expiresAt: number; scopes?: DeviceScope[] }
 
 export type Failure = { error: string; status: number };
 
@@ -150,7 +145,7 @@ export async function lookupCode(userCode: string):
 export async function approveCode(
   userCode: string,
   wallet: string,
-  grant: { scopes: DeviceScope[]; chatDailyCap: number } = { scopes: ["read"], chatDailyCap: 0 },
+  grant: { scopes: DeviceScope[] } = { scopes: ["read"] },
 ): Promise<{ ok: true; name: string } | Failure> {
   const p = await kvGetProbe<CodeRecord>(kCode(userCode));
   if (p.status === "error") return { error: "Could not read the code right now.", status: 503 };
@@ -161,7 +156,7 @@ export async function approveCode(
   if (list == null) return { error: "Could not read your linked devices right now.", status: 503 };
   if (list.length >= MAX_DEVICES) return { error: `You already have ${MAX_DEVICES} linked devices. Unlink one first.`, status: 409 };
   const left = Math.max(1, Math.ceil((rec.createdAt + CODE_TTL_S * 1000 - Date.now()) / 1000));
-  try { await kvSetOrThrow(kCode(userCode), { ...rec, wallet: wallet.toLowerCase(), approvedAt: Date.now(), scopes: grant.scopes, chatDailyCap: grant.chatDailyCap }, left); }
+  try { await kvSetOrThrow(kCode(userCode), { ...rec, wallet: wallet.toLowerCase(), approvedAt: Date.now(), scopes: grant.scopes }, left); }
   catch { return { error: "Could not approve right now. Try again.", status: 503 }; }
   return { ok: true, name: rec.name };
 }
@@ -194,12 +189,12 @@ export async function pollForToken(deviceCode: string): Promise<TokenPoll> {
   const now = Date.now();
   const device: DeviceRecord = {
     id: hash.slice(0, 16), wallet: rec.wallet, name: rec.name, kind: rec.kind, createdAt: now, expiresAt: now + TOKEN_TTL_S * 1000,
-    scopes: deviceScopes(rec), chatDailyCap: rec.chatDailyCap ?? 0,
+    scopes: deviceScopes(rec),
   };
   try {
     await kvSetOrThrow(kTok(hash), device, TOKEN_TTL_S);
     const list = (await listDevices(rec.wallet)) ?? [];
-    const next: DeviceListEntry[] = [{ id: device.id, hash, name: device.name, kind: device.kind, createdAt: now, expiresAt: device.expiresAt, scopes: device.scopes, chatDailyCap: device.chatDailyCap }, ...list].slice(0, MAX_DEVICES);
+    const next: DeviceListEntry[] = [{ id: device.id, hash, name: device.name, kind: device.kind, createdAt: now, expiresAt: device.expiresAt, scopes: device.scopes }, ...list].slice(0, MAX_DEVICES);
     await kvSetOrThrow(kList(rec.wallet), next, TOKEN_TTL_S);
   } catch {
     await kvDel(kTok(hash));
@@ -253,29 +248,4 @@ export async function revokePresentedToken(authorization: string | null): Promis
   try { await kvDelOrThrow(kTok(sha256(token))); } catch { return "unavailable"; }
   await revokeDevice(t.device.wallet, t.device.id); // list tidy-up; the token is already dead
   return "ok";
-}
-
-/* ─── the chat cap ───────────────────────────────────────────────────────── */
-
-/** UTC day — the cap resets at 00:00 UTC, like the wallet's daily credits. */
-export const utcDay = (t = Date.now()) => new Date(t).toISOString().slice(0, 10);
-const kSpend = (id: string, day: string) => `dev:spend:${id}:${day}`;
-
-/** Credits this device has spent today. null ⟹ unreadable: callers refuse
- *  rather than treat an outage as "nothing spent". */
-export async function deviceSpentToday(id: string): Promise<number | null> {
-  const p = await kvGetProbe<unknown>(kSpend(id, utcDay()));
-  if (p.status === "error") return null;
-  if (p.status === "miss") return 0;
-  const n = Number(p.value);
-  return Number.isFinite(n) ? n : 0;
-}
-
-/** Add (or, with a negative n, give back) spend. Best-effort by design: the
- *  wallet's own ledger is what actually charges; this only bounds a device. */
-export async function addDeviceSpend(id: string, n: number): Promise<void> {
-  if (!n) return;
-  const key = kSpend(id, utcDay());
-  try { await kv.incrby(key, Math.round(n)); await kv.expire(key, 2 * 86_400); }
-  catch (e) { console.error(`[devices:spend] ${id}: ${(e as Error).message}`); }
 }

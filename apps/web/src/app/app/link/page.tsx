@@ -6,8 +6,8 @@
 // A device shows a code like BCDF-GH23 (or a link with ?code=). Here the
 // person signs in with their wallet, sees WHICH device is asking, and approves
 // it, choosing what it may do (lib/devices.ts scopes): it always reads the
-// timeline and alerts; it may also chat on this wallet's credits up to a daily
-// cap, and set or change alerts. It never holds a key and never signs.
+// timeline and alerts; it may also chat on this wallet's credits, and set or
+// change alerts. It never holds a key and never signs.
 //
 // Every request that sees or changes the list is SIWE (useEnsureSession). The
 // lookup runs only after a click, so opening the page never pops a signature.
@@ -20,14 +20,12 @@ import { ConnectButton } from "@/components/ConnectModal";
 
 type Pending = { code: string; name: string; kind: "mac" | "bot"; createdAt: number; approved: boolean };
 type Scope = "read" | "chat" | "alerts";
-type Device = { id: string; name: string; kind: "mac" | "bot"; createdAt: number; expiresAt: number; scopes?: Scope[]; chatDailyCap?: number };
-
-const CAP_CHOICES = [100, 500, 2000] as const;
+type Device = { id: string; name: string; kind: "mac" | "bot"; createdAt: number; expiresAt: number; scopes?: Scope[] };
 
 function grantLabel(d: Device): string {
   const s = d.scopes?.length ? d.scopes : ["read"];
   const parts = ["read"];
-  if (s.includes("chat")) parts.push(`chat ≤ ${d.chatDailyCap ?? 0} cr/day`);
+  if (s.includes("chat")) parts.push("chat");
   if (s.includes("alerts")) parts.push("alerts");
   return parts.join(" · ");
 }
@@ -52,7 +50,6 @@ function LinkInner() {
   const [busy, setBusy] = useState(false);
   const [allowChat, setAllowChat] = useState(true);
   const [allowAlerts, setAllowAlerts] = useState(true);
-  const [cap, setCap] = useState<number>(500);
 
   const call = useCallback(async (path: string, init?: RequestInit) => {
     if (!address) throw new Error("Connect your wallet first.");
@@ -84,7 +81,6 @@ function LinkInner() {
       const j = await call("/api/devices/approve", { method: "POST", body: JSON.stringify({
         code: pending.code,
         scopes: [...(allowChat ? ["chat"] : []), ...(allowAlerts ? ["alerts"] : [])],
-        chatDailyCap: allowChat ? cap : 0,
       }) });
       setMsg({ tone: "ok", text: `Linked. ${j.name} will be ready in a few seconds.` });
       setPending(null); setCode("");
@@ -142,16 +138,6 @@ function LinkInner() {
                 <div className="space-y-1.5 text-[13px] text-slate-300">
                   <label className="flex items-center gap-2"><input type="checkbox" checked disabled /> See your alerts and activity</label>
                   <label className="flex items-center gap-2"><input type="checkbox" checked={allowChat} onChange={(e) => setAllowChat(e.target.checked)} /> Chat with Blue Agent on your credits</label>
-                  {allowChat && (
-                    <div className="flex items-center gap-2 pl-6">
-                      <span className="text-[12px] text-slate-500">Up to</span>
-                      {CAP_CHOICES.map((c) => (
-                        <button key={c} type="button" className={btn} onClick={() => setCap(c)}
-                          style={cap === c ? { background: "#4FC3F7", color: "#050508", border: "1px solid #4FC3F7" } : accent}>{c}</button>
-                      ))}
-                      <span className="text-[12px] text-slate-500">credits a day</span>
-                    </div>
-                  )}
                   <label className="flex items-center gap-2"><input type="checkbox" checked={allowAlerts} onChange={(e) => setAllowAlerts(e.target.checked)} /> Set and change price alerts</label>
                 </div>
                 <p className="text-[12px] text-amber-400">Only approve a code shown on your own screen. BlueBot can never sign or move funds.</p>

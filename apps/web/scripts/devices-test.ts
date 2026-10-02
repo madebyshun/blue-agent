@@ -9,8 +9,8 @@
  */
 import { NextRequest } from "next/server";
 import {
-  addDeviceSpend, approveCode, cleanDeviceName, cleanGrant, deviceScopes, deviceSpentToday, hasScope, isTokenShaped,
-  newUserCode, normalizeUserCode, pollForToken, readDeviceToken, sha256, startDeviceLink, DEFAULT_CHAT_CAP, MAX_CHAT_CAP,
+  approveCode, cleanDeviceName, cleanGrant, deviceScopes, hasScope, isTokenShaped,
+  newUserCode, normalizeUserCode, pollForToken, readDeviceToken, sha256, startDeviceLink,
   type DeviceRecord,
 } from "../src/lib/devices";
 import { requireDevice } from "../src/lib/device-auth";
@@ -53,11 +53,9 @@ async function main() {
   ok("cookie blue_session=bbt_… is ignored", sessionToken(asCookie) === null);
 
   console.log("5. scopes");
-  ok("read is always granted", cleanGrant([], 500).scopes.join() === "read");
-  ok("asked scopes are kept", cleanGrant(["alerts", "chat"], 500).scopes.join() === "read,chat,alerts");
-  ok("unknown scopes are dropped, never widened", cleanGrant(["admin", "sign", "chat"], 1).scopes.join() === "read,chat");
-  ok("cap clamps to [0, MAX]", cleanGrant(["chat"], 99_999).chatDailyCap === MAX_CHAT_CAP && cleanGrant(["chat"], -5).chatDailyCap === 0);
-  ok("garbage cap → default", cleanGrant(["chat"], "lots").chatDailyCap === DEFAULT_CHAT_CAP);
+  ok("read is always granted", cleanGrant([]).scopes.join() === "read");
+  ok("asked scopes are kept", cleanGrant(["alerts", "chat"]).scopes.join() === "read,chat,alerts");
+  ok("unknown scopes are dropped, never widened", cleanGrant(["admin", "sign", "chat"]).scopes.join() === "read,chat");
   ok("a pre-scope token is read-only", deviceScopes({}).join() === "read" && !hasScope({}, "chat") && !hasScope({}, "alerts"));
 
   if (process.env.KV_REST_API_URL) {
@@ -68,21 +66,18 @@ async function main() {
     const start = await startDeviceLink("Test Mac", "mac");
     ok("a code is issued", "userCode" in start);
     if ("userCode" in start) {
-      const ap = await approveCode(start.userCode, wallet, cleanGrant(["chat"], 500));
-      ok("approve with chat + cap", "ok" in ap);
+      const ap = await approveCode(start.userCode, wallet, cleanGrant(["chat"]));
+      ok("approve with chat", "ok" in ap);
       const t = await pollForToken(start.deviceCode);
       ok("token issued once", t.status === "issued");
       ok("a second poll gets nothing", (await pollForToken(start.deviceCode)).status === "expired");
       if (t.status === "issued") {
         const dev: DeviceRecord = t.device;
-        ok("scopes travel to the token", dev.scopes?.join() === "read,chat" && dev.chatDailyCap === 500);
+        ok("scopes travel to the token", dev.scopes?.join() === "read,chat");
         const req = (p: string) => new Request(`https://app.blueagent.dev${p}`, { headers: { authorization: `Bearer ${t.token}` } });
         ok("chat scope → allowed", !("res" in (await requireDevice(req("/api/devices/chat"), "chat"))));
         const denied = await requireDevice(req("/api/watches"), "alerts");
         ok("alerts NOT granted → 403 DEVICE_SCOPE", "res" in denied && denied.res.status === 403);
-        ok("spend starts at 0", (await deviceSpentToday(dev.id)) === 0);
-        await addDeviceSpend(dev.id, 50); await addDeviceSpend(dev.id, 12); await addDeviceSpend(dev.id, -12);
-        ok("spend adds and gives back", (await deviceSpentToday(dev.id)) === 50);
 
       }
     }
