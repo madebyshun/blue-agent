@@ -3459,8 +3459,13 @@ export async function POST(req: NextRequest) {
   // clients still send it without a 400, but nothing reads it.
   const { messages, tier = "pro", memoryContext, pageContext, provider, modelId, webSearch = false, attachments = [], address, coinbase = false, skills } = body;
   const mcpConnectors = Array.isArray(body.mcpConnectors) ? body.mcpConnectors : [];
-  // Pre-build connector tools + dispatch map once per request.
-  const { tools: mcpTools, map: mcpMap } = buildMcpTools(mcpConnectors);
+  // Pre-build connector tools + dispatch map once per request. Coinbase is the
+  // exception: its token is server-held (lib/connectors/coinbase.ts), so any
+  // headers or tool list the client sends for it are dropped here and the
+  // read-only tools are added below, once the wallet is proven.
+  const { isCoinbaseMcpUrl } = await import("@/lib/connectors/coinbase");
+  const wantsCoinbase = mcpConnectors.some((c) => isCoinbaseMcpUrl(c?.url));
+  const { tools: mcpTools, map: mcpMap } = buildMcpTools(mcpConnectors.filter((c) => !isCoinbaseMcpUrl(c?.url)));
   if (!messages?.length) {
     return NextResponse.json({ error: "messages array required." }, { status: 400 });
   }
@@ -3505,6 +3510,18 @@ export async function POST(req: NextRequest) {
           : acting.status === "mismatch" ? "wallet_mismatch"
           : "sign_in_required",
       );
+    }
+  }
+
+  // Coinbase (read-only): the wallet's own server-held token, never the client's.
+  if (wantsCoinbase && payer) {
+    const { readOnlyTools, accessToken, COINBASE_MCP_URL } = await import("@/lib/connectors/coinbase");
+    const cbTools = await readOnlyTools(payer);
+    const cbToken = cbTools ? await accessToken(payer) : null;
+    if (cbTools && cbToken) {
+      const cb = buildMcpTools([{ id: "coinbase", name: "Coinbase", url: COINBASE_MCP_URL, headers: { Authorization: `Bearer ${cbToken}` }, tools: cbTools }]);
+      for (const [k, v] of cb.map) mcpMap.set(k, v);
+      mcpTools.push(...cb.tools);
     }
   }
 

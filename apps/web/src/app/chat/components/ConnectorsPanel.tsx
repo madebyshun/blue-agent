@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { sessionFetch } from "@/lib/session-client";
 import BrandMark from "@/components/BrandMark";
 import {
-  useConnectors, addConnector, removeConnector, setConnectorEnabled,
+  useConnectors, addConnector, removeConnector, setConnectorEnabled, loadConnectors,
   probeConnector, isPresetAdded, brandForUrl,
   CONNECTOR_PRESETS, type ConnectorPreset, type ConnectorAuth, type McpToolDef,
 } from "../connectors";
@@ -81,8 +82,53 @@ export default function ConnectorsPanel({ onPick }: { onPick?: () => void }) {
     setAddingId(null);
   }
 
+  // ── OAuth presets with a server route (Coinbase): the token never comes here.
+  // On return from the provider (?coinbase=connected) fetch the read-only tool
+  // list from the server and save a connector entry that carries no secret.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const q = new URLSearchParams(window.location.search);
+    for (const p of CONNECTOR_PRESETS) {
+      const r = p.oauthStatus ? q.get(p.id) : null;
+      if (!r) continue;
+      if (r !== "connected") {
+        const msg: Record<string, string> = {
+          signin: "Sign in with your wallet first, then connect.",
+          denied: "Sign-in was cancelled on " + p.name + ".",
+          wallet: "That sign-in started from another wallet. Try again.",
+          unavailable: p.name + " connection is not available right now.",
+          slow: "Too many attempts. Wait a minute.",
+        };
+        setFlash({ id: p.id, msg: msg[r] ?? "Could not connect. Try again." });
+        continue;
+      }
+      setAddingId(p.id);
+      sessionFetch(p.oauthStatus!, { cache: "no-store" })
+        .then((res) => res.json())
+        .then((j: { connected?: boolean; tools?: McpToolDef[] }) => {
+          if (!j.connected || !j.tools?.length) { setFlash({ id: p.id, msg: "Connected, but no read-only tools came back." }); return; }
+          removeConnectorsByUrl(p.url);
+          addConnector({ id: p.id, name: p.name, url: p.url, tools: j.tools });
+        })
+        .catch(() => setFlash({ id: p.id, msg: "Could not read the connection. Try again." }))
+        .finally(() => setAddingId(null));
+    }
+  }, []);
+
+  function removeConnectorsByUrl(u: string) {
+    for (const c of loadConnectors()) if (c.url === u) removeConnector(c.id);
+  }
+
+  /** ✕ on a server-held connection also forgets its token on the server. */
+  function remove(c: { id: string; url: string }) {
+    const p = CONNECTOR_PRESETS.find((x) => x.oauthStatus && x.url === c.url);
+    if (p?.oauthStatus) void sessionFetch(p.oauthStatus, { method: "DELETE" }).catch(() => {});
+    removeConnector(c.id);
+  }
+
   function onPresetClick(p: ConnectorPreset, added: boolean) {
     if (added || addingId) return;
+    if (p.auth === "oauth" && p.oauthStart) { window.location.href = p.oauthStart; return; }
     if (p.auth === "none")   return void quickAdd(p);
     if (p.auth === "bearer") { reset(); choosePreset(p); setOpen(true); return; }
     // oauth → not attachable yet; no-op (card is visibly disabled)
@@ -238,7 +284,7 @@ export default function ConnectorsPanel({ onPick }: { onPick?: () => void }) {
                             />
                           </button>
                           <button
-                            onClick={() => removeConnector(c.id)}
+                            onClick={() => remove(c)}
                             title="Remove"
                             className="font-mono text-[12px] text-[#475569] hover:text-red-400 transition-colors"
                           >✕</button>
@@ -299,9 +345,9 @@ export default function ConnectorsPanel({ onPick }: { onPick?: () => void }) {
             <div className="mt-3 grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))" }}>
               {visible.map(p => {
                 const added   = isPresetAdded(connectors, p);
-                const badge   = AUTH_BADGE[p.auth];
+                const badge   = p.auth === "oauth" && p.oauthStart ? { label: "SIGN IN", color: ACCENT } : AUTH_BADGE[p.auth];
                 const adding  = addingId === p.id;
-                const isSoon  = p.auth === "oauth";
+                const isSoon  = p.auth === "oauth" && !p.oauthStart;
                 const disabled = isSoon || added || adding;
                 return (
                   <div key={p.id}
@@ -336,7 +382,7 @@ export default function ConnectorsPanel({ onPick }: { onPick?: () => void }) {
                           : { color: ACCENT, borderColor: "rgba(79,195,247,.3)" }
                       }
                     >
-                      {added ? "✓ Added" : adding ? "Adding…" : isSoon ? "OAuth · soon" : p.auth === "bearer" ? "+ Add key" : "+ Add"}
+                      {added ? "✓ Added" : adding ? "Adding…" : isSoon ? "OAuth · soon" : p.auth === "oauth" ? `Sign in with ${p.name}` : p.auth === "bearer" ? "+ Add key" : "+ Add"}
                     </button>
                   </div>
                 );

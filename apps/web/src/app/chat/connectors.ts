@@ -41,7 +41,10 @@ function emit() { if (isClient) window.dispatchEvent(new Event(EVENT)); }
 // auth model determines the enable flow:
 //   "none"   → true 1-click (probe + attach, no secret)
 //   "bearer" → 1 slim step to paste a token, then attach
-//   "oauth"  → surfaced for discovery, not attachable yet (OAuth flow TBD)
+//   "oauth"  → surfaced for discovery, not attachable yet — UNLESS the preset
+//              names an `oauthStart` route: then the server holds the token
+//              (never this browser) and the card connects through it. Coinbase
+//              is the first (lib/connectors/coinbase.ts, read-only).
 //
 // Every URL below was live-verified (initialize + tools/list, or a 401 that
 // proves the endpoint exists and demands auth) on 2026-07-02 — no invented URLs.
@@ -62,6 +65,12 @@ export interface ConnectorPreset {
   authHeader?: string;       // bearer only — header to send the token in
   authPlaceholder?: string;  // bearer only — input hint
   docsUrl?: string;          // where to get a token / learn more
+  /** oauth only: a server route that starts sign-in. Its token stays on the
+   *  server; the connector saved here carries no secret. */
+  oauthStart?: string;
+  /** oauth only: the server route that reports { connected, tools } and, on
+   *  DELETE, disconnects. */
+  oauthStatus?: string;
 }
 
 export const CONNECTOR_PRESETS: ConnectorPreset[] = [
@@ -123,6 +132,19 @@ export const CONNECTOR_PRESETS: ConnectorPreset[] = [
     icon: "🤗",
     description: "Search models, datasets, Spaces & papers on the HF Hub. Public search needs no key.",
     docsUrl: "https://huggingface.co/settings/mcp",
+  },
+  {
+    id: "coinbase",
+    name: "Coinbase",
+    url: "https://agents.coinbase.com/mcp",
+    auth: "oauth",
+    category: "Finance",
+    brand: "coinbase",
+    icon: "🟦",
+    description: "Your Coinbase balances, portfolios and prices — read-only. Sign in with Coinbase; Blue Agent never trades or moves funds there.",
+    oauthStart: "/api/connectors/coinbase/start",
+    oauthStatus: "/api/connectors/coinbase",
+    docsUrl: "https://agents.coinbase.com",
   },
   {
     id: "github",

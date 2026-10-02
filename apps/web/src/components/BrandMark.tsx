@@ -35,6 +35,10 @@ export const BRANDS: Record<string, Tier> = {
   // ── Our own ────────────────────────────────────────────────────────────────
   "blue-agent": { tier: "img", src: "/logomark.svg" },
 
+  // Coinbase: monogram on Coinbase blue (#0052FF, the same verified hex as Base)
+  // rather than a hand-drawn path of their mark.
+  coinbase: { tier: "mono", text: "C", color: "#0052FF" },
+
   // ── Verified marks ─────────────────────────────────────────────────────────
   base: {
     tier: "svg",
