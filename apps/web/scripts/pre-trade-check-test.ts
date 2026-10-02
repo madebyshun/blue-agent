@@ -46,6 +46,8 @@ const UNREAD = A(0x1006);            // Base: no tax selectors at all
 const IMPOSTOR_CBBTC = A(0x1007);    // Base: calls itself cbBTC, clean template tax
 const RH_IMPOSTOR = A(0x2001);       // RH: wears a registered RHJ ticker
 const RH_UNLISTED = A(0x2002);       // RH: an ordinary unregistered token
+const POOL = A(0x1008);              // Base: a v3-style pool holding CLEAN / HONEYPOT
+const NO_CODE = A(0x1009);           // Base: nothing deployed (a wallet)
 
 const NVDA = BASE_STOCKS[0];
 const RH_STOCK = RWA_TOKENS.find((t) => t.kind === "stock" && t.chainlinkFeed)!;
@@ -82,11 +84,18 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const rpc = (result: unknown, error?: unknown) =>
     new Response(JSON.stringify({ jsonrpc: "2.0", id: req?.id ?? 1, ...(error ? { error } : { result }) }), { status: 200, headers: { "Content-Type": "application/json" } });
   if (req && typeof req.method === "string") {
+    if (req.method === "eth_getCode") {
+      const at = String((req.params as string[])[0]).toLowerCase();
+      return rpc(CONTRACTS[at] || at === POOL ? "0x6080604052" : "0x");
+    }
     if (req.method !== "eth_call") return rpc(null);
     const call = req.params[0] as { to: string; data?: string; input?: string };
     const fx = CONTRACTS[call.to.toLowerCase()];
     const data = String(call.data ?? call.input ?? "");
     const revert = () => rpc(null, { code: 3, message: "execution reverted" });
+    const addrWord = (a: string) => encodeAbiParameters([{ type: "address" }], [a as `0x${string}`]);
+    if (call.to.toLowerCase() === POOL && data.startsWith("0x0dfe1681")) return rpc(addrWord(CLEAN));
+    if (call.to.toLowerCase() === POOL && data.startsWith("0xd21220a7")) return rpc(addrWord(HONEYPOT));
     if (!fx) return revert();
     if (data.startsWith("0x313ce567")) return rpc(encodeAbiParameters([{ type: "uint8" }], [fx.decimals]));
     if (data.startsWith("0x95d89b41")) return rpc(encodeAbiParameters([{ type: "string" }], [fx.symbol]));
@@ -203,6 +212,13 @@ async function run(input: Parameters<typeof preTradeCheck>[0]) {
   ok("a 0.4% drift on a weekday → PASS (the issuer-policy line is INFO)", c.verdict === "PASS" && /INFO:B20 tokens can carry issuer transfer policies/.test(texts(c)), texts(c));
   c = await run({ chain: "base", kind: "swap", token: NVDA.token, now: SATURDAY });
   ok("…the same token on a Saturday → WARN", c.verdict === "WARN" && /weekend/.test(texts(c)), texts(c));
+
+  c = await run({ chain: "base", kind: "swap", token: POOL, now: WEEKDAY });
+  ok("a pool address → WARN NOT_A_TOKEN naming its two tokens, not 'tax could not be read'",
+    c.verdict === "WARN" && c.reasons.some((r) => r.code === "NOT_A_TOKEN") && !c.reasons.some((r) => r.code === "TAX_UNREAD")
+      && /liquidity pool \(FINE \/ PUMP\)/.test(texts(c)) && c.pool?.token0.address.toLowerCase() === CLEAN && c.pool?.token1.symbol === "PUMP", texts(c));
+  c = await run({ chain: "base", kind: "swap", token: NO_CODE, now: WEEKDAY });
+  ok("no contract at the address → WARN NOT_A_TOKEN (a wallet)", c.verdict === "WARN" && c.reasons.some((r) => r.code === "NOT_A_TOKEN") && /no contract/.test(texts(c)), texts(c));
 
   console.log("\n4. no reason is ever about a country (§7 #1: tokenized assets, not US shares)");
   const geo = all.flatMap((x) => x.reasons).filter((r) => /countr|jurisdiction|geo|US person|sanction|region|resident/i.test(r.text));

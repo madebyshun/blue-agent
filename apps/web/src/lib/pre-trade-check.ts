@@ -11,7 +11,13 @@
  *       from a different contract (an impostor);
  *     • a measured honeypot (sell tax ≥ 50%, read on-chain);
  *     • a bridge whose measured cost is over BRIDGE_BLOCK_COST_PERCENT.
- *   WARN  — a measured risk or an unmeasured gap the user should see first.
+ *   WARN  — a measured risk or an unmeasured gap the user should see first,
+ *           including an address that is NOT a token at all (NOT_A_TOKEN:
+ *           no contract there, or a liquidity pool — measured by
+ *           eth_getCode / token0()+token1(), 2026-10-02, after a pool
+ *           address pasted into BlueBot came back as "tax could not be
+ *           read — try a small amount first", which reads as "a token,
+ *           probably fine").
  *   PASS  — nothing measured against it.
  * No reason is ever "country" — tokenized assets are gated by their issuers'
  * own offering terms, not by this check (§7 #1).
@@ -29,7 +35,7 @@ import { BASE_STOCKS } from "@/lib/base-stocks/registry";
 import { classifyToken, normalizeSymbol } from "@/lib/wallet/token-trust";
 import { readTokenTax } from "@/lib/token-tax";
 import { measuredHoneypotVerdict } from "@/lib/honeypot-verdict";
-import { isNativeToken, readTokenMeta, type TxChain } from "@/lib/tx-chains";
+import { clientFor, isNativeToken, readTokenMeta, type TxChain } from "@/lib/tx-chains";
 import { kvGetProbe } from "@/lib/kv";
 import { KV_BASE_ROWS_LATEST, BASE_ROWS_MAX_AGE_MS } from "@/lib/blue-hood/kv-keys";
 import { partitionBaseRows, type BaseDeskLatest } from "@/lib/blue-hood/types";
@@ -42,7 +48,8 @@ export type AssetType = "native" | "major" | "crypto" | "rh_stock_token" | "b20_
 export type ReasonCode =
   | "BRIDGE_COST" | "BRIDGE_COST_HIGH" | "NOT_ADDRESS" | "IMPOSTOR" | "HONEYPOT"
   | "SELL_LEVER" | "TAX_UNREAD" | "TAX_CLEAN" | "RH_UNREGISTERED" | "WEEKEND"
-  | "RH_ORACLE_GAP_PAUSED" | "NO_ORACLE_FEED" | "ISSUER_POLICY" | "DRIFT" | "DRIFT_UNAVAILABLE";
+  | "RH_ORACLE_GAP_PAUSED" | "NO_ORACLE_FEED" | "ISSUER_POLICY" | "DRIFT" | "DRIFT_UNAVAILABLE"
+  | "NOT_A_TOKEN";
 export type Reason = { level: "BLOCK" | "WARN" | "INFO"; code: ReasonCode; text: string };
 
 export interface PreTradeCheck {
@@ -52,6 +59,9 @@ export interface PreTradeCheck {
   label: string;
   reasons: Reason[];
   checked_at: string;
+  /** Set when the address is a liquidity pool: the two tokens it holds, so a
+   *  caller can offer to check the right one. Read from the pool itself. */
+  pool?: { token0: { address: string; symbol: string }; token1: { address: string; symbol: string } };
 }
 
 export interface PreTradeInput {
@@ -172,7 +182,15 @@ export async function preTradeCheck(input: PreTradeInput): Promise<PreTradeCheck
   }
 
   let symbol = "";
-  try { symbol = (await readTokenMeta("base", token as `0x${string}`)).symbol; } catch { /* unread */ }
+  let metaRead = true;
+  try { symbol = (await readTokenMeta("base", token as `0x${string}`)).symbol; } catch { metaRead = false; }
+  if (!metaRead) {
+    const not = await notATokenOnBase(token as `0x${string}`);
+    if (not) {
+      reasons.push(not.reason);
+      return { ...finish("crypto", not.label, reasons), ...(not.pool ? { pool: not.pool } : {}) };
+    }
+  }
   const trust = classifyToken({ address: token, symbol, isNative: false }, "base");
   if (trust === "verified") return finish("major", symbol || token, reasons);
   // A registered B20 stock's symbol from another contract is an impostor too.
@@ -189,4 +207,48 @@ export async function preTradeCheck(input: PreTradeInput): Promise<PreTradeCheck
     else reasons.push({ level: "INFO", code: "TAX_CLEAN", text: "Buy/sell tax read on-chain: clean." });
   }
   return finish("crypto", symbol || token, reasons);
+}
+
+const POOL_ABI = [
+  { type: "function", name: "token0", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] },
+  { type: "function", name: "token1", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] },
+] as const;
+
+/**
+ * Only asked when decimals() could not be read. Answers ONLY on a positive
+ * reading — no code at the address, or a contract that answers token0() and
+ * token1() (Uniswap v2/v3, Aerodrome and their forks all do). An RPC that
+ * could not be reached answers null, and the caller falls through to the
+ * unread-tax WARN as before: "could not tell" is never presented as "not a
+ * token".
+ */
+async function notATokenOnBase(token: `0x${string}`): Promise<{ reason: Reason; label: string; pool?: PreTradeCheck["pool"] } | null> {
+  const client = clientFor("base");
+  let code: string | undefined;
+  try { code = await client.getCode({ address: token }); } catch { return null; }
+  if (!code || code === "0x") {
+    return {
+      label: token,
+      reason: { level: "WARN", code: "NOT_A_TOKEN", text: "There is no contract at this address on Base — it is a wallet, not a token. Paste the token's contract address." },
+    };
+  }
+  let t0: string, t1: string;
+  try {
+    // Sequential, not Promise.all: the client batches same-tick reads into
+    // multicall3, and this path is rare enough that one extra round-trip is
+    // cheaper than a second code path to test.
+    t0 = await client.readContract({ address: token, abi: POOL_ABI, functionName: "token0" });
+    t1 = await client.readContract({ address: token, abi: POOL_ABI, functionName: "token1" });
+  } catch { return null; }
+  const sym = async (a: string) => {
+    try { return (await readTokenMeta("base", a as `0x${string}`)).symbol || ""; } catch { return ""; }
+  };
+  const s0 = await sym(t0), s1 = await sym(t1);
+  const name = (s: string, a: string) => s || `${a.slice(0, 6)}…${a.slice(-4)}`;
+  const pair = `${name(s0, t0)} / ${name(s1, t1)}`;
+  return {
+    label: `Liquidity pool ${pair}`,
+    pool: { token0: { address: t0, symbol: s0 }, token1: { address: t1, symbol: s1 } },
+    reason: { level: "WARN", code: "NOT_A_TOKEN", text: `This is a liquidity pool (${pair}) on Base, not a token. Check the token itself: ${name(s0, t0)} ${t0} or ${name(s1, t1)} ${t1}.` },
+  };
 }
