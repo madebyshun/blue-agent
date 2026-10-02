@@ -240,8 +240,18 @@ async function notATokenOnBase(token: `0x${string}`): Promise<{ reason: Reason; 
     t0 = await client.readContract({ address: token, abi: POOL_ABI, functionName: "token0" });
     t1 = await client.readContract({ address: token, abi: POOL_ABI, functionName: "token1" });
   } catch { return null; }
+  // MEASURED 2026-10-02: on production readTokenMeta (decimals + symbol in
+  // parallel) came back empty for both tokens of the VIRTUAL/WETH pool while
+  // the same reads answered locally — so fall back to one plain symbol() call,
+  // retried once. Still "" if it never answers: the address is then shown.
+  const SYMBOL_ABI = [{ type: "function", name: "symbol", stateMutability: "view", inputs: [], outputs: [{ type: "string" }] }] as const;
   const sym = async (a: string) => {
-    try { return (await readTokenMeta("base", a as `0x${string}`)).symbol || ""; } catch { return ""; }
+    try { const m = (await readTokenMeta("base", a as `0x${string}`)).symbol; if (m) return m; } catch { /* fall through */ }
+    for (let i = 0; i < 2; i++) {
+      try { return await client.readContract({ address: a as `0x${string}`, abi: SYMBOL_ABI, functionName: "symbol" }); }
+      catch { if (i === 0) await new Promise((r) => setTimeout(r, 250)); }
+    }
+    return "";
   };
   const s0 = await sym(t0), s1 = await sym(t1);
   const name = (s: string, a: string) => s || `${a.slice(0, 6)}…${a.slice(-4)}`;
