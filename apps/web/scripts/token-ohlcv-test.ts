@@ -69,6 +69,15 @@ const call = async (q: string) => (await GET(new Request(`https://app.blueagent.
   j = await call(`pool=${SHALLOW}`);
   ok("pool form → daily series, no token= sent", j.series.length === 2 && gtUrls.at(-1)!.includes("/ohlcv/day") && !gtUrls.at(-1)!.includes("token="), gtUrls.at(-1));
 
+  console.log("5. Robinhood Chain and a named pool");
+  const V4 = "0x" + "c7".repeat(32);
+  j = await call(`pool=${V4}&token=${TOKEN}&chain=robinhood&tf=1d`);
+  ok("a v4 pool id + token on Robinhood Chain → that pool, that token's price",
+    j.series.length === 2 && gtUrls.at(-1)!.includes(`/networks/robinhood/pools/${V4}/`) && gtUrls.at(-1)!.includes(`token=${TOKEN}`), gtUrls.at(-1));
+  ok("ETH is not mapped on Robinhood Chain (no unverified address)", /Robinhood Chain/.test((await call("token=ETH&chain=robinhood")).error));
+  ok("an unknown chain is refused", /chain must be/.test((await call(`token=${TOKEN}&chain=solana`)).error));
+  ok("a malformed pool is refused", /invalid pool/.test((await call("pool=0x1234")).error));
+
   console.log(failures === 0 ? "\ntoken-ohlcv-test: PASS" : `\ntoken-ohlcv-test: FAIL — ${failures}`);
   process.exit(failures === 0 ? 0 : 1);
 })();
