@@ -175,7 +175,9 @@ async function run(input: Parameters<typeof preTradeCheck>[0]) {
   c = await run({ chain: "base", kind: "bridge", token: "ETH", bridgeCostPercent: 0.4 });
   ok("a bridge costing 0.4% → PASS", c.verdict === "PASS", texts(c));
   c = await run({ chain: "base", kind: "swap", token: UNREAD, now: WEEKDAY });
-  ok("an UNREAD tax is not evidence → WARN, never BLOCK", c.verdict === "WARN" && /could not be read/.test(texts(c)), texts(c));
+  ok("an UNREAD tax is not evidence → WARN, never BLOCK", c.verdict === "WARN" && /Tax not measured/.test(texts(c)), texts(c));
+  ok("…and the WARN says why (template-only read) and that unmeasured is not zero, without calling it risky",
+    /Virtuals agent-token template/.test(texts(c)) && /unmeasured is not zero/.test(texts(c)) && /not a sign of risk/.test(texts(c)), texts(c));
 
   console.log("\n3. WARN on measured risk or an unmeasured gap");
   c = await run({ chain: "base", kind: "swap", token: SUSPICIOUS, now: WEEKDAY });
@@ -218,7 +220,7 @@ async function run(input: Parameters<typeof preTradeCheck>[0]) {
   ok("…the same token on a Saturday → WARN", c.verdict === "WARN" && /weekend/.test(texts(c)), texts(c));
 
   c = await run({ chain: "base", kind: "swap", token: POOL, now: WEEKDAY });
-  ok("a pool address → WARN NOT_A_TOKEN naming its two tokens, not 'tax could not be read'",
+  ok("a pool address → WARN NOT_A_TOKEN naming its two tokens, not 'tax not measured'",
     c.verdict === "WARN" && c.reasons.some((r) => r.code === "NOT_A_TOKEN") && !c.reasons.some((r) => r.code === "TAX_UNREAD")
       && /liquidity pool \(FINE \/ PUMP\)/.test(texts(c)) && c.pool?.token0.address.toLowerCase() === CLEAN && c.pool?.token1.symbol === "PUMP", texts(c));
   c = await run({ chain: "base", kind: "swap", token: POOL_WETH, now: WEEKDAY });

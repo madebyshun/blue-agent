@@ -203,7 +203,7 @@ export async function preTradeCheck(input: PreTradeInput): Promise<PreTradeCheck
     const hp = measuredHoneypotVerdict(await readTokenTax(token));
     if (hp.verdict === "HONEYPOT") reasons.push({ level: "BLOCK", code: "HONEYPOT", text: "Measured sell tax ≥ 50% — once bought, this token cannot be sold." });
     else if (hp.verdict === "SUSPICIOUS") reasons.push({ level: "WARN", code: "SELL_LEVER", text: "Measured sell lever: a blacklist function or a sell tax ≥ 10%." });
-    else if (hp.verdict === "UNKNOWN") reasons.push({ level: "WARN", code: "TAX_UNREAD", text: "Buy/sell tax could not be read from this contract — try a small amount first." });
+    else if (hp.verdict === "UNKNOWN") reasons.push({ level: "WARN", code: "TAX_UNREAD", text: "Tax not measured: Blue Agent reads buy/sell tax only from contracts built on the Virtuals agent-token template, and could not read one here. That is normal for most tokens and is not a sign of risk, but unmeasured is not zero, so try a small amount first." });
     else reasons.push({ level: "INFO", code: "TAX_CLEAN", text: "Buy/sell tax read on-chain: clean." });
   }
   return finish("crypto", symbol || token, reasons);
