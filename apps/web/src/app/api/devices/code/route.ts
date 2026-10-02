@@ -13,6 +13,14 @@ export const dynamic = "force-dynamic";
 
 const LINK_URL = "https://app.blueagent.dev/link";
 
+/** Production always sends people to app.blueagent.dev/link. A local or
+ *  preview server sends them to its OWN /app/link, so a device pointed at a
+ *  dev server is approved on that server, not on production. */
+function linkUrl(req: NextRequest): string {
+  if (process.env.VERCEL_ENV === "production") return LINK_URL;
+  return `${new URL(req.url).origin}/app/link`;
+}
+
 export async function POST(req: NextRequest) {
   const rl = await rateLimit(getIdentifier(req), "device");
   if (!rl.success) return NextResponse.json({ error: "Too many requests." }, { status: 429, headers: NO_STORE });
@@ -24,8 +32,8 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     user_code: r.userCode,
     device_code: r.deviceCode,
-    verification_uri: LINK_URL,
-    verification_uri_complete: `${LINK_URL}?code=${r.userCode}`,
+    verification_uri: linkUrl(req),
+    verification_uri_complete: `${linkUrl(req)}?code=${r.userCode}`,
     expires_in: CODE_TTL_S,
     interval: TOKEN_POLL_S,
   }, { headers: NO_STORE });
