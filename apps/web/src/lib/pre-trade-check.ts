@@ -32,7 +32,7 @@
 import { findByContract as findRwaByContract } from "@/lib/robinhood/rwa-registry";
 import { nyseMarketStatus } from "@/lib/robinhood/rwa-market";
 import { BASE_STOCKS } from "@/lib/base-stocks/registry";
-import { classifyToken, normalizeSymbol } from "@/lib/wallet/token-trust";
+import { BASE_MAJORS, classifyToken, normalizeSymbol } from "@/lib/wallet/token-trust";
 import { readTokenTax } from "@/lib/token-tax";
 import { measuredHoneypotVerdict } from "@/lib/honeypot-verdict";
 import { clientFor, isNativeToken, readTokenMeta, type TxChain } from "@/lib/tx-chains";
@@ -246,6 +246,10 @@ async function notATokenOnBase(token: `0x${string}`): Promise<{ reason: Reason; 
   // retried once. Still "" if it never answers: the address is then shown.
   const SYMBOL_ABI = [{ type: "function", name: "symbol", stateMutability: "view", inputs: [], outputs: [{ type: "string" }] }] as const;
   const sym = async (a: string) => {
+    // A pinned major is named from the pinned list — no RPC needed (on prod
+    // WETH's symbol() went unread twice even with the retry below).
+    const major = BASE_MAJORS.find((m) => m.addr.toLowerCase() === a.toLowerCase());
+    if (major) return major.sym;
     try { const m = (await readTokenMeta("base", a as `0x${string}`)).symbol; if (m) return m; } catch { /* fall through */ }
     for (let i = 0; i < 2; i++) {
       try { return await client.readContract({ address: a as `0x${string}`, abi: SYMBOL_ABI, functionName: "symbol" }); }

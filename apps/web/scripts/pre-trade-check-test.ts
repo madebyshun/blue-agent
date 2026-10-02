@@ -48,6 +48,8 @@ const RH_IMPOSTOR = A(0x2001);       // RH: wears a registered RHJ ticker
 const RH_UNLISTED = A(0x2002);       // RH: an ordinary unregistered token
 const POOL = A(0x1008);              // Base: a v3-style pool holding CLEAN / HONEYPOT
 const NO_CODE = A(0x1009);           // Base: nothing deployed (a wallet)
+const POOL_WETH = A(0x100a);         // Base: a pool holding CLEAN / WETH (WETH's symbol() never answers here)
+const WETH = "0x4200000000000000000000000000000000000006";
 
 const NVDA = BASE_STOCKS[0];
 const RH_STOCK = RWA_TOKENS.find((t) => t.kind === "stock" && t.chainlinkFeed)!;
@@ -86,7 +88,7 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   if (req && typeof req.method === "string") {
     if (req.method === "eth_getCode") {
       const at = String((req.params as string[])[0]).toLowerCase();
-      return rpc(CONTRACTS[at] || at === POOL ? "0x6080604052" : "0x");
+      return rpc(CONTRACTS[at] || at === POOL || at === POOL_WETH ? "0x6080604052" : "0x");
     }
     if (req.method !== "eth_call") return rpc(null);
     const call = req.params[0] as { to: string; data?: string; input?: string };
@@ -96,6 +98,8 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const addrWord = (a: string) => encodeAbiParameters([{ type: "address" }], [a as `0x${string}`]);
     if (call.to.toLowerCase() === POOL && data.startsWith("0x0dfe1681")) return rpc(addrWord(CLEAN));
     if (call.to.toLowerCase() === POOL && data.startsWith("0xd21220a7")) return rpc(addrWord(HONEYPOT));
+    if (call.to.toLowerCase() === POOL_WETH && data.startsWith("0x0dfe1681")) return rpc(addrWord(CLEAN));
+    if (call.to.toLowerCase() === POOL_WETH && data.startsWith("0xd21220a7")) return rpc(addrWord(WETH));
     if (!fx) return revert();
     if (data.startsWith("0x313ce567")) return rpc(encodeAbiParameters([{ type: "uint8" }], [fx.decimals]));
     if (data.startsWith("0x95d89b41")) return rpc(encodeAbiParameters([{ type: "string" }], [fx.symbol]));
@@ -217,6 +221,8 @@ async function run(input: Parameters<typeof preTradeCheck>[0]) {
   ok("a pool address → WARN NOT_A_TOKEN naming its two tokens, not 'tax could not be read'",
     c.verdict === "WARN" && c.reasons.some((r) => r.code === "NOT_A_TOKEN") && !c.reasons.some((r) => r.code === "TAX_UNREAD")
       && /liquidity pool \(FINE \/ PUMP\)/.test(texts(c)) && c.pool?.token0.address.toLowerCase() === CLEAN && c.pool?.token1.symbol === "PUMP", texts(c));
+  c = await run({ chain: "base", kind: "swap", token: POOL_WETH, now: WEEKDAY });
+  ok("a pool holding WETH names it from the pinned list, with no symbol() read", /\(FINE \/ WETH\)/.test(texts(c)), texts(c));
   c = await run({ chain: "base", kind: "swap", token: NO_CODE, now: WEEKDAY });
   ok("no contract at the address → WARN NOT_A_TOKEN (a wallet)", c.verdict === "WARN" && c.reasons.some((r) => r.code === "NOT_A_TOKEN") && /no contract/.test(texts(c)), texts(c));
 
