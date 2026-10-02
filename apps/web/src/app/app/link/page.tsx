@@ -113,7 +113,7 @@ function LinkInner() {
 
       {!isConnected ? (
         <div className={card}>
-          <p className="text-[13px] text-slate-300 mb-3">Connect the wallet whose alerts this BlueBot should show.</p>
+          <p className="text-[13px] text-slate-300 mb-3">Connect the wallet you use on Blue Agent. BlueBot will use it, with no new wallet.</p>
           <ConnectButton label="Connect wallet" />
         </div>
       ) : (
