@@ -33,6 +33,7 @@ import { CHAT_HIDDEN_TOOLS } from "@/lib/chat-hidden-tools";
 import { cardReply, CARD_ALREADY_SHOWN, CARD_RENDERED_TOOLS } from "@/lib/chat/card-replies";
 import { baseStockByTickerOrSymbol, dollarAmount } from "@/lib/chat/trade-intent";
 import { githubContextFor } from "@/lib/chat/github-context";
+import { wantsMyAlerts } from "@/lib/chat/intents";
 import { runInternalTool } from "@/lib/x402-internal-run";
 
 export const runtime = "nodejs";
@@ -3717,7 +3718,9 @@ export async function POST(req: NextRequest) {
       const forceTool =
         payer && wantsWalletBalance(cleanMessages)
           ? "check_wallet"
-          : undefined;
+          : payer && wantsMyAlerts(cleanMessages)
+            ? "my_alerts"
+            : undefined;
       // Forced tool → skip Phase 1 entirely: we already decided the tool and it
       // takes no LLM-authored args, so a full detection round-trip would only
       // echo back what we're forcing. Synthesize the tool_call locally instead.
@@ -3824,7 +3827,9 @@ export async function POST(req: NextRequest) {
     const forceTool =
       payer && wantsWalletBalance(cleanMessages)
         ? "check_wallet"
-        : undefined;
+        : payer && wantsMyAlerts(cleanMessages)
+          ? "my_alerts"
+          : undefined;
     // Forced tool → synthesize the tool_call and skip the Phase 1 LLM round-trip
     // (see the Venice branch above for the full rationale).
     const outcome: Phase1Outcome = forceTool
