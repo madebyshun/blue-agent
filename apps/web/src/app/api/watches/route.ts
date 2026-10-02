@@ -11,6 +11,11 @@
  * and a body field naming the wallet would let anyone fill a stranger's alert
  * box. `?address=` is compared with the session (401 on mismatch), never used.
  *
+ * The one other proof: a linked BlueBot's device token (Bearer bbt_…,
+ * lib/devices.ts). It reads with `read`; it creates, pauses or deletes only
+ * with the `alerts` scope the wallet's owner ticked when approving it. Marking
+ * alerts seen needs only `read` — that is reading state, not a standing order.
+ *
  * The CLIENT decides what to watch; the SERVER decides where its numbers come
  * from (`resolveWatchTarget`: registry/oracle for stock tokens, the deepest
  * base-side pool for everything else). A client cannot point a watch at a feed
@@ -28,11 +33,22 @@ import { resolveWatchTarget, readReadings } from "@/lib/watches/prices";
 import { MAX_WATCHES_PER_WALLET, describeWatch, type Watch } from "@/lib/watches/types";
 import { parseRule, parseTrade, parseCheckAt } from "@/lib/watches/rules";
 import { nextFireAt } from "@/lib/cron-schedule";
+import { hasScope, type DeviceScope } from "@/lib/devices";
+import { presentsDeviceToken, requireDevice } from "@/lib/device-auth";
 
 export const runtime = "nodejs";
 const NO_STORE = { "Cache-Control": "no-store" } as const;
 
-async function requireWallet(req: NextRequest): Promise<{ wallet: string } | { res: NextResponse }> {
+type Caller = { wallet: string; device?: { id: string; scopes?: DeviceScope[] } };
+
+async function requireWallet(req: NextRequest, scope: DeviceScope = "read"): Promise<Caller | { res: NextResponse }> {
+  if (presentsDeviceToken(req)) {
+    const d = await requireDevice(req, scope);
+    if ("res" in d) return d;
+    const rl = await rateLimit(`device:${d.device.id}`, "device");
+    if (!rl.success) return { res: NextResponse.json({ error: "Too many requests." }, { status: 429, headers: NO_STORE }) };
+    return { wallet: d.device.wallet, device: { id: d.device.id, scopes: d.device.scopes } };
+  }
   const session = await readSession(req);
   if (session.status === "unavailable") {
     return { res: NextResponse.json({ error: "Could not verify session — store unavailable." }, { status: 503, headers: NO_STORE }) };
@@ -78,7 +94,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await requireWallet(req);
+  const auth = await requireWallet(req, "alerts");
   if ("res" in auth) return auth.res;
   const rl = await rateLimit(auth.wallet, "hub");
   if (!rl.success) return bad("Too many changes — slow down.", 429);
@@ -136,6 +152,9 @@ export async function PATCH(req: NextRequest) {
   if (!rl.success) return bad("Too many changes — slow down.", 429);
   let b: Record<string, unknown>;
   try { b = await req.json(); } catch { return bad("Invalid JSON body"); }
+  if (b.seen !== true && auth.device && !hasScope(auth.device, "alerts")) {
+    return bad("This link can't change alerts. Link BlueBot again and allow it on app.blueagent.dev/link.", 403);
+  }
   if (b.seen === true) {
     // Up to the newest alert the page actually rendered (`upTo`), so one
     // written after it loaded stays unread; capped at now by markSeen.
@@ -161,7 +180,7 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const auth = await requireWallet(req);
+  const auth = await requireWallet(req, "alerts");
   if ("res" in auth) return auth.res;
   const rl = await rateLimit(auth.wallet, "hub");
   if (!rl.success) return bad("Too many changes — slow down.", 429);

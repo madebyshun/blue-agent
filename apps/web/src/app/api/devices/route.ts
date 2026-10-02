@@ -1,6 +1,6 @@
 /**
  * /api/devices — the wallet's linked BlueBots (SIWE).
- *   GET               → [{ id, name, kind, createdAt, expiresAt }]
+ *   GET               → [{ id, name, kind, createdAt, expiresAt, scopes?, chatDailyCap? }]
  *   DELETE ?id=…      → unlink one (its token stops working immediately)
  */
 import { NextResponse, type NextRequest } from "next/server";
