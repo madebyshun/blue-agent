@@ -6,15 +6,17 @@
 // `callTool` — the same handlers `/api/x402/<id>` sells, the same path the
 // Blue Hood poller uses, no HTTP hop and no payment. So the cube shows what
 // the agent would answer a paying caller, not a parallel re-implementation
-// that can drift from it. The two direct CoinGecko reads exist only because
-// no tool prices non-Base majors or returns a 24h series; each feed names
-// its sources in `via`.
+// that can drift from it. The two CoinGecko reads exist only because no tool
+// prices non-Base majors or returns a 24h series (spot goes through
+// `getCoinGeckoPrices` in lib/market-data; the 24h series is still a direct
+// read); each feed names its sources in `via`.
 //
 // Serving paid tools' output for free here gives nothing away: these exact
 // numbers are already public on the cube route, the reads are bounded to ~1
 // per minute by `memo`, and none of the three tools calls an LLM.
 
 import { callTool } from "@/lib/blue-hood/tool-caller";
+import { getCoinGeckoPrices } from "@/lib/market-data";
 import type { BasePulse, CoinQuote, CubeSources, HoodRow } from "./modes";
 
 const TIMEOUT_MS = 8000;
@@ -56,15 +58,17 @@ const num = (v: unknown): number | null => (typeof v === "number" && Number.isFi
 
 export const liveCubeSources: CubeSources = {
   coins: (ids) => memo(`coins:${ids.join(",")}`, async () => {
-    const d = await getJson<Record<string, { usd?: number; usd_24h_change?: number }>>(
-      `https://api.coingecko.com/api/v3/simple/price?ids=${ids.join(",")}&vs_currencies=usd&include_24hr_change=true`,
-    );
+    const d = await getCoinGeckoPrices(ids, {
+      include: { change24h: true },
+      timeoutMs: TIMEOUT_MS,
+      revalidate: TTL_MS / 1000,
+    });
     // Throw rather than return {}: a rejected promise is evicted from `memo`,
     // so one 429 costs this minute's rows, not the next 60s of retries.
     if (!d) throw new Error("coingecko unavailable");
     const out: Record<string, CoinQuote> = {};
     for (const id of ids) {
-      if (d[id]) out[id] = { usd: num(d[id].usd), change24h: num(d[id].usd_24h_change) };
+      if (d[id]) out[id] = { usd: d[id].usd, change24h: d[id].change24hPct };
     }
     return out;
   }),

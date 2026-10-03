@@ -437,6 +437,65 @@ export async function getBaseDexVolume(opts?: FetchOpts): Promise<BaseDexVolume 
 }
 export const getRobinhoodTvl = () => getChainTvl("Robinhood");
 
+// ─── CoinGecko: spot price by coin id ────────────────────────────────────────
+
+export type CoinGeckoPrice = {
+  usd: number | null;
+  change24hPct: number | null;
+  marketCapUsd: number | null;
+  volume24hUsd: number | null;
+};
+
+export type CoinGeckoPriceOpts = FetchOpts & {
+  /** Extra fields to ask for. A field not asked for is null in the result. */
+  include?: { change24h?: boolean; marketCap?: boolean; volume24h?: boolean };
+};
+
+/**
+ * CoinGecko `/simple/price` (keyless public tier) for one or more coin ids,
+ * keyed as CoinGecko keys its reply — by the id sent.
+ *
+ * null on ANY failure (network, timeout, non-2xx, non-object body). That is
+ * deliberately distinct from `{}`, which means CoinGecko answered but lists
+ * none of the ids — callers that cache or retry need to tell the two apart.
+ * A field absent from the reply is null, never a default: any fallback price
+ * a caller applies is that caller's own decision, made in plain sight.
+ *
+ * Timeout defaults to this module's 8s; pass the caller's own `timeoutMs` and
+ * `revalidate` so a migration does not change its cache semantics.
+ */
+export async function getCoinGeckoPrices(
+  ids: string[],
+  opts?: CoinGeckoPriceOpts,
+): Promise<Record<string, CoinGeckoPrice> | null> {
+  const inc = opts?.include ?? {};
+  const url =
+    `https://api.coingecko.com/api/v3/simple/price?ids=${ids.map(encodeURIComponent).join(",")}` +
+    `&vs_currencies=usd` +
+    (inc.change24h ? `&include_24hr_change=true` : "") +
+    (inc.marketCap ? `&include_market_cap=true` : "") +
+    (inc.volume24h ? `&include_24hr_vol=true` : "");
+  const d = await getJson<Record<string, {
+    usd?: number; usd_24h_change?: number; usd_market_cap?: number; usd_24h_vol?: number;
+  }>>(
+    url,
+    initOf(opts, { Accept: "application/json" }),
+    opts?.timeoutMs === undefined ? T : opts.timeoutMs,
+  );
+  if (!d || typeof d !== "object" || Array.isArray(d)) return null;
+  const out: Record<string, CoinGeckoPrice> = {};
+  for (const [id, e] of Object.entries(d)) {
+    if (!e || typeof e !== "object") continue;
+    out[id] = {
+      usd: num(e.usd),
+      change24hPct: inc.change24h ? num(e.usd_24h_change) : null,
+      marketCapUsd: inc.marketCap ? num(e.usd_market_cap) : null,
+      volume24hUsd: inc.volume24h ? num(e.usd_24h_vol) : null,
+    };
+  }
+  return out;
+}
+
 // ─── DefiLlama: real yield pools on Base ─────────────────────────────────────
 
 export type YieldPool = {
