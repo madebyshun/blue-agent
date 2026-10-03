@@ -379,6 +379,25 @@ async function getChainTvl(chainSlug: "Base" | "Robinhood"): Promise<BaseTvl | n
 }
 
 export const getBaseTvl = () => getChainTvl("Base");
+
+// ─── DefiLlama: Base chain DEX volume ────────────────────────────────────────
+
+export type BaseDexVolume = {
+  /** Every DEX DefiLlama tracks on Base, last 24h, USD. */
+  volume24hUsd: number | null;
+  /** Day-over-day change of that total, percent. */
+  change1dPct: number | null;
+  source: "defillama";
+};
+
+/** Chain-wide Base DEX volume — not a sum over some subset of pools. */
+export async function getBaseDexVolume(): Promise<BaseDexVolume | null> {
+  const d = await getJson<{ total24h?: number; change_1d?: number }>(
+    "https://api.llama.fi/overview/dexs/base?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true"
+  );
+  if (!d) return null;
+  return { volume24hUsd: num(d.total24h), change1dPct: num(d.change_1d), source: "defillama" };
+}
 export const getRobinhoodTvl = () => getChainTvl("Robinhood");
 
 // ─── DefiLlama: real yield pools on Base ─────────────────────────────────────
