@@ -16,15 +16,18 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 15;
 
-export async function GET(_req: Request, { params }: { params: Promise<{ mode: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ mode: string }> }) {
   const { mode } = await params;
+  // `?pick=bitcoin,aerodrome-finance` (crypto) or `?pick=NVDA,TSLA` (hood):
+  // the owner's choice, validated against the catalog in lib/cube/modes.ts.
+  const pick = new URL(req.url).searchParams.get("pick");
   if (!isCubeMode(mode)) {
     return NextResponse.json(
       { error: `unknown mode "${mode}"`, modes: CUBE_MODES },
       { status: 404, headers: { "Cache-Control": "public, s-maxage=3600" } },
     );
   }
-  const feed = await buildFeed(mode, liveCubeSources);
+  const feed = await buildFeed(mode, liveCubeSources, pick);
   return NextResponse.json(feed, {
     headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" },
   });

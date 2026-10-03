@@ -17,6 +17,7 @@
 //   - Hood arrows. Frozen 2026-09-30; the hood mode shows prices only.
 
 import type { TickerSnapshot } from "@/lib/blue-hood/types";
+import { BASE_STOCKS } from "@/lib/base-stocks/registry";
 
 export const CUBE_MODES = ["crypto", "base", "hood"] as const;
 export type CubeMode = (typeof CUBE_MODES)[number];
@@ -99,21 +100,68 @@ export interface CubeSources {
   hoodBaseRows(): Promise<TickerSnapshot[] | null>;
 }
 
-const CRYPTO: { label: string; id: string }[] = [
-  { label: "BTC", id: "bitcoin" },
-  { label: "ETH", id: "ethereum" },
-  { label: "SOL", id: "solana" },
-  { label: "BNB", id: "binancecoin" },
-  { label: "XRP", id: "ripple" },
+/**
+ * Coins a cube owner can pick from. A closed list, not free-form CoinGecko ids:
+ * every label here is checked to fit the 5-char column, and every id was
+ * confirmed to price on CoinGecko (2026-10-03). It also lets the whole catalog
+ * be ONE upstream call that every cube shares, whatever each one picked.
+ */
+export const CRYPTO_CATALOG: readonly { id: string; label: string }[] = [
+  { id: "bitcoin", label: "BTC" },
+  { id: "ethereum", label: "ETH" },
+  { id: "solana", label: "SOL" },
+  { id: "binancecoin", label: "BNB" },
+  { id: "ripple", label: "XRP" },
+  { id: "dogecoin", label: "DOGE" },
+  { id: "cardano", label: "ADA" },
+  { id: "avalanche-2", label: "AVAX" },
+  { id: "chainlink", label: "LINK" },
+  { id: "sui", label: "SUI" },
+  { id: "the-open-network", label: "TON" },
+  { id: "tron", label: "TRX" },
+  { id: "litecoin", label: "LTC" },
+  { id: "hyperliquid", label: "HYPE" },
+  { id: "uniswap", label: "UNI" },
+  { id: "pepe", label: "PEPE" },
+  // Base ecosystem
+  { id: "coinbase-wrapped-btc", label: "cbBTC" },
+  { id: "aerodrome-finance", label: "AERO" },
+  { id: "virtual-protocol", label: "VIRT" },
+  { id: "zora", label: "ZORA" },
+  { id: "degen-base", label: "DEGEN" },
+  { id: "based-brett", label: "BRETT" },
 ];
+export const CRYPTO_DEFAULT = ["bitcoin", "ethereum", "solana", "binancecoin", "ripple"];
+const ALL_COIN_IDS = CRYPTO_CATALOG.map((c) => c.id);
 
-export async function buildCrypto(src: CubeSources, now = Date.now()): Promise<CubeFeed> {
-  const q = await src.coins(CRYPTO.map((c) => c.id)).catch(() => ({}) as Record<string, CoinQuote>);
+/**
+ * `?pick=a,b,c` → the owner's choices, in their order, validated against
+ * `allowed`. Unknown entries are dropped (not 400'd) so a cube holding a pick
+ * we later retire keeps showing the rest. Nothing valid ⟹ null ⟹ defaults.
+ */
+export function parsePicks(raw: string | null | undefined, allowed: readonly string[], norm: (s: string) => string): string[] | null {
+  if (!raw) return null;
+  const ok = new Set(allowed);
+  const out: string[] = [];
+  for (const p of raw.split(",")) {
+    const v = norm(p.trim());
+    if (v && ok.has(v) && !out.includes(v)) out.push(v);
+    if (out.length === CUBE_MAX_ROWS) break;
+  }
+  return out.length ? out : null;
+}
+
+export async function buildCrypto(src: CubeSources, picks: string[] | null = null, now = Date.now()): Promise<CubeFeed> {
+  const ids = picks ?? CRYPTO_DEFAULT;
+  const q = await src.coins(ALL_COIN_IDS).catch(() => ({}) as Record<string, CoinQuote>);
   return {
     mode: "crypto",
     title: "CRYPTO 24H",
     changeKind: "24h",
-    rows: CRYPTO.map((c) => row(c.label, q[c.id]?.usd ?? null, q[c.id]?.change24h ?? null, fmtPrice)),
+    rows: ids.map((id) => {
+      const label = CRYPTO_CATALOG.find((c) => c.id === id)?.label ?? id.slice(0, 5).toUpperCase();
+      return row(label, q[id]?.usd ?? null, q[id]?.change24h ?? null, fmtPrice);
+    }),
     ts: now,
   };
 }
@@ -122,7 +170,8 @@ export async function buildBase(src: CubeSources, now = Date.now()): Promise<Cub
   const [tvl, dex, q] = await Promise.all([
     src.baseTvl().catch(() => null),
     src.baseDexVol().catch(() => null),
-    src.coins(["ethereum", "coinbase-wrapped-btc"]).catch(() => ({}) as Record<string, CoinQuote>),
+    // Full catalog, not just the two ids: same URL as the crypto mode ⟹ same cache entry.
+    src.coins(ALL_COIN_IDS).catch(() => ({}) as Record<string, CoinQuote>),
   ]);
   return {
     mode: "base",
@@ -139,26 +188,54 @@ export async function buildBase(src: CubeSources, now = Date.now()): Promise<Cub
   };
 }
 
-/** Base B20 stocks: DEX price, and how far it sits from the Chainlink oracle. */
-export async function buildHood(src: CubeSources, now = Date.now()): Promise<CubeFeed> {
-  const rows = (await src.hoodBaseRows().catch(() => null)) ?? [];
-  const live = rows
-    .filter((r) => r.chain === "base" && r.verdict !== "ERROR")
-    .sort((a, b) => (b.volume_24h_usd ?? 0) - (a.volume_24h_usd ?? 0) || a.ticker.localeCompare(b.ticker))
-    .slice(0, CUBE_MAX_ROWS);
+/**
+ * Base B20 stocks: DEX price, and how far it sits from the Chainlink oracle.
+ *
+ * With picks, rows follow the owner's order and a picked ticker with no fresh
+ * row still gets its label and "--" — the owner asked for TSLA, so the screen
+ * says "TSLA: unknown", not a list that quietly lost a line. Without picks,
+ * the five most-traded live rows.
+ */
+export async function buildHood(src: CubeSources, picks: string[] | null = null, now = Date.now()): Promise<CubeFeed> {
+  const rows = ((await src.hoodBaseRows().catch(() => null)) ?? [])
+    .filter((r) => r.chain === "base" && r.verdict !== "ERROR");
+  const toRow = (t: string, r?: TickerSnapshot) =>
+    row(t.slice(0, 5), r ? r.dex_usd ?? r.oracle_usd : null, r ? r.drift_pct : null, fmtPrice);
+
+  const out = picks
+    ? picks.map((t) => toRow(t, rows.find((r) => r.ticker.toUpperCase() === t)))
+    : rows
+        .sort((a, b) => (b.volume_24h_usd ?? 0) - (a.volume_24h_usd ?? 0) || a.ticker.localeCompare(b.ticker))
+        .slice(0, CUBE_MAX_ROWS)
+        .map((r) => toRow(r.ticker, r));
   return {
     mode: "hood",
-    title: live.length ? "STOCKS ON BASE" : "STOCKS: NO DATA",
+    title: rows.length ? "STOCKS ON BASE" : "STOCKS: NO DATA",
     changeKind: "vs oracle",
-    rows: live.map((r) => row(r.ticker.slice(0, 5), r.dex_usd ?? r.oracle_usd, r.drift_pct, fmtPrice)),
+    rows: out,
     ts: now,
   };
 }
 
-export function buildFeed(mode: CubeMode, src: CubeSources, now = Date.now()): Promise<CubeFeed> {
+/** Tickers a cube owner can pick: the verified Base B20 registry, nothing else. */
+export const HOOD_CATALOG = BASE_STOCKS.map((s) => ({ ticker: s.ticker.toUpperCase(), name: s.name }));
+
+/** Everything a cube needs to render its own picker page. */
+export function cubeOptions() {
+  return {
+    crypto: { catalog: CRYPTO_CATALOG, defaults: CRYPTO_DEFAULT },
+    hood: { catalog: HOOD_CATALOG, defaults: null as string[] | null },
+    maxPicks: CUBE_MAX_ROWS,
+  };
+}
+
+export function buildFeed(mode: CubeMode, src: CubeSources, pickRaw: string | null = null, now = Date.now()): Promise<CubeFeed> {
   switch (mode) {
-    case "crypto": return buildCrypto(src, now);
-    case "base": return buildBase(src, now);
-    case "hood": return buildHood(src, now);
+    case "crypto":
+      return buildCrypto(src, parsePicks(pickRaw, ALL_COIN_IDS, (s) => s.toLowerCase()), now);
+    case "base":
+      return buildBase(src, now);
+    case "hood":
+      return buildHood(src, parsePicks(pickRaw, HOOD_CATALOG.map((h) => h.ticker), (s) => s.toUpperCase()), now);
   }
 }

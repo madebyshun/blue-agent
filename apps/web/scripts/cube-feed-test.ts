@@ -11,6 +11,7 @@
  */
 import {
   buildFeed, fmtPrice, fmtCompact, fmtChange, CUBE_MODES, CUBE_MAX_ROWS,
+  CRYPTO_CATALOG, HOOD_CATALOG, cubeOptions,
   type CubeSources, type CubeFeed,
 } from "../src/lib/cube/modes";
 import type { TickerSnapshot } from "../src/lib/blue-hood/types";
@@ -64,8 +65,8 @@ async function main() {
   ok("null price → --", fmtPrice(null) === "--" && fmtCompact(NaN) === "--");
   ok("null change → empty", fmtChange(null) === "");
   for (const mode of ["crypto", "base"] as const) {
-    const good = await buildFeed(mode, healthy, 1);
-    const bad = await buildFeed(mode, dead, 1);
+    const good = await buildFeed(mode, healthy, null, 1);
+    const bad = await buildFeed(mode, dead, null, 1);
     ok(`${mode}: dead source keeps every label`,
       JSON.stringify(bad.rows.map((r) => r.label)) === JSON.stringify(good.rows.map((r) => r.label)));
     ok(`${mode}: dead source → all "--", change null`,
@@ -74,20 +75,41 @@ async function main() {
   }
 
   console.log("§4 hood");
-  const hood = await buildFeed("hood", healthy, 1);
+  const hood = await buildFeed("hood", healthy, null, 1);
   ok("hood: ≤ 5 rows", hood.rows.length === CUBE_MAX_ROWS);
   ok("hood: no Robinhood rows", !hood.rows.some((r) => r.label === "MSTR"));
   ok("hood: ERROR rows dropped", !hood.rows.some((r) => r.label === "BAD"));
   ok("hood: sorted by 24h volume", hood.rows.map((r) => r.label).join() === "NVDA,GOOGL,META,AAPL,SPCX");
   ok("hood: change is drift vs oracle", hood.changeKind === "vs oracle" && hood.rows[0].change === 1);
   ok("hood: no arrow/verdict fields leak", !JSON.stringify(hood).match(/arrow|verdict/i));
-  const hoodDead = await buildFeed("hood", dead, 1);
+  const hoodDead = await buildFeed("hood", dead, null, 1);
   ok("hood: no data → 0 rows + says so", hoodDead.rows.length === 0 && /NO DATA/.test(hoodDead.title));
   ok("hood: fits 128px", fits(hood) && fits(hoodDead));
 
+  console.log("§6 picks");
+  const cp = await buildFeed("crypto", healthy, " aerodrome-finance,BITCOIN,nope,bitcoin ", 1);
+  ok("crypto picks: owner order, case-insensitive, unknown + dupes dropped",
+    cp.rows.map((r) => r.label).join() === "AERO,BTC", cp.rows.map((r) => r.label).join());
+  ok("crypto picks: capped at 5",
+    (await buildFeed("crypto", healthy, CRYPTO_CATALOG.map((c) => c.id).join(","), 1)).rows.length === CUBE_MAX_ROWS);
+  ok("crypto picks: all unknown → defaults",
+    (await buildFeed("crypto", healthy, "nope,zzz", 1)).rows.map((r) => r.label).join() === "BTC,ETH,SOL,BNB,XRP");
+  ok("crypto picks: catalog labels all fit 5 chars", CRYPTO_CATALOG.every((c) => c.label.length <= 5));
+  const hp = await buildFeed("hood", healthy, "tsla,nvda", 1);
+  ok("hood picks: owner order", hp.rows.map((r) => r.label).join() === "TSLA,NVDA", hp.rows.map((r) => r.label).join());
+  const hpMissing = await buildFeed("hood", healthy, "MSFT,NVDA", 1);
+  ok("hood picks: picked ticker with no fresh row keeps its label, shows --",
+    hpMissing.rows[0].label === "MSFT" && hpMissing.rows[0].text === "--" && hpMissing.rows[0].change === null);
+  ok("hood picks: Robinhood-only ticker not pickable",
+    (await buildFeed("hood", healthy, "MSTR_RH,FAKE", 1)).rows.map((r) => r.label).join() === "NVDA,GOOGL,META,AAPL,SPCX");
+  ok("hood picks: only registry tickers are pickable", HOOD_CATALOG.length > 0 && HOOD_CATALOG.every((h) => /^[A-Z]{1,5}$/.test(h.ticker)));
+  const opts = cubeOptions();
+  ok("options: every default is in the catalog",
+    opts.crypto.defaults.every((d) => opts.crypto.catalog.some((c) => c.id === d)));
+
   console.log("§5 token");
   for (const mode of CUBE_MODES) {
-    const f = JSON.stringify(await buildFeed(mode, healthy, 1));
+    const f = JSON.stringify(await buildFeed(mode, healthy, null, 1));
     ok(`${mode}: no $BLUEAGENT`, !/blueagent|0xf895783b/i.test(f));
   }
 
