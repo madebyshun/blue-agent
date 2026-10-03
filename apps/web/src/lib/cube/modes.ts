@@ -18,6 +18,7 @@
 
 import type { TickerSnapshot } from "@/lib/blue-hood/types";
 import { BASE_STOCKS } from "@/lib/base-stocks/registry";
+import { WETH9_BASE } from "@/lib/b20hub/constants";
 
 export const CUBE_MODES = ["crypto", "base", "hood"] as const;
 export type CubeMode = (typeof CUBE_MODES)[number];
@@ -83,6 +84,13 @@ export interface CubeFeed {
   /** What `change` means for every row in this feed — "24h", "7d", "vs oracle". */
   changeKind: string;
   rows: CubeRow[];
+  /**
+   * Where the numbers came from: Blue Agent tool ids (the same handlers sold at
+   * /api/x402/<id>, run in-process) or a named upstream where no tool covers
+   * the data. Published so "the cube runs on Blue Agent's tools" is checkable
+   * per feed rather than a claim about all of them.
+   */
+  via: string[];
   /** Unix ms the feed was assembled. */
   ts: number;
 }
@@ -125,13 +133,26 @@ function row(label: string, value: number | null, change: number | null, fmt: (v
 
 export interface CoinQuote { usd: number | null; change24h: number | null }
 
+/** The fields of a Blue Hood row the cube reads — what `hood-live` publishes. */
+export type HoodRow = Pick<TickerSnapshot, "ticker" | "chain" | "verdict" | "oracle_usd" | "dex_usd" | "drift_pct" | "volume_24h_usd">;
+
+export interface BasePulse {
+  tvlUsd: number | null;
+  tvlChange7dPct: number | null;
+  dexVolume24hUsd: number | null;
+  dexVolumeChange1dPct: number | null;
+}
+
 export interface CubeSources {
-  /** CoinGecko ids → quote. Missing id ⟹ unknown. */
+  /** CoinGecko ids → quote. Missing id ⟹ unknown. No Blue Agent tool prices
+   *  non-Base majors (token-price is Base-only), so this one is direct. */
   coins(ids: string[]): Promise<Record<string, CoinQuote>>;
-  baseTvl(): Promise<{ tvlUsd: number | null; change7dPct: number | null } | null>;
-  baseDexVol(): Promise<{ total24h: number | null; change1dPct: number | null } | null>;
-  /** Fresh Base B20 desk rows, or null when absent / stale / unreadable. */
-  hoodBaseRows(): Promise<TickerSnapshot[] | null>;
+  /** Blue Agent tool `base-pulse`. */
+  basePulse(): Promise<BasePulse | null>;
+  /** Blue Agent tool `token-price`, by verified Base address. */
+  baseTokenPrice(address: string): Promise<CoinQuote | null>;
+  /** Blue Agent tool `hood-live` (chain=base): fresh Base B20 rows, or null. */
+  hoodBaseRows(): Promise<HoodRow[] | null>;
   /** 24h USD price series for a CoinGecko id, oldest → newest. Null = unknown. */
   coinHistory(id: string): Promise<number[] | null>;
 }
@@ -206,16 +227,23 @@ export async function buildCrypto(src: CubeSources, picks: string[] | null = nul
       const spark = withSpark && hist[i] ? toSpark(hist[i]!) : null;
       return spark ? { ...r, spark } : r;
     }),
+    // Named, not hidden: majors like BTC/SOL/XRP are not Base tokens, so no
+    // Blue Agent tool prices them and this feed reads CoinGecko directly.
+    via: ["coingecko"],
     ts: now,
   };
 }
 
+/** cbBTC on Base 8453 — same address the chat swap path and dashboard use. */
+export const CBBTC_BASE = "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf";
+
+/** Every number here comes through a Blue Agent tool, priced on Base itself. */
 export async function buildBase(src: CubeSources, now = Date.now()): Promise<CubeFeed> {
-  const [tvl, dex, q] = await Promise.all([
-    src.baseTvl().catch(() => null),
-    src.baseDexVol().catch(() => null),
-    // Full catalog, not just the two ids: same URL as the crypto mode ⟹ same cache entry.
-    src.coins(ALL_COIN_IDS).catch(() => ({}) as Record<string, CoinQuote>),
+  const [pulse, eth, btc] = await Promise.all([
+    src.basePulse().catch(() => null),
+    // ETH as WETH9 on Base: the price ETH actually trades at on Base DEXes.
+    src.baseTokenPrice(WETH9_BASE).catch(() => null),
+    src.baseTokenPrice(CBBTC_BASE).catch(() => null),
   ]);
   return {
     mode: "base",
@@ -223,11 +251,12 @@ export async function buildBase(src: CubeSources, now = Date.now()): Promise<Cub
     changeKind: "mixed",
     rows: [
       // TVL change is 7d (DefiLlama daily series); DEX volume is day-over-day.
-      row("TVL", tvl?.tvlUsd ?? null, tvl?.change7dPct ?? null, fmtCompact),
-      row("DEX", dex?.total24h ?? null, dex?.change1dPct ?? null, fmtCompact),
-      row("ETH", q["ethereum"]?.usd ?? null, q["ethereum"]?.change24h ?? null, fmtPrice),
-      row("cbBTC", q["coinbase-wrapped-btc"]?.usd ?? null, q["coinbase-wrapped-btc"]?.change24h ?? null, fmtPrice),
+      row("TVL", pulse?.tvlUsd ?? null, pulse?.tvlChange7dPct ?? null, fmtCompact),
+      row("DEX", pulse?.dexVolume24hUsd ?? null, pulse?.dexVolumeChange1dPct ?? null, fmtCompact),
+      row("ETH", eth?.usd ?? null, eth?.change24h ?? null, fmtPrice),
+      row("cbBTC", btc?.usd ?? null, btc?.change24h ?? null, fmtPrice),
     ],
+    via: ["base-pulse", "token-price"],
     ts: now,
   };
 }
@@ -243,7 +272,7 @@ export async function buildBase(src: CubeSources, now = Date.now()): Promise<Cub
 export async function buildHood(src: CubeSources, picks: string[] | null = null, now = Date.now()): Promise<CubeFeed> {
   const rows = ((await src.hoodBaseRows().catch(() => null)) ?? [])
     .filter((r) => r.chain === "base" && r.verdict !== "ERROR");
-  const toRow = (t: string, r?: TickerSnapshot) =>
+  const toRow = (t: string, r?: HoodRow) =>
     row(t.slice(0, 5), r ? r.dex_usd ?? r.oracle_usd : null, r ? r.drift_pct : null, fmtPrice);
 
   const out = picks
@@ -257,6 +286,7 @@ export async function buildHood(src: CubeSources, picks: string[] | null = null,
     title: rows.length ? "STOCKS ON BASE" : "STOCKS: NO DATA",
     changeKind: "vs oracle",
     rows: out,
+    via: ["hood-live"],
     ts: now,
   };
 }

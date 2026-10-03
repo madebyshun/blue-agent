@@ -11,7 +11,7 @@
  */
 import {
   buildFeed, fmtPrice, fmtCompact, fmtChange, CUBE_MODES, CUBE_MAX_ROWS,
-  CRYPTO_CATALOG, HOOD_CATALOG, cubeOptions, toSpark, SPARK_POINTS,
+  CRYPTO_CATALOG, HOOD_CATALOG, cubeOptions, toSpark, SPARK_POINTS, CBBTC_BASE,
   type CubeSources, type CubeFeed,
 } from "../src/lib/cube/modes";
 import type { TickerSnapshot } from "../src/lib/blue-hood/types";
@@ -33,8 +33,8 @@ const stockRow = (ticker: string, chain: "base" | "robinhood", vol: number, extr
 
 const healthy: CubeSources = {
   coins: async (ids) => Object.fromEntries(ids.map((id, i) => [id, { usd: 84864.2 / (i + 1), change24h: -2.07 }])),
-  baseTvl: async () => ({ tvlUsd: 4.12e9, change7dPct: 3.4 }),
-  baseDexVol: async () => ({ total24h: 1.368e9, change1dPct: 10.31 }),
+  basePulse: async () => ({ tvlUsd: 4.12e9, tvlChange7dPct: 3.4, dexVolume24hUsd: 1.368e9, dexVolumeChange1dPct: 10.31 }),
+  baseTokenPrice: async (a) => ({ usd: a.toLowerCase() === CBBTC_BASE.toLowerCase() ? 84850 : 2679.5, change24h: -0.6 }),
   hoodBaseRows: async () => [
     stockRow("NVDA", "base", 900), stockRow("META", "base", 500), stockRow("GOOGL", "base", 700),
     stockRow("AAPL", "base", 100), stockRow("SPCX", "base", 50), stockRow("TSLA", "base", 10),
@@ -44,8 +44,8 @@ const healthy: CubeSources = {
 };
 const dead: CubeSources = {
   coins: async () => { throw new Error("429"); },
-  baseTvl: async () => null,
-  baseDexVol: async () => { throw new Error("timeout"); },
+  basePulse: async () => { throw new Error("timeout"); },
+  baseTokenPrice: async () => null,
   hoodBaseRows: async () => null,
   coinHistory: async () => { throw new Error("429"); },
 };
@@ -127,6 +127,13 @@ async function main() {
   ok("toSpark: < 2 points → null, never a made-up line", toSpark([]) === null && toSpark([5]) === null && toSpark([NaN, 3]) === null);
   ok("toSpark: flat window → level line at 50", (toSpark([7, 7, 7]) ?? []).every((v) => v === 50));
   ok("toSpark: short series not padded", toSpark([1, 2, 3])?.length === 3);
+
+  console.log("§8 provenance");
+  ok("base: via base-pulse + token-price", JSON.stringify((await buildFeed("base", healthy, null, 1)).via) === '["base-pulse","token-price"]');
+  ok("hood: via hood-live", JSON.stringify((await buildFeed("hood", healthy, null, 1)).via) === '["hood-live"]');
+  ok("crypto: names coingecko, does not claim a tool", JSON.stringify((await buildFeed("crypto", healthy, null, 1)).via) === '["coingecko"]');
+  const base = await buildFeed("base", healthy, null, 1);
+  ok("base: ETH + cbBTC priced by address on Base", base.rows[2].value === 2679.5 && base.rows[3].value === 84850);
 
   console.log("§5 token");
   for (const mode of CUBE_MODES) {

@@ -1,12 +1,21 @@
 // Live sources behind the BlueCube feed. Every fetcher fails soft to null / {},
 // which `modes.ts` renders as "--" — never as a number.
+//
+// The cube runs on Blue Agent's own tools wherever one covers the data:
+// `base-pulse`, `token-price` and `hood-live` are called in-process through
+// `callTool` — the same handlers `/api/x402/<id>` sells, the same path the
+// Blue Hood poller uses, no HTTP hop and no payment. So the cube shows what
+// the agent would answer a paying caller, not a parallel re-implementation
+// that can drift from it. The two direct CoinGecko reads exist only because
+// no tool prices non-Base majors or returns a 24h series; each feed names
+// its sources in `via`.
+//
+// Serving paid tools' output for free here gives nothing away: these exact
+// numbers are already public on the cube route, the reads are bounded to ~1
+// per minute by `memo`, and none of the three tools calls an LLM.
 
-import { getBaseTvl } from "@/lib/market-data";
-import { kvGet } from "@/lib/kv";
-import { KV_BASE_ROWS_LATEST, BASE_ROWS_MAX_AGE_MS } from "@/lib/blue-hood/kv-keys";
-import { partitionBaseRows } from "@/lib/blue-hood/types";
-import type { BaseDeskLatest } from "@/lib/blue-hood/types";
-import type { CoinQuote, CubeSources } from "./modes";
+import { callTool } from "@/lib/blue-hood/tool-caller";
+import type { BasePulse, CoinQuote, CubeSources, HoodRow } from "./modes";
 
 const TIMEOUT_MS = 8000;
 const TTL_MS = 60_000;
@@ -14,8 +23,8 @@ const TTL_MS = 60_000;
 // Picks make every cube's URL different, so the CDN's `s-maxage` no longer
 // collapses a fleet into one request per mode. These two layers restore that:
 // `next.revalidate` shares upstream JSON across instances via Next's data
-// cache, and `memo` keeps a warm instance from re-reading KV for every pick
-// combination. Net: ~one CoinGecko call and one KV read per minute, not per cube.
+// cache, and `memo` keeps a warm instance from re-running a tool for every
+// pick combination. Net: ~one call per source per minute, not per cube.
 const memoStore = new Map<string, { at: number; v: Promise<unknown> }>();
 function memo<T>(key: string, fn: () => Promise<T>): Promise<T> {
   const hit = memoStore.get(key);
@@ -36,6 +45,13 @@ async function getJson<T>(url: string): Promise<T | null> {
   }
 }
 
+/** Run a Blue Agent tool; throw on failure so `memo` evicts it instead of caching it. */
+async function tool<T>(id: string, body: unknown): Promise<T> {
+  const r = await callTool<T>(id, body, { timeoutMs: TIMEOUT_MS });
+  if (!r.ok) throw new Error(`${id}: ${r.error}`);
+  return r.data;
+}
+
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 
 export const liveCubeSources: CubeSources = {
@@ -53,24 +69,9 @@ export const liveCubeSources: CubeSources = {
     return out;
   }),
 
-  async baseTvl() {
-    const t = await getBaseTvl();
-    return t ? { tvlUsd: t.tvlUsd, change7dPct: t.change7dPct } : null;
-  },
-
-  async baseDexVol() {
-    const d = await getJson<{ total24h?: number; change_1d?: number }>(
-      "https://api.llama.fi/overview/dexs/base?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true",
-    );
-    return d ? { total24h: num(d.total24h), change1dPct: num(d.change_1d) } : null;
-  },
-
-  // Same freshness + chain-marker rules as /api/hood/snapshot: a stale price
-  // that looks live is worse than none, and an unattributed row is dropped.
   // 24h at CoinGecko's 5-minute granularity (~289 points). Only fetched for
   // feeds of ≤ 2 rows, and only for catalog ids, so the fan-out is bounded by
-  // the catalog (22), not by how many cubes exist; the 60s memo + data cache
-  // collapse repeat requests for the same coin.
+  // the catalog (22), not by how many cubes exist.
   coinHistory: (id) => memo(`hist:${id}`, async () => {
     const d = await getJson<{ prices?: [number, number][] }>(
       `https://api.coingecko.com/api/v3/coins/${encodeURIComponent(id)}/market_chart?vs_currency=usd&days=1`,
@@ -79,11 +80,30 @@ export const liveCubeSources: CubeSources = {
     return d.prices.map((p) => p[1]);
   }),
 
-  hoodBaseRows: () => memo("hood:base-rows", async () => {
-    const latest = await kvGet<BaseDeskLatest>(KV_BASE_ROWS_LATEST);
-    if (!latest?.rows?.length) return null;
-    const ageMs = Date.now() - new Date(latest.started_at).getTime();
-    if (!Number.isFinite(ageMs) || ageMs > BASE_ROWS_MAX_AGE_MS) return null;
-    return partitionBaseRows(latest.rows).attributed;
+  basePulse: () => memo("tool:base-pulse", async (): Promise<BasePulse> => {
+    const d = await tool<Record<string, unknown>>("base-pulse", {});
+    return {
+      tvlUsd: num(d.tvl_usd),
+      tvlChange7dPct: num(d.tvl_change_7d),
+      dexVolume24hUsd: num(d.dex_volume_24h),
+      dexVolumeChange1dPct: num(d.dex_volume_change_24h),
+    };
+  }),
+
+  baseTokenPrice: (address) => memo(`tool:token-price:${address.toLowerCase()}`, async (): Promise<CoinQuote> => {
+    const d = await tool<{ price_usd?: unknown; address?: unknown; change?: { h24?: unknown } }>("token-price", { token: address });
+    // token-price answers with the address its price belongs to; anything else
+    // would be another token's price under this one's label.
+    if (typeof d.address !== "string" || d.address.toLowerCase() !== address.toLowerCase()) {
+      throw new Error(`token-price: answered for ${String(d.address)}, asked ${address}`);
+    }
+    return { usd: num(d.price_usd), change24h: num(d.change?.h24) };
+  }),
+
+  // hood-live applies the same freshness gate + chain-marker check the board
+  // does, so a stale or unattributed row never reaches the cube.
+  hoodBaseRows: () => memo("tool:hood-live:base", async () => {
+    const d = await tool<{ rows?: HoodRow[] }>("hood-live", { chain: "base" });
+    return d.rows?.length ? d.rows : null;
   }),
 };
