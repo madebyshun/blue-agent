@@ -11,6 +11,7 @@
 // MORALIS_API_KEY; degrades to an empty list + needsKey flag when absent.
 
 import { NextResponse } from "next/server";
+import { getCoinGeckoPrices } from "@/lib/market-data";
 
 const MORALIS = "https://deep-index.moralis.io/api/v2.2";
 // Moralis chain slug per BlueBank network. Base Sepolia = 0x14a34 (84532).
@@ -131,17 +132,7 @@ function normalize(t: MoralisTx, chain: TxChain): Tx {
 // Live ETH spot price (CoinGecko, no key) — only fetched when there's at least
 // one transfer to value. null on any failure → gas-saved shows "—".
 async function ethPriceUsd(): Promise<number | null> {
-  try {
-    const r = await fetch(
-      "https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd",
-      { signal: AbortSignal.timeout(5000) },
-    );
-    if (!r.ok) return null;
-    const j = (await r.json()) as { ethereum?: { usd?: number } };
-    return j.ethereum?.usd ?? null;
-  } catch {
-    return null;
-  }
+  return (await getCoinGeckoPrices(["ethereum"], { timeoutMs: 5000 }))?.ethereum?.usd ?? null;
 }
 
 const emptyStats = () => ({
