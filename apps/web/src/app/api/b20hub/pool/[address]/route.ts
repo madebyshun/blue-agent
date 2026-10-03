@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createPublicClient, http, keccak256, encodeAbiParameters } from "viem";
 import { base } from "viem/chains";
 import { B20HUB_HOOK, WETH9_BASE, V4_FEE_TIERS } from "@/lib/b20hub/constants";
+import { getCoinGeckoPrices } from "@/lib/market-data";
 
 export const runtime = "nodejs";
 export const revalidate = 30;
@@ -74,23 +75,13 @@ let _ethCache: { at: number; usd: number | null } | null = null;
 async function fetchEthPriceUsd(): Promise<number | null> {
   const now = Date.now();
   if (_ethCache && now - _ethCache.at < 5 * 60_000) return _ethCache.usd;
-  try {
-    const r = await fetch(
-      "https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd",
-      { signal: AbortSignal.timeout(4000), headers: { Accept: "application/json" } },
-    );
-    if (!r.ok) throw new Error(`CG ${r.status}`);
-    const j = (await r.json()) as { ethereum?: { usd?: number } };
-    const usd = j?.ethereum?.usd;
-    if (typeof usd !== "number" || !Number.isFinite(usd) || usd <= 0) {
-      throw new Error("bad CG payload");
-    }
-    _ethCache = { at: now, usd };
-    return usd;
-  } catch {
+  const usd = (await getCoinGeckoPrices(["ethereum"], { timeoutMs: 4000 }))?.ethereum?.usd ?? null;
+  if (usd == null || usd <= 0) {
     _ethCache = { at: now, usd: 3000 };
     return 3000;
   }
+  _ethCache = { at: now, usd };
+  return usd;
 }
 
 function buildKey(token: `0x${string}`, fee: number, spacing: number) {
