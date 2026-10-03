@@ -7,6 +7,7 @@
 //   - cbBTC price + 24h — Coinbase's wrapped BTC on Base (DexScreener)
 
 import { NextResponse } from "next/server";
+import { getBaseDexVolume, getChainTvlHistory } from "@/lib/market-data";
 
 export const revalidate = 600;
 
@@ -31,8 +32,9 @@ async function token(addr: string) {
 
 export async function GET() {
   const [tvlData, dexData, blue, cbbtc] = await Promise.all([
-    getJson<{ date: number; tvl: number }[]>("https://api.llama.fi/v2/historicalChainTvl/Base"),
-    getJson<{ total24h?: number; total7d?: number }>("https://api.llama.fi/overview/dexs/base?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true"),
+    // Same cache as the DexScreener reads below and, like them, no client timeout.
+    getChainTvlHistory("Base", { revalidate: 600, timeoutMs: null }),
+    getBaseDexVolume({ revalidate: 600, timeoutMs: null }),
     token(BLUE),
     token(CBBTC),
   ]);
@@ -44,8 +46,8 @@ export async function GET() {
 
   return NextResponse.json({
     tvlUsd, change7dPct, tvlSeries,
-    dexVol24h: dexData?.total24h ?? null,
-    dexVol7d:  dexData?.total7d ?? null,
+    dexVol24h: dexData?.volume24hUsd ?? null,
+    dexVol7d:  dexData?.volume7dUsd ?? null,
     blue, cbbtc,
     ts: Date.now(),
   });

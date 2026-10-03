@@ -3,6 +3,7 @@
 //   - DexScreener   (api.dexscreener.com)     — token price / volume / liquidity / change
 //   - GeckoTerminal (api.geckoterminal.com)   — trending + new pools on Base
 //   - DefiLlama     (api.llama.fi / yields)   — chain TVL + real yield pools
+//   - CoinGecko     (api.coingecko.com)       — spot price by coin id
 // All fetchers fail soft (null / []) so a handler can degrade instead of 500ing.
 
 import { pickBaseSidePair } from "./dex-side";
@@ -14,9 +15,10 @@ function num(v: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-async function getJson<T>(url: string, init?: RequestInit): Promise<T | null> {
+// `timeoutMs: null` = no client-side timeout, for callers that never had one.
+async function getJson<T>(url: string, init?: RequestInit, timeoutMs: number | null = T): Promise<T | null> {
   try {
-    const r = await fetch(url, { ...init, signal: AbortSignal.timeout(T) });
+    const r = await fetch(url, timeoutMs == null ? init : { ...init, signal: AbortSignal.timeout(timeoutMs) });
     if (!r.ok) return null;
     return (await r.json()) as T;
   } catch {
@@ -365,10 +367,36 @@ export type BaseTvl = {
 // path convention) — "Base" and "Robinhood" both confirmed live via curl
 // (Robinhood's history is short, ~7 daily points, since it's a newer chain,
 // but it's real DefiLlama-tracked TVL, not fabricated).
-async function getChainTvl(chainSlug: "Base" | "Robinhood"): Promise<BaseTvl | null> {
-  const hist = await getJson<{ date: number; tvl: number }[]>(
-    `https://api.llama.fi/v2/historicalChainTvl/${chainSlug}`
+// Fetch options shared by the fetchers below whose callers each kept their own
+// cache/timeout semantics. `revalidate` → Next's `next: { revalidate }` (left
+// unset when absent, so the route segment's default still applies);
+// `timeoutMs: null` → no client-side timeout.
+export type FetchOpts = { revalidate?: number; timeoutMs?: number | null };
+
+function initOf(opts: FetchOpts | undefined, headers?: HeadersInit): RequestInit | undefined {
+  const init: RequestInit = {};
+  if (headers) init.headers = headers;
+  if (opts?.revalidate != null) init.next = { revalidate: opts.revalidate };
+  return Object.keys(init).length ? init : undefined;
+}
+
+export type TvlPoint = { date: number; tvl: number };
+
+/** Raw daily TVL series, oldest first, exactly as DefiLlama returns it. null on any failure. */
+export async function getChainTvlHistory(
+  chainSlug: "Base" | "Robinhood",
+  opts?: FetchOpts,
+): Promise<TvlPoint[] | null> {
+  const hist = await getJson<TvlPoint[]>(
+    `https://api.llama.fi/v2/historicalChainTvl/${chainSlug}`,
+    initOf(opts),
+    opts?.timeoutMs === undefined ? T : opts.timeoutMs,
   );
+  return Array.isArray(hist) ? hist : null;
+}
+
+async function getChainTvl(chainSlug: "Base" | "Robinhood"): Promise<BaseTvl | null> {
+  const hist = await getChainTvlHistory(chainSlug);
   if (!hist?.length) return null;
   const last = hist[hist.length - 1]?.tvl ?? null;
   const d1 = hist[hist.length - 2]?.tvl ?? null;
@@ -385,18 +413,27 @@ export const getBaseTvl = () => getChainTvl("Base");
 export type BaseDexVolume = {
   /** Every DEX DefiLlama tracks on Base, last 24h, USD. */
   volume24hUsd: number | null;
+  /** Same total over the last 7 days, USD. */
+  volume7dUsd: number | null;
   /** Day-over-day change of that total, percent. */
   change1dPct: number | null;
   source: "defillama";
 };
 
 /** Chain-wide Base DEX volume — not a sum over some subset of pools. */
-export async function getBaseDexVolume(): Promise<BaseDexVolume | null> {
-  const d = await getJson<{ total24h?: number; change_1d?: number }>(
-    "https://api.llama.fi/overview/dexs/base?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true"
+export async function getBaseDexVolume(opts?: FetchOpts): Promise<BaseDexVolume | null> {
+  const d = await getJson<{ total24h?: number; total7d?: number; change_1d?: number }>(
+    "https://api.llama.fi/overview/dexs/base?excludeTotalDataChart=true&excludeTotalDataChartBreakdown=true",
+    initOf(opts),
+    opts?.timeoutMs === undefined ? T : opts.timeoutMs,
   );
   if (!d) return null;
-  return { volume24hUsd: num(d.total24h), change1dPct: num(d.change_1d), source: "defillama" };
+  return {
+    volume24hUsd: num(d.total24h),
+    volume7dUsd: num(d.total7d),
+    change1dPct: num(d.change_1d),
+    source: "defillama",
+  };
 }
 export const getRobinhoodTvl = () => getChainTvl("Robinhood");
 
