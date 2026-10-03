@@ -16,6 +16,8 @@
 //   hood      the owner's tokenized stocks on Base          (tool: hood-live)
 //   trending  Base trending tokens, each with its tax read  (tool: safe-trending)
 //   status    are the data sources the tools read up?       (tool: blue-doctor)
+//   buddy     the mascot, acting out a mood mapped IN CODE from blue-doctor +
+//             BTC 24h — never chosen by a model, never inferred from absence
 // A `base` mode (TVL, DEX volume, ETH, cbBTC) was retired 2026-10-03: every
 // number on it is free on DefiLlama/DexScreener, so it showed nothing Blue
 // Agent knows that a DEX site does not.
@@ -31,7 +33,7 @@
 import type { TickerSnapshot } from "@/lib/blue-hood/types";
 import { BASE_STOCKS } from "@/lib/base-stocks/registry";
 
-export const CUBE_MODES = ["crypto", "hood", "trending", "status"] as const;
+export const CUBE_MODES = ["crypto", "hood", "trending", "status", "buddy"] as const;
 export type CubeMode = (typeof CUBE_MODES)[number];
 
 export function isCubeMode(v: string): v is CubeMode {
@@ -100,7 +102,7 @@ export function toSpark(prices: number[], points = SPARK_POINTS): number[] | nul
 export interface CubeFeed {
   mode: CubeMode;
   /** Which layout the cube draws: priced rows, or the status board. */
-  kind: "list" | "status";
+  kind: "list" | "status" | "buddy";
   /** ≤ 21 chars, shown in the footer. */
   title: string;
   /** What `change` means for every row in this feed — "24h", "7d", "vs oracle". */
@@ -113,6 +115,8 @@ export interface CubeFeed {
    * per feed rather than a claim about all of them.
    */
   via: string[];
+  /** buddy feeds only: what the mascot acts out. See `buddyMood`. */
+  mood?: BuddyMood;
   /** Unix ms the feed was assembled. */
   ts: number;
 }
@@ -403,6 +407,64 @@ export function cubeOptions() {
   };
 }
 
+export type BuddyMood = "alarm" | "worried" | "dance" | "sad" | "happy" | "idle";
+
+/** BTC 24h move, in percent, at which the mascot dances / sulks. */
+export const BUDDY_MOVE_PCT = 3;
+
+/**
+ * The mascot's mood, hard-mapped from measured data — the same discipline as a
+ * verdict (CLAUDE.md: never let a model pick the word, never infer from
+ * absence). Health outranks the market: an outage is news, a BTC move is not.
+ *
+ *   any probed source down       → alarm    "<NAME> is down"
+ *   any probed source degraded   → worried  "<NAME> is slow"
+ *   BTC 24h ≥ +3%                → dance
+ *   BTC 24h ≤ −3%                → sad
+ *   all up, BTC in between       → happy
+ *   health unreadable            → idle     (no mood claimed from no data)
+ *
+ * When BTC is unknown but health is fine, the mood is `happy` on health alone
+ * — the caption says so rather than borrowing a price.
+ */
+export function buddyMood(
+  probes: DoctorProbe[] | null,
+  btc24h: number | null,
+): { mood: BuddyMood; caption: string } {
+  if (!probes?.length) return { mood: "idle", caption: "can't check sources" };
+  const probed = probes.filter((p) => p.status !== "unknown");
+  const label = (p: DoctorProbe) => DOCTOR_LABELS[p.name] ?? p.name.slice(0, 5).toUpperCase();
+  const down = probed.find((p) => p.status === "down");
+  if (down) return { mood: "alarm", caption: `${label(down)} is down` };
+  const slow = probed.find((p) => p.status === "degraded");
+  if (slow) return { mood: "worried", caption: `${label(slow)} is slow` };
+  if (btc24h != null && Number.isFinite(btc24h)) {
+    const move = `BTC ${fmtChange(btc24h)} 24h`;
+    if (btc24h >= BUDDY_MOVE_PCT) return { mood: "dance", caption: move };
+    if (btc24h <= -BUDDY_MOVE_PCT) return { mood: "sad", caption: move };
+  }
+  return { mood: "happy", caption: `All ${probed.length} sources up` };
+}
+
+export async function buildBuddy(src: CubeSources, now = Date.now()): Promise<CubeFeed> {
+  const [probes, q] = await Promise.all([
+    src.doctor().catch(() => null),
+    // Whole catalog = the same shared CoinGecko entry the crypto mode uses.
+    src.coins(ALL_COIN_IDS).catch(() => ({}) as Record<string, CoinQuote>),
+  ]);
+  const { mood, caption } = buddyMood(probes, q["bitcoin"]?.change24h ?? null);
+  return {
+    mode: "buddy",
+    kind: "buddy",
+    title: caption.slice(0, 21),
+    changeKind: "mood",
+    rows: [],
+    mood,
+    via: ["blue-doctor", "coingecko"],
+    ts: now,
+  };
+}
+
 export function buildFeed(mode: CubeMode, src: CubeSources, pickRaw: string | null = null, now = Date.now()): Promise<CubeFeed> {
   switch (mode) {
     case "crypto":
@@ -413,5 +475,7 @@ export function buildFeed(mode: CubeMode, src: CubeSources, pickRaw: string | nu
       return buildTrending(src, now);
     case "status":
       return buildStatus(src, now);
+    case "buddy":
+      return buildBuddy(src, now);
   }
 }

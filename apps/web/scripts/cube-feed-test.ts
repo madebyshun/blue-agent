@@ -11,7 +11,7 @@
  */
 import {
   buildFeed, fmtPrice, fmtCompact, fmtChange, CUBE_MODES, CUBE_MAX_ROWS,
-  CRYPTO_CATALOG, HOOD_CATALOG, cubeOptions, toSpark, SPARK_POINTS, trendingMark, STATUS_MAX_ROWS, type TrendingRow,
+  CRYPTO_CATALOG, HOOD_CATALOG, cubeOptions, toSpark, SPARK_POINTS, trendingMark, STATUS_MAX_ROWS, type TrendingRow, buddyMood, BUDDY_MOVE_PCT,
   type CubeSources, type CubeFeed,
 } from "../src/lib/cube/modes";
 import type { TickerSnapshot } from "../src/lib/blue-hood/types";
@@ -185,6 +185,22 @@ async function main() {
   ok("status: row cap", STATUS_MAX_ROWS >= st.rows.length);
   const stDead = await buildFeed("status", dead, null, 1);
   ok("status: tool down → says NO DATA, not all-red", stDead.rows.length === 0 && /NO DATA/.test(stDead.title));
+
+  console.log("§11 buddy");
+  const P = (st: "ok" | "degraded" | "down" | "unknown", name = "dexscreener") => ({ name, status: st, latency_ms: st === "down" ? null : 100 });
+  const allOk = [P("ok", "base_rpc"), P("ok", "dexscreener"), P("unknown", "moralis")];
+  ok("buddy: a down source → alarm, names it", JSON.stringify(buddyMood([P("ok", "base_rpc"), P("down")], 9)) === '{"mood":"alarm","caption":"DEXS is down"}');
+  ok("buddy: health outranks the market (down + BTC +9% → alarm, not dance)", buddyMood([P("down")], 9).mood === "alarm");
+  ok("buddy: degraded → worried", buddyMood([P("degraded", "robinhood_rpc")], 0).caption === "RH is slow");
+  ok("buddy: BTC ≥ +3% → dance", buddyMood(allOk, BUDDY_MOVE_PCT).mood === "dance");
+  ok("buddy: BTC ≤ -3% → sad", buddyMood(allOk, -BUDDY_MOVE_PCT).mood === "sad");
+  ok("buddy: calm market → happy, counts only probed sources", JSON.stringify(buddyMood(allOk, 1.2)) === '{"mood":"happy","caption":"All 2 sources up"}');
+  ok("buddy: BTC unknown → happy on health alone, no borrowed price", buddyMood(allOk, null).mood === "happy" && !/BTC/.test(buddyMood(allOk, null).caption));
+  ok("buddy: an UNPROBED source is never read as down", buddyMood([P("unknown"), P("ok", "base_rpc")], 0).mood === "happy");
+  ok("buddy: health unreadable → idle, no mood from no data", buddyMood(null, 9).mood === "idle" && buddyMood([], -9).mood === "idle");
+  const bf = await buildFeed("buddy", healthy, null, 1);
+  ok("buddy feed: kind + mood + via + fits", bf.kind === "buddy" && bf.mood === "alarm" && JSON.stringify(bf.via) === '["blue-doctor","coingecko"]' && bf.title.length <= 21, `${bf.mood} ${bf.title}`);
+  ok("buddy feed: tool down → idle", (await buildFeed("buddy", dead, null, 1)).mood === "idle");
 
   console.log("§5 token");
   for (const mode of CUBE_MODES) {
