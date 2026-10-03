@@ -97,7 +97,7 @@ export default function CreatorClient({ address }: { address: `0x${string}` }) {
                   <div className="text-slate-200 font-bold">
                     {t.market?.volume24h != null
                       ? "$" + (t.market.volume24h >= 1000 ? (t.market.volume24h / 1000).toFixed(1) + "K" : t.market.volume24h.toFixed(2))
-                      : "$0"}
+                      : "—"}
                   </div>
                 </div>
               </div>

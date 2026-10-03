@@ -1,22 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getLaunches } from "@/lib/launches";
-import { getCoinGeckoPrices, getTokenMarket } from "@/lib/market-data";
+import { getTokenMarket } from "@/lib/market-data";
+import { fetchEthPriceUsd } from "@/lib/b20hub/eth-price";
 import { B20HUB_HOOK, B20HUB_LAUNCHER } from "@/lib/b20hub/constants";
-
-// In-module cache mirroring the one in /api/b20hub/pool/[address]. Fine for
-// dev + Vercel warm lambdas — a cold lambda just refetches.
-let _ethCache: { at: number; usd: number | null } | null = null;
-async function fetchEthPriceUsd(): Promise<number | null> {
-  const now = Date.now();
-  if (_ethCache && now - _ethCache.at < 5 * 60_000) return _ethCache.usd;
-  const usd = (await getCoinGeckoPrices(["ethereum"], { timeoutMs: 4000 }))?.ethereum?.usd ?? null;
-  if (usd == null || usd <= 0) {
-    _ethCache = { at: now, usd: 3000 };
-    return 3000;
-  }
-  _ethCache = { at: now, usd };
-  return usd;
-}
 
 export const runtime = "nodejs";
 export const maxDuration = 15;
@@ -42,7 +28,10 @@ export interface B20HUBFeedResponse {
   count: number;
   stats: {
     tracked: number;
-    totalMarketCap: number;
+    // `null` = "cannot be summed honestly", not $0: either no token has a
+    // market cap, or the ETH price was unreadable and undexed tokens dropped
+    // out of the sum (a total that silently skips them is an undercount).
+    totalMarketCap: number | null;
     totalVolume24h: number;
   };
   hook: string;
@@ -105,6 +94,7 @@ export async function GET(req: NextRequest) {
 
   // Enrich the newest 40 with DexScreener market data. Fail-soft.
   const ENRICH = 40;
+  let mcapUnknown = false;
   const enriched = await Promise.all(
     b20hub.map(async (l, i) => {
       if (i >= ENRICH) return { ...l, market: null };
@@ -123,7 +113,9 @@ export async function GET(req: NextRequest) {
       }
       // No DexScreener data → fall back to the opening constant so the card
       // shows something meaningful. Volume/change stay null until a trade
-      // gets indexed.
+      // gets indexed. With no ETH price there is no honest USD figure, so
+      // `market` stays null and the card renders "—".
+      if (openingMcapUsd == null) mcapUnknown = true;
       return {
         ...l,
         market: openingMcapUsd != null ? {
@@ -138,7 +130,10 @@ export async function GET(req: NextRequest) {
   );
 
   const withMarket = enriched.filter((l) => l.market);
-  const totalMcap = withMarket.reduce((s, l) => s + (l.market?.marketCap ?? 0), 0);
+  const withMcap  = withMarket.filter((l) => l.market?.marketCap != null);
+  const totalMcap = mcapUnknown || withMcap.length === 0
+    ? null
+    : withMcap.reduce((s, l) => s + (l.market?.marketCap ?? 0), 0);
   const totalVol  = withMarket.reduce((s, l) => s + (l.market?.volume24h ?? 0), 0);
 
   return NextResponse.json<B20HUBFeedResponse>({

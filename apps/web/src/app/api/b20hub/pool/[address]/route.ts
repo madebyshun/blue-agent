@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createPublicClient, http, keccak256, encodeAbiParameters } from "viem";
 import { base } from "viem/chains";
 import { B20HUB_HOOK, WETH9_BASE, V4_FEE_TIERS } from "@/lib/b20hub/constants";
-import { getCoinGeckoPrices } from "@/lib/market-data";
+import { fetchEthPriceUsd } from "@/lib/b20hub/eth-price";
 
 export const runtime = "nodejs";
 export const revalidate = 30;
@@ -60,29 +60,6 @@ const TIERS: Array<{ fee: number; spacing: number; label: string }> = [
 ];
 
 const publicClient = createPublicClient({ chain: base, transport: http("https://mainnet.base.org") });
-
-/**
- * Fetch ETH/USD spot from CoinGecko. Falls back to a hardcoded $3000 if the
- * upstream is down — we never want the whole detail page to fail on a
- * transient CG hiccup, and a stale $3000 default at least keeps the mcap
- * within an order of magnitude of reality.
- *
- * Cached in-module for 5 min (per lambda instance) via a tiny memo so a
- * burst of concurrent detail-page hits doesn't hammer CoinGecko. Vercel
- * lambdas warm-cache this too.
- */
-let _ethCache: { at: number; usd: number | null } | null = null;
-async function fetchEthPriceUsd(): Promise<number | null> {
-  const now = Date.now();
-  if (_ethCache && now - _ethCache.at < 5 * 60_000) return _ethCache.usd;
-  const usd = (await getCoinGeckoPrices(["ethereum"], { timeoutMs: 4000 }))?.ethereum?.usd ?? null;
-  if (usd == null || usd <= 0) {
-    _ethCache = { at: now, usd: 3000 };
-    return 3000;
-  }
-  _ethCache = { at: now, usd };
-  return usd;
-}
 
 function buildKey(token: `0x${string}`, fee: number, spacing: number) {
   const wethIsSmaller = WETH9_BASE.toLowerCase() < token.toLowerCase();
