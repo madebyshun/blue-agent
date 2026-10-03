@@ -11,7 +11,7 @@
  */
 import {
   buildFeed, fmtPrice, fmtCompact, fmtChange, CUBE_MODES, CUBE_MAX_ROWS,
-  CRYPTO_CATALOG, HOOD_CATALOG, cubeOptions, toSpark, SPARK_POINTS, CBBTC_BASE,
+  CRYPTO_CATALOG, HOOD_CATALOG, cubeOptions, toSpark, SPARK_POINTS, trendingMark, STATUS_MAX_ROWS, type TrendingRow,
   type CubeSources, type CubeFeed,
 } from "../src/lib/cube/modes";
 import type { TickerSnapshot } from "../src/lib/blue-hood/types";
@@ -31,10 +31,27 @@ const stockRow = (ticker: string, chain: "base" | "robinhood", vol: number, extr
   ({ ticker, chain, name: ticker, contract: "0x0", verdict: "OK", oracle_usd: 100, dex_usd: 101,
      tvl_usd: 1, total_tvl_usd: 1, volume_24h_usd: vol, drift_pct: 1, ...extra }) as unknown as TickerSnapshot;
 
+const trow = (symbol: string, extra: Partial<TrendingRow> = {}): TrendingRow => ({
+  status: "ok", symbol, price_usd: 1.23, change_24h: 4.5,
+  honeypot: { verdict: "SAFE", tax_read: "template" }, flags: [], ...extra,
+});
+const probe = (name: string, status: "ok" | "degraded" | "down" | "unknown", latency_ms: number | null) => ({ name, status, latency_ms });
+
 const healthy: CubeSources = {
   coins: async (ids) => Object.fromEntries(ids.map((id, i) => [id, { usd: 84864.2 / (i + 1), change24h: -2.07 }])),
-  basePulse: async () => ({ tvlUsd: 4.12e9, tvlChange7dPct: 3.4, dexVolume24hUsd: 1.368e9, dexVolumeChange1dPct: 10.31 }),
-  baseTokenPrice: async (a) => ({ usd: a.toLowerCase() === CBBTC_BASE.toLowerCase() ? 84850 : 2679.5, change24h: -0.6 }),
+  trending: async () => [
+    trow("BRETT", { price_usd: 0.0000097 }),
+    trow("AERO"),
+    trow("TAXED", { flags: ["HIGH_TAX"] }),
+    trow("TRAP", { honeypot: { verdict: "HONEYPOT", tax_read: "template" } }),
+    trow("NOREAD", { honeypot: { verdict: "UNKNOWN", tax_read: "failed" }, flags: ["TAX_UNVERIFIED"] }),
+    trow("SIXTH"),
+  ],
+  doctor: async () => [
+    probe("base_rpc", "ok", 120), probe("robinhood_rpc", "down", null), probe("dexscreener", "degraded", 2900),
+    probe("geckoterminal", "ok", 300), probe("defillama", "ok", 410), probe("github", "ok", 90),
+    probe("vercel_kv", "unknown", null), probe("moralis", "unknown", null),
+  ],
   hoodBaseRows: async () => [
     stockRow("NVDA", "base", 900), stockRow("META", "base", 500), stockRow("GOOGL", "base", 700),
     stockRow("AAPL", "base", 100), stockRow("SPCX", "base", 50), stockRow("TSLA", "base", 10),
@@ -44,8 +61,8 @@ const healthy: CubeSources = {
 };
 const dead: CubeSources = {
   coins: async () => { throw new Error("429"); },
-  basePulse: async () => { throw new Error("timeout"); },
-  baseTokenPrice: async () => null,
+  trending: async () => { throw new Error("rpc"); },
+  doctor: async () => null,
   hoodBaseRows: async () => null,
   coinHistory: async () => { throw new Error("429"); },
 };
@@ -61,12 +78,18 @@ async function main() {
   }
   ok("fmtCompact(4.12e9) = $4.1B", fmtCompact(4.12e9) === "$4.1B", fmtCompact(4.12e9));
   ok("fmtPrice(84864.2) = $84864", fmtPrice(84864.2) === "$84864");
+  for (const [v, want] of [[0.0000097, "$9.7e-6"], [0.000012, "$0.000012"], [0.0012, "$0.0012"], [0.005, "$0.0050"], [0.79, "$0.7900"]] as const) {
+    ok(`fmtPrice(${v}) = ${want} (sub-cent never "$0.0000")`, fmtPrice(v) === want, fmtPrice(v));
+  }
+  for (const v of [0.00000001, 0.0000099, 0.00001, 0.0000999, 0.009999]) {
+    ok(`fmtPrice(${v}) ≤ 9 and not zero`, fmtPrice(v).length <= 9 && !/^\$0\.0+$/.test(fmtPrice(v)), fmtPrice(v));
+  }
   ok("fmtChange(-2.07) = -2.1%", fmtChange(-2.07) === "-2.1%");
 
   console.log("§2/§3 missing data");
   ok("null price → --", fmtPrice(null) === "--" && fmtCompact(NaN) === "--");
   ok("null change → empty", fmtChange(null) === "");
-  for (const mode of ["crypto", "base"] as const) {
+  for (const mode of ["crypto"] as const) {
     const good = await buildFeed(mode, healthy, null, 1);
     const bad = await buildFeed(mode, dead, null, 1);
     ok(`${mode}: dead source keeps every label`,
@@ -129,11 +152,39 @@ async function main() {
   ok("toSpark: short series not padded", toSpark([1, 2, 3])?.length === 3);
 
   console.log("§8 provenance");
-  ok("base: via base-pulse + token-price", JSON.stringify((await buildFeed("base", healthy, null, 1)).via) === '["base-pulse","token-price"]');
+  ok("trending: via safe-trending", JSON.stringify((await buildFeed("trending", healthy, null, 1)).via) === '["safe-trending"]');
+  ok("status: via blue-doctor", JSON.stringify((await buildFeed("status", healthy, null, 1)).via) === '["blue-doctor"]');
   ok("hood: via hood-live", JSON.stringify((await buildFeed("hood", healthy, null, 1)).via) === '["hood-live"]');
   ok("crypto: names coingecko, does not claim a tool", JSON.stringify((await buildFeed("crypto", healthy, null, 1)).via) === '["coingecko"]');
-  const base = await buildFeed("base", healthy, null, 1);
-  ok("base: ETH + cbBTC priced by address on Base", base.rows[2].value === 2679.5 && base.rows[3].value === 84850);
+  ok("base mode retired", !(CUBE_MODES as readonly string[]).includes("base"));
+
+  console.log("§9 trending");
+  const tr = await buildFeed("trending", healthy, null, 1);
+  ok("trending: ≤ 5 rows, tool order kept (no re-rank)", tr.rows.map((r) => r.label).join() === "BRETT,AERO,TAXED,TRAP,NOREA", tr.rows.map((r) => r.label).join());
+  ok("trending: clean only when tax read + SAFE + no flags", tr.rows[0].mark === "clean" && tr.rows[1].mark === "clean");
+  ok("trending: a flag → flagged", tr.rows[2].mark === "flagged");
+  ok("trending: HONEYPOT verdict → flagged, never clean", tr.rows[3].mark === "flagged");
+  ok("trending: unread tax → unverified, never clean", tr.rows[4].mark === "unverified");
+  ok("trending: errored scan → unverified", trendingMark({ ...tr.rows[0], status: "error", symbol: "X", price_usd: 1, change_24h: 1, honeypot: { verdict: "SAFE", tax_read: "template" }, flags: [] } as TrendingRow) === "unverified");
+  ok("trending: unread tax + a REAL flag → flagged (finding beats absence)", trendingMark({ status: "ok", symbol: "X", price_usd: 1, change_24h: 1, honeypot: { verdict: "UNKNOWN", tax_read: "failed" }, flags: ["TAX_UNVERIFIED", "CHURN"] }) === "flagged");
+  ok("trending: \"failed\" is a string — never read as a successful tax read", trendingMark({ status: "ok", symbol: "X", price_usd: 1, change_24h: 1, honeypot: { verdict: "SAFE", tax_read: "failed" }, flags: [] }) === "unverified");
+  ok("trending: sub-cent price is not $0.0000", tr.rows[0].text !== "$0.0000" && tr.rows[0].text.length <= 9, tr.rows[0].text);
+  ok("trending: never says SAFE on screen", !JSON.stringify({ t: tr.title, r: tr.rows.map((r) => [r.label, r.text, r.changeText]) }).includes("SAFE"));
+  ok("trending: fits 128px", fits(tr));
+  const trDead = await buildFeed("trending", dead, null, 1);
+  ok("trending: tool down → 0 rows + says so", trDead.rows.length === 0 && /NO DATA/.test(trDead.title));
+
+  console.log("§10 status");
+  const st = await buildFeed("status", healthy, null, 1);
+  ok("status: kind=status", st.kind === "status");
+  ok("status: only probed upstreams drawn (unknown ≠ down)", st.rows.length === 6 && st.rows.every((r) => r.state !== "unknown"));
+  ok("status: title counts ok of probed", st.title === "SOURCES 4/6 OK", st.title);
+  ok("status: labels fit 5 chars", st.rows.every((r) => r.label.length <= 5));
+  ok("status: down row has no latency", st.rows[1].state === "down" && st.rows[1].changeText === "");
+  ok("status: degraded shows as slow", st.rows[2].text === "slow");
+  ok("status: row cap", STATUS_MAX_ROWS >= st.rows.length);
+  const stDead = await buildFeed("status", dead, null, 1);
+  ok("status: tool down → says NO DATA, not all-red", stDead.rows.length === 0 && /NO DATA/.test(stDead.title));
 
   console.log("§5 token");
   for (const mode of CUBE_MODES) {

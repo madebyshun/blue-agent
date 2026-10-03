@@ -2,7 +2,7 @@
 // which `modes.ts` renders as "--" — never as a number.
 //
 // The cube runs on Blue Agent's own tools wherever one covers the data:
-// `base-pulse`, `token-price` and `hood-live` are called in-process through
+// `hood-live`, `safe-trending` and `blue-doctor` are called in-process through
 // `callTool` — the same handlers `/api/x402/<id>` sells, the same path the
 // Blue Hood poller uses, no HTTP hop and no payment. So the cube shows what
 // the agent would answer a paying caller, not a parallel re-implementation
@@ -12,12 +12,12 @@
 // read); each feed names its sources in `via`.
 //
 // Serving paid tools' output for free here gives nothing away: these exact
-// numbers are already public on the cube route, the reads are bounded to ~1
-// per minute by `memo`, and none of the three tools calls an LLM.
+// numbers are already public on the cube route, the reads are bounded by
+// `memo` (60s; 5 min for safe-trending), and none of the three calls an LLM.
 
 import { callTool } from "@/lib/blue-hood/tool-caller";
 import { getCoinGeckoPrices } from "@/lib/market-data";
-import type { BasePulse, CoinQuote, CubeSources, HoodRow } from "./modes";
+import type { CoinQuote, CubeSources, DoctorProbe, HoodRow, TrendingRow } from "./modes";
 
 const TIMEOUT_MS = 8000;
 const TTL_MS = 60_000;
@@ -28,9 +28,9 @@ const TTL_MS = 60_000;
 // cache, and `memo` keeps a warm instance from re-running a tool for every
 // pick combination. Net: ~one call per source per minute, not per cube.
 const memoStore = new Map<string, { at: number; v: Promise<unknown> }>();
-function memo<T>(key: string, fn: () => Promise<T>): Promise<T> {
+function memo<T>(key: string, fn: () => Promise<T>, ttlMs = TTL_MS): Promise<T> {
   const hit = memoStore.get(key);
-  if (hit && Date.now() - hit.at < TTL_MS) return hit.v as Promise<T>;
+  if (hit && Date.now() - hit.at < ttlMs) return hit.v as Promise<T>;
   const v = fn();
   memoStore.set(key, { at: Date.now(), v });
   v.catch(() => memoStore.delete(key));
@@ -54,7 +54,6 @@ async function tool<T>(id: string, body: unknown): Promise<T> {
   return r.data;
 }
 
-const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 
 export const liveCubeSources: CubeSources = {
   coins: (ids) => memo(`coins:${ids.join(",")}`, async () => {
@@ -84,24 +83,17 @@ export const liveCubeSources: CubeSources = {
     return d.prices.map((p) => p[1]);
   }),
 
-  basePulse: () => memo("tool:base-pulse", async (): Promise<BasePulse> => {
-    const d = await tool<Record<string, unknown>>("base-pulse", {});
-    return {
-      tvlUsd: num(d.tvl_usd),
-      tvlChange7dPct: num(d.tvl_change_7d),
-      dexVolume24hUsd: num(d.dex_volume_24h),
-      dexVolumeChange1dPct: num(d.dex_volume_change_24h),
-    };
-  }),
+  // safe-trending does three eth_calls per token, so it runs on a 5-minute
+  // memo rather than 60s, and asks for 5 tokens — what the screen shows —
+  // instead of the tool's default 10.
+  trending: () => memo("tool:safe-trending", async () => {
+    const d = await tool<{ tokens?: TrendingRow[] }>("safe-trending", { limit: 5 });
+    return d.tokens?.length ? d.tokens : null;
+  }, 5 * 60_000),
 
-  baseTokenPrice: (address) => memo(`tool:token-price:${address.toLowerCase()}`, async (): Promise<CoinQuote> => {
-    const d = await tool<{ price_usd?: unknown; address?: unknown; change?: { h24?: unknown } }>("token-price", { token: address });
-    // token-price answers with the address its price belongs to; anything else
-    // would be another token's price under this one's label.
-    if (typeof d.address !== "string" || d.address.toLowerCase() !== address.toLowerCase()) {
-      throw new Error(`token-price: answered for ${String(d.address)}, asked ${address}`);
-    }
-    return { usd: num(d.price_usd), change24h: num(d.change?.h24) };
+  doctor: () => memo("tool:blue-doctor", async () => {
+    const d = await tool<{ upstreams?: DoctorProbe[] }>("blue-doctor", {});
+    return d.upstreams?.length ? d.upstreams : null;
   }),
 
   // hood-live applies the same freshness gate + chain-marker check the board

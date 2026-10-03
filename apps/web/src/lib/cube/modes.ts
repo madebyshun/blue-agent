@@ -11,16 +11,27 @@
 // A row is never dropped to hide a failure — five labels with "--" says
 // "source down", while four rows would silently say "there are four coins".
 //
+// Modes:
+//   crypto    the owner's coins (CoinGecko — no Base tool prices majors)
+//   hood      the owner's tokenized stocks on Base          (tool: hood-live)
+//   trending  Base trending tokens, each with its tax read  (tool: safe-trending)
+//   status    are the data sources the tools read up?       (tool: blue-doctor)
+// A `base` mode (TVL, DEX volume, ETH, cbBTC) was retired 2026-10-03: every
+// number on it is free on DefiLlama/DexScreener, so it showed nothing Blue
+// Agent knows that a DEX site does not.
+//
 // Deliberately NOT shown:
 //   - $BLUEAGENT. The address in this repo is the pre-relaunch token
 //     (lib/soul.ts: "never present it as the live reward asset").
 //   - Hood arrows. Frozen 2026-09-30; the hood mode shows prices only.
+//   - The word "safe". safe-trending's own header calls its name the most
+//     dangerous thing about it: a clean row means "tax verified", never "buy".
+//     The cube shows a neutral mark, not a verdict.
 
 import type { TickerSnapshot } from "@/lib/blue-hood/types";
 import { BASE_STOCKS } from "@/lib/base-stocks/registry";
-import { WETH9_BASE } from "@/lib/b20hub/constants";
 
-export const CUBE_MODES = ["crypto", "base", "hood"] as const;
+export const CUBE_MODES = ["crypto", "hood", "trending", "status"] as const;
 export type CubeMode = (typeof CUBE_MODES)[number];
 
 export function isCubeMode(v: string): v is CubeMode {
@@ -49,6 +60,15 @@ export interface CubeRow {
    * means "no series", and the cube simply draws no chart.
    */
   spark?: number[];
+  /**
+   * trending rows only — what the tax read found, as a neutral mark:
+   *   clean       tax read from the contract, no flags
+   *   flagged     at least one flag (high tax, blacklist-capable, dumping, …)
+   *   unverified  the tax could not be read — unverified, NOT clean
+   */
+  mark?: "clean" | "flagged" | "unverified";
+  /** status rows only — the probe result, `unknown` = not measured, not down. */
+  state?: "ok" | "degraded" | "down" | "unknown";
 }
 
 /** Feeds with at most this many rows carry a sparkline per row. */
@@ -79,6 +99,8 @@ export function toSpark(prices: number[], points = SPARK_POINTS): number[] | nul
 
 export interface CubeFeed {
   mode: CubeMode;
+  /** Which layout the cube draws: priced rows, or the status board. */
+  kind: "list" | "status";
   /** ≤ 21 chars, shown in the footer. */
   title: string;
   /** What `change` means for every row in this feed — "24h", "7d", "vs oracle". */
@@ -103,7 +125,12 @@ export function fmtPrice(v: number | null): string {
   if (v >= 1_000_000) return fmtCompact(v);
   if (v >= 10_000) return `$${Math.round(v)}`;
   if (v >= 1) return `$${v.toFixed(2)}`;
-  return `$${v.toFixed(4)}`;
+  if (v >= 0.01) return `$${v.toFixed(4)}`;
+  // Sub-cent prices keep 2 significant digits. `toFixed(4)` printed PEPE
+  // ($0.0000097) as "$0.0000" — a price of zero on screen.
+  if (v >= 0.00001) return `$${Number(v.toPrecision(2)).toFixed(-Math.floor(Math.log10(v)) + 1)}`;
+  if (v > 0) return `$${v.toExponential(1)}`;
+  return "$0";
 }
 
 /** Large USD amounts as $12.3B / $845M / $9.1K. */
@@ -136,21 +163,34 @@ export interface CoinQuote { usd: number | null; change24h: number | null }
 /** The fields of a Blue Hood row the cube reads — what `hood-live` publishes. */
 export type HoodRow = Pick<TickerSnapshot, "ticker" | "chain" | "verdict" | "oracle_usd" | "dex_usd" | "drift_pct" | "volume_24h_usd">;
 
-export interface BasePulse {
-  tvlUsd: number | null;
-  tvlChange7dPct: number | null;
-  dexVolume24hUsd: number | null;
-  dexVolumeChange1dPct: number | null;
+/** The fields of a `safe-trending` row the cube reads. */
+export interface TrendingRow {
+  status: "ok" | "error";
+  symbol: string | null;
+  price_usd: number | null;
+  change_24h: number | null;
+  /** `tax_read` is "template" (both tax selectors answered) or "failed" (not
+   *  read — today that is every token outside the Virtuals AgentToken
+   *  templates, by design of lib/token-tax.ts). It is a string, not a boolean. */
+  honeypot: { verdict: string; tax_read: string };
+  flags: string[];
+}
+
+/** The fields of a `blue-doctor` probe the cube reads. */
+export interface DoctorProbe {
+  name: string;
+  status: "ok" | "degraded" | "down" | "unknown";
+  latency_ms: number | null;
 }
 
 export interface CubeSources {
   /** CoinGecko ids → quote. Missing id ⟹ unknown. No Blue Agent tool prices
    *  non-Base majors (token-price is Base-only), so this one is direct. */
   coins(ids: string[]): Promise<Record<string, CoinQuote>>;
-  /** Blue Agent tool `base-pulse`. */
-  basePulse(): Promise<BasePulse | null>;
-  /** Blue Agent tool `token-price`, by verified Base address. */
-  baseTokenPrice(address: string): Promise<CoinQuote | null>;
+  /** Blue Agent tool `safe-trending`, in the tool's own ranking. */
+  trending(): Promise<TrendingRow[] | null>;
+  /** Blue Agent tool `blue-doctor`: every upstream, probed or not. */
+  doctor(): Promise<DoctorProbe[] | null>;
   /** Blue Agent tool `hood-live` (chain=base): fresh Base B20 rows, or null. */
   hoodBaseRows(): Promise<HoodRow[] | null>;
   /** 24h USD price series for a CoinGecko id, oldest → newest. Null = unknown. */
@@ -219,6 +259,7 @@ export async function buildCrypto(src: CubeSources, picks: string[] | null = nul
   ]);
   return {
     mode: "crypto",
+    kind: "list",
     title: "CRYPTO 24H",
     changeKind: "24h",
     rows: ids.map((id, i) => {
@@ -234,29 +275,87 @@ export async function buildCrypto(src: CubeSources, picks: string[] | null = nul
   };
 }
 
-/** cbBTC on Base 8453 — same address the chat swap path and dashboard use. */
-export const CBBTC_BASE = "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf";
+/**
+ * The mark for one safe-trending row.
+ *
+ *   flagged     a MEASURED finding: any flag other than TAX_UNVERIFIED (unlock
+ *               overhang, churn, dumping, micro-cap, impersonation, high tax,
+ *               blacklist), or a HONEYPOT / SUSPICIOUS verdict. Wins over
+ *               "unverified": a real finding is information, an unread tax
+ *               is only its absence.
+ *   clean       the tax WAS read from the contract, verdict SAFE, no flags.
+ *   unverified  everything else, including every errored scan.
+ *
+ * MEASURED 2026-10-03: 10 of 10 trending tokens came back tax_read "failed" —
+ * AERO included — because the tax read only understands the Virtuals
+ * templates. Treating "failed" as a flag painted every row the same colour,
+ * which is a mark that carries no information. Hence the precedence above.
+ */
+export function trendingMark(r: TrendingRow): NonNullable<CubeRow["mark"]> {
+  if (r.status !== "ok") return "unverified";
+  const realFlags = (r.flags ?? []).filter((f) => f !== "TAX_UNVERIFIED");
+  const verdict = r.honeypot?.verdict;
+  if (realFlags.length > 0 || verdict === "HONEYPOT" || verdict === "SUSPICIOUS") return "flagged";
+  if (r.honeypot?.tax_read === "template" && verdict === "SAFE") return "clean";
+  return "unverified";
+}
 
-/** Every number here comes through a Blue Agent tool, priced on Base itself. */
-export async function buildBase(src: CubeSources, now = Date.now()): Promise<CubeFeed> {
-  const [pulse, eth, btc] = await Promise.all([
-    src.basePulse().catch(() => null),
-    // ETH as WETH9 on Base: the price ETH actually trades at on Base DEXes.
-    src.baseTokenPrice(WETH9_BASE).catch(() => null),
-    src.baseTokenPrice(CBBTC_BASE).catch(() => null),
-  ]);
+/**
+ * Base trending tokens in safe-trending's own order (unflagged first by 24h
+ * volume, then flagged, then errored). The cube takes the first 5 and never
+ * re-ranks: flagged rows stay visible exactly as the tool ranks them.
+ */
+export async function buildTrending(src: CubeSources, now = Date.now()): Promise<CubeFeed> {
+  const rows = (await src.trending().catch(() => null)) ?? [];
   return {
-    mode: "base",
-    title: "BASE CHAIN",
-    changeKind: "mixed",
-    rows: [
-      // TVL change is 7d (DefiLlama daily series); DEX volume is day-over-day.
-      row("TVL", pulse?.tvlUsd ?? null, pulse?.tvlChange7dPct ?? null, fmtCompact),
-      row("DEX", pulse?.dexVolume24hUsd ?? null, pulse?.dexVolumeChange1dPct ?? null, fmtCompact),
-      row("ETH", eth?.usd ?? null, eth?.change24h ?? null, fmtPrice),
-      row("cbBTC", btc?.usd ?? null, btc?.change24h ?? null, fmtPrice),
-    ],
-    via: ["base-pulse", "token-price"],
+    mode: "trending",
+    kind: "list",
+    title: rows.length ? "TRENDING ON BASE" : "TRENDING: NO DATA",
+    changeKind: "24h",
+    rows: rows.slice(0, CUBE_MAX_ROWS).map((t) => ({
+      ...row((t.symbol ?? "?").slice(0, 5), t.price_usd, t.change_24h, fmtPrice),
+      mark: trendingMark(t),
+    })),
+    via: ["safe-trending"],
+    ts: now,
+  };
+}
+
+/** Short names for blue-doctor's upstreams, ≤ 5 chars. */
+const DOCTOR_LABELS: Record<string, string> = {
+  base_rpc: "BASE",
+  robinhood_rpc: "RH",
+  dexscreener: "DEXS",
+  geckoterminal: "GECKO",
+  defillama: "LLAMA",
+  github: "GH",
+};
+/** Rows the status layout has room for — every probed upstream, today 6. */
+export const STATUS_MAX_ROWS = 6;
+
+/**
+ * Upstreams blue-doctor actually probed. The ones it deliberately does not
+ * probe (needs a key, would spend credit) are counted in the title, never
+ * drawn as a dot — a grey dot next to "down" ones would read as an outage.
+ */
+export async function buildStatus(src: CubeSources, now = Date.now()): Promise<CubeFeed> {
+  const probes = (await src.doctor().catch(() => null)) ?? [];
+  const probed = probes.filter((p) => p.status !== "unknown");
+  const ok = probed.filter((p) => p.status === "ok").length;
+  return {
+    mode: "status",
+    kind: "status",
+    title: probes.length ? `SOURCES ${ok}/${probed.length} OK` : "SOURCES: NO DATA",
+    changeKind: "latency",
+    rows: probed.slice(0, STATUS_MAX_ROWS).map((p) => ({
+      label: DOCTOR_LABELS[p.name] ?? p.name.slice(0, 5).toUpperCase(),
+      value: p.latency_ms,
+      text: p.status === "degraded" ? "slow" : p.status,
+      change: null,
+      changeText: p.latency_ms != null ? `${p.latency_ms}ms`.slice(0, 7) : "",
+      state: p.status,
+    })),
+    via: ["blue-doctor"],
     ts: now,
   };
 }
@@ -283,6 +382,7 @@ export async function buildHood(src: CubeSources, picks: string[] | null = null,
         .map((r) => toRow(r.ticker, r));
   return {
     mode: "hood",
+    kind: "list",
     title: rows.length ? "STOCKS ON BASE" : "STOCKS: NO DATA",
     changeKind: "vs oracle",
     rows: out,
@@ -307,9 +407,11 @@ export function buildFeed(mode: CubeMode, src: CubeSources, pickRaw: string | nu
   switch (mode) {
     case "crypto":
       return buildCrypto(src, parsePicks(pickRaw, ALL_COIN_IDS, (s) => s.toLowerCase()), now);
-    case "base":
-      return buildBase(src, now);
     case "hood":
       return buildHood(src, parsePicks(pickRaw, HOOD_CATALOG.map((h) => h.ticker), (s) => s.toUpperCase()), now);
+    case "trending":
+      return buildTrending(src, now);
+    case "status":
+      return buildStatus(src, now);
   }
 }
