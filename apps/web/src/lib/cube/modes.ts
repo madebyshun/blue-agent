@@ -40,6 +40,40 @@ export interface CubeRow {
   change: number | null;
   /** ≤ 7 chars, right column. "" when `change` is null. */
   changeText: string;
+  /**
+   * 24h shape for the cube's big-number layouts, oldest → newest, scaled to
+   * 0..100 (0 = the window's low, 100 = its high). Present only when the feed
+   * has ≤ SPARK_MAX_ROWS rows — a 5-row list has no room to draw it, so it
+   * would be bytes the cube parses and throws away. Absent ≠ flat: absent
+   * means "no series", and the cube simply draws no chart.
+   */
+  spark?: number[];
+}
+
+/** Feeds with at most this many rows carry a sparkline per row. */
+export const SPARK_MAX_ROWS = 2;
+/** Points per sparkline: one per ~2.7px on a 128px screen. */
+export const SPARK_POINTS = 48;
+
+/**
+ * Downsample a price series to `SPARK_POINTS` bucket averages and scale it to
+ * 0..100. Null when there is no real shape to draw — fewer than 2 finite
+ * points — rather than inventing a flat line. A genuinely flat window (low ==
+ * high) IS real, so it draws as a level line at 50.
+ */
+export function toSpark(prices: number[], points = SPARK_POINTS): number[] | null {
+  const xs = prices.filter((p) => Number.isFinite(p));
+  if (xs.length < 2) return null;
+  const n = Math.min(points, xs.length);
+  const out: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const a = Math.floor((i * xs.length) / n);
+    const b = Math.max(a + 1, Math.floor(((i + 1) * xs.length) / n));
+    const slice = xs.slice(a, b);
+    out.push(slice.reduce((s, v) => s + v, 0) / slice.length);
+  }
+  const lo = Math.min(...out), hi = Math.max(...out);
+  return out.map((v) => (hi === lo ? 50 : Math.round(((v - lo) / (hi - lo)) * 100)));
 }
 
 export interface CubeFeed {
@@ -98,6 +132,8 @@ export interface CubeSources {
   baseDexVol(): Promise<{ total24h: number | null; change1dPct: number | null } | null>;
   /** Fresh Base B20 desk rows, or null when absent / stale / unreadable. */
   hoodBaseRows(): Promise<TickerSnapshot[] | null>;
+  /** 24h USD price series for a CoinGecko id, oldest → newest. Null = unknown. */
+  coinHistory(id: string): Promise<number[] | null>;
 }
 
 /**
@@ -153,14 +189,22 @@ export function parsePicks(raw: string | null | undefined, allowed: readonly str
 
 export async function buildCrypto(src: CubeSources, picks: string[] | null = null, now = Date.now()): Promise<CubeFeed> {
   const ids = picks ?? CRYPTO_DEFAULT;
-  const q = await src.coins(ALL_COIN_IDS).catch(() => ({}) as Record<string, CoinQuote>);
+  const withSpark = ids.length <= SPARK_MAX_ROWS;
+  const [q, hist] = await Promise.all([
+    src.coins(ALL_COIN_IDS).catch(() => ({}) as Record<string, CoinQuote>),
+    withSpark
+      ? Promise.all(ids.map((id) => src.coinHistory(id).catch(() => null)))
+      : Promise.resolve([] as (number[] | null)[]),
+  ]);
   return {
     mode: "crypto",
     title: "CRYPTO 24H",
     changeKind: "24h",
-    rows: ids.map((id) => {
+    rows: ids.map((id, i) => {
       const label = CRYPTO_CATALOG.find((c) => c.id === id)?.label ?? id.slice(0, 5).toUpperCase();
-      return row(label, q[id]?.usd ?? null, q[id]?.change24h ?? null, fmtPrice);
+      const r = row(label, q[id]?.usd ?? null, q[id]?.change24h ?? null, fmtPrice);
+      const spark = withSpark && hist[i] ? toSpark(hist[i]!) : null;
+      return spark ? { ...r, spark } : r;
     }),
     ts: now,
   };

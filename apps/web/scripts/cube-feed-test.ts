@@ -11,7 +11,7 @@
  */
 import {
   buildFeed, fmtPrice, fmtCompact, fmtChange, CUBE_MODES, CUBE_MAX_ROWS,
-  CRYPTO_CATALOG, HOOD_CATALOG, cubeOptions,
+  CRYPTO_CATALOG, HOOD_CATALOG, cubeOptions, toSpark, SPARK_POINTS,
   type CubeSources, type CubeFeed,
 } from "../src/lib/cube/modes";
 import type { TickerSnapshot } from "../src/lib/blue-hood/types";
@@ -40,12 +40,14 @@ const healthy: CubeSources = {
     stockRow("AAPL", "base", 100), stockRow("SPCX", "base", 50), stockRow("TSLA", "base", 10),
     stockRow("MSTR", "robinhood", 99999), stockRow("BAD", "base", 99999, { verdict: "ERROR" as TickerSnapshot["verdict"] }),
   ],
+  coinHistory: async () => Array.from({ length: 289 }, (_, i) => 2600 + 80 * Math.sin(i / 30)),
 };
 const dead: CubeSources = {
   coins: async () => { throw new Error("429"); },
   baseTvl: async () => null,
   baseDexVol: async () => { throw new Error("timeout"); },
   hoodBaseRows: async () => null,
+  coinHistory: async () => { throw new Error("429"); },
 };
 
 async function main() {
@@ -106,6 +108,25 @@ async function main() {
   const opts = cubeOptions();
   ok("options: every default is in the catalog",
     opts.crypto.defaults.every((d) => opts.crypto.catalog.some((c) => c.id === d)));
+
+  console.log("§7 sparkline");
+  const one = await buildFeed("crypto", healthy, "ethereum", 1);
+  const s = one.rows[0].spark;
+  ok("1 pick → spark present", Array.isArray(s));
+  ok("spark: SPARK_POINTS long, ints in 0..100, hits both ends",
+    !!s && s.length === SPARK_POINTS && s.every((v) => Number.isInteger(v) && v >= 0 && v <= 100)
+      && Math.min(...s) === 0 && Math.max(...s) === 100);
+  ok("2 picks → both rows carry spark",
+    (await buildFeed("crypto", healthy, "ethereum,bitcoin", 1)).rows.every((r) => Array.isArray(r.spark)));
+  ok("3+ picks → no spark (list layout has no room)",
+    (await buildFeed("crypto", healthy, "ethereum,bitcoin,solana", 1)).rows.every((r) => r.spark === undefined));
+  ok("defaults (5 rows) → no spark", (await buildFeed("crypto", healthy, null, 1)).rows.every((r) => r.spark === undefined));
+  const oneDead = await buildFeed("crypto", dead, "ethereum", 1);
+  ok("history source down → no spark key, row still there",
+    oneDead.rows.length === 1 && oneDead.rows[0].spark === undefined && oneDead.rows[0].text === "--");
+  ok("toSpark: < 2 points → null, never a made-up line", toSpark([]) === null && toSpark([5]) === null && toSpark([NaN, 3]) === null);
+  ok("toSpark: flat window → level line at 50", (toSpark([7, 7, 7]) ?? []).every((v) => v === 50));
+  ok("toSpark: short series not padded", toSpark([1, 2, 3])?.length === 3);
 
   console.log("§5 token");
   for (const mode of CUBE_MODES) {

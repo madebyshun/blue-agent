@@ -67,6 +67,18 @@ export const liveCubeSources: CubeSources = {
 
   // Same freshness + chain-marker rules as /api/hood/snapshot: a stale price
   // that looks live is worse than none, and an unattributed row is dropped.
+  // 24h at CoinGecko's 5-minute granularity (~289 points). Only fetched for
+  // feeds of ≤ 2 rows, and only for catalog ids, so the fan-out is bounded by
+  // the catalog (22), not by how many cubes exist; the 60s memo + data cache
+  // collapse repeat requests for the same coin.
+  coinHistory: (id) => memo(`hist:${id}`, async () => {
+    const d = await getJson<{ prices?: [number, number][] }>(
+      `https://api.coingecko.com/api/v3/coins/${encodeURIComponent(id)}/market_chart?vs_currency=usd&days=1`,
+    );
+    if (!d?.prices?.length) throw new Error("coingecko history unavailable");
+    return d.prices.map((p) => p[1]);
+  }),
+
   hoodBaseRows: () => memo("hood:base-rows", async () => {
     const latest = await kvGet<BaseDeskLatest>(KV_BASE_ROWS_LATEST);
     if (!latest?.rows?.length) return null;
