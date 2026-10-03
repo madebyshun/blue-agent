@@ -5,7 +5,8 @@
  *   { symbol: "eth" }                              — major symbols by id
  *   { network: "base", address: "0x..." }          — any ERC-20 by contract
  *
- * Backed by CoinGecko's public /simple/price + /simple/token_price endpoints.
+ * Backed by CoinGecko's public /simple/price (via `getCoinGeckoPrices` in
+ * lib/market-data) + /simple/token_price endpoints.
  * No auth required for the free tier (~10-30 req/min). Cached 30s.
  *
  * Returns:
@@ -20,6 +21,7 @@
  *   }
  */
 import { NextRequest, NextResponse } from "next/server";
+import { getCoinGeckoPrices } from "@/lib/market-data";
 
 export const runtime = "nodejs";
 // CoinGecko replies < 1s normally; allow a generous margin for cold starts.
@@ -92,13 +94,10 @@ export async function POST(req: NextRequest) {
   // ── Mode A: by symbol ────────────────────────────────────────────────────
   if (symbol) {
     const coinId = COIN_IDS[symbol] ?? symbol;       // fall through with raw symbol
-    const url    = `${CG}/simple/price?ids=${coinId}`
-                 + `&vs_currencies=usd`
-                 + `&include_24hr_change=true`
-                 + `&include_market_cap=true`
-                 + `&include_24hr_vol=true`;
-
-    const data = await cgFetch<CoinGeckoSimplePrice>(url);
+    const data   = await getCoinGeckoPrices([coinId], {
+      include: { change24h: true, marketCap: true, volume24h: true },
+      timeoutMs: 6_000,
+    });
     if (!data) return NextResponse.json({ error: "CoinGecko unreachable" }, { status: 502 });
 
     const entry = data[coinId];
@@ -113,9 +112,9 @@ export async function POST(req: NextRequest) {
         symbol,
         coinId,
         usd:       entry.usd,
-        change24h: entry.usd_24h_change ?? null,
-        marketCap: entry.usd_market_cap ?? null,
-        volume24h: entry.usd_24h_vol ?? null,
+        change24h: entry.change24hPct,
+        marketCap: entry.marketCapUsd,
+        volume24h: entry.volume24hUsd,
         source:    "coingecko",
         fetchedAt: new Date().toISOString(),
       },
