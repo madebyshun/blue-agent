@@ -83,7 +83,7 @@ JSON Schema per tool) · [`llms.txt`](https://blueagent.dev/llms.txt) (short bri
      Source of truth: apps/web/src/lib/agent-tools.ts (AGENT_TOOLS).
      Body fields are the WIRE shape (post-x402Body), not the Hub form. -->
 
-Blue Hub exposes **114 tools** across 11 categories — 109 paid, 5 free.
+Blue Hub exposes **115 tools** across 11 categories — 109 paid, 6 free.
 
 Categories: on-chain · signal · security · intelligence · builder · trading · content · agent-economy · base-ecosystem · earn · portfolio
 
@@ -92,8 +92,8 @@ USDC `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`. Fields marked `*` are require
 every other field has a server-side default. Machine-readable equivalent, with
 full JSON Schema per tool: https://blueagent.dev/api/catalog
 
-The 5 priced $0.00 never answer 402 and never ask for a signature:
-`blue-doctor` · `hood-live` · `hood-track-record` · `rh-rwa-verify` · `rh-token-scan`.
+The 6 priced $0.00 never answer 402 and never ask for a signature:
+`blue-doctor` · `hood-live` · `hood-track-record` · `pre-trade-check` · `rh-rwa-verify` · `rh-token-scan`.
 Do not build an authorization for them — there is nothing to sign and no
 transfer to make.
 
@@ -145,7 +145,7 @@ transfer to make.
 | `rh-stock-flow` | $0.10 | `ticker`* | Buy vs sell pressure over 24h from GeckoTerminal trades feed. Hard-mapped verdict (BUY_HEAVY / SELL_HEAVY / BALANCED) at 10% net-of-total threshold. Never fabricates flow. |
 | `rh-stock-movers` | $0.05 | `limit` `min_tvl_usd` `min_volume_24h_usd` | Top gainers / losers 24h among Robinhood Chain tokenized stocks & ETFs. Dust-pool filter (default min $5k TVL + $500 24h volume) drops noise pools that would otherwise quote AAPL at $868 via a $453-TVL pool. Sign-filtered so a token with -1.56% never lands in gainers. Filtered pools surface as filtered_out for transparency. |
 
-### security (16)
+### security (17)
 
 | id | price | body | what it does |
 |---|---|---|---|
@@ -158,6 +158,7 @@ transfer to make.
 | `honeypot-check` | $0.10 | `token`* | Detect honeypot tokens that can be bought but not sold. Transfer tax analysis + rug pattern detection on Base. |
 | `key-exposure` | $0.50 | `address`* | Check if a wallet's public key is exposed on-chain (quantum vulnerability). Verdict computed from the real Base RPC nonce — never fabricated. EXPOSED means the key is visible, not that funds are at immediate risk. |
 | `liquidity-depth` | $0.03 | `token`* `trade_size_usd` | Liquidity depth, slippage estimate and exit risk for a Base token. |
+| `pre-trade-check` | $0.00 | `token`* `chain` `kind` | Call before signing. Is this address a real token or a pool, an impostor of a canonical stock token (Base B20 desk, Robinhood registry), a honeypot or a taxed token (tax read by eth_call), and is a stock token's DEX price adrift from its Chainlink oracle? Returns PASS / WARN / BLOCK plus machine-readable reason codes; the verdict is picked in code, no LLM. BLOCK only on evidence; an unread tax is a WARN that says so. Base 8453 or Robinhood Chain 4663. The same check Blue Agent's own swap, send and bridge builders gate on. Free — safety checks should never be gated. |
 | `quick-safety` | $0.05 | `contract`* | Fast contract safety check — liquidity, verification, risk verdict. |
 | `rh-rwa-verify` | $0.00 | `contract`* `expected_ticker` | Given a contract address on Robinhood Chain, is it a canonical RHJ-issued stock token or an impersonator? Cross-checks registry + live ERC-20 metadata. Surfaces the real contract when a fake claims a matching ticker. Free — safety checks should never be gated. |
 | `rh-stock-beacon-check` | $0.05 | `ticker` `contract` | EIP-1967 beacon slot + implementation + admin/owner read for a RWA token proxy. Governance-risk snapshot — compare across runs to detect implementation upgrades. Real on-chain storage reads. |
@@ -297,7 +298,7 @@ surface you are actually calling.
 **Cut from 85 to 18 on 2026-09-26, and the cut removed no capability.** The 85-tool manifest
 was 32,160 bytes — roughly 8,000 tokens spent before the agent read a single word of the user's
 question — and published MCP research finds tool-selection accuracy degrades sharply past
-~40 always-loaded entries. All 114 catalog tools remain live at `/api/x402/<id>`; `blue_registry`
+~40 always-loaded entries. All 115 catalog tools remain live at `/api/x402/<id>`; `blue_registry`
 lists them and `blue_call` runs any of them, so the rest moved from "always in context" to
 "one lookup away". A manifest is a context budget, not an inventory.
 

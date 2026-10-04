@@ -976,6 +976,22 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
 
   // ── Console commands (paid x402) ────────────────────────────────────────────
   {
+    id: "pre-trade-check",
+    name: "Pre-Trade Check (PASS / WARN / BLOCK)",
+    description: "Call before signing. Is this address a real token or a pool, an impostor of a canonical stock token (Base B20 desk, Robinhood registry), a honeypot or a taxed token (tax read by eth_call), and is a stock token's DEX price adrift from its Chainlink oracle? Returns PASS / WARN / BLOCK plus machine-readable reason codes; the verdict is picked in code, no LLM. BLOCK only on evidence; an unread tax is a WARN that says so. Base 8453 or Robinhood Chain 4663. The same check Blue Agent's own swap, send and bridge builders gate on. Free — safety checks should never be gated.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "security",
+    inputs: [
+      { key: "token", label: "Token address (or ETH)", placeholder: "0x…", required: true },
+      { key: "chain", label: "Chain: base or robinhood", placeholder: "base" },
+      { key: "kind", label: "Action: swap, send or bridge", placeholder: "swap" },
+    ],
+    isComposite: false,
+    price: "$0.00", priceUSDC: 0,
+    x402Url: `${X402_BASE}/pre-trade-check`,
+    x402Body: (v) => ({ token: v.token ?? "", chain: v.chain || "base", kind: v.kind || "swap" }),
+  },
+  {
     id: "honeypot-check",
     name: "Honeypot Check",
     description: "Detect honeypot tokens that can be bought but not sold. Transfer tax analysis + rug pattern detection on Base.",
