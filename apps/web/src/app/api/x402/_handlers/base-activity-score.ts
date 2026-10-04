@@ -1,6 +1,12 @@
 // x402/base-activity-score — onchain activity score for a Base wallet (Moralis).
 // Pure scoring formula, no LLM. Price: $0.05
-import { getMoralisNativeTx, getMoralisERC20Transfers } from "@/lib/moralis";
+//
+// 🔴 FAIL LOUD (2026-10-04). This used the `[]`-on-failure Moralis wrappers, so
+// with the plan paused every wallet scored 0 "Newcomer" with HTTP 200 — and the
+// x402 route settles on 200, so a caller paid full price for a number we never
+// read. An unread history is not an empty one: 502 now, and the route does not
+// charge for it (same rule as wallet-holdings).
+import { getMoralisNativeTxResult, getMoralisERC20TransfersResult } from "@/lib/moralis";
 
 export default async function handler(req: Request): Promise<Response> {
   try {
@@ -10,7 +16,21 @@ export default async function handler(req: Request): Promise<Response> {
     const address = (body.address ?? url.searchParams.get("address") ?? "").trim();
     if (!/^0x[a-fA-F0-9]{40}$/.test(address)) return Response.json({ error: "Provide a wallet address (0x…)" }, { status: 400 });
 
-    const [nat, erc] = await Promise.all([getMoralisNativeTx(address, 100), getMoralisERC20Transfers(address, 100)]);
+    const [natR, ercR] = await Promise.all([getMoralisNativeTxResult(address, 100), getMoralisERC20TransfersResult(address, 100)]);
+    if (!natR.ok || !ercR.ok) {
+      const error = !natR.ok ? natR.error : (ercR as { ok: false; error: unknown }).error;
+      return Response.json({
+        tool: "base-activity-score",
+        address,
+        status: "error",
+        score: null,
+        tier: null,
+        error,
+        note: "Wallet history could not be read, so no score was computed — an unread history is not an empty one. You were not charged.",
+        timestamp: new Date().toISOString(),
+      }, { status: 502 });
+    }
+    const nat = natR.data, erc = ercR.data;
     const txs = [...nat, ...erc] as Record<string, unknown>[];
     const lower = address.toLowerCase();
     const counterparties = new Set<string>();
