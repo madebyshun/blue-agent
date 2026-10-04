@@ -47,7 +47,7 @@
 
 #include "cube_render.h"
 
-#define FW_VERSION "1.2.0"
+#define FW_VERSION "1.2.1"
 
 // --- DISPLAY PINS ---
 #define TFT_SCLK   13
@@ -115,6 +115,7 @@ uint32_t cardUntil = 0;
 char     updCode[5] = "";
 uint32_t updUntil = 0;
 bool     updAuthorised = false, updFailed = false;
+String   updError;          // why the last upload failed, shown on the page
 bool     otaPendingVerify = false;
 uint32_t bootAt = 0;
 
@@ -426,6 +427,7 @@ void handleUnlink() { unlink(); redirectHome(); shownScreen = SCR_NONE; }
 void handleUpdatePage() {
   snprintf(updCode, sizeof updCode, "%04u", (unsigned)(esp_random() % 10000));
   updUntil = millis() + 120000;
+  Serial.printf("[ota] update code %s (valid 2 min)\n", updCode);   // for whoever holds the USB cable
   shownScreen = SCR_NONE;   // show the code now
   String h; h.reserve(2500);
   h += FPSTR(PAGE_HEAD);
@@ -434,6 +436,8 @@ void handleUpdatePage() {
          "<form id='f' method='POST' enctype='multipart/form-data'>"
          "<input type='text' id='code' inputmode='numeric' maxlength='4' placeholder='Code on the cube'>"
          "<input type='file' name='fw' accept='.bin'>"
+         "<p class='s'>Use <b>BlueCube.ino.bin</b> from Sketch &rarr; Export Compiled Binary. Not the "
+         "<i>.merged.bin</i> or <i>bootloader.bin</i> beside it.</p>"
          "<button>Upload</button></form><a class='btn ghost' href='/'>Cancel</a>"
          "<script>f.onsubmit=()=>{f.action='/update?code='+encodeURIComponent(code.value);};</script></body></html>");
   web.send(200, "text/html; charset=utf-8", h);
@@ -441,25 +445,54 @@ void handleUpdatePage() {
 
 void handleUpdateUpload() {
   HTTPUpload& up = web.upload();
+  static bool firstChunk = true;
+  static size_t received = 0;
+  auto fail = [](const String& why) {
+    updFailed = true;
+    updError = why;
+    Serial.printf("[ota] %s\n", why.c_str());
+  };
   if (up.status == UPLOAD_FILE_START) {
     updAuthorised = updCode[0] && millis() < updUntil && web.arg("code") == updCode;
-    updFailed = false;
-    if (!updAuthorised) { Serial.println("[ota] wrong or expired code"); return; }
-    if (!Update.begin(UPDATE_SIZE_UNKNOWN)) { updFailed = true; Update.printError(Serial); }
+    updFailed = false; updError = ""; firstChunk = true; received = 0;
+    if (!updAuthorised) { updError = "Wrong or expired code."; Serial.println("[ota] wrong or expired code"); return; }
+    String name = up.filename; name.toLowerCase();
+    if (name.indexOf("merged") >= 0 || name.indexOf("bootloader") >= 0 || name.indexOf("partitions") >= 0) {
+      fail("\"" + up.filename + "\" is not the app image. Choose BlueCube.ino.bin, the file next to it without .merged / bootloader / partitions in its name.");
+      return;
+    }
+    if (!Update.begin(UPDATE_SIZE_UNKNOWN)) fail(String("Could not start the update: ") + Update.errorString());
   } else if (up.status == UPLOAD_FILE_WRITE) {
-    if (updAuthorised && !updFailed && Update.write(up.buf, up.currentSize) != up.currentSize) { updFailed = true; Update.printError(Serial); }
+    if (!updAuthorised || updFailed) return;
+    // Every ESP32 app image starts with the magic byte 0xE9.
+    if (firstChunk) {
+      firstChunk = false;
+      if (up.currentSize == 0 || up.buf[0] != 0xE9) {
+        Update.abort();
+        fail("That file is not an ESP32 firmware image (it does not start with 0xE9). Choose BlueCube.ino.bin.");
+        return;
+      }
+    }
+    received += up.currentSize;
+    if (Update.write(up.buf, up.currentSize) != up.currentSize) fail(String("Write failed after ") + received + " bytes: " + Update.errorString());
   } else if (up.status == UPLOAD_FILE_END) {
-    if (updAuthorised && !updFailed && !Update.end(true)) { updFailed = true; Update.printError(Serial); }
+    if (!updAuthorised || updFailed) return;
+    if (!Update.end(true)) fail(String("The image did not verify (") + received + " bytes): " + Update.errorString());
+    else Serial.printf("[ota] received %u bytes, image OK\n", (unsigned)received);
   } else if (up.status == UPLOAD_FILE_ABORTED) {
     if (updAuthorised) Update.abort();
-    updFailed = true;
+    fail("The upload was interrupted. Try again on a steady WiFi signal.");
   }
 }
 
 void handleUpdateDone() {
   updCode[0] = 0; updUntil = 0; shownScreen = SCR_NONE;
   if (!updAuthorised) { web.send(403, "text/plain", "Wrong or expired code. Open /update again for a new one."); return; }
-  if (updFailed || Update.hasError()) { web.send(500, "text/plain", "Update failed. The cube keeps its current firmware."); return; }
+  if (updFailed || Update.hasError()) {
+    web.send(500, "text/plain", "Update failed. The cube keeps its current firmware.\n\n" +
+             (updError.length() ? updError : String(Update.errorString())));
+    return;
+  }
   web.send(200, "text/plain", "Installed. The cube restarts now.");
   delay(500);
   ESP.restart();
