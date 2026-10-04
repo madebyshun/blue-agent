@@ -7,6 +7,7 @@
  *   §4  the active window closes → the device is told to stop fast polling
  *   §5  feed item tones come from fields the item already has
  *   §6  the cube is a first-class device kind
+ *   §7  a cube is capped at `read` on the server, whatever the page asks for
  *
  * Hermetic: KV env cleared (in-memory store), no network.
  */
@@ -19,7 +20,7 @@ import {
   agentLabel, noteAgentStart, noteAgentEnd, readAgentState, agentStateOf, markAgentTurn, itemTone,
   ACTIVE_WINDOW_S, AGENT_POLL_S, MAX_TURN_S,
 } from "../src/lib/device-agent";
-import { DEVICE_KINDS, cleanDeviceName } from "../src/lib/devices";
+import { DEVICE_KINDS, cleanDeviceName, grantForKind, startDeviceLink, approveCode, pollForToken } from "../src/lib/devices";
 
 let failures = 0;
 function ok(label: string, cond: boolean, detail = "") {
@@ -79,6 +80,20 @@ async function main() {
   console.log("§6 device kind");
   ok("cube is a device kind", (DEVICE_KINDS as readonly string[]).includes("cube"));
   ok("unnamed cube is called BlueCube", cleanDeviceName("", "cube") === "BlueCube");
+
+  console.log("§7 cube is read-only");
+  ok("grantForKind(cube) drops chat + alerts", JSON.stringify(grantForKind("cube", { scopes: ["read", "chat", "alerts"] })) === '{"scopes":["read"]}');
+  ok("grantForKind(mac) keeps them", JSON.stringify(grantForKind("mac", { scopes: ["read", "chat", "alerts"] })) === '{"scopes":["read","chat","alerts"]}');
+  const OWNER = "0xc0be000000000000000000000000000000000003";
+  for (const kind of ["cube", "mac"] as const) {
+    const started = await startDeviceLink(kind === "cube" ? "BlueCube" : "BlueBot for Mac", kind);
+    if ("error" in started) { ok(`${kind}: link started`, false, started.error); continue; }
+    await approveCode(started.userCode, OWNER, { scopes: ["read", "chat", "alerts"] });
+    const tok = await pollForToken(started.deviceCode);
+    const scopes = "status" in tok && tok.status === "issued" ? tok.device.scopes : null;
+    ok(`${kind}: approved with chat+alerts asked → token scopes ${JSON.stringify(scopes)}`,
+      JSON.stringify(scopes) === (kind === "cube" ? '["read"]' : '["read","chat","alerts"]'));
+  }
 
   if (failures) { console.error(`\n${failures} failure(s)`); process.exit(1); }
   console.log("\ndevice-agent-test: all passed");

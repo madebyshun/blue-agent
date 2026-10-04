@@ -1,7 +1,8 @@
 "use client";
 
-// /app/link (app.blueagent.dev/link) — approve a BlueBot that asked to be
-// linked, and see or unlink the ones that are (lib/devices.ts).
+// /app/link (app.blueagent.dev/link) — approve a device (BlueBot for Mac, a
+// BlueBot, or a BlueCube desk screen) that asked to be linked, and see or
+// unlink the ones that are (lib/devices.ts).
 //
 // A device shows a code like BCDF-GH23 (or a link with ?code=). Here the
 // person signs in with their wallet, sees WHICH device is asking, and approves
@@ -80,7 +81,7 @@ function LinkInner() {
     try {
       const j = await call("/api/devices/approve", { method: "POST", body: JSON.stringify({
         code: pending.code,
-        scopes: [...(allowChat ? ["chat"] : []), ...(allowAlerts ? ["alerts"] : [])],
+        scopes: pending.kind === "cube" ? [] : [...(allowChat ? ["chat"] : []), ...(allowAlerts ? ["alerts"] : [])],
       }) });
       setMsg({ tone: "ok", text: `Linked. ${j.name} will be ready in a few seconds.` });
       setPending(null); setCode("");
@@ -99,17 +100,18 @@ function LinkInner() {
   return (
     <div className="mx-auto w-full max-w-[560px] px-4 py-8 space-y-4">
       <div>
-        <p className="font-mono text-[11px] tracking-widest text-slate-500 uppercase">// Link BlueBot</p>
-        <h1 className="text-[22px] font-bold text-slate-100 mt-1">Link a BlueBot to your wallet</h1>
+        <p className="font-mono text-[11px] tracking-widest text-slate-500 uppercase">// Link a device</p>
+        <h1 className="text-[22px] font-bold text-slate-100 mt-1">Link a device to your wallet</h1>
         <p className="text-[13px] text-slate-400 mt-1">
-          BlueBot is Blue Agent on your Mac: chat and alerts for this wallet, without a new wallet. It never holds a key
-          and cannot sign or move funds.
+          BlueBot is Blue Agent on your Mac: chat and alerts for this wallet. BlueCube is a desk screen that shows your
+          trades, alerts and what your agent is doing. Neither needs a new wallet, neither holds a key, and neither can
+          sign or move funds.
         </p>
       </div>
 
       {!isConnected ? (
         <div className={card}>
-          <p className="text-[13px] text-slate-300 mb-3">Connect the wallet you use on Blue Agent. BlueBot will use it, with no new wallet.</p>
+          <p className="text-[13px] text-slate-300 mb-3">Connect the wallet you use on Blue Agent. The device will use it, with no new wallet.</p>
           <ConnectButton label="Connect wallet" />
         </div>
       ) : (
@@ -137,10 +139,17 @@ function LinkInner() {
                 </p>
                 <div className="space-y-1.5 text-[13px] text-slate-300">
                   <label className="flex items-center gap-2"><input type="checkbox" checked disabled /> See your alerts and activity</label>
-                  <label className="flex items-center gap-2"><input type="checkbox" checked={allowChat} onChange={(e) => setAllowChat(e.target.checked)} /> Chat with Blue Agent on your credits</label>
-                  <label className="flex items-center gap-2"><input type="checkbox" checked={allowAlerts} onChange={(e) => setAllowAlerts(e.target.checked)} /> Set and change price alerts</label>
+                  {pending.kind === "cube" ? (
+                    // A cube is capped at read on the server too (lib/devices.ts KIND_MAX_SCOPES).
+                    <p className="text-[12px] text-slate-500">A BlueCube only shows things. It cannot chat or change alerts.</p>
+                  ) : (
+                    <>
+                      <label className="flex items-center gap-2"><input type="checkbox" checked={allowChat} onChange={(e) => setAllowChat(e.target.checked)} /> Chat with Blue Agent on your credits</label>
+                      <label className="flex items-center gap-2"><input type="checkbox" checked={allowAlerts} onChange={(e) => setAllowAlerts(e.target.checked)} /> Set and change price alerts</label>
+                    </>
+                  )}
                 </div>
-                <p className="text-[12px] text-amber-400">Only approve a code shown on your own screen. BlueBot can never sign or move funds.</p>
+                <p className="text-[12px] text-amber-400">Only approve a code shown on your own screen. A linked device can never sign or move funds.</p>
                 <button className={btn} style={{ background: "#4FC3F7", color: "#050508", border: "1px solid #4FC3F7" }} disabled={busy} onClick={approve}>
                   Approve
                 </button>
@@ -155,7 +164,7 @@ function LinkInner() {
               {devices == null && <button className={btn} style={accent} disabled={busy} onClick={loadDevices}>Show</button>}
             </div>
             {devices != null && (devices.length === 0
-              ? <p className="text-[13px] text-slate-500 mt-2">No BlueBot linked yet.</p>
+              ? <p className="text-[13px] text-slate-500 mt-2">No device linked yet.</p>
               : <ul className="mt-2 space-y-2">
                   {devices.map((d) => (
                     <li key={d.id} className="flex items-center gap-3 rounded-lg border border-[#1A1A2E] px-3 py-2">
