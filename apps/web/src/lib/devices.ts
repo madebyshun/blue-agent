@@ -65,6 +65,22 @@ export function deviceScopes(d: { scopes?: DeviceScope[] }): DeviceScope[] {
 export const hasScope = (d: { scopes?: DeviceScope[] }, s: DeviceScope) => deviceScopes(d).includes(s);
 export const DEVICE_KINDS: readonly DeviceKind[] = ["mac", "bot", "cube"];
 
+/**
+ * Scopes a kind of device may hold at most. A BlueCube is a screen: it only
+ * ever reads the timeline and the agent state, so it is capped at `read` no
+ * matter what the approve screen sends. A `chat` token stored on a desk
+ * gadget would spend the wallet's credits for a capability it never uses.
+ */
+export const KIND_MAX_SCOPES: Record<DeviceKind, readonly DeviceScope[]> = {
+  mac: ["read", "chat", "alerts"],
+  bot: ["read", "chat", "alerts"],
+  cube: ["read"],
+};
+export function grantForKind(kind: DeviceKind, grant: { scopes: DeviceScope[] }): { scopes: DeviceScope[] } {
+  const allowed = KIND_MAX_SCOPES[kind] ?? ["read"];
+  return { scopes: grant.scopes.filter((s) => allowed.includes(s)) };
+}
+
 /** No vowels (no accidental words), no 0/O/1/I/U/Y look-alikes. */
 const CODE_ALPHABET = "BCDFGHJKLMNPQRSTVWXZ23456789";
 const CODE_RE = /^[BCDFGHJKLMNPQRSTVWXZ2-9]{4}-[BCDFGHJKLMNPQRSTVWXZ2-9]{4}$/;
@@ -157,7 +173,8 @@ export async function approveCode(
   if (list == null) return { error: "Could not read your linked devices right now.", status: 503 };
   if (list.length >= MAX_DEVICES) return { error: `You already have ${MAX_DEVICES} linked devices. Unlink one first.`, status: 409 };
   const left = Math.max(1, Math.ceil((rec.createdAt + CODE_TTL_S * 1000 - Date.now()) / 1000));
-  try { await kvSetOrThrow(kCode(userCode), { ...rec, wallet: wallet.toLowerCase(), approvedAt: Date.now(), scopes: grant.scopes }, left); }
+  const scopes = grantForKind(rec.kind, grant).scopes;
+  try { await kvSetOrThrow(kCode(userCode), { ...rec, wallet: wallet.toLowerCase(), approvedAt: Date.now(), scopes }, left); }
   catch { return { error: "Could not approve right now. Try again.", status: 503 }; }
   return { ok: true, name: rec.name };
 }
