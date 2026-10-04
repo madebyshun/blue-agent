@@ -28,7 +28,6 @@ import { SOUL_MD } from "@/lib/soul";
 import { VIRTUALS_PRESETS } from "@/app/api/_lib/llm";
 import { buildBaseSystem, buildAgentCapabilities, buildB20Section, buildLaunchpadSection, buildAlertsSection } from "./system-prompt";
 import { normalizeWallet, resolveActingWallet } from "@/lib/acting-wallet";
-import { markAgentTurn } from "@/lib/device-agent";
 import { findByTicker as findRwaByTicker, findByContract as findRwaByContract } from "@/lib/robinhood/rwa-registry";
 import { CHAT_HIDDEN_TOOLS } from "@/lib/chat-hidden-tools";
 import { cardReply, CARD_ALREADY_SHOWN, CARD_RENDERED_TOOLS } from "@/lib/chat/card-replies";
@@ -2658,8 +2657,6 @@ async function veniceToolStream(
         // 1. tool_start events
         for (const tc of toolCalls)
           emit({ type: "tool_start", tool: tc.function.name });
-        // A linked BlueCube / BlueBot shows the agent working (lib/device-agent.ts).
-        markAgentTurn(userAddress, toolCalls.map((tc) => tc.function.name));
 
         // 2. Execute tools in parallel
         const t0 = Date.now();

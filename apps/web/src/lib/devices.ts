@@ -245,23 +245,6 @@ export async function listDevices(wallet: string): Promise<DeviceListEntry[] | n
   return p.status === "hit" && Array.isArray(p.value) ? p.value.filter((d) => d.expiresAt > now) : [];
 }
 
-/**
- * Does this wallet have any live linked device? Read by /api/chat on every
- * tool turn to decide whether to write agent activity at all, so a wallet
- * with no device costs one KV read per turn and never a write. Memoized 60s
- * per instance: linking is rare, chat turns are not (#148).
- */
-const linkedMemo = new Map<string, { at: number; v: boolean }>();
-export async function hasLinkedDevices(wallet: string): Promise<boolean> {
-  const w = wallet.toLowerCase();
-  const hit = linkedMemo.get(w);
-  if (hit && Date.now() - hit.at < 60_000) return hit.v;
-  const list = await listDevices(w);
-  const v = !!list && list.length > 0;
-  linkedMemo.set(w, { at: Date.now(), v });
-  return v;
-}
-
 export async function revokeDevice(wallet: string, id: string): Promise<"ok" | "not_found" | "unavailable"> {
   const list = await listDevices(wallet);
   if (list == null) return "unavailable";
