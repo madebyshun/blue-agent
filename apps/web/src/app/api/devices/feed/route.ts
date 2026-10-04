@@ -9,7 +9,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { FEED_POLL_S } from "@/lib/devices";
 import { buildTimeline } from "@/lib/timeline";
 import { NO_STORE, requireDevice } from "@/lib/device-auth";
-import { itemTone, readAgentState } from "@/lib/device-agent";
+import { itemTone } from "@/lib/device-feed";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,19 +22,13 @@ export async function GET(req: NextRequest) {
   if ("res" in auth) return auth.res;
   const rl = await rateLimit(`device:${auth.device.id}`, "device");
   if (!rl.success) return NextResponse.json({ error: "Too many requests." }, { status: 429, headers: NO_STORE });
-  const [{ items, unavailable }, agent] = await Promise.all([
-    buildTimeline(auth.device.wallet, 30),
-    readAgentState(auth.device.wallet),
-  ]);
+  const { items, unavailable } = await buildTimeline(auth.device.wallet, 30);
   const w = auth.device.wallet;
   return NextResponse.json({
     wallet: `${w.slice(0, 6)}…${w.slice(-4)}`,
     device: { id: auth.device.id, name: auth.device.name },
     items: items.map((i) => ({ ...i, tone: itemTone(i), ...(i.kind === "alert" ? { open_url: ALERTS_CHAT } : {}) })),
     unavailable,
-    // A chat turn ran recently: poll /api/devices/agent (every
-    // agent.next_poll_s) to show the agent working. Null = could not read.
-    agent_active: agent ? agent.active : null,
     next_poll_s: FEED_POLL_S,
   }, { headers: NO_STORE });
 }
