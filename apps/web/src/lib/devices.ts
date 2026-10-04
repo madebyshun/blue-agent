@@ -1,6 +1,7 @@
 /**
  * Linked devices — a READ-ONLY token for BlueBot (the macOS notch app, and
- * later the physical BlueBot), issued by a device-code flow (RFC 8628 shape).
+ * later the physical BlueBot) and BlueCube (the ESP32 desk screen, kind
+ * "cube", 2026-10-04), issued by a device-code flow (RFC 8628 shape).
  * ShunTr approved the route 2026-10-02.
  *
  *   1. The device asks for a code:      POST /api/devices/code   (no auth)
@@ -46,7 +47,7 @@ export const MAX_DEVICES = 5;
 export const FEED_POLL_S = 180;
 export const TOKEN_POLL_S = 5;
 
-export type DeviceKind = "mac" | "bot";
+export type DeviceKind = "mac" | "bot" | "cube";
 
 export type DeviceScope = "read" | "chat" | "alerts";
 export const OPTIONAL_SCOPES: readonly DeviceScope[] = ["chat", "alerts"];
@@ -62,7 +63,7 @@ export function deviceScopes(d: { scopes?: DeviceScope[] }): DeviceScope[] {
   return Array.isArray(d.scopes) && d.scopes.length ? d.scopes : ["read"];
 }
 export const hasScope = (d: { scopes?: DeviceScope[] }, s: DeviceScope) => deviceScopes(d).includes(s);
-export const DEVICE_KINDS: readonly DeviceKind[] = ["mac", "bot"];
+export const DEVICE_KINDS: readonly DeviceKind[] = ["mac", "bot", "cube"];
 
 /** No vowels (no accidental words), no 0/O/1/I/U/Y look-alikes. */
 const CODE_ALPHABET = "BCDFGHJKLMNPQRSTVWXZ23456789";
@@ -103,7 +104,7 @@ export function newUserCode(rand: (n: number) => Buffer = randomBytes): string {
 /** A device-supplied label, made safe to show: printable, short, never empty. */
 export function cleanDeviceName(raw: unknown, kind: DeviceKind): string {
   const s = typeof raw === "string" ? raw.replace(/[\u0000-\u001f\u007f<>]/g, "").replace(/\s+/g, " ").trim().slice(0, 40) : "";
-  return s || (kind === "mac" ? "BlueBot for Mac" : "BlueBot");
+  return s || (kind === "mac" ? "BlueBot for Mac" : kind === "cube" ? "BlueCube" : "BlueBot");
 }
 
 export const isTokenShaped = (t: string) => TOKEN_RE.test(t);
@@ -225,6 +226,23 @@ export async function listDevices(wallet: string): Promise<DeviceListEntry[] | n
   if (p.status === "error") return null;
   const now = Date.now();
   return p.status === "hit" && Array.isArray(p.value) ? p.value.filter((d) => d.expiresAt > now) : [];
+}
+
+/**
+ * Does this wallet have any live linked device? Read by /api/chat on every
+ * tool turn to decide whether to write agent activity at all, so a wallet
+ * with no device costs one KV read per turn and never a write. Memoized 60s
+ * per instance: linking is rare, chat turns are not (#148).
+ */
+const linkedMemo = new Map<string, { at: number; v: boolean }>();
+export async function hasLinkedDevices(wallet: string): Promise<boolean> {
+  const w = wallet.toLowerCase();
+  const hit = linkedMemo.get(w);
+  if (hit && Date.now() - hit.at < 60_000) return hit.v;
+  const list = await listDevices(w);
+  const v = !!list && list.length > 0;
+  linkedMemo.set(w, { at: Date.now(), v });
+  return v;
 }
 
 export async function revokeDevice(wallet: string, id: string): Promise<"ok" | "not_found" | "unavailable"> {
