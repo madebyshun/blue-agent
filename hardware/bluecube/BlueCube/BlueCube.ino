@@ -47,7 +47,7 @@
 
 #include "cube_render.h"
 
-#define FW_VERSION "1.2.1"
+#define FW_VERSION "1.2.2"
 
 // --- DISPLAY PINS ---
 #define TFT_SCLK   13
@@ -114,6 +114,10 @@ uint32_t cardUntil = 0;
 // --- OTA ---
 char     updCode[5] = "";
 uint32_t updUntil = 0;
+int      updWrong = 0;         // wrong codes against the current one
+String   updVerdict;           // "ok" | "wrong" | "expired" | "nofile", set as the upload starts
+#define  UPD_VALID_MS  (10UL * 60 * 1000)   // long enough to export a .bin in the IDE
+#define  UPD_MAX_WRONG 3
 bool     updAuthorised = false, updFailed = false;
 String   updError;          // why the last upload failed, shown on the page
 bool     otaPendingVerify = false;
@@ -424,22 +428,33 @@ void handleLink()   { if (!token.length() && !pairing) startPairing(); redirectH
 void handleUnlink() { unlink(); redirectHome(); shownScreen = SCR_NONE; }
 
 // --- firmware update: a 4-digit code on the cube authorises the upload ---
+bool updCodeLive() { return updCode[0] && millis() < updUntil; }
+void updCodeClear() { updCode[0] = 0; updUntil = 0; updWrong = 0; shownScreen = SCR_NONE; }
+
 void handleUpdatePage() {
-  snprintf(updCode, sizeof updCode, "%04u", (unsigned)(esp_random() % 10000));
-  updUntil = millis() + 120000;
-  Serial.printf("[ota] update code %s (valid 2 min)\n", updCode);   // for whoever holds the USB cable
+  // Reopening the page (or a browser prefetching it) keeps the live code:
+  // a fresh code on every GET silently invalidated the one on the screen.
+  if (!updCodeLive()) {
+    snprintf(updCode, sizeof updCode, "%04u", (unsigned)(esp_random() % 10000));
+    updWrong = 0;
+    Serial.printf("[ota] update code %s (valid 10 min)\n", updCode);   // for whoever holds the USB cable
+  }
+  updUntil = millis() + UPD_VALID_MS;
   shownScreen = SCR_NONE;   // show the code now
+  uint32_t mins = (updUntil - millis() + 59999) / 60000;
   String h; h.reserve(2500);
   h += FPSTR(PAGE_HEAD);
-  h += F("<h1>Update firmware</h1><p class='s'>The cube now shows a 4-digit code. Enter it, choose the .bin, and upload. "
-         "If the new build cannot reach blueagent.dev within 3 minutes of starting, the cube rolls back on its own.</p>"
+  h += "<h1>Update firmware</h1><p class='s'>The cube now shows a 4-digit code, good for " + String(mins) +
+       " minutes. Enter it, choose the .bin, and upload. Tip: export the .bin in the Arduino IDE first, then open this page. "
+       "If the new build cannot reach blueagent.dev within 3 minutes of starting, the cube rolls back on its own.</p>";
+  h += F(
          "<form id='f' method='POST' enctype='multipart/form-data'>"
          "<input type='text' id='code' inputmode='numeric' maxlength='4' placeholder='Code on the cube'>"
          "<input type='file' name='fw' accept='.bin'>"
          "<p class='s'>Use <b>BlueCube.ino.bin</b> from Sketch &rarr; Export Compiled Binary. Not the "
          "<i>.merged.bin</i> or <i>bootloader.bin</i> beside it.</p>"
-         "<button>Upload</button></form><a class='btn ghost' href='/'>Cancel</a>"
-         "<script>f.onsubmit=()=>{f.action='/update?code='+encodeURIComponent(code.value);};</script></body></html>");
+         "<button>Upload</button></form><a class='btn ghost' href='/update/cancel'>Cancel</a>"
+         "<script>f.onsubmit=()=>{f.action='/update?code='+encodeURIComponent(code.value.replace(/\\D/g,''));};</script></body></html>");
   web.send(200, "text/html; charset=utf-8", h);
 }
 
@@ -453,9 +468,12 @@ void handleUpdateUpload() {
     Serial.printf("[ota] %s\n", why.c_str());
   };
   if (up.status == UPLOAD_FILE_START) {
-    updAuthorised = updCode[0] && millis() < updUntil && web.arg("code") == updCode;
+    String given = web.arg("code"); given.trim();
+    updVerdict = !updCodeLive() ? "expired" : given == updCode ? "ok" : "wrong";
+    updAuthorised = updVerdict == "ok";
     updFailed = false; updError = ""; firstChunk = true; received = 0;
-    if (!updAuthorised) { updError = "Wrong or expired code."; Serial.println("[ota] wrong or expired code"); return; }
+    if (!updAuthorised) { Serial.printf("[ota] code %s\n", updVerdict.c_str()); return; }
+    if (up.filename.length() == 0) { fail("No file was chosen. Choose BlueCube.ino.bin."); return; }
     String name = up.filename; name.toLowerCase();
     if (name.indexOf("merged") >= 0 || name.indexOf("bootloader") >= 0 || name.indexOf("partitions") >= 0) {
       fail("\"" + up.filename + "\" is not the app image. Choose BlueCube.ino.bin, the file next to it without .merged / bootloader / partitions in its name.");
@@ -486,13 +504,38 @@ void handleUpdateUpload() {
 }
 
 void handleUpdateDone() {
-  updCode[0] = 0; updUntil = 0; shownScreen = SCR_NONE;
-  if (!updAuthorised) { web.send(403, "text/plain", "Wrong or expired code. Open /update again for a new one."); return; }
-  if (updFailed || Update.hasError()) {
-    web.send(500, "text/plain", "Update failed. The cube keeps its current firmware.\n\n" +
-             (updError.length() ? updError : String(Update.errorString())));
+  // No file part at all: the upload callback never ran.
+  if (updVerdict == "") updVerdict = "nofile";
+  String v = updVerdict;
+  updVerdict = "";
+  bool authorised = updAuthorised;
+  updAuthorised = false;
+  if (v == "nofile") { web.send(400, "text/plain", "No file was attached. Choose BlueCube.ino.bin and try again. The code on the cube still works."); return; }
+  if (v == "expired") {
+    updCodeClear();
+    web.send(403, "text/plain", "That code expired. Open /update again: the cube will show a new one, good for 10 minutes.");
     return;
   }
+  if (!authorised) {
+    // A typo should not cost the code; three wrong guesses retire it.
+    if (++updWrong >= UPD_MAX_WRONG) {
+      updCodeClear();
+      web.send(403, "text/plain", "Wrong code three times, so it was retired. Open /update again for a new one.");
+    } else {
+      web.send(403, "text/plain", String("Wrong code. Check the 4 digits on the cube and try again (") +
+               (UPD_MAX_WRONG - updWrong) + " tries left). The code on the cube still works.");
+    }
+    return;
+  }
+  if (updFailed || Update.hasError()) {
+    if (Update.isRunning()) Update.abort();
+    // Keep the code: the usual fix is choosing the right file, not a new code.
+    web.send(500, "text/plain", "Update failed. The cube keeps its current firmware.\n\n" +
+             (updError.length() ? updError : String(Update.errorString())) +
+             "\n\nThe code on the cube still works for another try.");
+    return;
+  }
+  updCodeClear();
   web.send(200, "text/plain", "Installed. The cube restarts now.");
   delay(500);
   ESP.restart();
@@ -506,6 +549,7 @@ void setupWeb() {
   web.on("/link", handleLink);
   web.on("/unlink", handleUnlink);
   web.on("/update", HTTP_GET, handleUpdatePage);
+  web.on("/update/cancel", []() { updCodeClear(); redirectHome(); });
   web.on("/update", HTTP_POST, handleUpdateDone, handleUpdateUpload);
   web.onNotFound(redirectHome);
   web.begin();
