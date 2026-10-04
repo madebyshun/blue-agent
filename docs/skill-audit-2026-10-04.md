@@ -60,3 +60,18 @@ RH 4663: `rh-rwa-verify`, `rh-token-scan`, `rh-stock-arb`, `rh-stock-swap-quote`
 - An toàn token: `pre-trade-check` (verdict) + `risk-gate` (calldata) + `contract-trust` (nguồn) — `honeypot-check`/`quick-safety` thành alias.
 - RH lookup: `rh-stock-token` ⊃ `rh-stock-quote` + `rh-stock-search`.
 - Swap RH: `rh-stock-swap-quote` + `rh-stock-swap-prepare` (+ route bên trong).
+
+## Research build mới (2026-10-04, sau rà soát)
+
+Đo + nguồn: Scam Sniffer 2025, revoke.cash 2025 review, USENIX Sec 2025 (address poisoning), Zerion API, GoPlus (probe trực tiếp).
+
+| Ứng viên | Nhu cầu | Đối thủ miễn phí | Dữ liệu free trên Base | Kết luận |
+|---|---|---|---|---|
+| Giải mã tx + chữ ký trước khi ký (Permit/Permit2/7702) | Cao — Permit là nhóm lớn nhất trong vụ trộm ≥$1M 2025 ($8.72M/3 vụ) | Một phần (Tenderly cần tài khoản, Blockaid enterprise) | `eth_simulateV1` + `traceTransfers` chạy trên mainnet.base.org (đo) | **Build #1** |
+| Audit phơi nhiễm ví + dựng tx revoke chưa ký (+7702) | Vừa — approval exploit giảm còn ~$6M 2025 | **Cao** cho list ERC-20 (GoPlus free trên Base) | Blockscout getLogs full history ~1–6s (đo) | **Build #2**, phải hơn GoPlus: Permit2, NFT, đọc lại allowance, calldata revoke |
+| Kiểm tra người nhận / chống address poisoning | Cao — 270M lần tấn công, ≥$83.8M (ETH+BSC); vụ $50M 12/2025 | Thấp–vừa | Blockscout history + GoPlus address_security (có `sanctioned`, 8453 + 4663) | **Build #3**, WARN chứ không BLOCK |
+| PnL / giá vốn | Có | **Rất cao** — Zerion FIFO PnL, free 2.000 req/ngày, $0.01/call qua x402, có Base + RH | Khó, dễ sai số | **Không build** |
+| Spread Base ↔ RH | Hẹp | — | Đã có endpoint (64014c82) | Đã làm |
+| Sanctions / 7702 riêng lẻ | — | GoPlus free | Chainlink sanctions oracle KHÔNG có code trên Base (đo) | Gộp vào #2/#3 |
+
+⚠️ Hai probe GoPlus `token_approval_security/8453` cho kết quả khác nhau (ví `0x0295…` trả rỗng dù on-chain có approval cho escrow ACP; agent research thấy ví khác có dữ liệu) ⇒ GoPlus phủ Base không đầy đủ — đúng chỗ tool của mình cần đối chiếu lại bằng on-chain.
