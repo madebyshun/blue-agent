@@ -156,7 +156,10 @@ export function fmtChange(v: number | null): string {
 }
 
 function row(label: string, value: number | null, change: number | null, fmt: (v: number | null) => string): CubeRow {
-  const c = change != null && Number.isFinite(change) ? change : null;
+  // Rounded to the 1 decimal the screen prints, so the sign the cube colours
+  // by always agrees with the text: -0.04 used to print "-0.0%" in red.
+  // `+ 0` folds -0 into 0 before it is serialised.
+  const c = change != null && Number.isFinite(change) ? Math.round(change * 10) / 10 + 0 : null;
   return { label, value: value != null && Number.isFinite(value) ? value : null, text: fmt(value), change: c, changeText: fmtChange(c) };
 }
 

@@ -1,6 +1,6 @@
 /**
- * POST /api/devices/code { name?, kind: "mac" | "bot" } — step 1 of linking a
- * BlueBot (lib/devices.ts). No auth: the device has nothing to prove yet.
+ * POST /api/devices/code { name?, kind: "mac" | "bot" | "cube" } — step 1 of
+ * linking a BlueBot or BlueCube (lib/devices.ts). No auth: the device has nothing to prove yet.
  * Returns the code to SHOW and the secret to POLL with.
  */
 import { NextResponse, type NextRequest } from "next/server";

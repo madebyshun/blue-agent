@@ -85,6 +85,8 @@ async function main() {
     ok(`fmtPrice(${v}) ≤ 9 and not zero`, fmtPrice(v).length <= 9 && !/^\$0\.0+$/.test(fmtPrice(v)), fmtPrice(v));
   }
   ok("fmtChange(-2.07) = -2.1%", fmtChange(-2.07) === "-2.1%");
+  const tiny = await buildFeed("crypto", { ...healthy, coins: async (ids) => Object.fromEntries(ids.map((id) => [id, { usd: 1, change24h: -0.04 }])) }, null, 1);
+  ok("a -0.04% move is 0 with text +0.0%, never a red \"-0.0%\"", tiny.rows[0].change === 0 && tiny.rows[0].changeText === "+0.0%" && !Object.is(tiny.rows[0].change, -0), `${tiny.rows[0].change} ${tiny.rows[0].changeText}`);
 
   console.log("§2/§3 missing data");
   ok("null price → --", fmtPrice(null) === "--" && fmtCompact(NaN) === "--");
