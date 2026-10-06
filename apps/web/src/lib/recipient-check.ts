@@ -109,7 +109,8 @@ async function nativePayees(chain: TxChain, wallet: string): Promise<string[] | 
   return j.items.filter((t) => t.to?.hash && t.value && t.value !== "0").map((t) => t.to!.hash!);
 }
 
-async function goplus(chain: TxChain, addr: string): Promise<{ hard: string[]; soft: string[]; source: string; isContract: boolean | null } | null> {
+/** GoPlus address_security for one address. null = the feed did not answer. */
+export async function addressFlags(chain: TxChain, addr: string): Promise<{ hard: string[]; soft: string[]; source: string; isContract: boolean | null } | null> {
   const j = await getJson(`https://api.gopluslabs.io/api/v1/address_security/${addr}?chain_id=${GOPLUS_CHAIN[chain]}`) as
     { code?: number; result?: Record<string, string> } | null;
   if (!j || j.code !== 1 || !j.result) return null;
@@ -122,7 +123,7 @@ async function goplus(chain: TxChain, addr: string): Promise<{ hard: string[]; s
   };
 }
 
-const label = (f: string) => f.replace(/_/g, " ");
+export const flagLabel = (f: string) => f.replace(/_/g, " ");
 
 export async function recipientReasons(input: RecipientInput): Promise<RecipientReason[]> {
   const { chain } = input;
@@ -149,7 +150,7 @@ export async function recipientReasons(input: RecipientInput): Promise<Recipient
 
   const [code, flags, outgoing, incoming, native] = await Promise.all([
     clientFor(chain).getCode({ address: to as `0x${string}` }).catch(() => undefined),
-    goplus(chain, to),
+    addressFlags(chain, to),
     ADDR.test(sender) ? transfers(chain, sender, "from") : Promise.resolve(null),
     ADDR.test(sender) ? transfers(chain, sender, "to") : Promise.resolve(null),
     ADDR.test(sender) ? nativePayees(chain, sender) : Promise.resolve(null),
@@ -159,9 +160,9 @@ export async function recipientReasons(input: RecipientInput): Promise<Recipient
   if (!flags) {
     reasons.push({ level: "INFO", code: "RECIPIENT_FLAGS_UNREAD", text: "The address-risk feed (GoPlus) did not answer, so this address was not screened for theft, phishing or sanctions." });
   } else if (flags.hard.length) {
-    reasons.push({ level: "BLOCK", code: "RECIPIENT_FLAGGED", text: `This address is flagged for ${flags.hard.map(label).join(", ")}${flags.source ? ` (source: ${flags.source})` : ""}. Do not send to it.` });
+    reasons.push({ level: "BLOCK", code: "RECIPIENT_FLAGGED", text: `This address is flagged for ${flags.hard.map(flagLabel).join(", ")}${flags.source ? ` (source: ${flags.source})` : ""}. Do not send to it.` });
   } else if (flags.soft.length) {
-    reasons.push({ level: "WARN", code: "RECIPIENT_FLAG_DOUBT", text: `An address-risk feed marks this address: ${flags.soft.map(label).join(", ")}${flags.source ? ` (source: ${flags.source})` : ""}. Make sure you know who it belongs to.` });
+    reasons.push({ level: "WARN", code: "RECIPIENT_FLAG_DOUBT", text: `An address-risk feed marks this address: ${flags.soft.map(flagLabel).join(", ")}${flags.source ? ` (source: ${flags.source})` : ""}. Make sure you know who it belongs to.` });
   }
 
   // ── What is at the address ───────────────────────────────────────────────

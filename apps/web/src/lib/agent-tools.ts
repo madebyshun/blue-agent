@@ -773,6 +773,26 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     x402Body: (v) => ({ token: v.token ?? "", chain: v.chain || "base", kind: v.kind || "swap", ...(v.recipient ? { recipient: v.recipient } : {}), ...(v.sender ? { sender: v.sender } : {}) }),
   },
   {
+    id: "sign-check",
+    name: "Sign Check (what will signing this do?)",
+    description: "Call before a wallet signs anything. A transaction is decoded (approve, permit, Permit2, setApprovalForAll, transfer) and simulated with eth_simulateV1, so the answer lists the assets that would leave and arrive. EIP-712 typed data is decoded — ERC-2612 and DAI permits, Permit2 single/batch/transfer-from/witness, Seaport orders — because an off-chain signature moves nothing until the spender uses it. An EIP-7702 authorization names who would run code as the account. Returns PASS / WARN / BLOCK with plain-language summary lines and reason codes, picked in code (no LLM). BLOCK only on evidence: a spender, operator or delegate flagged for theft or sanctions (GoPlus), or a Seaport order that gives items away for nothing. Unlimited or long-lived grants, grants to plain wallets, any 7702 delegation, reverting or out-only simulations, and anything unreadable are WARN. Base 8453 or Robinhood Chain 4663. Free — safety checks should never be gated.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "security",
+    inputs: [
+      { key: "from", label: "Signing wallet 0x… (needed to simulate a tx)", placeholder: "0x…" },
+      { key: "tx", label: "Transaction JSON {to, data, value}", placeholder: "{\"to\":\"0x…\",\"data\":\"0x…\"}" },
+      { key: "typed_data", label: "EIP-712 typed data JSON", placeholder: "{\"domain\":…,\"primaryType\":…,\"message\":…}" },
+      { key: "chain", label: "Chain: base or robinhood", placeholder: "base" },
+    ],
+    isComposite: false,
+    price: "$0.00", priceUSDC: 0,
+    x402Url: `${X402_BASE}/sign-check`,
+    x402Body: (v) => {
+      const parse = (x?: string) => { if (!x) return undefined; try { return JSON.parse(x); } catch { return x; } };
+      return { chain: v.chain || "base", ...(v.from ? { from: v.from } : {}), ...(v.tx ? { tx: parse(v.tx) } : {}), ...(v.typed_data ? { typed_data: v.typed_data } : {}) };
+    },
+  },
+  {
     id: "honeypot-check",
     name: "Honeypot Check",
     description: "Detect honeypot tokens that can be bought but not sold. Transfer tax analysis + rug pattern detection on Base.",

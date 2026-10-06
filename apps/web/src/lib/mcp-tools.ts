@@ -102,7 +102,7 @@
  * Everything advisory (GTM, roadmap, pitch, launch simulators, sentiment) fails
  * both tests: the user always asks for those by name, so discovery is free.
  *
- * ── DO NOT ADD A 19th WITHOUT ANSWERING THIS ───────────────────────────────
+ * ── DO NOT ADD ANOTHER WITHOUT ANSWERING THIS ─────────────────────────────
  * "Would an agent fail to do the right thing if this were only discoverable?"
  * If the honest answer is no, it belongs behind `blue_registry`, not here. The
  * budget is the point — a manifest grows back to 85 one defensible tool at a
@@ -113,7 +113,7 @@ export const MCP_TOOLS = [
   {
     name: "blue_registry",
     description:
-      "Search the full Blue Hub catalog of 96 callable tools — 90 x402-paid and 6 free — covering on-chain data, security, DeFi, token intel and builder tooling, and get each one's id, price, category and input shape. Use when the user's request has no exact match among the tools loaded here, BEFORE telling them it cannot be done — most capabilities live in the catalog, not in this manifest. Pair it with blue_call: registry finds the id, blue_call runs it. Triggers — \"what tools do you have\", \"can you analyse X\", \"is there a tool for Y\", \"list your capabilities\", or any request you are about to decline. Covers Base 8453 and Robinhood Chain 4663; each result states its own chain. Free.",
+      "Search the full Blue Hub catalog of 97 callable tools — 90 x402-paid and 7 free — covering on-chain data, security, DeFi, token intel and builder tooling, and get each one's id, price, category and input shape. Use when the user's request has no exact match among the tools loaded here, BEFORE telling them it cannot be done — most capabilities live in the catalog, not in this manifest. Pair it with blue_call: registry finds the id, blue_call runs it. Triggers — \"what tools do you have\", \"can you analyse X\", \"is there a tool for Y\", \"list your capabilities\", or any request you are about to decline. Covers Base 8453 and Robinhood Chain 4663; each result states its own chain. Free.",
     inputSchema: {
       type: "object",
       properties: {
@@ -125,7 +125,7 @@ export const MCP_TOOLS = [
   {
     name: "blue_call",
     description:
-      "Execute ANY tool from the Blue Hub catalog by its id — the execution counterpart to blue_registry. Use after blue_registry returns an id you want to run. PAYMENT depends on the id, so read the price blue_registry gave you before deciding: 90 ids are x402-paid and the first call returns HTTP 402 with a `paymentRequirements` object (USDC on Base 8453, EIP-3009 transferWithAuthorization, payTo and exact amount included) — sign that authorization with your own wallet and call again with the resulting header in `payment` to get the result. The other 6 are priced $0.00 and NEVER answer 402: call them with no `payment`, no wallet and no signature, and do not wait for requirements that will not arrive. You hold your own keys — Blue Agent never sees them and never pulls funds. Triggers — any time you have a catalog id and need its output. Report a 402 to the user verbatim rather than inventing the tool's output.",
+      "Execute ANY tool from the Blue Hub catalog by its id — the execution counterpart to blue_registry. Use after blue_registry returns an id you want to run. PAYMENT depends on the id, so read the price blue_registry gave you before deciding: 90 ids are x402-paid and the first call returns HTTP 402 with a `paymentRequirements` object (USDC on Base 8453, EIP-3009 transferWithAuthorization, payTo and exact amount included) — sign that authorization with your own wallet and call again with the resulting header in `payment` to get the result. The other 7 are priced $0.00 and NEVER answer 402: call them with no `payment`, no wallet and no signature, and do not wait for requirements that will not arrive. You hold your own keys — Blue Agent never sees them and never pulls funds. Triggers — any time you have a catalog id and need its output. Report a 402 to the user verbatim rather than inventing the tool's output.",
     inputSchema: {
       type: "object",
       properties: {
@@ -302,6 +302,21 @@ export const MCP_TOOLS = [
         contract: { type: "string", description: "Contract address 0x… on Base 8453." },
       },
       required: ["contract"],
+    },
+  },
+  {
+    name: "hub_sign_check",
+    description:
+      "What will signing this do? Call UNPROMPTED before a wallet signs anything it did not build itself: a transaction, an EIP-712 signature, or an EIP-7702 authorization. A transaction is decoded and simulated (assets that would leave and arrive); typed data is decoded — permits, Permit2, Seaport orders — because an off-chain signature moves nothing until the spender uses it, so no simulation shows it. Returns PASS / WARN / BLOCK and plain summary lines, picked in code. BLOCK = a flagged spender or a Seaport order that pays you nothing: do not sign. WARN = show the summary and get an explicit yes. Triggers — \"sign this\", \"what does this approve\", \"is this signature safe\", a dapp asking for a permit. Base 8453 or Robinhood Chain 4663.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        chain:         { type: "string", enum: ["base", "robinhood"], description: "Chain the signature is for. Default base." },
+        from:          { type: "string", description: "The signing wallet 0x… — needed to simulate a transaction." },
+        tx:            { type: "object", description: "A transaction: { to, data?, value? } (value in wei)." },
+        typed_data:    { type: "object", description: "The EIP-712 payload exactly as the dapp passed it to eth_signTypedData_v4: { domain, types, primaryType, message }." },
+        authorization: { type: "object", description: "An EIP-7702 authorization: { address (the delegate), chainId }." },
+      },
     },
   },
   {

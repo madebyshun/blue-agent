@@ -11,7 +11,7 @@
  *   }
  *
  * Protocol: JSON-RPC 2.0 over HTTP POST
- * Tools: 19 — 8 blue_* + 10 hub_* + 1 b20_*
+ * Tools: 20 — 8 blue_* + 11 hub_* + 1 b20_*
  *        CUT FROM 85 ON 2026-09-26. The reasoning, the measurements, and the rule
  *        for adding a 19th all live in the header of lib/mcp-tools.ts — read that
  *        before touching this number. One-line version: 85 always-loaded tools cost
@@ -23,7 +23,7 @@
  *        This line is pinned by apps/web/scripts/docs-truth-check.ts and fails CI if
  *        it drifts. Do not hand-edit it — change the manifest, then update both.
  *
- *        This is NOT the catalog total. `AGENT_TOOLS` holds 96; all 96 stay live at
+ *        This is NOT the catalog total. `AGENT_TOOLS` holds 97; all 97 stay live at
  *        /api/x402/<id> and are now reached through blue_registry → blue_call rather
  *        than by preloading. The hub_* names listed here each map to a real catalog
  *        id (also checked by docs-truth-check.ts, because an MCP tool pointing at a
@@ -130,6 +130,9 @@ const HUB_MAP: Record<string, string> = {
   hub_contract_trust:   "contract-trust",
   hub_wallet_risk:      "wallet-risk",
   hub_liquidity_depth:  "liquidity-depth",
+  // The 20th slot (2026-10-07, plan-build-2026-10-06 D4): reached before a
+  // signature, unprompted, by the same rule (b) as the safety five above.
+  hub_sign_check:       "sign-check",
   // Live chain reads — Base 8453. Quoting any of these from model memory is
   // wrong by construction, which is why they are preloaded rather than found.
   hub_token_price:      "token-price",

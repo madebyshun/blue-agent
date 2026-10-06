@@ -18,7 +18,7 @@ import { TOOL_COUNT, FREE_TOOL_COUNT } from "@/lib/agent-tools";
  * Server-rendered pages do NOT do this: they import and derive (see
  * app/docs/_data.ts, app/docs/api/page.tsx).
  */
-const MCP_TOOL_COUNT = 19;
+const MCP_TOOL_COUNT = 20;
 
 // ── Data ──────────────────────────────────────────────────────────────────────
 
@@ -57,7 +57,7 @@ const SURFACES = [
     icon: "⚡",
     name: "MCP Server",
     handle: "blueagent.dev/api/mcp",
-    desc: `${MCP_TOOL_COUNT} tools via MCP (8 blue_ + 10 hub_ + 1 b20_) — plug into Claude Desktop, Cursor, or any MCP client. No API key needed. 18 run free; blue_call reaches the rest of the catalog and charges x402.`,
+    desc: `${MCP_TOOL_COUNT} tools via MCP (8 blue_ + 11 hub_ + 1 b20_) — plug into Claude Desktop, Cursor, or any MCP client. No API key needed. 18 run free; blue_call reaches the rest of the catalog and charges x402.`,
     link: "https://blueagent.dev/api/mcp",
     linkLabel: "Connect MCP →",
     color: "#F59E0B",

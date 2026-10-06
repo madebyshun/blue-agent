@@ -629,6 +629,20 @@ const ALL_HUB_TOOLS = [
     },
   },
   {
+    name: "hub_sign_check",
+    description: "What will signing this do? Use when the user pastes a transaction, an EIP-712 signature request (permit, Permit2, Seaport order) or an EIP-7702 authorization a dapp asked them to sign, or asks \"is this signature safe\" / \"what does this approve\". Decodes it and simulates a transaction; returns PASS / WARN / BLOCK and summary lines decided in code. Relay the summary lines and the verdict as given; never soften a BLOCK. Base 8453 or Robinhood Chain 4663.",
+    input_schema: {
+      type: "object",
+      properties: {
+        chain:         { type: "string", enum: ["base", "robinhood"], description: "Default base." },
+        from:          { type: "string", description: "The signing wallet 0x… — the user's connected wallet. Needed to simulate a transaction." },
+        tx:            { type: "object", description: "A transaction { to, data?, value? } (value in wei)." },
+        typed_data:    { type: "object", description: "The EIP-712 payload { domain, types, primaryType, message } exactly as pasted." },
+        authorization: { type: "object", description: "An EIP-7702 authorization { address, chainId }." },
+      },
+    },
+  },
+  {
     name: "hub_risk_gate",
     description: "Screen any transaction before execution — rug check, AML, malicious contract patterns. Use when user wants to verify a transaction, address, or contract is safe.",
     input_schema: {
@@ -1190,6 +1204,7 @@ const TOOL_ENDPOINT: Record<string, string> = {
   hub_deep_analysis:    "deep-analysis",
   hub_honeypot:         "honeypot-check",
   hub_risk_gate:        "risk-gate",
+  hub_sign_check:       "sign-check",
   hub_contract_trust:   "contract-trust",
   hub_key_exposure:     "key-exposure",
   hub_market_fit:       "market-fit",
@@ -2299,6 +2314,9 @@ async function callHubTool(
       // inbound /api/chat request carried the internal key — free-bypasses
       // paid tools for a cron job with no end user; anyone else is a guest
       // and gets WALLET_REQUIRED on a paid tool.
+      // The signing wallet for a simulation is the user's own connected wallet
+      // when the model did not name one.
+      if (toolName === "hub_sign_check" && !args.from && userAddress) args = { ...args, from: userAddress };
       const r = await runInternalTool({
         tool:      endpoint,
         body:      args,

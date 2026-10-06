@@ -83,7 +83,7 @@ JSON Schema per tool) · [`llms.txt`](https://blueagent.dev/llms.txt) (short bri
      Source of truth: apps/web/src/lib/agent-tools.ts (AGENT_TOOLS).
      Body fields are the WIRE shape (post-x402Body), not the Hub form. -->
 
-Blue Hub exposes **96 tools** across 10 categories — 90 paid, 6 free.
+Blue Hub exposes **97 tools** across 10 categories — 90 paid, 7 free.
 
 Categories: on-chain · signal · security · intelligence · builder · trading · base-ecosystem · earn · portfolio · content
 
@@ -92,8 +92,8 @@ USDC `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`. Fields marked `*` are require
 every other field has a server-side default. Machine-readable equivalent, with
 full JSON Schema per tool: https://blueagent.dev/api/catalog
 
-The 6 priced $0.00 never answer 402 and never ask for a signature:
-`blue-doctor` · `hood-live` · `hood-track-record` · `pre-trade-check` · `rh-rwa-verify` · `rh-token-scan`.
+The 7 priced $0.00 never answer 402 and never ask for a signature:
+`blue-doctor` · `hood-live` · `hood-track-record` · `pre-trade-check` · `sign-check` · `rh-rwa-verify` · `rh-token-scan`.
 Do not build an authorization for them — there is nothing to sign and no
 transfer to make.
 
@@ -141,7 +141,7 @@ transfer to make.
 | `rh-stock-flow` | $0.10 | `ticker`* | Buy vs sell pressure over 24h from GeckoTerminal trades feed. Hard-mapped verdict (BUY_HEAVY / SELL_HEAVY / BALANCED) at 10% net-of-total threshold. Never fabricates flow. |
 | `rh-stock-movers` | $0.05 | `limit` `min_tvl_usd` `min_volume_24h_usd` | Top gainers / losers 24h among Robinhood Chain tokenized stocks & ETFs. Dust-pool filter (default min $5k TVL + $500 24h volume) drops noise pools that would otherwise quote AAPL at $868 via a $453-TVL pool. Sign-filtered so a token with -1.56% never lands in gainers. Filtered pools surface as filtered_out for transparency. |
 
-### security (17)
+### security (18)
 
 | id | price | body | what it does |
 |---|---|---|---|
@@ -160,6 +160,7 @@ transfer to make.
 | `rh-stock-beacon-check` | $0.05 | `ticker` `contract` | EIP-1967 beacon slot + implementation + admin/owner read for a RWA token proxy. Governance-risk snapshot — compare across runs to detect implementation upgrades. Real on-chain storage reads. |
 | `rh-token-scan` | $0.00 | `contract`* | What can the owner still do to this token? Reads a Virtuals AgentToken / AgentTokenV4 on Robinhood Chain 4663 straight off the bytecode: buy/sell tax in basis points, projectTaxRecipient, vault, owner and pendingOwner, the blacklists(address) lever, and the bot-protection window. Selector probes, not contract names — a deployer picks the name, not the bytecode. Every unread field stays null and is listed in `unread`, because on this template a zero owner, a zero pendingOwner and a zero bot window are all the reassuring answer. No LLM. Free — safety checks should never be gated. |
 | `risk-gate` | $0.20 | `to`* `action` `value` | Pre-transaction risk assessment — screen any address or swap for drainer patterns, AML signals, and malicious contracts. |
+| `sign-check` | $0.00 | `chain` `from` `tx` `typed_data` | Call before a wallet signs anything. A transaction is decoded (approve, permit, Permit2, setApprovalForAll, transfer) and simulated with eth_simulateV1, so the answer lists the assets that would leave and arrive. EIP-712 typed data is decoded — ERC-2612 and DAI permits, Permit2 single/batch/transfer-from/witness, Seaport orders — because an off-chain signature moves nothing until the spender uses it. An EIP-7702 authorization names who would run code as the account. Returns PASS / WARN / BLOCK with plain-language summary lines and reason codes, picked in code (no LLM). BLOCK only on evidence: a spender, operator or delegate flagged for theft or sanctions (GoPlus), or a Seaport order that gives items away for nothing. Unlimited or long-lived grants, grants to plain wallets, any 7702 delegation, reverting or out-only simulations, and anything unreadable are WARN. Base 8453 or Robinhood Chain 4663. Free — safety checks should never be gated. |
 | `token-distribution` | $0.05 | `contract`* | Holder concentration + rug-risk distribution score (Moralis holders). |
 | `wallet-risk` | $0.05 | `address`* | AML / risk screen for a Base wallet from real on-chain flow (Moralis). |
 
@@ -263,7 +264,7 @@ them.
 
 The MCP surface is deliberately a **subset**, not a mirror.
 
-MCP serves 19 tools — 8 `blue_` + 10 `hub_` + 1 `b20_`.
+MCP serves 20 tools — 8 `blue_` + 11 `hub_` + 1 `b20_`.
 
 Only the 10 `hub_` tools and `blue_doctor` are drawn from the 115-tool catalog; `blue_` are the door
 (`blue_registry`, `blue_call`), the execution primitives and two console commands, and `b20_`
@@ -274,7 +275,7 @@ surface you are actually calling.
 **Cut from 85 to 18 on 2026-09-26, and the cut removed no capability.** The 85-tool manifest
 was 32,160 bytes — roughly 8,000 tokens spent before the agent read a single word of the user's
 question — and published MCP research finds tool-selection accuracy degrades sharply past
-~40 always-loaded entries. All 96 catalog tools remain live at `/api/x402/<id>`; `blue_registry`
+~40 always-loaded entries. All 97 catalog tools remain live at `/api/x402/<id>`; `blue_registry`
 lists them and `blue_call` runs any of them, so the rest moved from "always in context" to
 "one lookup away". A manifest is a context budget, not an inventory.
 
