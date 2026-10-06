@@ -277,8 +277,12 @@ async function resetArrows() {
 
     if (ARROWS_FROZEN) {
       const badLink = await say("/start link_NOPE00");
-      check("4.2 frozen: a stale deep link is not sent back for a button that is hidden",
-        badLink.length > 0 && !/Get alerts on Telegram/i.test(badLink) && badLink.includes(ARROWS_FROZEN_SINCE), badLink.slice(0, 160));
+      // The Hood button stays hidden while frozen, but since 2026-10-07 Blue
+      // Chat's price-alert card carries one (Telegram delivery of watches,
+      // lib/watches/deliver.ts) — so the reply may send the user THERE, never
+      // to Blue Hood, and still says signals are paused and since when.
+      check("4.2 frozen: a stale deep link points at Blue Chat's button, never the hidden Hood one",
+        badLink.length > 0 && !/Open Blue Hood, tap/i.test(badLink) && (!/Get alerts on Telegram/i.test(badLink) || /in Blue Chat/i.test(badLink)) && badLink.includes(ARROWS_FROZEN_SINCE), badLink.slice(0, 200));
       const mute = await say("/mute");
       check("4.2 frozen /mute promises neither re-enrolment nor linked alerts",
         !/Send \/start any time/i.test(mute) && !/still come through/i.test(mute), mute.slice(0, 160));

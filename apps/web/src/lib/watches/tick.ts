@@ -20,6 +20,7 @@ import { nextFireAt } from "@/lib/cron-schedule";
 import { pushFeed, type FeedEntry } from "@/lib/activity";
 import { readReadings } from "./prices";
 import { mutateWatches, pushAlerts, readManyWatches, watchOwners } from "./store";
+import { deliverAlerts } from "./deliver";
 import { CASH, type Watch, type WatchAlert } from "./types";
 
 /** A scheduled watch (automation) is read only when its check is due. */
@@ -110,7 +111,12 @@ export async function runWatchTick(now: number, deadline = now + 45_000): Promis
       }, { fromTick: true });
       if (res !== "ok") continue;
       const out = [...alerts.values()].filter((a) => applied.has(a.watchId));
-      if (await pushAlerts(owner, out)) fired += out.length;
+      if (await pushAlerts(owner, out)) {
+        fired += out.length;
+        // Outside the app: Telegram for a wallet its owner linked (deliver.ts).
+        // Only after the alert is recorded, so the record never depends on it.
+        await deliverAlerts(owner, out);
+      }
       await pushFeed(owner, [...feed.entries()].filter(([id]) => applied.has(id)).map(([, e]) => e));
     }
     return { owners: owners.length, watches: all.length, fired, ...(deferred ? { deferred } : {}) };

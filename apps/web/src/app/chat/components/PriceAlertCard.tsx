@@ -10,6 +10,7 @@ import Link from "next/link";
 import { useEnsureSession } from "@/hooks/useEnsureSession";
 import { ConnectButton } from "@/components/ConnectModal";
 import { localTz } from "@/lib/cron-schedule";
+import { TelegramAlertsButton } from "@/components/wallet/TelegramAlertsButton";
 
 export interface PriceAlertDraft {
   kind: "price_alert_draft";
@@ -61,9 +62,13 @@ export function PriceAlertCard({ result, account }: { result: PriceAlertDraft; a
         {!account ? (
           <ConnectButton label="Connect to arm" />
         ) : state === "armed" ? (
-          <p className="font-mono text-[11px] text-emerald-400">
-            Armed. <Link href="/cron" className="underline hover:text-emerald-300">See all alerts →</Link>
-          </p>
+          <div className="space-y-1">
+            <p className="font-mono text-[11px] text-emerald-400">
+              Armed. <Link href="/cron" className="underline hover:text-emerald-300">See all alerts →</Link>
+            </p>
+            {/* Delivery outside the app (lib/watches/deliver.ts). */}
+            <TelegramAlertsButton address={account} />
+          </div>
         ) : (
           <>
             <button onClick={arm} disabled={state === "busy"}

@@ -52,6 +52,7 @@ import type { HoodSnapshot } from "@/lib/blue-hood/types";
 import { readPublicArrows } from "@/lib/blue-hood/public-feed";
 import { computeHitRate } from "@/lib/blue-hood/hit-rate-gate";
 import { absoluteUrl } from "@/lib/site-url";
+import { setWatchAlertsMuted, watchAlertsMuted } from "@/lib/watches/deliver";
 
 export const runtime = "nodejs";
 
@@ -124,6 +125,7 @@ async function handleStart(rest: string, from?: TgUser): Promise<string> {
     `• <code>/drift TICKER</code> — ${driftHelp()}`,
     `• <code>/track</code> — public hit-rate${ARROWS_FROZEN ? " (historical)" : ""}`,
     `• <code>/mute</code> — ${ARROWS_FROZEN ? "leave the broadcast list" : "stop broadcasts (your watchlist alerts stay)"}`,
+    `• <code>/alerts off</code> / <code>/alerts on</code> — Blue Chat price alerts for your linked wallet`,
   ];
   // Trading straight from a signal is its own switch (arrow-freeze.ts), off
   // since 2026-09-30 — only point at it while it exists.
@@ -143,7 +145,9 @@ async function handleStart(rest: string, from?: TgUser): Promise<string> {
       `🎯 <b>Blue Hood</b>`,
       `Oracle-vs-DEX readings for tokenized stocks on Base and Robinhood Chain.`,
       ``,
-      `⏸ <b>Signals are paused.</b> ${esc(ARROWS_FROZEN_NOTE)} No alerts are sent while that holds, so there is nothing to subscribe to here yet.`,
+      `⏸ <b>Signals are paused.</b> ${esc(ARROWS_FROZEN_NOTE)} No Hood signals are sent while that holds.`,
+      ``,
+      `🔔 Price alerts and automations you set in Blue Chat CAN be sent here: set one, then tap “Get alerts on Telegram” on its card.`,
       ``,
       ...safety,
       ``,
@@ -190,6 +194,21 @@ function driftHelp(): string {
 }
 
 /**
+ * `/alerts [on|off]` — Blue Chat price alerts and automations for the linked
+ * wallet (lib/watches/deliver.ts, 2026-10-07). Separate from /mute, which is
+ * the Hood broadcast list: a user can stop one without the other.
+ */
+async function handleWatchAlerts(arg: string, from?: TgUser): Promise<string> {
+  if (!from?.id) return `Couldn't read your Telegram id — please try again.`;
+  const a = arg.trim().toLowerCase();
+  if (a === "off") { await setWatchAlertsMuted(from.id, true); return `🔕 Blue Chat price alerts are off here. Send /alerts on to resume.`; }
+  if (a === "on") { await setWatchAlertsMuted(from.id, false); return `🔔 Blue Chat price alerts are on for your linked wallet.`; }
+  return (await watchAlertsMuted(from.id))
+    ? `Blue Chat price alerts are OFF here. Send /alerts on to resume.`
+    : `Blue Chat price alerts are ON for your linked wallet. Send /alerts off to stop them.`;
+}
+
+/**
  * Shared wallet-link reply used by BOTH `/link CODE` (manual fallback) and the
  * `/start link_<code>` deep link. Never reveals a wallet on failure — a bad or
  * expired code was never bound to one.
@@ -200,11 +219,14 @@ async function linkReply(rawCode: string, from?: TgUser): Promise<string> {
   // one points at a button that is not there — and "you'll get alerts" is a
   // delivery nothing performs. An old deep link still lands here; answer it
   // truthfully rather than refuse it.
-  const paused = `⏸ ${esc(ARROWS_FROZEN_NOTE)} No alerts are sent while that holds.`;
+  // Since 2026-10-07 a linked wallet DOES get something while frozen: its Blue
+  // Chat price alerts and automations (lib/watches/deliver.ts). Only Hood
+  // signals are paused, so only they are described as paused.
+  const paused = `⏸ Hood signals are paused (${esc(ARROWS_FROZEN_NOTE)}). Blue Chat price alerts still arrive here.`;
   const code = (rawCode.trim().split(/\s+/)[0] ?? "").toUpperCase();
   if (!code) {
     return ARROWS_FROZEN
-      ? paused
+      ? `Send the code from the app, e.g. <code>/link ABC123</code> — or tap “Get alerts on Telegram” on a price alert in Blue Chat.`
       : `Send the code from the app, e.g. <code>/link ABC123</code>. Create yours in Blue Hood.`;
   }
   if (!from?.id) {
@@ -213,12 +235,13 @@ async function linkReply(rawCode: string, from?: TgUser): Promise<string> {
   const res = await consumeTgLinkCode(code, from.id, from.username);
   if (!res.ok) {
     return ARROWS_FROZEN
-      ? `❌ ${esc(res.reason)}.\n${paused}`
+      ? `❌ ${esc(res.reason)}. Tap “Get alerts on Telegram” on a price alert in Blue Chat for a fresh link.\n${paused}`
       : `❌ ${esc(res.reason)}. Open Blue Hood, tap “Get alerts on Telegram” for a fresh link.`;
   }
   if (ARROWS_FROZEN) {
     return [
       `✅ Linked to <code>${esc(shortAddr(res.address))}</code>.`,
+      `🔔 Price alerts and automations you set in Blue Chat will be sent here. A prepared trade is never executed from Telegram — you review and sign it in Blue Chat.`,
       paused,
     ].join("\n");
   }
@@ -249,7 +272,7 @@ async function handleMute(from?: TgUser): Promise<string> {
   if (ARROWS_FROZEN) {
     return [
       `🔕 Muted — you're off the broadcast list.`,
-      `<i>${esc(ARROWS_FROZEN_NOTE)} No alerts are sent while that holds.</i>`,
+      `<i>Hood signals are paused (${esc(ARROWS_FROZEN_NOTE)}). Blue Chat price alerts for a linked wallet still arrive here.</i>`,
     ].join("\n");
   }
   return [
@@ -417,6 +440,9 @@ export async function POST(req: NextRequest) {
         break;
       case "/drift":
         reply = await handleDrift(rest);
+        break;
+      case "/alerts":
+        reply = await handleWatchAlerts(rest, msg.from);
         break;
       case "/track":
         reply = await handleTrack();
