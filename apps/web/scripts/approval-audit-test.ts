@@ -46,9 +46,12 @@ const word = (n: bigint) => encodeAbiParameters([{ type: "uint256" }], [n]);
 const MAXU = 2n ** 256n - 1n;
 const allowance: Record<string, bigint> = { [`${USDC}|${ROUTER}`]: MAXU, [`${USDC}|${DAPP}`]: 5_000_000n, [`${USDC}|${EOA}`]: 1_000_000n, [`${USDC}|${THIEF}`]: 10n ** 12n, [`${USDC}|${OLD}`]: 0n };
 let historyUp = true;
+const seen: string[] = [];
 
 const stub = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = String(input instanceof Request ? input.url : input);
+  if (url.includes("blockscout.com")) seen.push(url);
+  if (url.startsWith("https://api.blockscout.com/")) return new Response("pro down in this test", { status: 503 });
   if (url.includes("blockscout.com/api?module=logs")) {
     if (!historyUp) return Response.json({ message: "Too many requests", result: null, status: "0" }, { status: 429 });
     const u = new URL(url);
@@ -130,6 +133,16 @@ const P2 = [{ type: "function", name: "approve", stateMutability: "nonpayable", 
   const res = await HANDLERS["approval-audit"](new Request("https://x/api/x402/approval-audit", { method: "POST", body: JSON.stringify({ wallet: OWNER, fresh: true }) }));
   ok("the route answers 502 (not charged, not 'no approvals')", res.status === 502);
   historyUp = true;
+
+  console.log("6. optional PRO key");
+  process.env.BLOCKSCOUT_API_KEY = "proapi_test";
+  seen.length = 0;
+  const k = await approvalAudit("base", OWNER, { fresh: true });
+  const pro = seen.filter((u) => u.startsWith("https://api.blockscout.com/v2/api?chain_id=8453&apikey=proapi_test&module=logs"));
+  ok("with a key, the PRO API is asked first (chain_id + apikey)", pro.length === 3, `${pro.length} PRO request(s)`);
+  ok("…and when it fails the keyless instance answers, same result", k.counts.live === 6 && k.unread.length === 0);
+  ok("the key never reaches the per-chain instance", !seen.some((u) => u.includes("base.blockscout.com") && u.includes("proapi_test")));
+  delete process.env.BLOCKSCOUT_API_KEY;
 
   console.log("7. wiring");
   const read = (p: string) => fs.readFileSync(path.resolve(__dirname, "..", p), "utf8");

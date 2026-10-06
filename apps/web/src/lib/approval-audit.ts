@@ -101,22 +101,36 @@ export function __setAuditFetch(f: typeof fetch | null, retryMs = 1_500) { fetch
 type Log = { address: string; topics: (string | null)[]; data: string };
 
 /**
- * Optional key for Blockscout's higher rate tier. MEASURED 2026-10-07: the
- * keyless tier allowed 10 requests, then 429 with an ~8-minute reset, so a
- * production audit needs a key or the cache below. Not printed anywhere.
+ * Blockscout PRO API (docs.blockscout.com/devs/apis/pro-api, read 2026-10-07):
+ * `https://api.blockscout.com/v2/api?chain_id=<id>&…&apikey=…`, Etherscan-
+ * compatible, free tier 5 rps / 100K credits a day. Used when
+ * BLOCKSCOUT_API_KEY is set; the keyless per-chain instance is the fallback.
+ * MEASURED the same day: this machine's IP got 10 keyless requests, then 429
+ * with a reset of minutes — the docs' 300/min default did not hold after a
+ * burst. Not yet exercised with a real key. The key is never logged.
  */
-function apiKeyParam(): string {
+function logsBase(chain: TxChain, keyed: boolean): string {
   const k = process.env.BLOCKSCOUT_API_KEY;
-  return k ? `&apikey=${encodeURIComponent(k)}` : "";
+  return keyed && k
+    ? `https://api.blockscout.com/v2/api?chain_id=${CHAIN_ID[chain]}&apikey=${encodeURIComponent(k)}&`
+    : `${EXPLORER[chain]}/api?`;
 }
 
 /** History by topic0 (or by emitting contract when `topic0` is null) and owner in topic1. */
 async function logs(chain: TxChain, topic0: string | null, owner: string, address?: string): Promise<Log[] | null> {
+  if (process.env.BLOCKSCOUT_API_KEY) {
+    const viaPro = await logsFrom(chain, topic0, owner, address, true);
+    if (viaPro) return viaPro;
+  }
+  return logsFrom(chain, topic0, owner, address, false);
+}
+
+async function logsFrom(chain: TxChain, topic0: string | null, owner: string, address: string | undefined, keyed: boolean): Promise<Log[] | null> {
   const t1 = "0x" + owner.slice(2).toLowerCase().padStart(64, "0");
   const out: Log[] = [];
   for (let page = 1; page <= 5; page++) {
     const sel = topic0 ? `&topic0=${topic0}&topic1=${t1}&topic0_1_opr=and` : `&topic1=${t1}`;
-    const url = `${EXPLORER[chain]}/api?module=logs&action=getLogs&fromBlock=0&toBlock=latest${address ? `&address=${address}` : ""}${sel}&page=${page}&offset=1000${apiKeyParam()}`;
+    const url = `${logsBase(chain, keyed)}module=logs&action=getLogs&fromBlock=0&toBlock=latest${address ? `&address=${address}` : ""}${sel}&page=${page}&offset=1000`;
     try {
       let r = await fetchImpl(url, { headers: { "User-Agent": UA, Accept: "application/json" }, signal: AbortSignal.timeout(15_000) });
       // The free explorer tier answers 429 under bursts (measured 2026-10-07).
@@ -133,6 +147,25 @@ async function logs(chain: TxChain, topic0: string | null, owner: string, addres
     } catch { return page === 1 ? null : out; }
   }
   return out;
+}
+
+
+/**
+ * Run `jobs` at most `n` at a time. The public chain RPCs throttle bursts:
+ * MEASURED 2026-10-07, an unbounded fan-out over 25 pairs left 20 grants
+ * unread on mainnet.base.org.
+ */
+async function pool<T>(jobs: (() => Promise<T>)[], n = 4): Promise<T[]> {
+  const out: T[] = new Array(jobs.length);
+  let i = 0;
+  await Promise.all(Array.from({ length: Math.min(n, jobs.length) }, async () => {
+    while (i < jobs.length) { const k = i++; out[k] = await jobs[k](); }
+  }));
+  return out;
+}
+/** One read, retried once after a short pause. */
+async function read<T>(f: () => Promise<T>): Promise<T> {
+  try { return await f(); } catch { await new Promise((r) => setTimeout(r, 400)); return f(); }
 }
 
 const topicAddr = (t: string | null | undefined) => (t ? ("0x" + t.slice(26)).toLowerCase() : "");
@@ -198,22 +231,22 @@ async function auditUncached(chain: TxChain, wallet: string): Promise<ApprovalAu
   const live: Raw[] = [];
   let closed = 0, stateUnread = 0;
 
-  await Promise.all([
-    ...[...ercPairs.values()].map(async (p) => {
+  await pool([
+    ...[...ercPairs.values()].map((p) => async () => {
       try {
-        const a = await client.readContract({ address: p.token as `0x${string}`, abi: ERC20_ABI, functionName: "allowance", args: [owner as `0x${string}`, p.spender as `0x${string}`] });
+        const a = await read(() => client.readContract({ address: p.token as `0x${string}`, abi: ERC20_ABI, functionName: "allowance", args: [owner as `0x${string}`, p.spender as `0x${string}`] }));
         if (a > 0n) live.push({ type: "erc20", asset: p.token, spender: p.spender, amount: a, expiration: null }); else closed++;
       } catch { stateUnread++; }  // ERC-721 single-token approvals land here too: no allowance()
     }),
-    ...[...opPairs.values()].map(async (p) => {
+    ...[...opPairs.values()].map((p) => async () => {
       try {
-        const on = await client.readContract({ address: p.collection as `0x${string}`, abi: NFT_ABI, functionName: "isApprovedForAll", args: [owner as `0x${string}`, p.operator as `0x${string}`] });
+        const on = await read(() => client.readContract({ address: p.collection as `0x${string}`, abi: NFT_ABI, functionName: "isApprovedForAll", args: [owner as `0x${string}`, p.operator as `0x${string}`] }));
         if (on) live.push({ type: "nft_operator", asset: p.collection, spender: p.operator, amount: UNLIMITED, expiration: null }); else closed++;
       } catch { stateUnread++; }
     }),
-    ...[...p2Pairs.values()].map(async (p) => {
+    ...[...p2Pairs.values()].map((p) => async () => {
       try {
-        const [amount, expiration] = await client.readContract({ address: PERMIT2 as `0x${string}`, abi: PERMIT2_ABI, functionName: "allowance", args: [owner as `0x${string}`, p.token as `0x${string}`, p.spender as `0x${string}`] });
+        const [amount, expiration] = await read(() => client.readContract({ address: PERMIT2 as `0x${string}`, abi: PERMIT2_ABI, functionName: "allowance", args: [owner as `0x${string}`, p.token as `0x${string}`, p.spender as `0x${string}`] }));
         if (amount > 0n && BigInt(expiration) > now) live.push({ type: "permit2", asset: p.token, spender: p.spender, amount, expiration: BigInt(expiration) }); else closed++;
       } catch { stateUnread++; }
     }),
@@ -222,17 +255,17 @@ async function auditUncached(chain: TxChain, wallet: string): Promise<ApprovalAu
 
   // Token metadata + balances, then spender screening (most exposed first).
   const meta = new Map<string, { symbol: string; decimals: number | null; balance: bigint | null }>();
-  await Promise.all([...new Set(live.filter((g) => g.type !== "nft_operator").map((g) => g.asset))].map(async (t) => {
+  await pool([...new Set(live.filter((g) => g.type !== "nft_operator").map((g) => g.asset))].map((t) => async () => {
     let symbol = `${t.slice(0, 6)}…${t.slice(-4)}`, decimals: number | null = null, balance: bigint | null = null;
-    try { const m = await readTokenMeta(chain, t as `0x${string}`); symbol = m.symbol || symbol; decimals = m.decimals; } catch { /* keep address */ }
-    try { balance = await client.readContract({ address: t as `0x${string}`, abi: ERC20_ABI, functionName: "balanceOf", args: [owner as `0x${string}`] }); } catch { /* null */ }
+    try { const m = await read(() => readTokenMeta(chain, t as `0x${string}`)); symbol = m.symbol || symbol; decimals = m.decimals; } catch { /* keep address */ }
+    try { balance = await read(() => client.readContract({ address: t as `0x${string}`, abi: ERC20_ABI, functionName: "balanceOf", args: [owner as `0x${string}`] })); } catch { /* null */ }
     meta.set(t, { symbol, decimals, balance });
   }));
   const exposure = (g: Raw) => { const b = meta.get(g.asset)?.balance; return g.type === "nft_operator" ? 1n : b == null ? 0n : (g.amount < b ? g.amount : b); };
   live.sort((a, b) => (exposure(b) > exposure(a) ? 1 : -1));
   const spenders = [...new Set(live.map((g) => g.spender))];
   const screened = new Map<string, { flags: string[] | null; contract: boolean | null }>();
-  await Promise.all(spenders.slice(0, MAX_SCREEN).map(async (s) => {
+  await pool(spenders.slice(0, MAX_SCREEN).map((s) => async () => {
     const [f, code] = await Promise.all([
       addressFlags(chain, s),
       client.getCode({ address: s as `0x${string}` }).then((c) => !!c && c !== "0x").catch(() => null),

@@ -52,8 +52,6 @@ const EXPLORER: Record<TxChain, string> = {
   robinhood: "https://robinhoodchain.blockscout.com",
 };
 const GOPLUS_CHAIN: Record<TxChain, number> = { base: 8453, robinhood: 4663 };
-/** Optional key for Blockscout's higher rate tier (keyless: 10 requests, then 429). */
-const bsKey = () => (process.env.BLOCKSCOUT_API_KEY ? `&apikey=${encodeURIComponent(process.env.BLOCKSCOUT_API_KEY)}` : "");
 
 /** GoPlus flags that are evidence of harm → BLOCK. */
 const HARD_FLAGS = [
@@ -91,7 +89,7 @@ async function transfers(chain: TxChain, wallet: string, filter: "from" | "to", 
   const out: Transfer[] = [];
   let next = "";
   for (let p = 0; p < pages; p++) {
-    const j = await getJson(`${EXPLORER[chain]}/api/v2/addresses/${wallet}/token-transfers?filter=${filter}${next}${bsKey()}`) as
+    const j = await getJson(`${EXPLORER[chain]}/api/v2/addresses/${wallet}/token-transfers?filter=${filter}${next}`) as
       { items?: { from?: { hash?: string }; to?: { hash?: string }; total?: { value?: string } }[]; next_page_params?: Record<string, unknown> | null } | null;
     if (!j || !Array.isArray(j.items)) return p === 0 ? null : out;
     for (const it of j.items) {
@@ -105,7 +103,7 @@ async function transfers(chain: TxChain, wallet: string, filter: "from" | "to", 
 
 /** The sender's native-ETH payees (outgoing transactions with value). null = unread. */
 async function nativePayees(chain: TxChain, wallet: string): Promise<string[] | null> {
-  const j = await getJson(`${EXPLORER[chain]}/api/v2/addresses/${wallet}/transactions?filter=from${bsKey()}`) as
+  const j = await getJson(`${EXPLORER[chain]}/api/v2/addresses/${wallet}/transactions?filter=from`) as
     { items?: { to?: { hash?: string } | null; value?: string }[] } | null;
   if (!j || !Array.isArray(j.items)) return null;
   return j.items.filter((t) => t.to?.hash && t.value && t.value !== "0").map((t) => t.to!.hash!);
