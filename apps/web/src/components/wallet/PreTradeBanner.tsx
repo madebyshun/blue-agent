@@ -41,16 +41,21 @@ export function usePreTradeCheck(input: {
   kind: "swap" | "send" | "bridge";
   token: string | null | undefined;
   bridgeCostPercent?: number | null;
+  /** Sends: the destination and the paying wallet (lib/recipient-check.ts). */
+  recipient?: string | null;
+  sender?: string | null;
   enabled?: boolean;
 }) {
   const { chain, kind, token, bridgeCostPercent, enabled = true } = input;
+  const recipient = kind === "send" ? input.recipient ?? null : null;
+  const sender = kind === "send" ? input.sender ?? null : null;
   const cost = typeof bridgeCostPercent === "number" && Number.isFinite(bridgeCostPercent) ? bridgeCostPercent : null;
   // Everything the answer depends on. A result — and a tick — only count for
   // the exact input they were given: change the token, the amount behind a
   // bridge cost, or the chain, and the card is held until the new answer lands.
   // Derived rather than reset in an effect, so there is no render in which an
   // old PASS (or an old tick) stands in for a new trade.
-  const key = JSON.stringify([chain, kind, token ?? "", cost, enabled]);
+  const key = JSON.stringify([chain, kind, token ?? "", cost, recipient, sender, enabled]);
   // A manual retry (after a 429) re-runs the fetch for the SAME input. It is
   // part of the fetch identity, not of `key`, so a tick on a WARN survives it.
   const [nonce, setNonce] = useState(0);
@@ -73,7 +78,7 @@ export function usePreTradeCheck(input: {
       sessionFetch("/api/pretrade-check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chain, kind, token, ...(cost != null ? { bridge_cost_percent: cost } : {}) }),
+        body: JSON.stringify({ chain, kind, token, ...(cost != null ? { bridge_cost_percent: cost } : {}), ...(recipient ? { recipient } : {}), ...(sender ? { sender } : {}) }),
       })
         .then(async (r) => {
           if (!live) return;

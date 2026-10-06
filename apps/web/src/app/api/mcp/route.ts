@@ -754,7 +754,10 @@ async function withPreTradeCheck(kind: ActionKind, args: Record<string, unknown>
   if (!chain || !token) return build();
   let check: PreTradeCheck | null = null;
   if (kind !== "bridge") {
-    check = await preTradeCheck({ chain, kind, token });
+    check = await preTradeCheck({
+      chain, kind, token,
+      ...(kind === "send" ? { recipient: typeof args.toAddress === "string" ? args.toAddress : null, sender: typeof args.fromAddress === "string" ? args.fromAddress : null } : {}),
+    });
     if (check.verdict === "BLOCK") {
       await recordPreTradeBlock(check, { chain, token });
       throw preTradeRefusal(check);

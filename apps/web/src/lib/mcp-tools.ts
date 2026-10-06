@@ -158,7 +158,7 @@ export const MCP_TOOLS = [
   {
     name: "blue_send_tx",
     description:
-      "Build an unsigned ERC-20 or native-ETH transfer the user signs in their OWN wallet, on Base 8453 or Robinhood Chain 4663. Returns { to, data, value, chainId } with the resolved symbol, decimals and exact base-unit amount so the user can verify before signing. Non-custodial — the server encodes calldata and nothing else. Use when the user wants to move tokens to an address. Triggers — \"send 50 USDC to 0x…\", \"transfer TOKEN to\", \"pay this address\". Run hub_risk_gate on the recipient first when the user has not sent there before.",
+      "Build an unsigned ERC-20 or native-ETH transfer the user signs in their OWN wallet, on Base 8453 or Robinhood Chain 4663. Returns { to, data, value, chainId } with the resolved symbol, decimals and exact base-unit amount so the user can verify before signing. Non-custodial — the server encodes calldata and nothing else. Use when the user wants to move tokens to an address. Triggers — \"send 50 USDC to 0x…\", \"transfer TOKEN to\", \"pay this address\". The recipient is checked too: look-alike of a past payee, flagged, a contract, or the token itself.",
     inputSchema: {
       type: "object",
       properties: {

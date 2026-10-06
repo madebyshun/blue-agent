@@ -1,5 +1,5 @@
 /**
- * POST /api/pretrade-check { chain, kind, token, bridge_cost_percent? } → the
+ * POST /api/pretrade-check { chain, kind, token, bridge_cost_percent?, recipient?, sender? } → the
  * G2 pre-trade check (lib/pre-trade-check.ts) for the swap/send/bridge cards.
  *
  * A public read: it reveals nothing about any wallet — only facts about a
@@ -36,6 +36,10 @@ export async function POST(req: NextRequest) {
     kind,
     token,
     bridgeCostPercent: typeof body.bridge_cost_percent === "number" ? body.bridge_cost_percent : null,
+    // Sends: the destination, and the sending wallet to compare it with
+    // (lib/recipient-check.ts). Both optional; they only ever add reasons.
+    recipient: typeof body.recipient === "string" ? body.recipient : null,
+    sender: typeof body.sender === "string" ? body.sender : null,
   });
   // The public meter (G4) counts only what this server measured: a token
   // refused on evidence (lib/action-stats.ts).

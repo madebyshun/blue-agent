@@ -38,6 +38,7 @@ import { measuredHoneypotVerdict } from "@/lib/honeypot-verdict";
 import { clientFor, isNativeToken, readTokenMeta, type TxChain } from "@/lib/tx-chains";
 import { kvGetProbe } from "@/lib/kv";
 import { KV_BASE_ROWS_LATEST, BASE_ROWS_MAX_AGE_MS } from "@/lib/blue-hood/kv-keys";
+import { recipientReasons, type RecipientCode } from "@/lib/recipient-check";
 import { partitionBaseRows, type BaseDeskLatest } from "@/lib/blue-hood/types";
 import { HIGH_COST_PERCENT } from "@/lib/wallet/bridge-pairs";
 
@@ -49,7 +50,8 @@ export type ReasonCode =
   | "BRIDGE_COST" | "BRIDGE_COST_HIGH" | "NOT_ADDRESS" | "IMPOSTOR" | "HONEYPOT"
   | "SELL_LEVER" | "TAX_UNREAD" | "TAX_CLEAN" | "RH_UNREGISTERED" | "WEEKEND"
   | "RH_ORACLE_GAP_PAUSED" | "NO_ORACLE_FEED" | "ISSUER_POLICY" | "DRIFT" | "DRIFT_UNAVAILABLE"
-  | "NOT_A_TOKEN";
+  | "NOT_A_TOKEN"
+  | RecipientCode;
 export type Reason = { level: "BLOCK" | "WARN" | "INFO"; code: ReasonCode; text: string };
 
 export interface PreTradeCheck {
@@ -71,6 +73,11 @@ export interface PreTradeInput {
   token: string;
   /** Bridges only: Relay's total cost as a percent of the amount. */
   bridgeCostPercent?: number | null;
+  /** Sends only: the destination address (lib/recipient-check.ts, 2026-10-07). */
+  recipient?: string | null;
+  /** Sends only: the sending wallet, so the recipient can be compared with
+   *  addresses it has paid before. Unproven input — it only adds reasons. */
+  sender?: string | null;
   /** Injected in tests; defaults to now. */
   now?: Date;
 }
@@ -102,6 +109,19 @@ function weekendReason(now: Date): Reason | null {
 }
 
 export async function preTradeCheck(input: PreTradeInput): Promise<PreTradeCheck> {
+  const recipient = input.kind === "send" && typeof input.recipient === "string" && input.recipient.trim() ? input.recipient : null;
+  if (!recipient) return tokenCheck(input);
+  // A send is two questions: is the token what it claims, and is the address
+  // the one the user means. Both run; the verdict is recomputed from the union.
+  const [t, r] = await Promise.all([
+    tokenCheck(input),
+    recipientReasons({ chain: input.chain, recipient, sender: input.sender ?? null, token: input.token }),
+  ]);
+  const merged = finish(t.asset_type, t.label, [...t.reasons, ...r]);
+  return t.pool ? { ...merged, pool: t.pool } : merged;
+}
+
+async function tokenCheck(input: PreTradeInput): Promise<PreTradeCheck> {
   const now = input.now ?? new Date();
   const reasons: Reason[] = [];
 

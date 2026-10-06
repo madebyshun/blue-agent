@@ -8,6 +8,9 @@
 // buyer, anything that routes elsewhere) could not ask for it on its own. This
 // is that door: same lib/pre-trade-check.ts, no second implementation.
 //
+// For kind=send, pass `recipient` (and `sender`, the paying wallet) and the
+// address is checked too — see lib/recipient-check.ts.
+//
 // What it answers that a DEX API does not: is this address a real token or a
 // pool (read off the contract), an impostor of a canonical stock token (Base
 // B20 desk / Robinhood registry), a honeypot or a taxed token (tax read by
@@ -22,7 +25,7 @@ import { parseTxChain } from "@/lib/tx-chains";
 
 export default async function handler(req: Request): Promise<Response> {
   try {
-    let body: { chain?: unknown; kind?: unknown; token?: unknown; bridge_cost_percent?: unknown } = {};
+    let body: { chain?: unknown; kind?: unknown; token?: unknown; bridge_cost_percent?: unknown; recipient?: unknown; sender?: unknown } = {};
     try { const t = await req.text(); if (t?.trim().startsWith("{")) body = JSON.parse(t); } catch {}
     const url = new URL(req.url);
     const chain = parseTxChain(body.chain ?? url.searchParams.get("chain") ?? "base");
@@ -31,6 +34,8 @@ export default async function handler(req: Request): Promise<Response> {
     const token = String(body.token ?? url.searchParams.get("token") ?? "").trim();
     const costRaw = body.bridge_cost_percent ?? url.searchParams.get("bridge_cost_percent");
     const bridgeCostPercent = costRaw === null || costRaw === undefined || costRaw === "" ? null : Number(costRaw);
+    const recipient = String(body.recipient ?? url.searchParams.get("recipient") ?? "").trim() || null;
+    const sender = String(body.sender ?? url.searchParams.get("sender") ?? "").trim() || null;
 
     if (!chain) return Response.json({ error: "chain must be base (8453) or robinhood (4663)" }, { status: 400 });
     if (!kind) return Response.json({ error: "kind must be swap, send or bridge" }, { status: 400 });
@@ -41,6 +46,8 @@ export default async function handler(req: Request): Promise<Response> {
       kind,
       token,
       bridgeCostPercent: bridgeCostPercent !== null && Number.isFinite(bridgeCostPercent) ? bridgeCostPercent : null,
+      recipient,
+      sender,
     });
 
     return Response.json({
@@ -51,7 +58,7 @@ export default async function handler(req: Request): Promise<Response> {
       token,
       ...check,
       how_to_use: "BLOCK: do not sign. WARN: sign only after showing the reasons to the user. PASS: no evidence of harm was found — not a recommendation to buy.",
-      data_sources: ["Base / Robinhood Chain RPC (eth_getCode, eth_call)", "Blue Hood Base desk + Robinhood RWA registry", "Chainlink oracle"],
+      data_sources: ["Base / Robinhood Chain RPC (eth_getCode, eth_call)", "Blue Hood Base desk + Robinhood RWA registry", "Chainlink oracle", ...(recipient ? ["GoPlus address_security", "Blockscout transfer history"] : [])],
     });
   } catch (e) {
     return Response.json({ error: "pre-trade-check failed", message: (e as Error).message }, { status: 502 });

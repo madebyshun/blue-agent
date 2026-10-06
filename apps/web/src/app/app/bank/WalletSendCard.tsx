@@ -293,10 +293,6 @@ export default function WalletSendCard({
   // never to a placeholder ticker, which on a send screen would be a label
   // claiming an identity nothing read.
   const symbol = asset.symbol || truncAddr(asset.address ?? "");
-  // G2 — the pre-trade check on the asset being sent. A send is never blocked
-  // for an impostor (moving one you hold hurts no one) — it is told, and the
-  // WARN needs a tick; the check's other reasons (B20 issuer policy) are INFO.
-  const pt = usePreTradeCheck({ chain: network === "robinhood" ? "robinhood" : "base", kind: "send", token: asset.address ?? "ETH" });
 
   // ── EIP-5792 ───────────────────────────────────────────────────────────────
   // Routes 5792-capable wallets through `wallet_sendCalls`, which is the only
@@ -429,6 +425,18 @@ export default function WalletSendCard({
   });
   const resolvedAddr = resolvedRaw && resolvedRaw !== ZERO_ADDR ? (resolvedRaw as `0x${string}`) : undefined;
   const toAddress = (recipIsAddr ? recip : (recipIsName ? resolvedAddr : undefined)) as `0x${string}` | undefined;
+
+  // G2 — the pre-trade check on the asset being sent AND, once the address is
+  // complete, on the recipient (lib/recipient-check.ts: zero address, the
+  // token's own contract, a flagged address, a contract, a look-alike of an
+  // address this wallet paid before). A send is never blocked for an impostor
+  // token (moving one you hold hurts no one) — it is told, and the WARN needs a
+  // tick. Declared here, after `toAddress`, because the recipient is part of
+  // the question.
+  const pt = usePreTradeCheck({
+    chain: network === "robinhood" ? "robinhood" : "base", kind: "send", token: asset.address ?? "ETH",
+    recipient: toAddress ?? null, sender: account ?? null,
+  });
 
   const amt = parseFloat(amount);
 
