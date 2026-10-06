@@ -26,7 +26,7 @@
  * An unread source is reported as unread; it never becomes "no approvals".
  */
 import { encodeFunctionData } from "viem";
-import { clientFor, readTokenMeta, type TxChain } from "@/lib/tx-chains";
+import { clientFor, type TxChain } from "@/lib/tx-chains";
 import { addressFlags, flagLabel } from "@/lib/recipient-check";
 import { kvGet, kvSet } from "@/lib/kv";
 
@@ -163,6 +163,29 @@ async function pool<T>(jobs: (() => Promise<T>)[], n = 4): Promise<T[]> {
   }));
   return out;
 }
+const MULTICALL3 = "0xcA11bde05977b3631167028862bE2a173976CA11" as const;
+const META_ABI = [
+  { type: "function", name: "symbol", stateMutability: "view", inputs: [], outputs: [{ type: "string" }] },
+  { type: "function", name: "decimals", stateMutability: "view", inputs: [], outputs: [{ type: "uint8" }] },
+] as const;
+/** Results per call; `undefined` = unread (the call reverted or its chunk failed). */
+async function multiRead(chain: TxChain, calls: readonly unknown[], chunk = 100): Promise<unknown[]> {
+  const out: unknown[] = new Array(calls.length).fill(undefined);
+  const client = clientFor(chain);
+  const jobs: (() => Promise<void>)[] = [];
+  for (let s = 0; s < calls.length; s += chunk) {
+    const part = calls.slice(s, s + chunk);
+    jobs.push(async () => {
+      try {
+        const res = await read(() => client.multicall({ allowFailure: true, multicallAddress: MULTICALL3, batchSize: 0, contracts: part as never })) as { status: string; result?: unknown }[];
+        res.forEach((r, k) => { if (r.status === "success") out[s + k] = r.result; });
+      } catch { /* the chunk stays unread */ }
+    });
+  }
+  await pool(jobs, 2);
+  return out;
+}
+
 /** One read, retried once after a short pause. */
 async function read<T>(f: () => Promise<T>): Promise<T> {
   try { return await f(); } catch { await new Promise((r) => setTimeout(r, 400)); return f(); }
@@ -231,36 +254,55 @@ async function auditUncached(chain: TxChain, wallet: string): Promise<ApprovalAu
   const live: Raw[] = [];
   let closed = 0, stateUnread = 0;
 
-  await pool([
-    ...[...ercPairs.values()].map((p) => async () => {
-      try {
-        const a = await read(() => client.readContract({ address: p.token as `0x${string}`, abi: ERC20_ABI, functionName: "allowance", args: [owner as `0x${string}`, p.spender as `0x${string}`] }));
-        if (a > 0n) live.push({ type: "erc20", asset: p.token, spender: p.spender, amount: a, expiration: null }); else closed++;
-      } catch { stateUnread++; }  // ERC-721 single-token approvals land here too: no allowance()
-    }),
-    ...[...opPairs.values()].map((p) => async () => {
-      try {
-        const on = await read(() => client.readContract({ address: p.collection as `0x${string}`, abi: NFT_ABI, functionName: "isApprovedForAll", args: [owner as `0x${string}`, p.operator as `0x${string}`] }));
-        if (on) live.push({ type: "nft_operator", asset: p.collection, spender: p.operator, amount: UNLIMITED, expiration: null }); else closed++;
-      } catch { stateUnread++; }
-    }),
-    ...[...p2Pairs.values()].map((p) => async () => {
-      try {
-        const [amount, expiration] = await read(() => client.readContract({ address: PERMIT2 as `0x${string}`, abi: PERMIT2_ABI, functionName: "allowance", args: [owner as `0x${string}`, p.token as `0x${string}`, p.spender as `0x${string}`] }));
-        if (amount > 0n && BigInt(expiration) > now) live.push({ type: "permit2", asset: p.token, spender: p.spender, amount, expiration: BigInt(expiration) }); else closed++;
-      } catch { stateUnread++; }
-    }),
-  ]);
+  // Every state read goes through Multicall3 (deployed on both chains), in
+  // chunks: ONE eth_call per chunk. MEASURED 2026-10-07: one eth_call per pair
+  // left 20 of 25 grants unread on mainnet.base.org — the same failure
+  // lib/wallet/base-token-discovery.ts measured and fixed this way. A slot that
+  // does not answer is UNREAD, never a zero.
+  const ercList = [...ercPairs.values()], opList = [...opPairs.values()], p2List = [...p2Pairs.values()];
+  const o = owner as `0x${string}`;
+  const stateCalls = [
+    ...ercList.map((p) => ({ address: p.token as `0x${string}`, abi: ERC20_ABI, functionName: "allowance", args: [o, p.spender as `0x${string}`] })),
+    ...opList.map((p) => ({ address: p.collection as `0x${string}`, abi: NFT_ABI, functionName: "isApprovedForAll", args: [o, p.operator as `0x${string}`] })),
+    ...p2List.map((p) => ({ address: PERMIT2 as `0x${string}`, abi: PERMIT2_ABI, functionName: "allowance", args: [o, p.token as `0x${string}`, p.spender as `0x${string}`] })),
+  ];
+  const st = await multiRead(chain, stateCalls);
+  ercList.forEach((p, i) => {
+    const r = st[i];
+    if (r === undefined) { stateUnread++; return; }           // includes ERC-721 single approvals: no allowance()
+    const a = r as bigint;
+    if (a > 0n) live.push({ type: "erc20", asset: p.token, spender: p.spender, amount: a, expiration: null }); else closed++;
+  });
+  opList.forEach((p, i) => {
+    const r = st[ercList.length + i];
+    if (r === undefined) { stateUnread++; return; }
+    if (r === true) live.push({ type: "nft_operator", asset: p.collection, spender: p.operator, amount: UNLIMITED, expiration: null }); else closed++;
+  });
+  p2List.forEach((p, i) => {
+    const r = st[ercList.length + opList.length + i];
+    if (r === undefined) { stateUnread++; return; }
+    const [amount, expiration] = r as readonly [bigint, number, number];
+    if (amount > 0n && BigInt(expiration) > now) live.push({ type: "permit2", asset: p.token, spender: p.spender, amount, expiration: BigInt(expiration) }); else closed++;
+  });
   if (stateUnread) unread.push(`${stateUnread} grant${stateUnread === 1 ? "" : "s"} whose current state could not be read`);
 
-  // Token metadata + balances, then spender screening (most exposed first).
+  // Token metadata + balances, one more multicall.
   const meta = new Map<string, { symbol: string; decimals: number | null; balance: bigint | null }>();
-  await pool([...new Set(live.filter((g) => g.type !== "nft_operator").map((g) => g.asset))].map((t) => async () => {
-    let symbol = `${t.slice(0, 6)}…${t.slice(-4)}`, decimals: number | null = null, balance: bigint | null = null;
-    try { const m = await read(() => readTokenMeta(chain, t as `0x${string}`)); symbol = m.symbol || symbol; decimals = m.decimals; } catch { /* keep address */ }
-    try { balance = await read(() => client.readContract({ address: t as `0x${string}`, abi: ERC20_ABI, functionName: "balanceOf", args: [owner as `0x${string}`] })); } catch { /* null */ }
-    meta.set(t, { symbol, decimals, balance });
-  }));
+  const tokens = [...new Set(live.filter((g) => g.type !== "nft_operator").map((g) => g.asset))];
+  const mm = await multiRead(chain, tokens.flatMap((t) => [
+    { address: t as `0x${string}`, abi: META_ABI, functionName: "symbol", args: [] },
+    { address: t as `0x${string}`, abi: META_ABI, functionName: "decimals", args: [] },
+    { address: t as `0x${string}`, abi: ERC20_ABI, functionName: "balanceOf", args: [o] },
+  ]));
+  tokens.forEach((t, i) => {
+    const sym = mm[i * 3], dec = mm[i * 3 + 1], bal = mm[i * 3 + 2];
+    const d = dec === undefined ? null : Number(dec);
+    meta.set(t, {
+      symbol: typeof sym === "string" && sym ? sym : `${t.slice(0, 6)}…${t.slice(-4)}`,
+      decimals: d != null && Number.isInteger(d) && d >= 0 && d <= 30 ? d : null,
+      balance: typeof bal === "bigint" ? bal : null,
+    });
+  });
   const exposure = (g: Raw) => { const b = meta.get(g.asset)?.balance; return g.type === "nft_operator" ? 1n : b == null ? 0n : (g.amount < b ? g.amount : b); };
   live.sort((a, b) => (exposure(b) > exposure(a) ? 1 : -1));
   const spenders = [...new Set(live.map((g) => g.spender))];

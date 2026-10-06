@@ -15,7 +15,7 @@ for (const k of ["KV_REST_API_URL", "KV_REST_API_TOKEN", "UPSTASH_REDIS_REST_URL
 
 import fs from "node:fs";
 import path from "node:path";
-import { decodeFunctionData, encodeAbiParameters } from "viem";
+import { decodeFunctionData, encodeAbiParameters, encodeFunctionResult, multicall3Abi } from "viem";
 import { approvalAudit, __setAuditFetch, PERMIT2 } from "../src/lib/approval-audit";
 import { __setRecipientFetch } from "../src/lib/recipient-check";
 import { HANDLERS } from "../src/app/api/x402/_handlers/index";
@@ -48,6 +48,20 @@ const allowance: Record<string, bigint> = { [`${USDC}|${ROUTER}`]: MAXU, [`${USD
 let historyUp = true;
 const seen: string[] = [];
 
+
+let multicalls = 0;
+/** One contract read: hex return data, or null for a revert. */
+function call(to: string, d: string): string | null {
+  const arg = (i: number) => "0x" + d.slice(10 + i * 64 + 24, 10 + (i + 1) * 64);
+  if (d.startsWith("0xdd62ed3e")) return word(allowance[`${to}|${arg(1)}`] ?? 0n);            // allowance(owner, spender)
+  if (d.startsWith("0x70a08231")) return word(7_000_000n);                                     // balanceOf → 7 USDC
+  if (d.startsWith("0x313ce567")) return encodeAbiParameters([{ type: "uint8" }], [6]);
+  if (d.startsWith("0x95d89b41")) return encodeAbiParameters([{ type: "string" }], ["USDC"]);
+  if (d.startsWith("0xe985e9c5")) return word(1n);                                             // isApprovedForAll → true
+  if (d.startsWith("0x927da105")) return encodeAbiParameters([{ type: "uint160" }, { type: "uint48" }, { type: "uint48" }], [2n ** 160n - 1n, 2 ** 48 - 1, 0]); // Permit2.allowance
+  return null;
+}
+
 const stub = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = String(input instanceof Request ? input.url : input);
   if (url.includes("blockscout.com")) seen.push(url);
@@ -76,14 +90,18 @@ const stub = (async (input: RequestInfo | URL, init?: RequestInit) => {
   if (req?.method === "eth_call") {
     const c = (req.params as { to: string; data?: string; input?: string }[])[0];
     const d = String(c.data ?? c.input ?? ""), to = c.to.toLowerCase();
-    const arg = (i: number) => "0x" + d.slice(10 + i * 64 + 24, 10 + (i + 1) * 64);
-    if (d.startsWith("0xdd62ed3e")) return reply(word(allowance[`${to}|${arg(1)}`] ?? 0n));            // allowance(owner, spender)
-    if (d.startsWith("0x70a08231")) return reply(word(7_000_000n));                                     // balanceOf → 7 USDC
-    if (d.startsWith("0x313ce567")) return reply(encodeAbiParameters([{ type: "uint8" }], [6]));
-    if (d.startsWith("0x95d89b41")) return reply(encodeAbiParameters([{ type: "string" }], ["USDC"]));
-    if (d.startsWith("0xe985e9c5")) return reply(word(1n));                                             // isApprovedForAll → true
-    if (d.startsWith("0x927da105")) return reply(encodeAbiParameters([{ type: "uint160" }, { type: "uint48" }, { type: "uint48" }], [2n ** 160n - 1n, 2 ** 48 - 1, 0])); // Permit2.allowance
-    return Response.json({ jsonrpc: "2.0", id: req.id ?? 1, error: { code: 3, message: "execution reverted" } });
+    // Multicall3.aggregate3: answer each inner call with the same per-call stub.
+    if (to === "0xca11bde05977b3631167028862be2a173976ca11" && d.startsWith("0x82ad56cb")) {
+      multicalls++;
+      const { args } = decodeFunctionData({ abi: multicall3Abi, data: d as `0x${string}` });
+      const inner = (args[0] as readonly { target: string; callData: string }[]).map((x) => {
+        const r = call(x.target.toLowerCase(), x.callData);
+        return { success: r !== null, returnData: (r ?? "0x") as `0x${string}` };
+      });
+      return reply(encodeFunctionResult({ abi: multicall3Abi, functionName: "aggregate3", result: inner }));
+    }
+    const r = call(to, d);
+    return r === null ? Response.json({ jsonrpc: "2.0", id: req.id ?? 1, error: { code: 3, message: "execution reverted" } }) : reply(r);
   }
   return new Response("not stubbed", { status: 502 });
 }) as typeof fetch;
@@ -102,6 +120,8 @@ const P2 = [{ type: "function", name: "approve", stateMutability: "nonpayable", 
   console.log("1. state decides");
   ok("6 live grants (4 ERC-20 + 1 operator + 1 Permit2); the revoked one is closed", a.counts.live === 6 && a.counts.closed_since === 1 && !find("erc20", OLD), JSON.stringify(a.counts));
   ok("nothing unread", a.unread.length === 0, JSON.stringify(a.unread));
+
+  ok("state is read through Multicall3, not one eth_call per grant", multicalls === 2, `${multicalls} multicall(s)`);
 
   console.log("2. levels");
   ok("flagged spender → BLOCK, sorted first", a.grants[0].level === "BLOCK" && a.grants[0].spender === THIEF && /stealing attack/.test(a.grants[0].why));
