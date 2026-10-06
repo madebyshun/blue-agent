@@ -99,3 +99,26 @@ Thứ tự bắt buộc, không đảo:
 | 3 | 1.3 + 2.4 |
 | 4–5 | 2.1, 2.2, 2.3, 2.5 |
 | sau đó | Phase 3 nếu D1 = B |
+
+---
+
+## Trạng thái — 2026-10-07 (nhánh `chore/skill-audit`, chưa push)
+
+| Task | Trạng thái | Ghi chú |
+|---|---|---|
+| 0.1 | ✅ code xong | push + kiểm tra Vercel READY là việc của ShunTr |
+| 0.2 | ✅ | surface `chat` trong usage meter |
+| 0.3 | ✅ | 13 tool Aeon (đang bán thật) + 6 tool đã halt retire → catalog 96 |
+| 0.4 | ✅ | 10 tool ngoài vòng ẩn khỏi Chat; `hub_b20_analyze` giữ |
+| 0.5 | ✅ | correlations dùng log returns; mô tả `rh-rwa-dca` sửa; `rh-stock-pnl` vốn đã trung thực |
+| 0.6 | ⏳ ShunTr | `CONNECTOR_TOKEN_KEY` |
+| 1.1 | ✅ live | kiểm tra người nhận trong `preTradeCheck` |
+| 1.2 | ✅ live | `sign-check` + MCP slot 20 (`hub_sign_check`) |
+| 1.3 | ✅ code, ⚠️ live chưa đủ | `approval-audit` + thẻ Revoke + tab Approvals. Blockscout `module=logs` keyless chặn IP sau ~10 request ⇒ **cần `BLOCKSCOUT_API_KEY` (PRO, free 5 rps)** |
+| 2.1 | ✅ live | `wallet-holdings` (checkWallet) + `wallet-risk` (GoPlus + explorer + chain) sống lại |
+| 2.2 | ✅ live (simulate) | Base B20 qua Aerodrome Slipstream, địa chỉ đã xác minh on-chain |
+| 2.3 | ✅ | alert → Telegram cho ví đã link; `/alerts off|on`. Webhook: chưa (cần research SSRF) |
+| 2.4 | ✅ live | `pre_trade` thêm vào honeypot-check + quick-safety (không phá client) |
+| 2.5 | ✅ phần Chat | `hub_pool_scan` (MCP) giữ — đổi tên đã publish = ShunTr quyết |
+
+Catalog cuối: **98** (90 paid, 8 free). MCP: **20**.
