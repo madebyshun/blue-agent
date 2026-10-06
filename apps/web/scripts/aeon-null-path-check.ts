@@ -52,7 +52,9 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   console.log("\n2. every Aeon-reading handler");
   const dir = path.resolve(__dirname, "../src/app/api/x402/_handlers");
   const readers = fs.readdirSync(dir).filter((f) => f.endsWith(".ts") && /getAeonOutput|runAeonSkill/.test(code(fs.readFileSync(path.join(dir, f), "utf8"))));
-  ok(`found the Aeon readers (${readers.length})`, readers.length >= 14, readers.join(", "));
+  // 14 readers until 2026-10-06; 13 of them were the Aeon-backed advisory tools
+  // retired that day. The floor only guards against this scan matching nothing.
+  ok(`found the Aeon readers (${readers.length})`, readers.length >= 1, readers.join(", "));
   for (const f of readers) {
     const src = code(fs.readFileSync(path.join(dir, f), "utf8"));
     // Variables that hold an Aeon read.
@@ -76,20 +78,22 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const before = prompts.length;
   ok("an empty KV → null", (await runAeonSkill("narrative-tracker", "anything")) === null && prompts.length === before);
 
-  console.log("\n4. real handlers, empty KV, stubbed model");
+  console.log("\n4. the last Aeon reader, empty KV, stubbed model");
+  // gtm-brief and roadmap-validator were the subjects here until 2026-10-06,
+  // when the Aeon-backed advisory tools were retired. builder-deep-dd is the
+  // one handler left that reads Aeon KV; a non-GitHub target keeps it offline.
   const { HANDLERS } = await import("../src/app/api/x402/_handlers/index");
   for (const [id, body] of [
-    ["gtm-brief", { project: "Test", description: "a wallet" }],
-    ["roadmap-validator", { project: "Test", roadmap: "Q1 ship" }],
+    ["builder-deep-dd", { target: "Example project (offline test)" }],
   ] as const) {
     prompts.length = 0;
     const res = await HANDLERS[id](new Request(`https://blueagent.dev/api/x402/${id}`, { method: "POST", body: JSON.stringify(body) }));
     const j = (await res.json()) as { aeon_data?: { status?: string; note?: string } };
     ok(`${id}: response says aeon_data.status "none", with the note`, j.aeon_data?.status === "none" && j.aeon_data?.note === AEON_NONE_NOTE, JSON.stringify(j.aeon_data));
-    const narr = prompts.filter((p) => /Narratives|Ecosystem/.test(p));
-    ok(`${id}: every prompt with an Aeon slot says NONE, none says "Base ecosystem"`,
-      narr.length > 0 && narr.every((p) => p.includes(AEON_NONE_PROMPT.slice(0, 40)) && !/Narratives: Base ecosystem|Ecosystem: Base ecosystem|Narratives: Base\\n/.test(p)),
-      `${narr.length} prompt(s)`);
+    const slots = prompts.filter((p) => /Research:|Project research:|Project:/.test(p));
+    ok(`${id}: every prompt with an Aeon slot says NONE`,
+      slots.length > 0 && slots.every((p) => p.includes(AEON_NONE_PROMPT.slice(0, 40))),
+      `${slots.length} prompt(s)`);
   }
 
   console.log(failures === 0 ? "\naeon-null-path-check: PASS" : `\naeon-null-path-check: FAIL — ${failures}`);

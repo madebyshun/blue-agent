@@ -99,7 +99,7 @@ interface Tool {
   async?:          boolean;
 }
 
-const FEATURED_IDS = ["launch-simulator-1", "investor-memo", "market-fit", "token-launch-readiness"];
+const FEATURED_IDS = ["pre-trade-check", "risk-gate", "safe-trending", "rh-rwa-verify"];
 
 // ─── Example inputs per tool ──────────────────────────────────────────────────
 // Keys must exactly match input.key fields in agent-tools.ts
@@ -136,31 +136,17 @@ const TOOL_EXAMPLES: Record<string, Record<string, string>> = {
   "market-fit":                { description: "Pay-per-use AI research tool for Base builders — $0.50/report via x402 USDC micropayments", stage: "MVP" },
   "token-launch-readiness":    { name: "EXAMPLEDAO", description: "Sample project (not real) — DeFi yield router on Base, pre-token, small private beta" },
   // ── Builder ───────────────────────────────────────────────────────────────────
-  "roadmap-validator":         { project: "x402 AI tool marketplace on Base", roadmap: "Q1: 10 tools, Q2: open marketplace, Q3: agent registry, Q4: Tool NFTs" },
   "competitor-scan":           { project: "AI agent tool marketplace with x402 pay-per-call", category: "AI agent infrastructure" },
-  "pitch-intelligence":        { project: "ExampleDAO (sample)", description: "Sample project (not real) — pay-per-use AI tools for Base builders via x402 micropayments, pre-revenue, raising a pre-seed." },
-  "fundraise-timing":          { project: "ExampleDAO (sample) — x402 pay-per-call tool marketplace", stage: "pre-seed · pre-revenue · sample input, not real metrics" },
-  "gtm-brief":                 { project: "Blue Hub", description: "x402 AI tools for Base builders, pay per call in USDC, no signup", target: "Base builders, DeFi devs, AI agent teams" },
-  "stack-recommender":         { project_type: "Multi-agent x402 tool marketplace on Base mainnet with USDC micropayments", constraints: "TypeScript, Next.js, solo dev" },
-  "investor-memo":             { project: "ExampleDAO (sample)", description: "Sample project (not real) — pay-per-use AI tools for Base builders via x402 micropayments", ask: "$750k pre-seed" },
   "agent-performance":         { handle: "@blueagent_" },
   "agent-collab-match":        { agent_a: "Blue Agent — AI research + x402 tool execution on Base", agent_b: "any", collab_goal: "joint tool bundle or revenue share" },
   "repo-health":               { repo: "madebyshun/blue-agent" },
-  "community-sentiment":       { project: "Base", channels: "@base Twitter, Base Discord, base.mirror.xyz" },
   "defi-opportunity":          { focus: "stablecoin yield above 8% APR on Base", risk_tolerance: "medium" },
   "builder-deep-dd":           { target: "@madebyshun" },
-  // ── Launch Simulator (3 tiers) ────────────────────────────────────────────────
-  "launch-simulator-1":        { project: "ExampleDAO (sample)", description: "Sample project (not real) — AI agent tooling on Base, pre-launch, no token yet", ticker: "$EXDAO" },
-  "launch-simulator-2":        { project: "ExampleDAO (sample)", description: "Sample project (not real) — AI agent tooling on Base, pre-launch, no token yet", ticker: "$EXDAO", contract: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" },
-  "launch-simulator-3":        { project: "ExampleDAO (sample)", description: "Sample project (not real) — AI agent tooling on Base, pre-launch, no token yet", ticker: "$EXDAO", contract: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" },
   // ── Trading ───────────────────────────────────────────────────────────────────
   "whale-copy-signal":         { wallet: "", token: "WETH" },
   "token-momentum-scanner":    { timeframe: "24h", filter: "min $50k volume, AI agent narrative" },
   // ── Content ───────────────────────────────────────────────────────────────────
-  "thread-intelligence":       { topic: "x402 pay-per-call changes how agents monetize on Base", angle: "alpha drop — explain the pattern, why it matters for agent builders" },
-  "community-growth-playbook": { project: "ExampleDAO (sample)", current_size: "sample input, not real numbers — early community, a few hundred members" },
   // ── Agent Economy ─────────────────────────────────────────────────────────────
-  "multi-agent-workflow":      { goal: "Research top 5 AI agent tokens on Base and generate a buy/sell signal", agents: "Blue Agent" },
   // ── Base Ecosystem ────────────────────────────────────────────────────────────
   "base-grant-finder":         { project: "AI tool marketplace with x402 pay-per-call micropayments on Base", stage: "MVP — live product, early usage" },
   "base-protocol-comparison":  { protocol_a: "Aerodrome", protocol_b: "Uniswap v4", use_case: "liquidity pool for BLUEAGENT/ETH pair" },
@@ -1416,14 +1402,14 @@ const TOOL_GROUPS: { id: string; label: string; desc: string; color: string; ids
     label: "For Founders",
     desc: "Launch, market fit, growth, fundraising",
     color: "#A78BFA",
-    ids: ["market-fit", "token-launch-readiness", "competitor-scan", "gtm-brief", "launch-simulator-1", "launch-simulator-2", "launch-simulator-3", "base-grant-finder", "grant-evaluator", "roadmap-validator", "stack-recommender"],
+    ids: ["market-fit", "token-launch-readiness", "competitor-scan", "base-grant-finder", "grant-evaluator"],
   },
   {
     id: "investors",
     label: "For Investors",
     desc: "Due diligence, memos, pitch intel",
     color: "#34D399",
-    ids: ["builder-deep-dd", "investor-memo", "pitch-intelligence", "fundraise-timing", "base-protocol-comparison", "agent-score", "founder-check"],
+    ids: ["builder-deep-dd", "base-protocol-comparison", "agent-score", "founder-check"],
   },
   {
     id: "blue",
@@ -1465,7 +1451,7 @@ const TOOL_GROUPS: { id: string; label: string; desc: string; color: string; ids
     label: "Agent Economy",
     desc: "Multi-agent workflows, revenue, collab",
     color: "#94A3B8",
-    ids: ["agent-performance", "agent-collab-match", "multi-agent-workflow", "community-sentiment", "community-growth-playbook", "thread-intelligence"],
+    ids: ["agent-performance", "agent-collab-match"],
   },
 ];
 

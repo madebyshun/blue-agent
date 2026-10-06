@@ -123,8 +123,10 @@ check("HUB_TOOLS schemas parsed out of route.ts",
 // clean-up decision stays visible instead of silently becoming permanent.
 const curatedIds = [...HUB_SRC.matchAll(/^\s+\{\s*id:\s*"([a-z0-9][a-z0-9-]*)",/gm)].map((m) => m[1]);
 const renderedIds = new Set(HUB_SKILLS.map((s) => s.id));
+// Floor, not a count: 24 entries until 2026-10-06, when six chips for the
+// retired Aeon-backed advisory tools went with their ids.
 check("CURATED ids parsed out of hub-skills.ts",
-  curatedIds.length >= 20, `${curatedIds.length} entries`);
+  curatedIds.length >= 15, `${curatedIds.length} entries`);
 
 // `tool` per entry, read the same way. A hidden tool's chip is dropped on
 // purpose (check 5), so it is not "unrendered" in the sense below.

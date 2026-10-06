@@ -30,8 +30,6 @@ Run the following through Blue Agent: $ARGUMENTS
    **Hub — builder & fundraising:**
    - Market fit, timing, competition: `hub-market-fit`
    - Competitor scan: `hub-competitor-scan`
-   - Investor memo: `hub-investor-memo`
-   - Fundraise timing: `hub-fundraise-timing`
    - Base grants: `hub-base-grant`
    - Builder Score: `hub-builder-score`
    - Repo health: `hub-repo-health`

@@ -83,9 +83,9 @@ JSON Schema per tool) · [`llms.txt`](https://blueagent.dev/llms.txt) (short bri
      Source of truth: apps/web/src/lib/agent-tools.ts (AGENT_TOOLS).
      Body fields are the WIRE shape (post-x402Body), not the Hub form. -->
 
-Blue Hub exposes **115 tools** across 11 categories — 109 paid, 6 free.
+Blue Hub exposes **102 tools** across 10 categories — 96 paid, 6 free.
 
-Categories: on-chain · signal · security · intelligence · builder · trading · content · agent-economy · base-ecosystem · earn · portfolio
+Categories: on-chain · signal · security · intelligence · builder · trading · base-ecosystem · earn · portfolio · content
 
 `POST https://blueagent.dev/api/x402/{id}` · x402 v2 · `eip155:8453` ·
 USDC `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`. Fields marked `*` are required;
@@ -184,7 +184,7 @@ transfer to make.
 | `token-launch-readiness` | $0.30 | `name`* `project`* `description` | Go/no-go signal on whether your project is ready to launch a token. |
 | `token-pick-signal` | $0.20 | `chain` `context` | The top Base token by an on-chain quality score (liquidity, turnover, momentum) — facts from live pools, no buy/sell call. |
 
-### builder (29)
+### builder (19)
 
 | id | price | body | what it does |
 |---|---|---|---|
@@ -201,22 +201,12 @@ transfer to make.
 | `blue-ship` | $0.10 | `prompt`* | Deployment checklist, verification, release notes, monitoring. Everything you forget when excited to launch. |
 | `blue-simulate` | $0.15 | `scenario`* `params` | Bull/base/bear scenario modeling for a Base decision — tokenomics, fee model, growth, runway — with assumptions, projections, and sensitivities. |
 | `builder-deep-dd` | $0.35 | `target`* `type` | Full due diligence on a Base builder: onchain activity, shipped products, credibility. |
-| `community-sentiment` | $0.20 | `project`* `description` | Real-time sentiment analysis across your community channels. |
 | `competitor-scan` | $0.20 | `project`* `description`* `competitors` | Identify direct/indirect competitors and surface your defensible edge. |
 | `defi-opportunity` | $0.25 | `strategy` `risk_tolerance` | Scan Base DeFi for emerging yield, liquidity, and protocol opportunities. |
-| `fundraise-timing` | $0.20 | `project`* `stage` | Is now the right time to raise? Market conditions, stage readiness, investor appetite. |
 | `grant-evaluator` | $5.00 | `projectName`* `description`* `teamBackground` `requestedAmount` `milestones` `githubUrl` | Base ecosystem grant scoring — innovation, feasibility, impact, team quality. |
-| `gtm-brief` | $0.25 | `project`* `description`* `target` | Go-to-market playbook: channels, timing, messaging, and early adopter strategy. |
-| `investor-memo` | $0.35 | `project`* `description`* `ask` `stage` `traction`* | Full investor memo: thesis, market, moat, risks, and ask — ready to send. |
-| `launch-simulator-1` | $0.10 | `project`* `description` `ticker` | Quick Signal — baseline ecosystem read, weighted sentiment pass, one verdict. Fast pre-launch gut-check. |
-| `launch-simulator-2` | $0.35 | `project`* `description` `ticker` `contract` | Deep Signal launch simulation with live DexScreener market data — price, volume, liquidity. |
-| `launch-simulator-3` | $0.50 | `project`* `description` `ticker` `contract` | Full Simulation — every pass plus risk matrix and timeline recommendation. |
-| `pitch-intelligence` | $0.30 | `project`* `description`* | Transform your deck into investor-grade pitch intelligence with narrative scoring. |
 | `repo-health` | $0.20 | `repo`* `description`* | Audit your GitHub repo health: code quality, docs, CI, contributor signals. |
 | `rh-rwa-embed-kit` | $0.05 | `ticker`* `framework` `theme` | Copy-paste 'Buy $TICKER' button kit: chain config, live-price hook, and wagmi buy button wired to the RH swap prepare endpoint. Non-custodial. The Vlad-Tenev-builder-tweet-answering tool. |
 | `rh-rwa-pricing-kit` | $0.05 | `ticker`* | Standalone read-only React hook for a live Chainlink RH RWA price: ABI + viem client + hook + demo badge component. No wallet required, no cost per read. |
-| `roadmap-validator` | $0.25 | `project`* `roadmap`* | Validate your roadmap against market timing, execution risk, and narrative fit. |
-| `stack-recommender` | $0.20 | `project`* `description`* `team_size` `timeline` | Optimal tech stack for Base builders — infra, tooling, protocols, integrations. |
 
 ### trading (5)
 
@@ -227,21 +217,6 @@ transfer to make.
 | `rh-stock-swap-route` | $0.10 | `token_in`* `token_out`* | Full V3 route map for any Robinhood Chain pair. Probes all 4 fee tiers for a direct pool and both legs of a WETH-hopped route. Returns liquidity per tier so a client can pick / split its own path. Accepts 0x addresses or RWA tickers. |
 | `token-momentum-scanner` | $0.20 | `min_mcap` | Real-time momentum scan for Base tokens — breakouts, volume spikes, narrative alignment. |
 | `whale-copy-signal` | $0.25 | `wallet` `token` | Track and copy high-alpha whale wallets on Base — entry, size, and timing. |
-
-### content (4)
-
-| id | price | body | what it does |
-|---|---|---|---|
-| `community-growth-playbook` | $0.25 | `project`* `current_size` `goal` | Proven growth tactics for Base builder communities — from 0 to 1000 members. |
-| `rh-rwa-readme` | $0.05 | `ticker`* | Markdown README section for embedding a Robinhood RWA in another repo. Includes chain config, live oracle usage, buy-button integration, safety notes. Live numbers embedded. |
-| `rh-stock-report` | $0.20 | `ticker`* `horizon` | Concise Markdown research brief for a Robinhood Chain RWA: verified on-chain facts (Chainlink oracle + DEX depth) + model-recall market context, labelled as such. No web search on this gateway, so no source URLs are claimed. Temperature 0.3, LLM never invents numbers. |
-| `thread-intelligence` | $0.20 | `topic`* `audience` `goal` | Turn your alpha or project update into a high-engagement X thread. |
-
-### agent-economy (1)
-
-| id | price | body | what it does |
-|---|---|---|---|
-| `multi-agent-workflow` | $0.25 | `goal`* `agents` | Design an automated workflow combining multiple agents for complex tasks. |
 
 ### base-ecosystem (2)
 
@@ -266,6 +241,13 @@ transfer to make.
 | `rh-sector-basket` | $0.10 | `sector` `tickers` `total_usd`* `weighting` `max_constituents` | Multi-buy plan for a sector or explicit ticker list. Input total USD + weighting (equal / market-cap-tvl proxy). Returns per-ticker allocation, live spot, expected units. Feeds each leg into rh-stock-swap-prepare for atomic-ish execution. |
 | `rh-stock-holdings` | $0.05 | `wallet`* | Full RH RWA portfolio for a wallet: reads balanceOf for every canonical tokenized stock/ETF in the registry, prices non-zero balances via Chainlink (fallback DEX). Real on-chain reads. Never fabricates — value_usd is null when no price source exists, and any balance read that failed is reported in unread_count rather than counted as a zero. |
 | `rh-stock-pnl` | $0.20 | `wallet`* `ticker` | Wallet position + trade activity per RH RWA token from Blockscout Transfer logs: transfer counts, cumulative in/out, first/last activity. Cost-basis PnL requires historical Chainlink reads and is deferred to v2 rather than fabricated. |
+
+### content (2)
+
+| id | price | body | what it does |
+|---|---|---|---|
+| `rh-rwa-readme` | $0.05 | `ticker`* | Markdown README section for embedding a Robinhood RWA in another repo. Includes chain config, live oracle usage, buy-button integration, safety notes. Live numbers embedded. |
+| `rh-stock-report` | $0.20 | `ticker`* `horizon` | Concise Markdown research brief for a Robinhood Chain RWA: verified on-chain facts (Chainlink oracle + DEX depth) + model-recall market context, labelled as such. No web search on this gateway, so no source URLs are claimed. Temperature 0.3, LLM never invents numbers. |
 
 <!-- END GENERATED TOOL CATALOG -->
 
@@ -298,7 +280,7 @@ surface you are actually calling.
 **Cut from 85 to 18 on 2026-09-26, and the cut removed no capability.** The 85-tool manifest
 was 32,160 bytes — roughly 8,000 tokens spent before the agent read a single word of the user's
 question — and published MCP research finds tool-selection accuracy degrades sharply past
-~40 always-loaded entries. All 115 catalog tools remain live at `/api/x402/<id>`; `blue_registry`
+~40 always-loaded entries. All 102 catalog tools remain live at `/api/x402/<id>`; `blue_registry`
 lists them and `blue_call` runs any of them, so the rest moved from "always in context" to
 "one lookup away". A manifest is a context budget, not an inventory.
 

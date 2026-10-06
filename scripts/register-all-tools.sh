@@ -24,30 +24,20 @@ TOOLS=(
   ecosystem-digest
   market-fit
   token-launch-readiness
-  roadmap-validator
   competitor-scan
-  pitch-intelligence
-  fundraise-timing
-  gtm-brief
-  stack-recommender
-  investor-memo
   token-distribution-plan
   agent-performance
   agent-collab-match
   repo-health
-  community-sentiment
   defi-opportunity
   builder-deep-dd
   launch-simulator
   whale-copy-signal
   token-momentum-scanner
   portfolio-rebalancer
-  thread-intelligence
   builder-brand-score
-  community-growth-playbook
   agent-revenue-optimizer
   agent-token-strategy
-  multi-agent-workflow
   base-grant-finder
   base-protocol-comparison
   base-builder-network-match

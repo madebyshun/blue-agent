@@ -103,8 +103,6 @@ You are a **skill router** for Base builders. Identify what the user needs and l
 |-----------|------------|
 | Market fit, problem/timing/competition | `hub-market-fit` |
 | Competitor analysis, defensible edge | `hub-competitor-scan` |
-| Investor memo, pitch doc | `hub-investor-memo` |
-| Fundraising timing, is now right? | `hub-fundraise-timing` |
 | Base grants, active funding | `hub-base-grant` |
 | Builder Score for X handle | `hub-builder-score` |
 | GitHub repo health, velocity, risk | `hub-repo-health` |

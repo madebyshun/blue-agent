@@ -120,14 +120,10 @@ const CURATED: { id: string; tool: string; category: SkillCategory; trigger: str
   // Builder Tools
   { id: "market-fit",              tool: "hub_market_fit",       category: "Builder Tools", trigger: "/idea " },
   { id: "competitor-scan",         tool: "hub_competitor_scan",  category: "Builder Tools", trigger: "Who are the competitors for " },
-  { id: "gtm-brief",               tool: "hub_gtm",              category: "Builder Tools", trigger: "/ship " },
-  { id: "stack-recommender",       tool: "hub_stack",            category: "Builder Tools", trigger: "/build " },
   { id: "repo-health",             tool: "hub_repo_health",      category: "Builder Tools", trigger: "Check repo health for " },
   // Does not render — see the `builder-score` note above. Left in place on purpose.
   { id: "builder-score",           tool: "hub_builder_score",    category: "Builder Tools", trigger: "What's the builder score for " },
   // Fundraise
-  { id: "investor-memo",           tool: "hub_investor_memo",    category: "Fundraise",     trigger: "/raise " },
-  { id: "fundraise-timing",        tool: "hub_fundraise_timing", category: "Fundraise",     trigger: "Is now a good time to raise for " },
   // Trigger reworded 2026-09-23. The old one — "What are investors funding on
   // Base right now?" — MEASURED as routing to `hub_ecosystem`, not to this chip's
   // own tool, and the model was right: that sentence asks what the ecosystem is
@@ -135,12 +131,10 @@ const CURATED: { id: string; tool: string; category: SkillCategory; trigger: str
   // "Transform your deck into investor-grade pitch intelligence". The tool returns
   // pitch_angles / one_liner / investor_thesis for ONE project, so the trigger now
   // names a project the way the other Fundraise chips do.
-  { id: "pitch-intelligence",      tool: "hub_pitch_intel",      category: "Fundraise",     trigger: "What's the strongest pitch angle for " },
   { id: "base-grant-finder",       tool: "hub_base_grant",       category: "Fundraise",     trigger: "Find Base grants for " },
   // Launch
   { id: "token-launch-readiness",  tool: "hub_token_readiness",  category: "Launch",        trigger: "Is my token ready to launch? " },
   // Agent Network
-  { id: "multi-agent-workflow",    tool: "hub_multi_agent",      category: "Agent Network", trigger: "Design a multi-agent workflow for " },
   // Ecosystem
   { id: "ecosystem-digest",        tool: "hub_ecosystem",        category: "Ecosystem",     trigger: "What happened on Base today?" },
   { id: "base-protocol-comparison",tool: "hub_protocol_compare", category: "Ecosystem",     trigger: "Compare these Base protocols: " },

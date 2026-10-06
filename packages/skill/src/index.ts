@@ -294,20 +294,6 @@ const HUB_TOOLS = [
     },
   },
   {
-    name: "hub_investor_memo",
-    toolId: "investor-memo",
-    description: "Full investor memo — thesis, market, moat, risks, ask. Ready to send.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        project: { type: "string", description: "Project name" },
-        description: { type: "string", description: "Description and traction" },
-        ask: { type: "string", description: "Raise ask e.g. $500k pre-seed" },
-      },
-      required: ["project", "description"],
-    },
-  },
-  {
     name: "hub_repo_health",
     toolId: "repo-health",
     description: "GitHub repo health — commit velocity, test coverage, dependency risk, bus factor.",
@@ -377,19 +363,6 @@ const HUB_TOOLS = [
       required: ["token"],
     },
   },
-  {
-    name: "hub_fundraise_timing",
-    toolId: "fundraise-timing",
-    description: "Is now the right time to raise? Market conditions, stage readiness, investor appetite.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        project: { type: "string", description: "Project description" },
-        stage: { type: "string", description: "Stage and key metrics" },
-      },
-      required: ["project"],
-    },
-  },
   // ── Security (extended) ────────────────────────────────────────────────────
   {
     name: "hub_contract_trust",
@@ -422,19 +395,7 @@ const HUB_TOOLS = [
     description: "Smart money flow analysis — track top wallet moves across Base in real time.",
     inputSchema: { type: "object", properties: { focus: { type: "string" } } },
   },
-  {
-    name: "hub_community_sentiment",
-    toolId: "community-sentiment",
-    description: "Community sentiment for a token or project — CT mindshare, Farcaster buzz, Telegram signals.",
-    inputSchema: { type: "object", properties: { target: { type: "string" } }, required: ["target"] },
-  },
   // ── Builder (extended) ─────────────────────────────────────────────────────
-  {
-    name: "hub_launch_simulator",
-    toolId: "launch-simulator-1",
-    description: "Simulate a token or product launch — model price action, liquidity, community growth scenarios.",
-    inputSchema: { type: "object", properties: { project: { type: "string" }, supply: { type: "string" } }, required: ["project"] },
-  },
   {
     name: "hub_token_launch",
     toolId: "token-launch-readiness",
@@ -446,24 +407,6 @@ const HUB_TOOLS = [
     toolId: "builder-deep-dd",
     description: "Deep due diligence on a builder — onchain history, shipped projects, GitHub activity, reputation.",
     inputSchema: { type: "object", properties: { handle: { type: "string" } }, required: ["handle"] },
-  },
-  {
-    name: "hub_roadmap",
-    toolId: "roadmap-validator",
-    description: "Validate a product roadmap — feasibility, sequencing, market timing, missing milestones.",
-    inputSchema: { type: "object", properties: { roadmap: { type: "string" }, stage: { type: "string" } }, required: ["roadmap"] },
-  },
-  {
-    name: "hub_gtm",
-    toolId: "gtm-brief",
-    description: "Go-to-market brief — distribution channels, launch sequence, community strategy for a Base project.",
-    inputSchema: { type: "object", properties: { project: { type: "string" }, target: { type: "string" } }, required: ["project"] },
-  },
-  {
-    name: "hub_pitch_intel",
-    toolId: "pitch-intelligence",
-    description: "Pitch intelligence — analyze and strengthen a pitch deck or fundraising narrative.",
-    inputSchema: { type: "object", properties: { pitch: { type: "string" } }, required: ["pitch"] },
   },
   // ── Premium ────────────────────────────────────────────────────────────────
   {
@@ -480,12 +423,6 @@ const HUB_TOOLS = [
   },
   // ── Multi-agent ────────────────────────────────────────────────────────────
   {
-    name: "hub_multi_agent",
-    toolId: "multi-agent-workflow",
-    description: "Orchestrate a multi-agent workflow — route tasks across Blue Agent + Aeon + MiroShark.",
-    inputSchema: { type: "object", properties: { task: { type: "string" } }, required: ["task"] },
-  },
-  {
     name: "hub_agent_match",
     toolId: "agent-collab-match",
     description: "Find the best collaborator agent for a task — match your project with Base agents by capability.",
@@ -498,18 +435,6 @@ const HUB_TOOLS = [
     inputSchema: { type: "object", properties: { agent: { type: "string" } }, required: ["agent"] },
   },
   // ── Community ──────────────────────────────────────────────────────────────
-  {
-    name: "hub_community_growth",
-    toolId: "community-growth-playbook",
-    description: "Community growth playbook — channels, content strategy, retention loops, milestones.",
-    inputSchema: { type: "object", properties: { project: { type: "string" }, current_size: { type: "string" } }, required: ["project"] },
-  },
-  {
-    name: "hub_thread_intel",
-    toolId: "thread-intelligence",
-    description: "Thread intelligence — analyze a CT thread or topic for signal vs noise, key takes, insights.",
-    inputSchema: { type: "object", properties: { thread: { type: "string" } }, required: ["thread"] },
-  },
   {
     name: "hub_narrative_pulse",
     toolId: "narrative-pulse",

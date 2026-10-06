@@ -707,31 +707,6 @@ const ALL_HUB_TOOLS = [
     },
   },
   {
-    name: "hub_investor_memo",
-    description: "Generate a full investor memo — thesis, market, moat, risks, ask. USE WHEN: the user explicitly asks for an investor memo / pitch doc / fundraising deck. NOT FOR: writing code, building, explaining concepts, or architecture — answer those directly without a tool.",
-    input_schema: {
-      type: "object",
-      properties: {
-        project: { type: "string", description: "Project name" },
-        description: { type: "string", description: "Description and traction" },
-        ask: { type: "string", description: "Raise ask e.g. $500k pre-seed" },
-      },
-      required: ["project", "description"],
-    },
-  },
-  {
-    name: "hub_fundraise_timing",
-    description: "Assess if now is the right time to raise — market conditions, stage readiness, investor appetite. USE WHEN: the user asks WHETHER/WHEN to raise, or when the user asks for a pitch narrative. NOT FOR: writing code, building, explaining concepts, or architecture — answer those directly without a tool.",
-    input_schema: {
-      type: "object",
-      properties: {
-        project: { type: "string", description: "Project description" },
-        stage: { type: "string", description: "Stage and key metrics" },
-      },
-      required: ["project"],
-    },
-  },
-  {
     name: "hub_base_grant",
     description: "Find active grants and funding for Base projects. USE WHEN: the user asks about GRANTS / funding programs on Base, or when the user wants funding paths. NOT FOR: writing code, building, explaining concepts, or architecture — answer those directly without a tool.",
     input_schema: {
@@ -868,70 +843,9 @@ const ALL_HUB_TOOLS = [
       required: ["name"],
     },
   },
-  // The four below are ADVISORY: no measured upstream. They return a structured
-  // framework the model is expected to relay AS a framework — /build and /ship
-  // were the only two of the five Blue Agent commands with no tool behind them,
-  // while /idea, /audit and /raise have had hub_market_fit, hub_deep_analysis and
-  // hub_investor_memo since launch. Each handler tries to enrich itself from the
-  // Aeon KV cache, which has been EXPIRED in production since the research-loop
-  // cron was unscheduled (2026-09-05, #148) — so in prod these take their `null`
-  // path by design and are model-generated end to end. That is why every
-  // description below tells the model to label the output, and why none of them
-  // claim a data source.
-  {
-    name: "hub_gtm",
-    description: "Go-to-market brief for a Base project — target user, entry wedge, distribution channel, launch hook. MODEL-GENERATED STRATEGY, not measured market data: present it as a framework to pressure-test, and never state a market size, user count, or CAC from it as fact. Use for '/ship', 'how do I launch this', 'what's my GTM'.",
-    input_schema: {
-      type: "object",
-      properties: {
-        project:     { type: "string", description: "Project name" },
-        description: { type: "string", description: "What it does — required; ask the user if they only gave a name" },
-        target:      { type: "string", description: "Who it's for, if the user said (optional)" },
-      },
-      required: ["project", "description"],
-    },
-  },
-  {
-    name: "hub_stack",
-    description: "Recommended tech stack for a Base build — frontend, backend, contracts, database, payments, deployment, with a build sequence. MODEL-GENERATED RECOMMENDATION, not a benchmark: present trade-offs, and never quote performance numbers, costs, or version support from it as fact. Use for '/build', 'what stack should I use', 'how should I architect this'.",
-    input_schema: {
-      type: "object",
-      properties: {
-        project:     { type: "string", description: "Project name" },
-        description: { type: "string", description: "What it does — required; ask the user if they only gave a name" },
-        team_size:   { type: "number", description: "Number of engineers (optional, default 1)" },
-        timeline:    { type: "string", description: "Time available, e.g. '6 weeks' (optional, default '3 months')" },
-      },
-      required: ["project", "description"],
-    },
-  },
-  {
-    name: "hub_pitch_intel",
-    description: "Pitch framing for a raise — market framing, why-this-wins, why-now, why-Base, ask framing, investor type. MODEL-GENERATED NARRATIVE, not investor research: it does NOT know what any specific fund has actually deployed into, so never let it name a firm's real portfolio, check size, or current thesis as fact. Use when the user asks how to pitch, what investors want, or what's getting funded.",
-    input_schema: {
-      type: "object",
-      properties: {
-        project:     { type: "string", description: "Project name" },
-        description: { type: "string", description: "The pitch in a few sentences — required" },
-        ask:         { type: "string", description: "How much they're raising, if stated (optional)" },
-        stage:       { type: "string", description: "e.g. 'pre-seed', 'seed' (optional, default 'pre-seed')" },
-      },
-      required: ["project", "description"],
-    },
-  },
-  {
-    name: "hub_multi_agent",
-    description: "Design a multi-agent workflow for a goal — coordination pattern, agent roles, hand-offs, bottleneck risks. MODEL-GENERATED DESIGN: any cost or latency figure in it is an estimate, not a measurement, and it does not know which agents are actually registered anywhere. Use when the user asks how to orchestrate several agents or split a job across them.",
-    input_schema: {
-      type: "object",
-      properties: {
-        goal:        { type: "string", description: "What the workflow must accomplish" },
-        agents:      { type: "string", description: "Agents available, if the user named any (optional)" },
-        constraints: { type: "string", description: "Budget, latency, or tooling limits (optional)" },
-      },
-      required: ["goal"],
-    },
-  },
+  // hub_gtm, hub_stack, hub_pitch_intel and hub_multi_agent sat here until
+  // 2026-10-06: model-generated end to end on an expired Aeon cache, and sold
+  // as paid tools. Retired with their catalog ids (docs/plan-build-2026-10-06.md).
   {
     name: "hub_agent_score",
     description: "Agent Score for AI agents on Base — XP, interactions, uptime. Use when user asks about an AI agent's score or performance.",
@@ -1319,8 +1233,6 @@ const TOOL_ENDPOINT: Record<string, string> = {
   hub_key_exposure:     "key-exposure",
   hub_market_fit:       "market-fit",
   hub_competitor_scan:  "competitor-scan",
-  hub_investor_memo:    "investor-memo",
-  hub_fundraise_timing: "fundraise-timing",
   hub_base_grant:       "base-grant-finder",
   hub_builder_score:    "builder-score",
   hub_repo_health:      "repo-health",
@@ -1365,10 +1277,6 @@ const TOOL_ENDPOINT: Record<string, string> = {
   hub_protocol_risk:    "protocol-risk-monitor",
   hub_protocol_compare: "base-protocol-comparison",
   hub_token_readiness:  "token-launch-readiness",
-  hub_gtm:              "gtm-brief",
-  hub_stack:            "stack-recommender",
-  hub_pitch_intel:      "pitch-intelligence",
-  hub_multi_agent:      "multi-agent-workflow",
   // Discovery (G0, 2026-09-30) — see the block in ALL_HUB_TOOLS.
   hub_rh_movers:        "rh-stock-movers",
   hub_rh_new_listings:  "rh-stock-new-listings",

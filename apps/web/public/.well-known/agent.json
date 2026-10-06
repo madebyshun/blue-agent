@@ -4,7 +4,7 @@
   "agent": {
     "name": "Blue Agent",
     "handle": "@blueagent_",
-    "description": "Onchain AI agent for builders — idea, build, audit, ship, raise. 115 tools on Blue Hub reading Base 8453 and Robinhood Chain 4663, x402 pay-per-call in USDC on Base. Inference by Virtuals.",
+    "description": "Onchain AI agent for builders — idea, build, audit, ship, raise. 102 tools on Blue Hub reading Base 8453 and Robinhood Chain 4663, x402 pay-per-call in USDC on Base. Inference by Virtuals.",
     "version": "1.2.0",
     "network": "base",
     "chain_id": 8453,
@@ -38,8 +38,8 @@
     "pricing": "https://blueagent.dev/.well-known/pricing",
     "endpoint_pattern": "https://blueagent.dev/api/x402/{tool-id}",
     "manifest_pattern": "https://blueagent.dev/.well-known/ai-tool/{tool-id}.json",
-    "tools": 115,
-    "paid_tools": 109,
+    "tools": 102,
+    "paid_tools": 96,
     "free_tools": [
       "blue-doctor",
       "hood-live",
@@ -49,7 +49,7 @@
       "rh-token-scan"
     ],
     "sdk": "npm install @blueagent/x402",
-    "note": "109 of the 115 are x402-paid: any x402-capable agent can call the endpoint and pay per call in USDC, no API key. The 6 in free_tools are priced $0.00 — they never answer 402 and never ask for a signature, so POST them directly and do not build an authorization. This file is a pointer, not a price list: /api/catalog is the only authoritative source for tool ids and prices. Install @blueagent/x402 to handle payment automatically."
+    "note": "96 of the 102 are x402-paid: any x402-capable agent can call the endpoint and pay per call in USDC, no API key. The 6 in free_tools are priced $0.00 — they never answer 402 and never ask for a signature, so POST them directly and do not build an authorization. This file is a pointer, not a price list: /api/catalog is the only authoritative source for tool ids and prices. Install @blueagent/x402 to handle payment automatically."
   },
   "skills": [
     {

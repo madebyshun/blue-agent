@@ -58,23 +58,13 @@ import h1 from "./agent-performance";
 import h5 from "./base-grant-finder";
 import h6 from "./base-protocol-comparison";
 import h8 from "./builder-deep-dd";
-import h9 from "./community-growth-playbook";
-import h10 from "./community-sentiment";
 import h11 from "./competitor-scan";
 import h12 from "./defi-opportunity";
 import h13 from "./ecosystem-digest";
-import h14 from "./fundraise-timing";
-import h15 from "./gtm-brief";
-import h16 from "./investor-memo";
 import h18 from "./market-fit";
-import h19 from "./multi-agent-workflow";
 import h20 from "./narrative-position";
-import h21 from "./pitch-intelligence";
 import h23 from "./protocol-risk-monitor";
 import h24 from "./repo-health";
-import h25 from "./roadmap-validator";
-import h26 from "./stack-recommender";
-import h27 from "./thread-intelligence";
 import h29 from "./token-launch-readiness";
 import h30 from "./token-momentum-scanner";
 import h31 from "./token-pick-signal";
@@ -84,11 +74,8 @@ import h41 from "./airdrop-check";
 import h42 from "./whale-tracker";
 import h43 from "./dex-flow";
 import h45 from "./lp-analyzer";
-import h49 from "./launch-simulator-2";
-import h50 from "./launch-simulator-3";
 import h52 from "./grant-evaluator";
 import h53 from "./key-exposure";
-import h54 from "./launch-simulator-1";
 import hBaseTokenScan  from "./base-token-scan";
 import hDefiYieldScan  from "./defi-yield-scan";
 import hNarrativeScan  from "./narrative-scan";
@@ -163,23 +150,13 @@ export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "base-grant-finder": h5,
   "base-protocol-comparison": h6,
   "builder-deep-dd": h8,
-  "community-growth-playbook": h9,
-  "community-sentiment": h10,
   "competitor-scan": h11,
   "defi-opportunity": h12,
   "ecosystem-digest": h13,
-  "fundraise-timing": h14,
-  "gtm-brief": h15,
-  "investor-memo": h16,
   "market-fit": h18,
-  "multi-agent-workflow": h19,
   "narrative-position": h20,
-  "pitch-intelligence": h21,
   "protocol-risk-monitor": h23,
   "repo-health": h24,
-  "roadmap-validator": h25,
-  "stack-recommender": h26,
-  "thread-intelligence": h27,
   "token-launch-readiness": h29,
   "token-momentum-scanner": h30,
   "token-pick-signal": h31,
@@ -212,11 +189,8 @@ export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "whale-tracker":   h42,
   "dex-flow":        h43,
   "lp-analyzer":     h45,
-  "launch-simulator-2": h49,
-  "launch-simulator-3": h50,
   "grant-evaluator": h52,
   "key-exposure":    h53,
-  "launch-simulator-1": h54,
   "base-token-scan":    hBaseTokenScan,
   "defi-yield-scan":    hDefiYieldScan,
   "narrative-scan":     hNarrativeScan,

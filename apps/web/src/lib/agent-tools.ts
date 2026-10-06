@@ -565,24 +565,6 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
   // ── Builder ─────────────────────────────────────────────────────────────────
 
   {
-    id: "roadmap-validator",
-    name: "Roadmap Validator",
-    description: "Validate your roadmap against market timing, execution risk, and narrative fit.",
-    agentHandle: "composite",
-    agentName: "Blue Agent",
-    agentType: "composite",
-    category: "builder",
-    inputs: [
-      { key: "project", label: "Project name", placeholder: "Your project name", required: true },
-      { key: "roadmap", label: "Roadmap milestones", placeholder: "Q1: X, Q2: Y, Q3: Z — be specific about what you plan to ship", required: true },
-    ],
-    isComposite: true,
-    price: "$0.25",
-    priceUSDC: 250000,
-    x402Url: `${X402_BASE}/roadmap-validator`,
-    x402Body: (v) => ({ project: v.project ?? "", roadmap: v.roadmap ?? "" }),
-  },
-  {
     id: "competitor-scan",
     name: "Competitor Scan",
     description: "Identify direct/indirect competitors and surface your defensible edge.",
@@ -599,99 +581,6 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     priceUSDC: 200000,
     x402Url: `${X402_BASE}/competitor-scan`,
     x402Body: (v) => ({ project: v.project ?? "", description: v.project ?? "", competitors: v.category ?? "" }),
-  },
-  {
-    id: "pitch-intelligence",
-    name: "Pitch Intelligence",
-    description: "Transform your deck into investor-grade pitch intelligence with narrative scoring.",
-    agentHandle: "composite",
-    agentName: "Blue Agent",
-    agentType: "composite",
-    category: "builder",
-    inputs: [
-      { key: "project", label: "Project", placeholder: "Project name", required: true },
-      { key: "description", label: "Pitch summary", placeholder: "Problem you solve, your solution, traction so far, and funding ask", required: true },
-    ],
-    isComposite: true,
-    price: "$0.30",
-    priceUSDC: 300000,
-    x402Url: `${X402_BASE}/pitch-intelligence`,
-    x402Body: (v) => ({ project: v.project ?? "", description: v.description ?? "" }),
-  },
-  {
-    id: "fundraise-timing",
-    name: "Fundraise Timing",
-    description: "Is now the right time to raise? Market conditions, stage readiness, investor appetite.",
-    agentHandle: "composite",
-    agentName: "Blue Agent",
-    agentType: "composite",
-    category: "builder",
-    inputs: [
-      { key: "project", label: "Project", placeholder: "What you build", required: true },
-      { key: "stage", label: "Stage & metrics", placeholder: "e.g. pre-seed, current MRR, user count, what you've shipped" },
-    ],
-    isComposite: true,
-    price: "$0.20",
-    priceUSDC: 200000,
-    x402Url: `${X402_BASE}/fundraise-timing`,
-    x402Body: (v) => ({ project: v.project ?? "", stage: v.stage ?? "" }),
-  },
-  {
-    id: "gtm-brief",
-    name: "GTM Brief",
-    description: "Go-to-market playbook: channels, timing, messaging, and early adopter strategy.",
-    agentHandle: "composite",
-    agentName: "Blue Agent",
-    agentType: "composite",
-    category: "builder",
-    inputs: [
-      { key: "project", label: "Project name", placeholder: "Your project name", required: true },
-      { key: "description", label: "What you're launching", placeholder: "Product description and core value prop", required: true },
-      { key: "target", label: "Target audience", placeholder: "Who are your first 100 users?" },
-    ],
-    isComposite: true,
-    price: "$0.25",
-    priceUSDC: 250000,
-    x402Url: `${X402_BASE}/gtm-brief`,
-    x402Body: (v) => ({ project: v.project ?? "", description: v.description ?? "", target: v.target ?? "" }),
-  },
-  {
-    id: "stack-recommender",
-    name: "Stack Recommender",
-    description: "Optimal tech stack for Base builders — infra, tooling, protocols, integrations.",
-    agentHandle: "composite",
-    agentName: "Blue Agent",
-    agentType: "composite",
-    category: "builder",
-    inputs: [
-      { key: "project_type", label: "Project type", placeholder: "e.g. DeFi protocol, AI agent, consumer app, NFT marketplace", required: true },
-      { key: "constraints", label: "Constraints", placeholder: "e.g. solo dev, 2-week timeline, TypeScript only" },
-    ],
-    isComposite: true,
-    price: "$0.20",
-    priceUSDC: 200000,
-    x402Url: `${X402_BASE}/stack-recommender`,
-    x402Body: (v) => ({ project: v.project_type ?? "", description: v.project_type ?? "", team_size: "1", timeline: v.constraints ?? "" }),
-  },
-  {
-    id: "investor-memo",
-    name: "Investor Memo",
-    description: "Full investor memo: thesis, market, moat, risks, and ask — ready to send.",
-    agentHandle: "composite",
-    agentName: "Blue Agent",
-    agentType: "composite",
-    category: "builder",
-    inputs: [
-      { key: "project", label: "Project name", placeholder: "Your project name", required: true },
-      { key: "description", label: "Description + traction", placeholder: "What you do, current metrics, revenue, community — use real numbers", required: true },
-      { key: "ask", label: "Raise ask", placeholder: "e.g. $500k pre-seed, $2M seed" },
-    ],
-    isComposite: true,
-    featured: true,
-    price: "$0.35",
-    priceUSDC: 350000,
-    x402Url: `${X402_BASE}/investor-memo`,
-    x402Body: (v) => ({ project: v.project ?? "", description: v.description ?? "", ask: v.ask ?? "", stage: "pre-seed", traction: v.description ?? "" }),
   },
   {
     id: "agent-performance",
@@ -746,24 +635,6 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     priceUSDC: 200000,
     x402Url: `${X402_BASE}/repo-health`,
     x402Body: (v) => ({ repo: v.repo ?? "", description: v.repo ?? "" }),
-  },
-  {
-    id: "community-sentiment",
-    name: "Community Sentiment",
-    description: "Real-time sentiment analysis across your community channels.",
-    agentHandle: "composite",
-    agentName: "Blue Agent",
-    agentType: "composite",
-    category: "builder",
-    inputs: [
-      { key: "project", label: "Project / token", placeholder: "Project name or token ticker", required: true },
-      { key: "channels", label: "Channels", placeholder: "e.g. Twitter @handle, Telegram link, Discord" },
-    ],
-    isComposite: true,
-    price: "$0.20",
-    priceUSDC: 200000,
-    x402Url: `${X402_BASE}/community-sentiment`,
-    x402Body: (v) => ({ project: v.project ?? "", description: v.channels ?? "" }),
   },
   {
     id: "defi-opportunity",
@@ -849,69 +720,9 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
 
   // ── Content ─────────────────────────────────────────────────────────────────
 
-  {
-    id: "thread-intelligence",
-    name: "Thread Intelligence",
-    description: "Turn your alpha or project update into a high-engagement X thread.",
-    agentHandle: "composite",
-    agentName: "Blue Agent",
-    agentType: "composite",
-    category: "content",
-    inputs: [
-      { key: "topic", label: "Thread topic", placeholder: "What do you want to write about?", required: true },
-      { key: "angle", label: "Angle", placeholder: "e.g. alpha drop, project update, educational, hot take" },
-    ],
-    isComposite: true,
-    price: "$0.20",
-    priceUSDC: 200000,
-    x402Url: `${X402_BASE}/thread-intelligence`,
-    x402Body: (v) => ({ topic: v.topic ?? "", audience: "Base builders", goal: v.angle ?? "" }),
-  },
-  {
-    id: "community-growth-playbook",
-    name: "Community Growth Playbook",
-    description: "Proven growth tactics for Base builder communities — from 0 to 1000 members.",
-    agentHandle: "composite",
-    agentName: "Blue Agent",
-    agentType: "composite",
-    category: "content",
-    inputs: [
-      { key: "project", label: "Project name", placeholder: "Your project name", required: true },
-      { key: "current_size", label: "Current community size", placeholder: "e.g. 50 Telegram members, 200 Twitter followers" },
-    ],
-    isComposite: true,
-    price: "$0.25",
-    priceUSDC: 250000,
-    x402Url: `${X402_BASE}/community-growth-playbook`,
-    x402Body: (v) => ({ project: v.project ?? "", current_size: v.current_size ?? "0", goal: "1000 active members" }),
-  },
 
   // ── Agent Economy ────────────────────────────────────────────────────────────
 
-  {
-    id: "multi-agent-workflow",
-    name: "Multi-Agent Workflow",
-    description: "Design an automated workflow combining multiple agents for complex tasks.",
-    agentHandle: "composite",
-    agentName: "Blue Agent",
-    agentType: "composite",
-    category: "agent-economy",
-    inputs: [
-      { key: "goal", label: "Workflow goal", placeholder: "What should this workflow accomplish end-to-end?", required: true },
-      // Free text, and deliberately so: this tool DESIGNS a workflow, so the
-      // roster is whatever the caller wants to combine — their own agents
-      // included. The placeholder and the default below both named Aeon and
-      // MiroShark, which made a blank field seed the design with two retired
-      // products. Handler-side defaults exist too — keep them in sync
-      // (api/x402/_handlers/multi-agent-workflow.ts, two `agents ||` spots).
-      { key: "agents", label: "Agents to use (optional)", placeholder: "e.g. Blue Agent, your own agents, or third-party ones" },
-    ],
-    isComposite: true,
-    price: "$0.25",
-    priceUSDC: 250000,
-    x402Url: `${X402_BASE}/multi-agent-workflow`,
-    x402Body: (v) => ({ goal: v.goal ?? "", agents: v.agents ?? "Blue Agent" }),
-  },
 
   // ── Base Ecosystem ───────────────────────────────────────────────────────────
 
@@ -1379,74 +1190,6 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
 
   // ── Builder (launch & grants) ─────────────────────────────────────────────────
 
-  {
-    id: "launch-simulator-1",
-    name: "Launch Simulator Tier 1",
-    // "+ 3-agent verdict" until 2026-09-27. The steps are real (ecosystem read,
-    // weighted sentiment pass, synthesis) — the "3 agents" were not: all three
-    // are prompts on one Virtuals endpoint, and two of the three names are now
-    // retired products. Describe the WORK, not a roster.
-    // ⚠️ The handler's JSON response still emits `aeon` and `miroshark` keys
-    // (same for tiers 2 and 3). Those NAMES are the paid response SHAPE, not
-    // copy — renaming them breaks every existing caller, so it is ShunTr's call
-    // and is deliberately not done here. See the Task-5 writeup.
-    // 🔴 Read "not done here" as covering the names ONLY. For a day it was read
-    // as covering what is INSIDE them too, and that is a different question with
-    // a different answer: no compatibility argument protects a wrong value. Both
-    // blocks turned out to be fabricated whenever their source was absent — which
-    // for tier 1 is always, `aeon:digest` having no writer anywhere in the repo.
-    // Fixed 2026-09-28 in the handlers, code-set on every path, key and sub-key
-    // names untouched. `docs-truth-check.ts` now fails on any prompt schema that
-    // lets the model choose its own `status`.
-    description: "Quick Signal — baseline ecosystem read, weighted sentiment pass, one verdict. Fast pre-launch gut-check.",
-    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
-    category: "builder",
-    inputs: [
-      { key: "project", label: "Project name", placeholder: "Your project name", required: true },
-      { key: "description", label: "Project description", placeholder: "What it does, target audience, current stage" },
-      { key: "ticker", label: "Token ticker (optional)", placeholder: "e.g. $BLUEAGENT" },
-    ],
-    isComposite: true,
-    price: "$0.10", priceUSDC: 100000,
-    x402Url: `${X402_BASE}/launch-simulator-1`,
-    x402Body: (v) => ({ project: v.project ?? "", description: v.description ?? "", ticker: v.ticker ?? "" }),
-  },
-  {
-    id: "launch-simulator-2",
-    name: "Launch Simulator Tier 2",
-    description: "Deep Signal launch simulation with live DexScreener market data — price, volume, liquidity.",
-    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
-    category: "builder",
-    inputs: [
-      { key: "project", label: "Project name", placeholder: "Your project name", required: true },
-      { key: "description", label: "Project description", placeholder: "What it does, target audience, current stage" },
-      { key: "ticker", label: "Token ticker (optional)", placeholder: "e.g. $BLUEAGENT" },
-      { key: "contract", label: "Contract address (optional)", placeholder: "0x... for live market data" },
-    ],
-    isComposite: true,
-    price: "$0.35", priceUSDC: 350000,
-    x402Url: `${X402_BASE}/launch-simulator-2`,
-    x402Body: (v) => ({ project: v.project ?? "", description: v.description ?? "", ticker: v.ticker ?? "", contract: v.contract ?? "" }),
-  },
-  {
-    id: "launch-simulator-3",
-    name: "Launch Simulator Tier 3",
-    // "complete multi-agent report" until 2026-09-27 — see the note on tier 1.
-    description: "Full Simulation — every pass plus risk matrix and timeline recommendation.",
-    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
-    category: "builder",
-    inputs: [
-      { key: "project", label: "Project name", placeholder: "Your project name", required: true },
-      { key: "description", label: "Project description", placeholder: "What it does, target audience, current stage" },
-      { key: "ticker", label: "Token ticker (optional)", placeholder: "e.g. $BLUEAGENT" },
-      { key: "contract", label: "Contract address (optional)", placeholder: "0x... for live market data" },
-    ],
-    isComposite: true,
-    featured: true,
-    price: "$0.50", priceUSDC: 500000,
-    x402Url: `${X402_BASE}/launch-simulator-3`,
-    x402Body: (v) => ({ project: v.project ?? "", description: v.description ?? "", ticker: v.ticker ?? "", contract: v.contract ?? "" }),
-  },
   {
     id: "grant-evaluator",
     name: "Grant Evaluator",

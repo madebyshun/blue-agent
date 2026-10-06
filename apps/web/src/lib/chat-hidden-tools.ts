@@ -23,9 +23,8 @@
 export const CHAT_HIDDEN_TOOLS: ReadonlySet<string> = new Set([
   // Builder/founder tools — the old founder console, outside the trading loop.
   "hub_competitor_scan", "hub_market_fit", "hub_repo_health", "hub_agent_score",
-  "hub_token_readiness", "blue_deploy", "blue_simulate", "hub_pitch_intel",
-  "hub_fundraise_timing", "hub_gtm", "hub_stack", "hub_investor_memo",
-  "hub_builder_dd", "hub_multi_agent", "hub_base_grant",
+  "hub_token_readiness", "blue_deploy", "blue_simulate",
+  "hub_builder_dd", "hub_base_grant",
   // DeFi/yield research — outside swap/send/bridge.
   "hub_defi_opportunity", "hub_protocol_compare",
   // Temporarily out: Moralis-backed (halted in lib/tool-halts.ts) and
