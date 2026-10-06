@@ -323,16 +323,18 @@ export const AGENT_SKILLS: AgentSkill[] = [
     group:       "discover",
     chains:      ["base"],
     name:        "Trader Intel",
-    description: "Market facts — token pick, narrative pulse, momentum, DEX flow",
+    description: "Market facts — token pick, tax-checked trending, DEX flow",
     provider:    "Bundled",
     status:      "active",
     trigger:     "Give me full trader intel on: ",
     // Was 5 tools with hub_whale_signal, which left chat 2026-09-30 (Moralis
-    // upstream paused; the id is halted in lib/tool-halts.ts).
-    badge:       "Bundle · 4 tools",
-    tools:       ["hub_token_pick", "hub_narrative_pulse", "hub_token_momentum", "hub_dex_flow"],
+    // upstream paused). hub_narrative_pulse and hub_token_momentum left on
+    // 2026-10-06 (model-written labels and LLM entry/target zones, outside the
+    // five-layer loop); hub_safe_trending replaces them with a measured feed.
+    badge:       "Bundle · 3 tools",
+    tools:       ["hub_token_pick", "hub_safe_trending", "hub_dex_flow"],
     author:      BLUE_AUTHOR,
-    meterIds:    ["token-pick-signal", "narrative-pulse", "token-momentum-scanner", "dex-flow"],
+    meterIds:    ["token-pick-signal", "safe-trending", "dex-flow"],
   },
 
   {

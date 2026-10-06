@@ -31,6 +31,19 @@ export const CHAT_HIDDEN_TOOLS: ReadonlySet<string> = new Set([
   // key-exposure (Etherscan account endpoints are not on the free tier for
   // Base). Back when the Blockscout replacement lands.
   "hub_key_exposure",
+  // Outside the five-layer loop (docs/plan-build-2026-10-06.md task 0.4,
+  // skill audit 2026-10-04). Model-written narrative and research
+  // (narrative, narrative_pulse, ecosystem, research), an
+  // LLM-scored entry/target scanner (token_momentum), a TVL-only risk score
+  // (protocol_risk), a founder score (builder_score), and three re-serves of
+  // DexScreener/GeckoTerminal that hub_token_price, hub_dex_flow,
+  // hub_safe_trending and hub_rh_movers already cover with more checks
+  // (blue_monitor, blue_analytics, blue_stream). Still in the catalog and
+  // callable over x402 and blue_call. hub_b20_analyze stays: it explains the
+  // standard (no figures, no verdict) and the B20 dispatch rules lean on it.
+  "hub_narrative", "hub_narrative_pulse", "hub_ecosystem", "blue_research",
+  "hub_token_momentum", "hub_protocol_risk", "hub_builder_score",
+  "blue_monitor", "blue_analytics", "blue_stream",
   // Execution cards outside the basic set (swap/send/bridge on Base + RH):
   // the yield card shows another vault's APY; B20 management is not a basic trade.
   "prepare_yield", "hub_b20_manage",
