@@ -83,7 +83,7 @@ JSON Schema per tool) · [`llms.txt`](https://blueagent.dev/llms.txt) (short bri
      Source of truth: apps/web/src/lib/agent-tools.ts (AGENT_TOOLS).
      Body fields are the WIRE shape (post-x402Body), not the Hub form. -->
 
-Blue Hub exposes **97 tools** across 10 categories — 90 paid, 7 free.
+Blue Hub exposes **98 tools** across 10 categories — 90 paid, 8 free.
 
 Categories: on-chain · signal · security · intelligence · builder · trading · base-ecosystem · earn · portfolio · content
 
@@ -92,8 +92,8 @@ USDC `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`. Fields marked `*` are require
 every other field has a server-side default. Machine-readable equivalent, with
 full JSON Schema per tool: https://blueagent.dev/api/catalog
 
-The 7 priced $0.00 never answer 402 and never ask for a signature:
-`blue-doctor` · `hood-live` · `hood-track-record` · `pre-trade-check` · `sign-check` · `rh-rwa-verify` · `rh-token-scan`.
+The 8 priced $0.00 never answer 402 and never ask for a signature:
+`blue-doctor` · `hood-live` · `hood-track-record` · `pre-trade-check` · `sign-check` · `approval-audit` · `rh-rwa-verify` · `rh-token-scan`.
 Do not build an authorization for them — there is nothing to sign and no
 transfer to make.
 
@@ -141,10 +141,11 @@ transfer to make.
 | `rh-stock-flow` | $0.10 | `ticker`* | Buy vs sell pressure over 24h from GeckoTerminal trades feed. Hard-mapped verdict (BUY_HEAVY / SELL_HEAVY / BALANCED) at 10% net-of-total threshold. Never fabricates flow. |
 | `rh-stock-movers` | $0.05 | `limit` `min_tvl_usd` `min_volume_24h_usd` | Top gainers / losers 24h among Robinhood Chain tokenized stocks & ETFs. Dust-pool filter (default min $5k TVL + $500 24h volume) drops noise pools that would otherwise quote AAPL at $868 via a $453-TVL pool. Sign-filtered so a token with -1.56% never lands in gainers. Filtered pools surface as filtered_out for transparency. |
 
-### security (18)
+### security (19)
 
 | id | price | body | what it does |
 |---|---|---|---|
+| `approval-audit` | $0.00 | `wallet`* `chain` | Everything a wallet has granted that is still live: ERC-20 allowances, NFT operator-for-all and Permit2 grants, each re-read from chain state so spent or revoked grants are not reported. For each: the amount exposed (min of allowance and balance), whether the spender is a contract or a plain wallet, GoPlus flags, a level picked in code (BLOCK = flagged spender, revoke now; WARN = unlimited, plain-wallet spender, operator-for-all, Permit2 valid >30 days; INFO = bounded to a contract), and an UNSIGNED revoke transaction the owner signs. An unread source is listed in `unread`, never shown as 'no approvals'. Base 8453 or Robinhood Chain 4663. No LLM. Free — safety checks should never be gated. |
 | `b20-analyze` | $0.05 | `action` `address` `context` | B20 (Base Native Token Standard) guide — variants, roles, policies, integration tips. Powered by Beryl upgrade docs. |
 | `b20-check` | $0.05 | `contract`* | ERC-20 compliance (B20) role + policy detection from verified source. |
 | `b20-inspect` | $0.005 | `address`* `network` | Live on-chain B20 token inspector — reads real state from Base RPC via multicall. Returns isB20 flag, name/symbol/decimals, totalSupply, supplyCap, variant (ASSET/STABLECOIN), pause status per feature, and policy IDs per transfer/mint scope. Zero LLM. |
@@ -275,7 +276,7 @@ surface you are actually calling.
 **Cut from 85 to 18 on 2026-09-26, and the cut removed no capability.** The 85-tool manifest
 was 32,160 bytes — roughly 8,000 tokens spent before the agent read a single word of the user's
 question — and published MCP research finds tool-selection accuracy degrades sharply past
-~40 always-loaded entries. All 97 catalog tools remain live at `/api/x402/<id>`; `blue_registry`
+~40 always-loaded entries. All 98 catalog tools remain live at `/api/x402/<id>`; `blue_registry`
 lists them and `blue_call` runs any of them, so the rest moved from "always in context" to
 "one lookup away". A manifest is a context budget, not an inventory.
 

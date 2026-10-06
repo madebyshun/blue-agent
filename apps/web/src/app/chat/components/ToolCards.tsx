@@ -3,6 +3,7 @@
 // One card per tool type: honeypot, risk-gate, deep-analysis, token-pick, contract-trust
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { ApprovalsPanel, type AuditView } from "@/components/wallet/ApprovalsPanel";
 import { useAccount, useReadContracts, useBalance, useReadContract, useWriteContract, useSwitchChain, usePublicClient, useSendTransaction, useCapabilities, useSendCalls, useCallsStatus } from "wagmi";
 import { formatUnits, parseUnits, isAddress, namehash, encodeFunctionData } from "viem";
 import { base } from "viem/chains";
@@ -2363,6 +2364,7 @@ export function ToolResultCard({ tool, result }: { tool: string; result: Record<
     case "hub_contract_trust": return <ContractTrustCard result={r as ContractTrustResult} />;
     case "hub_market_fit":    return <MarketFitCard   result={r} />;
     case "hub_key_exposure":  return <KeyExposureCard  result={r} />;
+    case "hub_approvals":     return Array.isArray((r as { grants?: unknown }).grants) ? <ApprovalsPanel audit={r as unknown as AuditView} /> : null;
     case "blue_stream":       return <BlueStreamCard   result={r} />;
     // No "hub_b20_launch" case — the tool was retired 2026-09-08 along with its
     // card. Chat has no token-deploy path; /app/b20 is the one that exists.

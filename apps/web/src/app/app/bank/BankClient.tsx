@@ -70,6 +70,7 @@ import { parsePaymentQr, buildPaymentUri, type ParsedPayment } from "@/lib/payme
 // banner from it, so gating the entrance here only ever meant the user could
 // not reach the explanation. See the VIEWS list below.
 import OrdersPanel from "./OrdersPanel";
+import { ApprovalsView } from "@/components/wallet/ApprovalsPanel";
 import TransactionHistory, { type WalletTx, type TxSource } from "./TransactionHistory";
 import ActionHistory from "@/components/wallet/ActionHistory";
 import TokenTable from "./TokenTable";
@@ -134,7 +135,7 @@ type Panel = "withdraw" | "send" | "receive" | "convert" | "bridge";
 // "Portfolio": a second tab row inside a tab is a place for state to hide. Both
 // honour the same chain filter and the same dust toggle, so switching between
 // them changes the asset class and nothing else.
-type View = "tokens" | "stocks" | "activity" | "orders";
+type View = "tokens" | "stocks" | "activity" | "approvals" | "orders";
 
 /** The two views that answer "what do I hold?" — the filter + dust controls
  *  belong to both of them and to neither of the other two. */
@@ -1236,6 +1237,8 @@ export default function BankPage() {
     { id: "tokens",   label: "Tokens" },
     { id: "stocks",   label: "Stocks" },
     { id: "activity", label: "Activity" },
+    // Open grants + a Revoke the owner signs (plan 2026-10-06 task 1.3).
+    { id: "approvals", label: "Approvals" },
     ...(SHOW_PAYMENT_REQUESTS ? [{ id: "orders" as View, label: "Payment requests" }] : []),
   ];
 
@@ -2632,6 +2635,8 @@ export default function BankPage() {
               address={acct}
             />
           )}
+
+          {view === "approvals" && <ApprovalsView address={acct} />}
 
           {SHOW_PAYMENT_REQUESTS && view === "orders" && <OrdersPanel />}
 

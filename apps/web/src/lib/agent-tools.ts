@@ -793,6 +793,21 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     },
   },
   {
+    id: "approval-audit",
+    name: "Approval Audit + Revoke",
+    description: "Everything a wallet has granted that is still live: ERC-20 allowances, NFT operator-for-all and Permit2 grants, each re-read from chain state so spent or revoked grants are not reported. For each: the amount exposed (min of allowance and balance), whether the spender is a contract or a plain wallet, GoPlus flags, a level picked in code (BLOCK = flagged spender, revoke now; WARN = unlimited, plain-wallet spender, operator-for-all, Permit2 valid >30 days; INFO = bounded to a contract), and an UNSIGNED revoke transaction the owner signs. An unread source is listed in `unread`, never shown as 'no approvals'. Base 8453 or Robinhood Chain 4663. No LLM. Free — safety checks should never be gated.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "security",
+    inputs: [
+      { key: "wallet", label: "Wallet 0x…", placeholder: "0x…", required: true },
+      { key: "chain", label: "Chain: base or robinhood", placeholder: "base" },
+    ],
+    isComposite: false,
+    price: "$0.00", priceUSDC: 0,
+    x402Url: `${X402_BASE}/approval-audit`,
+    x402Body: (v) => ({ wallet: v.wallet ?? "", chain: v.chain || "base" }),
+  },
+  {
     id: "honeypot-check",
     name: "Honeypot Check",
     description: "Detect honeypot tokens that can be bought but not sold. Transfer tax analysis + rug pattern detection on Base.",

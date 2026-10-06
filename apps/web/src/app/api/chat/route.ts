@@ -629,6 +629,17 @@ const ALL_HUB_TOOLS = [
     },
   },
   {
+    name: "hub_approvals",
+    description: "The approvals the user's wallet still has open — ERC-20 allowances, NFT operator-for-all, Permit2 grants — re-read live, each with a level and a Revoke button the user signs. Use for \"check my approvals\", \"what have I approved\", \"revoke\", \"am I exposed\", or after a scam scare. Uses the connected wallet unless the user gives another address (any wallet can be READ; only its owner can revoke). Never restate the rows as a table — the card shows them. Base 8453 or Robinhood Chain 4663.",
+    input_schema: {
+      type: "object",
+      properties: {
+        chain:  { type: "string", enum: ["base", "robinhood"], description: "Default base." },
+        wallet: { type: "string", description: "Optional 0x address; defaults to the connected wallet." },
+      },
+    },
+  },
+  {
     name: "hub_sign_check",
     description: "What will signing this do? Use when the user pastes a transaction, an EIP-712 signature request (permit, Permit2, Seaport order) or an EIP-7702 authorization a dapp asked them to sign, or asks \"is this signature safe\" / \"what does this approve\". Decodes it and simulates a transaction; returns PASS / WARN / BLOCK and summary lines decided in code. Relay the summary lines and the verdict as given; never soften a BLOCK. Base 8453 or Robinhood Chain 4663.",
     input_schema: {
@@ -1205,6 +1216,7 @@ const TOOL_ENDPOINT: Record<string, string> = {
   hub_honeypot:         "honeypot-check",
   hub_risk_gate:        "risk-gate",
   hub_sign_check:       "sign-check",
+  hub_approvals:        "approval-audit",
   hub_contract_trust:   "contract-trust",
   hub_key_exposure:     "key-exposure",
   hub_market_fit:       "market-fit",
@@ -2317,6 +2329,7 @@ async function callHubTool(
       // The signing wallet for a simulation is the user's own connected wallet
       // when the model did not name one.
       if (toolName === "hub_sign_check" && !args.from && userAddress) args = { ...args, from: userAddress };
+      if (toolName === "hub_approvals" && !args.wallet && userAddress) args = { ...args, wallet: userAddress };
       const r = await runInternalTool({
         tool:      endpoint,
         body:      args,

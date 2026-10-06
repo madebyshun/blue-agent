@@ -42,6 +42,7 @@ import hContractTrust from "./contract-trust";
 import hHoneypotCheck from "./honeypot-check";
 import hPreTradeCheck from "./pre-trade-check";
 import hSignCheck from "./sign-check";
+import hApprovalAudit from "./approval-audit";
 import hRiskGate      from "./risk-gate";
 import hDeepAnalysis  from "./deep-analysis";
 import hAgentScore    from "./agent-score";
@@ -163,6 +164,7 @@ export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "honeypot-check": hHoneypotCheck,
   "pre-trade-check": hPreTradeCheck,
   "sign-check": hSignCheck,
+  "approval-audit": hApprovalAudit,
   "risk-gate":      hRiskGate,
   "deep-analysis":  hDeepAnalysis,
   "agent-score":    hAgentScore,
