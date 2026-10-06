@@ -52,6 +52,20 @@
  * key, no RPC and no DexScreener call ever leaves the process.
  */
 import { HANDLERS } from "../src/app/api/x402/_handlers/index";
+import { __setWalletReader } from "../src/app/api/x402/_handlers/wallet-holdings";
+import type { WalletLookup } from "../src/lib/wallet/holdings";
+
+// wallet-holdings reads through lib/wallet/holdings checkWallet since
+// 2026-10-07 (Moralis → on-chain discovery → RPC majors). Its own tests own
+// that pipeline; here the reader is injected and the handler's billing
+// contract is what is pinned: nothing read → 502, partial → 200 that SAYS so.
+const W = (over: Partial<WalletLookup>): WalletLookup => ({
+  address: "0x2222222222222222222222222222222222222222", network: "mainnet", explorer: "https://basescan.org",
+  addressUrl: "https://basescan.org/address/0x2222", source: "discovery", partial: false, holdings: [], ...over,
+});
+const ETH = { symbol: "ETH", address: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", amount: "4.1157", raw: "4115700000000000000", decimals: 18, isNative: true, usdValue: 12347.1, trust: "verified" as const };
+const USDC = { symbol: "USDC", address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913", amount: "188.73", raw: "188730000", decimals: 6, usdValue: 188.73, trust: "verified" as const };
+const LONGTAIL = { symbol: "NOCK", address: "0x1111111111111111111111111111111111111111", amount: "66", raw: "66", decimals: 0, trust: "unverified" as const };
 import { encodeTransferWithMemo } from "../src/lib/b20/encode";
 import { parseUnits, encodeFunctionData, stringToHex } from "viem";
 
@@ -151,15 +165,17 @@ const EMPTY_MORALIS = () => [] as unknown;
   };
 
   {
-    const { status, body } = await run("wallet-holdings");
+    // The reader could not read anything: an error, or an empty list it marks degraded.
+    __setWalletReader(async () => W({ error: "Moralis 401 and the explorer did not answer", partial: true, degraded: true }));
+    let { status, body } = await run("wallet-holdings");
     check("holdings returns 502 so the x402 route never settles", status === 502, `got ${status}`);
     check("holdings status is 'error'", body.status === "error", String(body.status));
     check("holdings total_usd is null, NOT 0", body.total_usd === null, JSON.stringify(body.total_usd));
     check("holdings tokens is null, NOT []", body.tokens === null, JSON.stringify(body.tokens));
     check("holdings token_count is null, NOT 0", body.token_count === null, JSON.stringify(body.token_count));
-    check("holdings names the real cause", errCode(body) === "UPSTREAM_PLAN_PAUSED", String(errCode(body)));
-    check("holdings still reports the RPC-read native balance as partial truth",
-      body.native_eth === 4.1157, JSON.stringify(body.native_eth));
+    __setWalletReader(async () => W({ partial: true, degraded: true, partialReason: "2 balance reads did not complete." }));
+    ({ status, body } = await run("wallet-holdings"));
+    check("an empty list the reader marks degraded is also 502, not 'empty'", status === 502 && body.tokens === null, `got ${status}`);
   }
 
   {
@@ -191,10 +207,18 @@ const EMPTY_MORALIS = () => [] as unknown;
   };
 
   {
-    const { status, body } = await run("wallet-holdings");
+    __setWalletReader(async () => W({ source: "moralis", partial: false, holdings: [ETH, USDC] }));
+    let { status, body } = await run("wallet-holdings");
     check("holdings succeeds", status === 200 && body.status === "ok", `${status} ${String(body.status)}`);
     check("holdings totals the real positions", body.total_usd === 12535.83, JSON.stringify(body.total_usd));
     check("holdings lists the token", Array.isArray(body.tokens) && (body.tokens as unknown[]).length === 1);
+    check("a complete read says complete, total not a floor", body.complete === true && body.total_usd_is_floor === false);
+    // Partial: discovery read real rows but cannot promise the long tail.
+    __setWalletReader(async () => W({ partial: true, partialReason: "Found on-chain without Moralis — the scan hit its limit.", holdings: [ETH, USDC, LONGTAIL] }));
+    ({ status, body } = await run("wallet-holdings"));
+    check("a partial read is 200 and SAYS it is partial, with the reader's reason",
+      status === 200 && body.complete === false && body.total_usd_is_floor === true && /scan hit its limit/.test(String(body.partial_reason)), JSON.stringify({ status, c: body.complete }));
+    check("an unpriced position is counted, never valued at $0 silently", body.unpriced_positions === 1 && (body.tokens as { value_usd: unknown }[]).some((t) => t.value_usd === null));
   }
 
   {
@@ -217,18 +241,9 @@ const EMPTY_MORALIS = () => [] as unknown;
     check("risk verdict is UNKNOWN", body.verdict === "UNKNOWN", String(body.verdict));
   }
 
-  {
-    // Same disagreement, different field: Moralis says 0 wei, the chain says 0.022 ETH.
-    scenario = {
-      moralisStatus: 200,
-      moralisBody: (url) => (url.includes("/balance") ? { balance: "0" } : []),
-      rpcWei: 22_147_000_000_000_000n, rpcNonce: 73, ethPriceUsd: 3000,
-    };
-    const { status, body } = await run("wallet-holdings");
-    check("holdings refuses when the two sources disagree on zero", status === 502, `got ${status}`);
-    check("holdings flags the disagreement", errCode(body) === "UPSTREAM_INCONSISTENT", String(errCode(body)));
-  }
-
+  // (The holdings "Moralis says 0 wei, the chain says 0.022 ETH" case retired
+  //  with the Moralis-only handler on 2026-10-07: native ETH is now read from
+  //  the chain alone, so there is no second figure to disagree with.)
   // ── Case 4: genuinely empty, and provably so ─────────────────────────────
   console.log("\n4. A real, verifiably unused wallet");
   scenario = { moralisStatus: 200, moralisBody: EMPTY_MORALIS, rpcWei: 0n, rpcNonce: 0, ethPriceUsd: 3000 };
@@ -242,6 +257,8 @@ const EMPTY_MORALIS = () => [] as unknown;
   }
 
   {
+    const zeroEth = { ...ETH, amount: "0", raw: "0", usdValue: 0 };
+    __setWalletReader(async () => W({ source: "moralis", partial: false, holdings: [zeroEth] }));
     const { status, body } = await run("wallet-holdings");
     check("holdings succeeds", status === 200, `got ${status}`);
     check("holdings marks it empty", body.status === "empty", String(body.status));

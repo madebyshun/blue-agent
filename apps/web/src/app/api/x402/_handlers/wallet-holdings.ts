@@ -1,58 +1,33 @@
 // x402/wallet-holdings — ERC-20 + native ETH balances for any Base wallet
 // Price: $0.02 — pure on-chain data, no LLM. Never fabricates a price.
 //
-// 🔴 FAIL LOUD. This handler used to swallow every upstream failure into
-// `[]` / `null` and then publish `total_usd: 0` with HTTP 200. MEASURED
-// 2026-09-26: Moralis answers 401 "Your Moralis Free usage is paused" on every
-// endpoint, so all three test wallets — one holding 4.1157 ETH + 188.73 USDC —
-// were reported as holding $0.00, confidently, for $0.05 a call. The zero was
-// indistinguishable from a genuinely empty wallet, which is what made it
-// dangerous rather than merely wrong.
+// 2026-10-07 (plan-build-2026-10-06 task 2.1): rebuilt on lib/wallet/holdings
+// `checkWallet` — the reader Blue Chat's check_wallet already uses — instead of
+// Moralis alone. It tries Moralis, then on-chain DISCOVERY (Blockscout for the
+// candidate list, balanceOf through Multicall3 for every number), then the RPC
+// majors. The tool had been HALTED since 2026-09-30 because Moralis answers 401
+// (plan paused); it is the one MCP-preloaded wallet read, so a halt there was a
+// preloaded tool that only ever said 501.
 //
-// Two rules follow, and neither is negotiable:
-//  1. An unread value is `null`, never `0` and never `[]`.
-//  2. An unread value returns a NON-2xx status. `route.ts` settles the USDC
-//     only after a 2xx, so a 200 carrying `status:"error"` would still charge
-//     the caller for the outage. 502 = "we could not answer, you were not
-//     charged". That is the whole point of the fix.
-//
-// Native ETH is read from Base RPC (no API key, no indexer, still works) and
-// Moralis' own native figure is kept purely as a cross-check.
+// 🔴 FAIL LOUD, unchanged in spirit. MEASURED 2026-09-26: the Moralis-only
+// version reported a wallet holding 4.1157 ETH + 188.73 USDC as $0.00 with
+// HTTP 200. Rules:
+//  1. Nothing read → 502 (`route.ts` settles only after a 2xx, so the caller
+//     is not charged), every field null, never 0 and never [].
+//  2. Read, but known incomplete (discovery cannot enumerate every long-tail
+//     token; a balance read did not finish) → 200 with `complete: false`, the
+//     reader's own reason, and `total_usd_is_floor: true`. Each row present is
+//     a real balanceOf; the TOTAL is a lower bound and says so.
+//  3. A position with no price is counted in `unpriced_positions` and adds
+//     nothing to the total — it is never valued at $0 silently.
 
-import {
-  getMoralisErc20BalancesResult,
-  getMoralisNativeBalanceResult,
-  type UpstreamError,
-} from "@/lib/moralis";
-import { getRpcWalletState } from "@/lib/onchain";
+import { checkWallet, type WalletLookup } from "@/lib/wallet/holdings";
 
-const WETH_BASE = "0x4200000000000000000000000000000000000006";
+let readWallet: (address: string, network: string) => Promise<WalletLookup> = checkWallet;
+/** Tests inject the reader; production always uses checkWallet. */
+export function __setWalletReader(f: typeof readWallet | null) { readWallet = f ?? checkWallet; }
 
-function num(v: unknown): number | null {
-  const n = typeof v === "string" ? parseFloat(v) : typeof v === "number" ? v : NaN;
-  return Number.isFinite(n) ? n : null;
-}
-
-// Live WETH price (USD) from DexScreener, or null if unavailable.
-async function getWethPriceUsd(): Promise<number | null> {
-  try {
-    const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${WETH_BASE}`, {
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { pairs?: { chainId?: string; priceUsd?: string; liquidity?: { usd?: number } }[] };
-    const basePairs = (data.pairs ?? [])
-      .filter((p) => p.chainId === "base")
-      .sort((a, b) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0));
-    return num(basePairs[0]?.priceUsd);
-  } catch {
-    return null;
-  }
-}
-
-/** Every unreadable field is null, and the caller is told why. 502 so the x402
- *  route never settles payment for an answer we do not have. */
-function failLoud(address: string, error: UpstreamError, partial: Record<string, unknown> = {}): Response {
+function failLoud(address: string, message: string): Response {
   return Response.json({
     tool: "wallet-holdings",
     address,
@@ -63,8 +38,7 @@ function failLoud(address: string, error: UpstreamError, partial: Record<string,
     tokens: null,
     token_count: null,
     total_usd: null,
-    ...partial,
-    error,
+    error: { source: "wallet-reader", code: "UPSTREAM_ERROR", message },
     note: "Balances could not be read. Nothing here is an estimate and nothing is zero-by-default — you were not charged.",
     timestamp: new Date().toISOString(),
   }, { status: 502 });
@@ -79,92 +53,35 @@ export default async function handler(req: Request): Promise<Response> {
     } catch {}
     const url = new URL(req.url);
     if (!body.address) body.address = url.searchParams.get("address") || undefined;
-
     const { address } = body;
     if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) {
       return Response.json({ error: "Provide a valid wallet address (0x...)" }, { status: 400 });
     }
 
-    console.log(`[WalletHoldings] Reading balances for: ${address}`);
-
-    const [erc20, moralisNative, rpc, wethPrice] = await Promise.all([
-      getMoralisErc20BalancesResult(address),
-      getMoralisNativeBalanceResult(address),
-      getRpcWalletState(address),
-      getWethPriceUsd(),
-    ]);
-
-    // ── Native ETH: RPC is authoritative, Moralis is the corroborator ────────
-    const nativeWei = rpc ? rpc.wei : moralisNative.ok ? moralisNative.data : null;
-    if (nativeWei === null) {
-      return failLoud(address, {
-        source: "base-rpc",
-        code: "UPSTREAM_ERROR",
-        message: `Base RPC did not return a balance, and the Moralis fallback also failed${moralisNative.ok ? "" : `: ${moralisNative.error.message}`}.`,
-      });
+    const w = await readWallet(address, "mainnet");
+    if (w.error) return failLoud(address, w.error);
+    if (w.holdings.length === 0 && (w.partial || w.degraded)) {
+      return failLoud(address, w.partialReason ?? "No balance read completed for this wallet.");
     }
 
-    // Cross-check on the ONE quantity both sources answer. Deliberately only
-    // the zero/non-zero disagreement: block lag makes exact equality flaky, but
-    // "one source says the wallet is empty and the other says it is not" is
-    // never lag — and it is precisely the shape of the bug this file had.
-    if (rpc && moralisNative.ok) {
-      const rpcZero = BigInt(rpc.wei) === 0n;
-      const morZero = BigInt(moralisNative.data) === 0n;
-      if (rpcZero !== morZero) {
-        return failLoud(address, {
-          source: "moralis+base-rpc",
-          code: "UPSTREAM_INCONSISTENT",
-          message: `Base RPC reports ${rpc.wei} wei and Moralis reports ${moralisNative.data} wei for the same address. One of them is wrong; this tool will not pick.`,
-        });
-      }
-    }
+    const nativeRow = w.holdings.find((h) => h.isNative);
+    const native_eth = nativeRow ? Number(nativeRow.amount) : null;
+    const native_eth_usd = nativeRow?.usdValue != null ? +nativeRow.usdValue.toFixed(2) : null;
+    const tokens = w.holdings.filter((h) => !h.isNative).map((h) => ({
+      symbol: h.symbol || null,
+      balance: Number(h.amount),
+      value_usd: h.usdValue != null ? +h.usdValue.toFixed(2) : null,
+      contract: h.address,
+      // verified / listed / unverified, from lib/wallet/token-trust — a token
+      // that calls itself USDC is not ranked as USDC on its symbol alone.
+      trust: h.trust,
+    }));
 
-    const native_eth = +(Number(BigInt(nativeWei)) / 1e18).toFixed(6);
-    const native_eth_usd = wethPrice != null ? +(native_eth * wethPrice).toFixed(2) : null;
-
-    // ── ERC-20 list: the actual product. Unreadable → the call fails. ────────
-    if (!erc20.ok) {
-      return failLoud(address, erc20.error, {
-        native_eth,
-        native_eth_usd,
-        note_partial: "Native ETH above was read from Base RPC and is real; the token list is what could not be read.",
-      });
-    }
-
-    const tokens = erc20.data
-      .filter((t) => !t.possible_spam)
-      .map((t) => {
-        const decimals = num(t.decimals) ?? 18;
-        const rawBal = num(t.balance);
-        const balance = rawBal != null ? rawBal / Math.pow(10, decimals) : null;
-        // Prefer Moralis-provided usd_value; else derive from usd_price; else null.
-        let value_usd = num(t.usd_value);
-        if (value_usd == null) {
-          const price = num(t.usd_price);
-          if (price != null && balance != null) value_usd = +(balance * price).toFixed(2);
-        }
-        return {
-          symbol: t.symbol ?? null,
-          balance,
-          value_usd,
-          contract: t.token_address ?? null,
-        };
-      });
-
-    // `total_usd` is the sum of what we could price, and `unpriced_positions`
-    // says how much of the wallet it leaves out. A wallet full of unpriced
-    // junk tokens should not report a total that silently pretends they are
-    // worth nothing — so the omission is a field, not a rounding decision.
     let unpriced_positions = 0;
-    if (native_eth > 0 && native_eth_usd == null) unpriced_positions++;
-    for (const t of tokens) {
-      if (t.value_usd == null && (t.balance ?? 0) > 0) unpriced_positions++;
-    }
-    const total_usd =
-      +(tokens.reduce((sum, t) => sum + (t.value_usd ?? 0), 0) + (native_eth_usd ?? 0)).toFixed(2);
-
-    const empty = tokens.length === 0 && native_eth === 0;
+    for (const h of w.holdings) if (h.usdValue == null && Number(h.amount) > 0) unpriced_positions++;
+    const total_usd = +w.holdings.reduce((s, h) => s + (h.usdValue ?? 0), 0).toFixed(2);
+    const complete = !w.partial;
+    const empty = complete && tokens.length === 0 && (native_eth ?? 0) === 0;
 
     return Response.json({
       tool: "wallet-holdings",
@@ -175,16 +92,16 @@ export default async function handler(req: Request): Promise<Response> {
       native_eth_usd,
       tokens,
       total_usd,
+      total_usd_is_floor: !complete || unpriced_positions > 0,
       token_count: tokens.length,
       unpriced_positions,
-      data_source: rpc ? "Base RPC (native) + Moralis (ERC-20) + DexScreener (ETH price)" : "Moralis + DexScreener",
+      complete,
+      ...(w.partialReason ? { partial_reason: w.partialReason } : {}),
+      data_source: w.source === "moralis" ? "Moralis (token list) + Base RPC" : w.source === "discovery" ? "Blockscout (candidates) + Base RPC balanceOf via Multicall3" : "Base RPC (native + majors only)",
+      explorer: w.addressUrl,
       timestamp: new Date().toISOString(),
     });
-  } catch (error) {
-    console.error("[WalletHoldings] Error:", error);
-    return Response.json(
-      { error: "Wallet holdings lookup failed", message: (error as Error).message },
-      { status: 500 }
-    );
+  } catch (e) {
+    return failLoud("", (e as Error).message);
   }
 }
