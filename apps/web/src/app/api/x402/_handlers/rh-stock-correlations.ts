@@ -2,7 +2,7 @@
 // Price: $0.10
 //
 // Reads GeckoTerminal OHLC (daily) for each ticker's dollar-anchored primary
-// pool (resolvePrimaryPool — USDG preferred), computes pairwise Pearson
+// pool (resolvePrimaryPool — USDG preferred), computes pairwise Pearson (on daily log returns)
 // correlations. Real math — no LLM.
 //
 // Caveat: OHLC availability on RH Chain is nascent (some pools have < 7
@@ -65,19 +65,26 @@ export default async function handler(req: Request): Promise<Response> {
     const byTicker: Record<string, Record<number, number>> = {};
     for (const s of series) byTicker[s.token.ticker] = Object.fromEntries(s.closes.map((x) => [x.t, x.c]));
 
-    // Pairwise correlation using overlapping timestamps only.
-    type Corr = { a: string; b: string; overlap: number; corr: number | null };
+    // Pairwise correlation of daily LOG RETURNS over overlapping days.
+    //
+    // 2026-10-06: this used to correlate the closes themselves. Two series
+    // that both trend over the window correlate near ±1 on levels whatever
+    // they do day to day (spurious correlation), so the matrix mostly
+    // reported "both went up". Returns are the standard basis. A return needs
+    // two consecutive common days, so the floor is 4 days → 3 returns.
+    type Corr = { a: string; b: string; overlap: number; returns_n: number; corr: number | null };
     const rows: Corr[] = [];
     for (let i = 0; i < tokens.length; i++) {
       for (let j = i + 1; j < tokens.length; j++) {
         const A = tokens[i].ticker, B = tokens[j].ticker;
         const aMap = byTicker[A], bMap = byTicker[B];
-        const common = Object.keys(aMap).filter((k) => bMap[+k] !== undefined).map(Number).sort();
-        if (common.length < 3) { rows.push({ a: A, b: B, overlap: common.length, corr: null }); continue; }
-        const xs = common.map((k) => aMap[k]);
-        const ys = common.map((k) => bMap[k]);
-        const corr = pearson(xs, ys);
-        rows.push({ a: A, b: B, overlap: common.length, corr });
+        const common = Object.keys(aMap).filter((k) => bMap[+k] !== undefined).map(Number).sort((x, y) => x - y);
+        const xs: number[] = [], ys: number[] = [];
+        for (let k = 1; k < common.length; k++) {
+          const a0 = aMap[common[k - 1]], a1 = aMap[common[k]], b0 = bMap[common[k - 1]], b1 = bMap[common[k]];
+          if (a0 > 0 && a1 > 0 && b0 > 0 && b1 > 0) { xs.push(Math.log(a1 / a0)); ys.push(Math.log(b1 / b0)); }
+        }
+        rows.push({ a: A, b: B, overlap: common.length, returns_n: xs.length, corr: xs.length >= 3 ? pearson(xs, ys) : null });
       }
     }
 
@@ -91,7 +98,8 @@ export default async function handler(req: Request): Promise<Response> {
       // there is no USD series to correlate (#231).
       pool_selection: Object.fromEntries(series.map((s) => [s.token.ticker, s.selection])),
       correlations: rows,
-      note: "Pearson r over overlapping daily closes from GeckoTerminal pool OHLC, taken from each token's dollar-anchored primary pool. Correlation null when overlap < 3 candles — RH RWA OHLC history is still shallow.",
+      basis: "daily log returns",
+      note: "Pearson r of daily log returns over overlapping days, from GeckoTerminal pool OHLC on each token's dollar-anchored primary pool. Null when fewer than 3 returns overlap (4 common days) — RH RWA OHLC history is still shallow.",
       data_sources: ["api.geckoterminal.com (RH Chain)"],
       network: RH_CHAIN,
       timestamp,

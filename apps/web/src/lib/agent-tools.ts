@@ -1555,7 +1555,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
   {
     id: "rh-stock-correlations",
     name: "RH Stock Correlations",
-    description: "Pairwise Pearson correlation matrix over daily closes from GT pool OHLC for 2–10 tickers. Correlation null when overlap < 3 candles — honest about nascent history.",
+    description: "Pairwise Pearson correlation of daily log returns from GT pool OHLC for 2–10 Robinhood Chain tickers. Null when fewer than 3 returns overlap — honest about nascent history.",
     agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
     category: "on-chain",
     inputs: [
@@ -1575,7 +1575,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
   {
     id: "rh-rwa-dca",
     name: "RH RWA DCA",
-    description: "Recurring buy schedule for a Robinhood Chain RWA. Returns config (cadence, periods, next_run) + the first-run unsigned tx calldata. Optionally persists to Vercel KV for the DCA cron worker to execute per period.",
+    description: "First buy of a recurring plan for a Robinhood Chain RWA: the plan (cadence, periods, next_run) plus the FIRST period's unsigned tx calldata for the caller to sign. Nothing executes later periods — there is no keeper, by design; call again each period.",
     agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
     category: "portfolio",
     inputs: [
