@@ -69,7 +69,6 @@ async function main() {
     { title: "D5  rh-stock-correlations   — 3-ticker",             id: "rh-stock-correlations",  body: { tickers: ["AAPL", "TSLA", "MSTR"], days: 14 } },
     // Phase 6
     { title: "A1  rh-rwa-dca              — TSLA weekly WETH",    id: "rh-rwa-dca",             body: { wallet, ticker: "TSLA", amount_usd: 50, cadence: "week", denom: "WETH" } },
-    { title: "A2  rh-stock-alert          — AAPL > $350",          id: "rh-stock-alert",         body: { ticker: "AAPL", threshold_usd: 350, direction: "above" } },
     { title: "A3  rh-stock-report         — AAPL (LLM)",          id: "rh-stock-report",        body: { ticker: "AAPL", horizon: "week" } },
     { title: "A4  rh-stock-agent-brief    — AAPL verdict",         id: "rh-stock-agent-brief",   body: { ticker: "AAPL" } },
     // Phase 7

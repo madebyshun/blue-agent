@@ -1,7 +1,7 @@
 {
   "name": "@blueagent/skill",
   "version": "0.4.1",
-  "description": "MCP server for Blue Agent — 39 tools: 5 console commands + 32 Hub tools + blue_score + blue_new",
+  "description": "MCP server for Blue Agent — 36 tools: 5 console commands + 29 Hub tools + blue_score + blue_new",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {

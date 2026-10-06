@@ -12,7 +12,7 @@ const ACCENT = "#4FC3F7";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const PILLARS: { k: string; d: string }[] = [
-  { k: "Blue Chat", d: "AI chat wired to 100+ onchain tools. Pay per call in USDC — no signup, no API key." },
+  { k: "Blue Chat", d: "AI chat wired to 90+ onchain tools. Pay per call in USDC — no signup, no API key." },
   { k: "Blue Hood", d: "Oracle-vs-DEX signals on tokenized stocks, with a public, receipted track record." },
   { k: "Blue Hub", d: "A marketplace of agent skills. Publish yours and earn on every paid call." },
 ];

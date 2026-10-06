@@ -30,7 +30,7 @@ export const CHAT_HIDDEN_TOOLS: ReadonlySet<string> = new Set([
   // Temporarily out: Moralis-backed (halted in lib/tool-halts.ts) and
   // key-exposure (Etherscan account endpoints are not on the free tier for
   // Base). Back when the Blockscout replacement lands.
-  "hub_airdrop", "hub_aml", "hub_whale_signal", "hub_whale_tracker", "hub_key_exposure",
+  "hub_key_exposure",
   // Execution cards outside the basic set (swap/send/bridge on Base + RH):
   // the yield card shows another vault's APY; B20 management is not a basic trade.
   "prepare_yield", "hub_b20_manage",

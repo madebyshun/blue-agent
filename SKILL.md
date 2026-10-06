@@ -83,7 +83,7 @@ JSON Schema per tool) · [`llms.txt`](https://blueagent.dev/llms.txt) (short bri
      Source of truth: apps/web/src/lib/agent-tools.ts (AGENT_TOOLS).
      Body fields are the WIRE shape (post-x402Body), not the Hub form. -->
 
-Blue Hub exposes **102 tools** across 10 categories — 96 paid, 6 free.
+Blue Hub exposes **96 tools** across 10 categories — 90 paid, 6 free.
 
 Categories: on-chain · signal · security · intelligence · builder · trading · base-ecosystem · earn · portfolio · content
 
@@ -97,13 +97,11 @@ The 6 priced $0.00 never answer 402 and never ask for a signature:
 Do not build an authorization for them — there is nothing to sign and no
 transfer to make.
 
-### on-chain (29)
+### on-chain (26)
 
 | id | price | body | what it does |
 |---|---|---|---|
 | `agent-readiness` | $0.10 | `url`* | x402 + MCP readiness probe for an agent endpoint. |
-| `airdrop-check` | $0.10 | `address`* | Base airdrop eligibility check — which protocols, activity score, estimated value. |
-| `aml-screen` | $0.25 | `address`* | AML compliance screening for any wallet — transaction patterns, risk flags, clean/suspicious verdict. |
 | `base-activity-score` | $0.05 | `address`* | Onchain activity score + tier for a Base wallet (Moralis). |
 | `base-pulse` | $0.05 | _(no body)_ | Base chain market pulse — TVL, DEX volume, sentiment, pulse score. |
 | `blue-doctor` | $0.00 | _(no body)_ | Upstream health for every data source the tools read from — Base 8453 and Robinhood Chain 4663 RPC, DexScreener, GeckoTerminal, DefiLlama, GitHub. Says down only when a probe actually failed; anything it could not reach is reported unknown with the reason. |
@@ -129,9 +127,8 @@ transfer to make.
 | `scam-detector` | $0.10 | `contract`* | Detect honeypot / rug / fake-token patterns on a Base contract. |
 | `token-price` | $0.01 | `token`* | Live price, mcap, volume and liquidity for any Base token (DexScreener). |
 | `wallet-holdings` | $0.02 | `address`* | Live ERC-20 + ETH holdings and USD value for a Base wallet (Moralis). |
-| `whale-tracker` | $0.10 | `address`* | Smart money and whale flow analysis — accumulation vs distribution signal for any token. |
 
-### signal (9)
+### signal (8)
 
 | id | price | body | what it does |
 |---|---|---|---|
@@ -140,7 +137,6 @@ transfer to make.
 | `hood-track-record` | $0.00 | `limit` | Blue Hood's own scoreboard — every public arrow with its graded outcome (HIT / MISS / VOID, VOID included), the raw counts, and the hit-rate we are allowed to publish. The headline passes a sample gate: below the published threshold you get ready:false with graded + needed and no percentage at all, plus a Wilson 95% interval once it clears. Receipts are returned freely so you can recompute it yourself — the window block tells you whether you were handed the whole record or the newest N of a longer one. An unreadable feed answers 503, never an empty record. Free. |
 | `narrative-scan` | $0.10 | _(no body)_ | Detects active Base narratives from real trending token data. Tracks Emerging → Rising → Peak → Fading lifecycle in KV. Virtuals LLM grounded by GeckoTerminal. |
 | `rh-stock-agent-brief` | $0.20 | `ticker`* | Agent-consumable JSON brief for a Robinhood Chain RWA. Deterministic market-hours-aware verdict: WATCH / ARB_LONG_DEX / ARB_SHORT_DEX (market OPEN) · FROZEN_ALIGNED / PREMARKET_DRIFT / AFTERHOURS_DRIFT (CLOSED) · THIN_LIQUIDITY / NO_ORACLE / INSUFFICIENT_DATA. Uses shared resolvePrimaryPool for cross-tool consistency. Model-recall context (no web search on this gateway) + risk flags. |
-| `rh-stock-alert` | $0.10 | `ticker`* `threshold_usd`* `direction` `recipient` `webhook_url` `persist` `ttl_hours` | Register a Chainlink-price threshold alert for a RH RWA. Polls Chainlink once at registration for immediate met/pending status; optionally persists to KV for a poller to watch. Above / below direction, USD threshold. |
 | `rh-stock-arb` | $0.05 | `ticker`* | Chainlink oracle vs deepest DEX pool spot for a Robinhood Chain tokenized stock. Market-hours-aware verdict: OPEN → ALIGNED / LONG_DEX / SHORT_DEX (real arb); CLOSED → FROZEN_ALIGNED / PREMARKET_DRIFT / AFTERHOURS_DRIFT (Chainlink is frozen, DEX drift ≠ arb). Warnings for feed-abnormally-stale + thin pool. |
 | `rh-stock-flow` | $0.10 | `ticker`* | Buy vs sell pressure over 24h from GeckoTerminal trades feed. Hard-mapped verdict (BUY_HEAVY / SELL_HEAVY / BALANCED) at 10% net-of-total threshold. Never fabricates flow. |
 | `rh-stock-movers` | $0.05 | `limit` `min_tvl_usd` `min_volume_24h_usd` | Top gainers / losers 24h among Robinhood Chain tokenized stocks & ETFs. Dust-pool filter (default min $5k TVL + $500 24h volume) drops noise pools that would otherwise quote AAPL at $868 via a $453-TVL pool. Sign-filtered so a token with -1.56% never lands in gainers. Filtered pools surface as filtered_out for transparency. |
@@ -167,7 +163,7 @@ transfer to make.
 | `token-distribution` | $0.05 | `contract`* | Holder concentration + rug-risk distribution score (Moralis holders). |
 | `wallet-risk` | $0.05 | `address`* | AML / risk screen for a Base wallet from real on-chain flow (Moralis). |
 
-### intelligence (12)
+### intelligence (11)
 
 | id | price | body | what it does |
 |---|---|---|---|
@@ -180,7 +176,6 @@ transfer to make.
 | `narrative-position` | $0.15 | `topic` `focus` | Which narratives are building vs peaking on CT — and where to position. |
 | `narrative-pulse` | $0.10 | `focus` | Live Base narrative phases, velocity and entry windows. |
 | `protocol-health` | $0.10 | `protocol`* | Protocol TVL health, trend and risk signals (DefiLlama). |
-| `token-alpha` | $0.15 | `token`* | Token trade signal — entry, whale confirmation, momentum and risk. |
 | `token-launch-readiness` | $0.30 | `name`* `project`* `description` | Go/no-go signal on whether your project is ready to launch a token. |
 | `token-pick-signal` | $0.20 | `chain` `context` | The top Base token by an on-chain quality score (liquidity, turnover, momentum) — facts from live pools, no buy/sell call. |
 
@@ -208,7 +203,7 @@ transfer to make.
 | `rh-rwa-embed-kit` | $0.05 | `ticker`* `framework` `theme` | Copy-paste 'Buy $TICKER' button kit: chain config, live-price hook, and wagmi buy button wired to the RH swap prepare endpoint. Non-custodial. The Vlad-Tenev-builder-tweet-answering tool. |
 | `rh-rwa-pricing-kit` | $0.05 | `ticker`* | Standalone read-only React hook for a live Chainlink RH RWA price: ABI + viem client + hook + demo badge component. No wallet required, no cost per read. |
 
-### trading (5)
+### trading (4)
 
 | id | price | body | what it does |
 |---|---|---|---|
@@ -216,7 +211,6 @@ transfer to make.
 | `rh-stock-swap-quote` | $0.05 | `ticker`* `side`* `amount`* `denom` `slippage_bps` | Quote a buy/sell for a Robinhood Chain tokenized stock. Route + best-pool from on-chain V3 factory, spot from Chainlink (fallback DEX), expected & min out at your slippage, plus a first-order liquidity upper bound. Denom USDG (default) or WETH. |
 | `rh-stock-swap-route` | $0.10 | `token_in`* `token_out`* | Full V3 route map for any Robinhood Chain pair. Probes all 4 fee tiers for a direct pool and both legs of a WETH-hopped route. Returns liquidity per tier so a client can pick / split its own path. Accepts 0x addresses or RWA tickers. |
 | `token-momentum-scanner` | $0.20 | `min_mcap` | Real-time momentum scan for Base tokens — breakouts, volume spikes, narrative alignment. |
-| `whale-copy-signal` | $0.25 | `wallet` `token` | Track and copy high-alpha whale wallets on Base — entry, size, and timing. |
 
 ### base-ecosystem (2)
 
@@ -280,7 +274,7 @@ surface you are actually calling.
 **Cut from 85 to 18 on 2026-09-26, and the cut removed no capability.** The 85-tool manifest
 was 32,160 bytes — roughly 8,000 tokens spent before the agent read a single word of the user's
 question — and published MCP research finds tool-selection accuracy degrades sharply past
-~40 always-loaded entries. All 102 catalog tools remain live at `/api/x402/<id>`; `blue_registry`
+~40 always-loaded entries. All 96 catalog tools remain live at `/api/x402/<id>`; `blue_registry`
 lists them and `blue_call` runs any of them, so the rest moved from "always in context" to
 "one lookup away". A manifest is a context budget, not an inventory.
 

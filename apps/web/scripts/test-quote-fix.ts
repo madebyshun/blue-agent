@@ -36,12 +36,6 @@ async function main() {
   console.log("quote_preview.pool_oracle_delta_pct:", (a1d.quote_preview as { pool_oracle_delta_pct?: number })?.pool_oracle_delta_pct);
   console.log("quote_preview.min_out_per_period:", (a1d.quote_preview as { min_out_per_period?: number })?.min_out_per_period);
 
-  console.log("\n── A2 alert preview_only ──");
-  const a2 = await call("rh-stock-alert", { ticker: "AAPL", threshold_usd: 350, direction: "above" });
-  const a2d = a2.data as Record<string, unknown>;
-  console.log("mode:", a2d.mode, "status:", (a2d.alert as { status?: string })?.status, "met_now:", a2d.met_now);
-  console.log("warnings:", a2d.warnings);
-
   console.log("\n── D2 flow AAPL — pool_ref + gt_status + warnings ──");
   const d2 = await call("rh-stock-flow", { ticker: "AAPL" });
   const d2d = d2.data as Record<string, unknown>;

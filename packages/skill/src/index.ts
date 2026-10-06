@@ -350,31 +350,12 @@ const HUB_TOOLS = [
       required: ["token"],
     },
   },
-  {
-    name: "hub_whale_signal",
-    toolId: "whale-copy-signal",
-    description: "Track whale wallet movements and generate copy-trade signals for a token.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        token: { type: "string", description: "Token address to track" },
-        min_usd: { type: "number", description: "Min trade size in USD (default: 10000)" },
-      },
-      required: ["token"],
-    },
-  },
   // ── Security (extended) ────────────────────────────────────────────────────
   {
     name: "hub_contract_trust",
     toolId: "contract-trust",
     description: "Trust score for any smart contract — code quality, upgrade risk, ownership, audit history.",
     inputSchema: { type: "object", properties: { contract: { type: "string", description: "Contract address 0x..." } }, required: ["contract"] },
-  },
-  {
-    name: "hub_aml_screen",
-    toolId: "aml-screen",
-    description: "AML screening for a wallet — sanctions, mixer exposure, illicit flow patterns.",
-    inputSchema: { type: "object", properties: { address: { type: "string", description: "Wallet address 0x..." } }, required: ["address"] },
   },
   {
     name: "hub_key_exposure",
@@ -388,12 +369,6 @@ const HUB_TOOLS = [
     toolId: "token-momentum-scanner",
     description: "Token momentum scanner — price velocity, volume spikes, social acceleration for Base tokens.",
     inputSchema: { type: "object", properties: { token: { type: "string" }, limit: { type: "number" } } },
-  },
-  {
-    name: "hub_whale_tracker",
-    toolId: "whale-tracker",
-    description: "Smart money flow analysis — track top wallet moves across Base in real time.",
-    inputSchema: { type: "object", properties: { focus: { type: "string" } } },
   },
   // ── Builder (extended) ─────────────────────────────────────────────────────
   {

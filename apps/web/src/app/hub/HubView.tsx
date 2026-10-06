@@ -143,7 +143,6 @@ const TOOL_EXAMPLES: Record<string, Record<string, string>> = {
   "defi-opportunity":          { focus: "stablecoin yield above 8% APR on Base", risk_tolerance: "medium" },
   "builder-deep-dd":           { target: "@madebyshun" },
   // ── Trading ───────────────────────────────────────────────────────────────────
-  "whale-copy-signal":         { wallet: "", token: "WETH" },
   "token-momentum-scanner":    { timeframe: "24h", filter: "min $50k volume, AI agent narrative" },
   // ── Content ───────────────────────────────────────────────────────────────────
   // ── Agent Economy ─────────────────────────────────────────────────────────────
@@ -167,9 +166,6 @@ const TOOL_EXAMPLES: Record<string, Record<string, string>> = {
   // ── Quantum ───────────────────────────────────────────────────────────────────
   "key-exposure":    { address: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045" },
   // ── On-chain Data ─────────────────────────────────────────────────────────────
-  "aml-screen":      { address: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045" },
-  "airdrop-check":   { address: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045" },
-  "whale-tracker":   { token: "0xf895783b2931c919955e18b5e3343e7c7c456ba3" },
   "dex-flow":        { token: "0xf895783b2931c919955e18b5e3343e7c7c456ba3" },
   // ── Earn ──────────────────────────────────────────────────────────────────────
   "lp-analyzer":     { pool: "WETH/USDC 0.05%", position: "$5000 deployed" },
@@ -1395,7 +1391,7 @@ const TOOL_GROUPS: { id: string; label: string; desc: string; color: string; ids
     label: "For Traders",
     desc: "Signals, market intel, portfolio tools",
     color: "#4FC3F7",
-    ids: ["token-pick-signal", "narrative-position", "whale-copy-signal", "defi-opportunity", "token-momentum-scanner", "ecosystem-digest", "protocol-risk-monitor", "base-alpha", "token-alpha", "narrative-pulse", "protocol-health"],
+    ids: ["token-pick-signal", "narrative-position", "defi-opportunity", "token-momentum-scanner", "ecosystem-digest", "protocol-risk-monitor", "base-alpha", "narrative-pulse", "protocol-health"],
   },
   {
     id: "founders",
@@ -1430,7 +1426,7 @@ const TOOL_GROUPS: { id: string; label: string; desc: string; color: string; ids
     label: "On-chain Data",
     desc: "Wallet PnL, AML, airdrops, whale tracking, DEX flow",
     color: "#FACC15",
-    ids: ["aml-screen", "airdrop-check", "whale-tracker", "dex-flow", "token-price", "pool-scan", "wallet-holdings", "new-pools", "gas-tracker", "base-activity-score", "scam-detector", "cross-protocol-yield", "agent-readiness", "base-pulse"],
+    ids: ["dex-flow", "token-price", "pool-scan", "wallet-holdings", "new-pools", "gas-tracker", "base-activity-score", "scam-detector", "cross-protocol-yield", "agent-readiness", "base-pulse"],
   },
   {
     id: "earn",

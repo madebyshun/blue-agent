@@ -30,7 +30,6 @@ REGISTERED=(
   "builder-deep-dd"
   "market-fit"
   "token-launch-readiness"
-  "whale-copy-signal"
   "blue-idea"
   "blue-build"
   "blue-audit"
@@ -65,7 +64,6 @@ ALL_TOOLS=(
   "builder-score"
   "agent-score"
   # Trading & Alpha
-  "whale-copy-signal"
   "token-momentum-scanner"
   "portfolio-rebalancer"
   # Content
@@ -81,9 +79,6 @@ ALL_TOOLS=(
   "wallet-strategy-analyzer"
   "protocol-risk-monitor"
   "wallet-pnl"
-  "aml-screen"
-  "airdrop-check"
-  "whale-tracker"
   "dex-flow"
   # Security
   "honeypot-check"
@@ -128,9 +123,6 @@ NEW_TOOLS=(
   "wallet-strategy-analyzer"
   "protocol-risk-monitor"
   "wallet-pnl"
-  "aml-screen"
-  "airdrop-check"
-  "whale-tracker"
   "dex-flow"
   "honeypot-check"
   "risk-gate"

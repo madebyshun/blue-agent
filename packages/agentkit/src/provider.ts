@@ -96,39 +96,6 @@ export function createBlueAgentProvider(options: BlueAgentProviderOptions = {}) 
       },
 
       {
-        name: "whale_tracker",
-        description:
-          "Track large wallet movements and whale activity for a token on Base. Price: $0.10 USDC.",
-        schema: z.object({
-          token: z.string().describe("Token contract address to track (0x…)"),
-        }),
-        invoke: async (args: { token: string }) =>
-          callTool("whale-tracker", args as Record<string, unknown>, options),
-      },
-
-      {
-        name: "aml_screen",
-        description:
-          "AML (Anti-Money Laundering) screening for a wallet address — checks against sanctions and flagged addresses. Price: $0.25 USDC.",
-        schema: z.object({
-          address: z.string().describe("Wallet address to screen (0x…)"),
-        }),
-        invoke: async (args: { address: string }) =>
-          callTool("aml-screen", args as Record<string, unknown>, options),
-      },
-
-      {
-        name: "airdrop_check",
-        description:
-          "Check a wallet's eligibility for active and upcoming airdrops on Base. Price: $0.10 USDC.",
-        schema: z.object({
-          address: z.string().describe("Wallet address to check (0x…)"),
-        }),
-        invoke: async (args: { address: string }) =>
-          callTool("airdrop-check", args as Record<string, unknown>, options),
-      },
-
-      {
         name: "narrative_pulse",
         description:
           "Get the current narrative trends and sentiment pulse in crypto — optionally filtered by topic. Price: $0.10 USDC.",

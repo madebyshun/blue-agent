@@ -20,9 +20,9 @@ Blue Agent is a full economic actor on Base: it holds a wallet, executes onchain
 
 ---
 
-## Blue Hub — 102 AI Tools on Base
+## Blue Hub — 96 AI Tools on Base
 
-Blue Hub is a curated marketplace of 102 AI tools built on Base — 96 pay-per-call, 6 free. Any agent or developer can call tools via x402 micropayments in USDC — no API key, no account, no human in the loop.
+Blue Hub is a curated marketplace of 96 AI tools built on Base — 90 pay-per-call, 6 free. Any agent or developer can call tools via x402 micropayments in USDC — no API key, no account, no human in the loop.
 
 ```bash
 # Discover all tools + prices
@@ -39,7 +39,7 @@ X-Payment: <EIP-3009 USDC on Base>
 POST https://blueagent.dev/api/x402/blue-doctor
 ```
 
-**102 tools across 10 categories** — on-chain · signal · security · intelligence · builder · trading · base-ecosystem · earn · portfolio · content
+**96 tools across 10 categories** — on-chain · signal · security · intelligence · builder · trading · base-ecosystem · earn · portfolio · content
 
 <!-- Both numbers above, and every other tool count in this file, are pinned to
      `TOOL_COUNT` by apps/web/scripts/docs-truth-check.ts, which runs in CI. -->
@@ -117,11 +117,11 @@ Navigate with `↑ ↓ Enter`. Press `Esc` to go back.
 | Category | Tools |
 |---|---|
 | **Build** | idea · build · audit · ship · raise |
-| **Intelligence** | base-alpha · token-alpha · protocol-health · founder-check · narrative-pulse · token-pick-signal · ecosystem-digest · market-fit · blue-research |
-| **On-chain** | token-price · pool-scan · wallet-holdings · new-pools · gas-tracker · scam-detector · cross-protocol-yield · whale-tracker · dex-flow · aml-screen · airdrop-check |
+| **Intelligence** | base-alpha · protocol-health · founder-check · narrative-pulse · token-pick-signal · ecosystem-digest · market-fit · blue-research |
+| **On-chain** | token-price · pool-scan · wallet-holdings · new-pools · gas-tracker · scam-detector · cross-protocol-yield · dex-flow |
 | **Security** | quick-safety · wallet-risk · honeypot-check · risk-gate · deep-analysis · contract-trust · key-exposure · token-distribution · liquidity-depth |
 | **Builder** | competitor-scan · repo-health · builder-deep-dd · grant-evaluator |
-| **Trading** | whale-copy-signal · token-momentum-scanner |
+| **Trading** | token-momentum-scanner |
 | **Earn** | lp-analyzer · cross-protocol-yield |
 
 One category the TUI still renders is **not** listed above, because it does not
@@ -145,12 +145,12 @@ blue doctor
 ## Blue Chat
 
 The browser terminal folded into Blue Chat at
-[app.blueagent.dev/chat](https://app.blueagent.dev/chat) — all 102 Hub tools, the
+[app.blueagent.dev/chat](https://app.blueagent.dev/chat) — all 96 Hub tools, the
 5 core commands, and onchain queries, in the browser. No install required.
 (`/terminal` still 301s there, so old links keep working.)
 
 ```
-blue hub ls                    # list all 102 tools
+blue hub ls                    # list all 96 tools
 blue hub info token-pick-signal
 blue idea <prompt>             # $0.05, inference via Virtuals
 blue balance 0x...             # ETH + USDC on Base mainnet

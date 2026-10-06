@@ -611,17 +611,6 @@ const ALL_HUB_TOOLS = [
     },
   },
   {
-    name: "hub_whale_signal",
-    description: "Copy-trade signal from a WALLET's real recent on-chain transfers (Basescan, live) — is this whale accumulating or distributing, and is it worth copying. Works on ANY 0x address (wallet preferred). USE WHEN: the user gives an address and asks whether to copy it / what it's doing on-chain. NOT FOR: code/concept questions. For a token's overall whale flow, use hub_whale_tracker.",
-    input_schema: {
-      type: "object",
-      properties: {
-        address: { type: "string", description: "The 0x address to analyse (a whale wallet, preferred). Reads its real recent on-chain transfers." },
-      },
-      required: ["address"],
-    },
-  },
-  {
     name: "hub_deep_analysis",
     description: "Comprehensive token fundamentals — on-chain activity, holder distribution, risk signals. USE WHEN: the user gives a token CONTRACT ADDRESS and asks for DD / due diligence / deep analysis. NOT FOR: analysing, reviewing, or debugging CODE; explaining concepts; or any request without a real token address — answer those directly without a tool.",
     input_schema: {
@@ -856,24 +845,6 @@ const ALL_HUB_TOOLS = [
     },
   },
   {
-    name: "hub_aml",
-    description: "AML compliance screening for any wallet — clean/suspicious/flagged verdict with risk score. Use when user asks if a wallet is clean, safe to receive funds from, or needs AML check.",
-    input_schema: {
-      type: "object",
-      properties: { address: { type: "string", description: "Wallet address 0x..." } },
-      required: ["address"],
-    },
-  },
-  {
-    name: "hub_whale_tracker",
-    description: "Smart money and whale flow analysis for any token — top holders, recent large moves, accumulation/distribution. Use when user asks about whale activity for a specific token.",
-    input_schema: {
-      type: "object",
-      properties: { token: { type: "string", description: "Token contract address on Base" } },
-      required: ["token"],
-    },
-  },
-  {
     name: "hub_dex_flow",
     description: "Live DEX buy/sell pressure and liquidity flow for a token. Use when user asks about DEX volume, buy pressure, sell walls, liquidity.",
     input_schema: {
@@ -896,15 +867,6 @@ const ALL_HUB_TOOLS = [
       properties: {
         min_mcap: { type: "number", description: "Minimum market cap in USD to include (optional, default 0 = no floor)" },
       },
-    },
-  },
-  {
-    name: "hub_airdrop",
-    description: "Check Base airdrop eligibility for a wallet — activity score, eligible protocols, estimated allocation. Use when user asks about airdrops, eligibility, or airdrop farming.",
-    input_schema: {
-      type: "object",
-      properties: { address: { type: "string", description: "Wallet address 0x..." } },
-      required: ["address"],
     },
   },
   {
@@ -1225,7 +1187,6 @@ const VENICE_TOOLS = HUB_TOOLS.map(t => ({
 const TOOL_ENDPOINT: Record<string, string> = {
   hub_token_pick:       "token-pick-signal",
   hub_narrative:        "narrative-position",
-  hub_whale_signal:     "whale-copy-signal",
   hub_deep_analysis:    "deep-analysis",
   hub_honeypot:         "honeypot-check",
   hub_risk_gate:        "risk-gate",
@@ -1238,8 +1199,6 @@ const TOOL_ENDPOINT: Record<string, string> = {
   hub_repo_health:      "repo-health",
   hub_ecosystem:        "ecosystem-digest",
   hub_agent_score:      "agent-score",
-  hub_aml:              "aml-screen",
-  hub_whale_tracker:    "whale-tracker",
   hub_dex_flow:         "dex-flow",
   // The three below back the always-on default skills in chat/integrations.ts
   // ("Trader Intel", "Base Builder"). Those packs are injected into every user's
@@ -1252,7 +1211,6 @@ const TOOL_ENDPOINT: Record<string, string> = {
   hub_narrative_pulse:  "narrative-pulse",
   hub_builder_dd:       "builder-deep-dd",
   hub_token_momentum:   "token-momentum-scanner",
-  hub_airdrop:          "airdrop-check",
   hub_crypto_rpc:       "crypto-rpc",
   hub_token_price:      "token-price",
   // Blue first-party suite

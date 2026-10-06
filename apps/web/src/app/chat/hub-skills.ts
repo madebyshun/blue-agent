@@ -109,7 +109,6 @@ const CURATED: { id: string; tool: string; category: SkillCategory; trigger: str
   // Market Intel
   { id: "token-pick-signal",       tool: "hub_token_pick",       category: "Market Intel",  trigger: "/pick" },
   { id: "narrative-position",      tool: "hub_narrative",        category: "Market Intel",  trigger: "What narratives are running on Base right now?" },
-  { id: "whale-copy-signal",       tool: "hub_whale_signal",     category: "Market Intel",  trigger: "Show me whale signals for " },
   { id: "token-momentum-scanner",  tool: "hub_token_momentum",   category: "Market Intel",  trigger: "Scan top momentum tokens on Base" },
   // Due Diligence
   { id: "deep-analysis",           tool: "hub_deep_analysis",    category: "Due Diligence", trigger: "/audit " },

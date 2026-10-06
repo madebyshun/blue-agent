@@ -35,7 +35,7 @@ const raise = await client.raise("gasless USDC tipping app, 500 DAU, pre-seed");
 ```typescript
 // Call by tool ID + inputs
 const result = await client.hub("ecosystem-digest", { focus: "DeFi" });
-const result = await client.hub("whale-copy-signal", { wallet: "0x..." });
+const result = await client.hub("honeypot-check", { token: "0x..." });
 const result = await client.hub("contract-trust",    { address: "0x..." });
 
 // Call any x402 endpoint directly

@@ -36,27 +36,6 @@ async function main() {
     call_count: (a1d.first_run as { call_count?: number })?.call_count,
   };
 
-  const a2 = await call("rh-stock-alert", {
-    ticker: "AAPL", threshold_usd: 100, direction: "above", persist: false,
-  });
-  const a2d = a2.data as Record<string, unknown>;
-  results["A2 alert AAPL >$100"] = {
-    status: a2.status,
-    status_field: (a2d.alert as { status?: string })?.status,
-    met_now: a2d.met_now,
-    last_price: (a2d.alert as { last_price_usd?: number })?.last_price_usd,
-  };
-
-  const a2b = await call("rh-stock-alert", {
-    ticker: "AAPL", threshold_usd: 5000, direction: "above", persist: false,
-  });
-  const a2bd = a2b.data as Record<string, unknown>;
-  results["A2 alert AAPL >$5000"] = {
-    status: a2b.status,
-    met_now: a2bd.met_now,
-    note: a2bd.note,
-  };
-
   const a4 = await call("rh-stock-agent-brief", { ticker: "AAPL" });
   const a4d = a4.data as Record<string, unknown>;
   results["A4 agent brief AAPL"] = {

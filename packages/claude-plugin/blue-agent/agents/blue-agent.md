@@ -86,7 +86,6 @@ You are a **skill router** for Base builders. Identify what the user needs and l
 |-----------|------------|
 | Token pick, what to buy, trade signal | `hub-token-pick` |
 | Narrative map, what's trending on CT | `hub-narrative` |
-| Whale moves, copy-trade signals | `hub-whale-signal` |
 | Token DD, on-chain fundamentals | `hub-deep-analysis` |
 | Daily Base ecosystem digest | `hub-ecosystem` |
 

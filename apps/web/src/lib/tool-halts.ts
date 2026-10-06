@@ -41,13 +41,7 @@ export const HALTED_TOOLS: Readonly<Record<string, string>> = {
   "wallet-holdings": MORALIS,
   "wallet-risk": MORALIS,
   "token-distribution": MORALIS,
-  "token-alpha": MORALIS,
-  "whale-tracker": MORALIS,
-  "whale-copy-signal": MORALIS,
-  "airdrop-check": MORALIS,
-  "aml-screen": MORALIS,
   "base-activity-score": MORALIS,
-  "rh-stock-alert": UNDELIVERED,
   "rh-rwa-dca": UNDELIVERED,
 };
 

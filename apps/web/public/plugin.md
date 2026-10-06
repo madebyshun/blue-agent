@@ -3,9 +3,9 @@
 > Source of truth: https://blueagent.dev/plugin.md
 > Hub UI: https://blueagent.dev/hub · Catalog (machine-readable): https://blueagent.dev/api/catalog
 
-102 AI tools for onchain builders and autonomous agents — audits, token signals,
+96 AI tools for onchain builders and autonomous agents — audits, token signals,
 market-fit analysis, deep due diligence, launch readiness, ecosystem intel and
-more. 96 are paid HTTP endpoints that speak **x402 v2** natively, so Base MCP
+more. 90 are paid HTTP endpoints that speak **x402 v2** natively, so Base MCP
 can call any of them and settle the USDC payment without extra wiring. The
 other 6 are priced $0.00, never answer 402 and never ask for a signature.
 
@@ -64,7 +64,7 @@ no auth. Returns:
   "network": "eip155:8453",
   "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
   "payTo": "0x02950ad38ada1d599375bd447e080cd404809205",
-  "count": 102,
+  "count": 96,
   "tools": [
     {
       "id": "token-pick-signal",

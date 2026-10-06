@@ -19,7 +19,6 @@ Run the following through Blue Agent: $ARGUMENTS
    **Hub — market intelligence:**
    - Token pick, what to buy: `hub-token-pick`
    - Narratives, trending, CT mindshare: `hub-narrative`
-   - Whale signals, copy-trade: `hub-whale-signal`
    - Token DD, on-chain analysis: `hub-deep-analysis`
    - Base ecosystem digest: `hub-ecosystem`
 

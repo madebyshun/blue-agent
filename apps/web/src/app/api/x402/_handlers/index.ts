@@ -25,7 +25,6 @@ import hB20Inspect from "./b20-inspect";
 import hLiquidityDepth from "./liquidity-depth";
 import hTokenDistribution from "./token-distribution";
 import hBaseAlpha from "./base-alpha";
-import hTokenAlpha from "./token-alpha";
 import hProtocolHealth from "./protocol-health";
 import hFounderCheck from "./founder-check";
 import hNarrativePulse from "./narrative-pulse";
@@ -68,10 +67,6 @@ import h24 from "./repo-health";
 import h29 from "./token-launch-readiness";
 import h30 from "./token-momentum-scanner";
 import h31 from "./token-pick-signal";
-import h33 from "./whale-copy-signal";
-import h40 from "./aml-screen";
-import h41 from "./airdrop-check";
-import h42 from "./whale-tracker";
 import h43 from "./dex-flow";
 import h45 from "./lp-analyzer";
 import h52 from "./grant-evaluator";
@@ -108,7 +103,6 @@ import hRhStockBeaconCheck   from "./rh-stock-beacon-check";
 import hRhStockCorrelations  from "./rh-stock-correlations";
 // RH RWA Phase 6 (A1·A2·A3·A4) — agent skills
 import hRhRwaDca             from "./rh-rwa-dca";
-import hRhStockAlert         from "./rh-stock-alert";
 import hRhStockReport        from "./rh-stock-report";
 import hRhStockAgentBrief    from "./rh-stock-agent-brief";
 // RH RWA Phase 7 (B1·B2·E1·E2·E3) — bridge & builder kit (final)
@@ -136,7 +130,6 @@ export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "liquidity-depth": hLiquidityDepth,
   "token-distribution": hTokenDistribution,
   "base-alpha": hBaseAlpha,
-  "token-alpha": hTokenAlpha,
   "protocol-health": hProtocolHealth,
   "founder-check": hFounderCheck,
   "narrative-pulse": hNarrativePulse,
@@ -160,7 +153,6 @@ export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "token-launch-readiness": h29,
   "token-momentum-scanner": h30,
   "token-pick-signal": h31,
-  "whale-copy-signal": h33,
   "blue-idea":      hBlueIdea,
   "blue-build":     hBlueBuild,
   "blue-audit":     hBlueAudit,
@@ -184,9 +176,6 @@ export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
 
 
 
-  "aml-screen":      h40,
-  "airdrop-check":   h41,
-  "whale-tracker":   h42,
   "dex-flow":        h43,
   "lp-analyzer":     h45,
   "grant-evaluator": h52,
@@ -223,7 +212,6 @@ export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "rh-stock-correlations":  hRhStockCorrelations,
   // ── RH RWA Phase 6 — Agent Skills ─────────────────────────────────────
   "rh-rwa-dca":             hRhRwaDca,
-  "rh-stock-alert":         hRhStockAlert,
   "rh-stock-report":        hRhStockReport,
   "rh-stock-agent-brief":   hRhStockAgentBrief,
   // ── RH RWA Phase 7 — Bridge & Builder Kit ─────────────────────────────

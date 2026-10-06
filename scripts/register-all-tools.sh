@@ -32,7 +32,6 @@ TOOLS=(
   defi-opportunity
   builder-deep-dd
   launch-simulator
-  whale-copy-signal
   token-momentum-scanner
   portfolio-rebalancer
   builder-brand-score

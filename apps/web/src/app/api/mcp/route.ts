@@ -23,7 +23,7 @@
  *        This line is pinned by apps/web/scripts/docs-truth-check.ts and fails CI if
  *        it drifts. Do not hand-edit it — change the manifest, then update both.
  *
- *        This is NOT the catalog total. `AGENT_TOOLS` holds 102; all 102 stay live at
+ *        This is NOT the catalog total. `AGENT_TOOLS` holds 96; all 96 stay live at
  *        /api/x402/<id> and are now reached through blue_registry → blue_call rather
  *        than by preloading. The hub_* names listed here each map to a real catalog
  *        id (also checked by docs-truth-check.ts, because an MCP tool pointing at a
