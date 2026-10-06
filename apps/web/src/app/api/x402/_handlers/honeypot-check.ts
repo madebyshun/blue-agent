@@ -25,6 +25,7 @@
 // word chosen by the LLM flips between runs on identical input; both passes now
 // run at temperature 0 and only write prose and flags.
 
+import { preTradeCheck } from "@/lib/pre-trade-check";
 import { getTokenIdentity, tokenIdentityToPrompt } from "@/lib/onchain";
 import { callLLM } from "@/app/api/_lib/llm";
 import { readTokenTax, type TaxRead } from "@/lib/token-tax";
@@ -151,6 +152,11 @@ export default async function handler(req: Request): Promise<Response> {
     if (!/^0x[0-9a-fA-F]{40}$/.test(address)) {
       return Response.json({ error: "Invalid address format. Must be 0x + 40 hex chars." }, { status: 400 });
     }
+    // The unified pre-swap verdict (lib/pre-trade-check.ts), started now and
+    // attached as `pre_trade` so this tool and pre-trade-check never disagree
+    // about the same token. Added, not substituted: existing fields unchanged
+    // (plan-build-2026-10-06 task 2.4).
+    const preTradeP = preTradeCheck({ chain: "base", kind: "swap", token: address }).catch(() => null);
 
     // Authoritative on-chain identity (eth_getCode + ERC-20 metadata + live
     // DexScreener liquidity), the Basescan verification lookup, and the tax
@@ -358,8 +364,11 @@ Schema: {
         ? ""
         : ` Buy/sell tax could NOT be read from this contract (it does not expose the Virtuals AgentToken tax selectors), so confidence is capped at ${TAX_UNVERIFIED_CONFIDENCE_CAP}. This is unverified, not clean — do a small test sell before committing size.`;
 
+    const pt = await preTradeP;
+    const pre_trade = pt ? { verdict: pt.verdict, reasons: pt.reasons, note: "The same PASS / WARN / BLOCK the swap cards and blue_swap_tx gate on (pre-trade-check)." } : null;
     return Response.json({
       tool: "honeypot-check",
+      pre_trade,
       timestamp: new Date().toISOString(),
       address,
       chain: "base",

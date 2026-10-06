@@ -8,6 +8,7 @@
 // inputs there was nothing for a model to add except those things it must not
 // produce. The verdict, flags and confidence are now arithmetic on what was
 // read, and a tax is reported only when it was read on-chain (lib/token-tax).
+import { preTradeCheck } from "@/lib/pre-trade-check";
 import { getBasescanSource } from "@/lib/moralis";
 import { sideOf } from "@/lib/dex-side";
 import { readTokenTax } from "@/lib/token-tax";
@@ -65,6 +66,11 @@ export default async function handler(req: Request): Promise<Response> {
     const url = new URL(req.url);
     const contract = (body.contract ?? url.searchParams.get("contract") ?? url.searchParams.get("address") ?? "").trim();
     if (!/^0x[a-fA-F0-9]{40}$/.test(contract)) return Response.json({ error: "Provide a contract address (0x…)" }, { status: 400 });
+    // The unified pre-swap verdict (lib/pre-trade-check.ts), started now and
+    // attached as `pre_trade` so this tool and pre-trade-check never disagree
+    // about the same token. Added, not substituted: existing fields unchanged
+    // (plan-build-2026-10-06 task 2.4).
+    const preTradeP = preTradeCheck({ chain: "base", kind: "swap", token: contract }).catch(() => null);
 
     type Pair = {
       chainId?: string;
@@ -99,8 +105,11 @@ export default async function handler(req: Request): Promise<Response> {
       honeypot: honeypot.verdict,
     });
 
+    const pt = await preTradeP;
+    const pre_trade = pt ? { verdict: pt.verdict, reasons: pt.reasons, note: "The same PASS / WARN / BLOCK the swap cards and blue_swap_tx gate on (pre-trade-check)." } : null;
     return Response.json({
       tool: "quick-safety",
+      pre_trade,
       contract,
       symbol,
       safe: verdict === "UNKNOWN" ? null : verdict === "SAFE",
