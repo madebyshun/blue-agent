@@ -136,6 +136,8 @@ const inMajors = (t: Token) => TOKENS.some(x => x.addr.toLowerCase() === t.addr.
 type FeeLeg = { amount?: string; token?: string; type?: string } | null;
 type Quote = {
   needsKey?: boolean; error?: string;
+  /** "aerodrome" for a Base B20 stock leg (lib/aerodrome-swap.ts); absent = 0x. */
+  venue?: string;
   buyAmount?: string; minBuyAmount?: string;
   transaction?: { to: `0x${string}`; data: `0x${string}`; value?: string };
   issues?: { allowance?: { spender: `0x${string}` } | null };
@@ -226,7 +228,7 @@ export default function SwapCard({
   useRecordAction(txHash, () => ({
     wallet: account, kind: "swap", chain: "base",
     params: { tokenIn: sell.addr, tokenOut: buy.addr, amountIn: amount, slippageBps, symIn: label(sell), symOut: label(buy) },
-    quote: { venue: "0x", expected_out: quote?.buyAmount ?? null, min_out: quote?.minBuyAmount ?? null, unit: "base" },
+    quote: { venue: quote?.venue ?? "0x", expected_out: quote?.buyAmount ?? null, min_out: quote?.minBuyAmount ?? null, unit: "base" },
     check: pt.check ? { verdict: pt.check.verdict, reasons: pt.check.reasons.map((r) => r.text) } : null,
   }));
 
@@ -463,7 +465,7 @@ export default function SwapCard({
   );
 
   return (
-    <WalletCard title="CONVERT" chain="base" note="via 0x">
+    <WalletCard title="CONVERT" chain="base" note={quote?.venue === "aerodrome" ? "via Aerodrome" : "via 0x"}>
       {/* The picker's `value` is a LITERAL, not state — see `onChain` above.
           This card signs on Base whatever it is told, so Base is the only thing
           it is allowed to claim. */}
@@ -568,7 +570,7 @@ export default function SwapCard({
           : !pt.cleared ? "Confirm the check above"
           : `Trade ${amt > 0 ? fmt(amt) : ""} ${label(sell)} → ${label(buy)}`}
       </ConfirmButton>
-      <CardNote>Best route via 0x · 0x fee shown when quoted · you sign · non-custodial · Base mainnet.</CardNote>
+      <CardNote>{quote?.venue === "aerodrome" ? "Base stock tokens route via Aerodrome Slipstream (USDC pair) · you sign · non-custodial · Base mainnet." : "Best route via 0x · 0x fee shown when quoted · you sign · non-custodial · Base mainnet."}</CardNote>
     </WalletCard>
   );
 }

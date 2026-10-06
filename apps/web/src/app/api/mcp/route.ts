@@ -613,7 +613,7 @@ async function callSwapTx(args: Record<string, unknown>): Promise<string> {
       tx: { to: tx.to, data: tx.data, value: tx.value ?? "0", chainId: TX_CHAINS.base.chainId },
       approve: buildBaseApprove(data, tokenIn, amountInBase, inIsNative),
       meta: {
-        venue: "0x AllowanceHolder", from: fromAddress,
+        venue: data.venue === "aerodrome" ? "Aerodrome Slipstream" : "0x AllowanceHolder", from: fromAddress,
         tokenIn, tokenOut, amountIn, amountInBase, decimals, slippageBps,
         buyAmount: data.buyAmount ?? null, minBuyAmount: data.minBuyAmount ?? null,
         explorer: TX_CHAINS.base.explorer,

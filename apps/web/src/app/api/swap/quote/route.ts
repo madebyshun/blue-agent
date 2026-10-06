@@ -11,6 +11,7 @@
 import { NextResponse } from "next/server";
 import { toNativeSentinel } from "@/lib/tx-chains";
 import { parseSlippageBps } from "@/lib/zerox-swap";
+import { aerodromeQuote, baseStockByToken } from "@/lib/aerodrome-swap";
 
 const ZEROX_BASE = "https://api.0x.org/swap/allowance-holder/quote";
 const BASE_CHAIN = 8453;
@@ -23,6 +24,15 @@ export async function GET(req: Request) {
   const taker = u.searchParams.get("taker") ?? "";
   const slippageBps = parseSlippageBps(u.searchParams.get("slippageBps"));
   const key = process.env.ZEROX_API_KEY;
+
+  // Base B20 stock tokens: 0x refuses them ("not authorized for trade due to
+  // legal restrictions", measured 2026-10-03), so a leg that is a REGISTERED
+  // Base stock routes through Aerodrome Slipstream instead (lib/aerodrome-swap).
+  // Same response shape, plus `venue: "aerodrome"`; needs no 0x key.
+  if (baseStockByToken(sellToken) || baseStockByToken(buyToken)) {
+    const q = await aerodromeQuote({ sellToken, buyToken, sellAmount, taker, slippageBps });
+    return NextResponse.json(q, { status: 200 });
+  }
 
   if (!key) return NextResponse.json({ needsKey: true }, { status: 200 });
   if (!sellToken || !buyToken || !/^\d+$/.test(sellAmount)) {
