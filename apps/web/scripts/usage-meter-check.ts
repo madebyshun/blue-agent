@@ -88,6 +88,7 @@ async function main() {
   await recordCall("token-price", "mcp",  "err");
   await recordCall("gas-tracker", "hub",  "err");
   await recordCall("blue_idea",   "console", "ok");
+  await recordCall("token-price", "chat", "ok");
 
   const days = await readDays(1);
   check("readDays returns today's bucket", days.length === 1 && days[0].day === utcDay(), days[0]?.day);
@@ -112,6 +113,7 @@ async function main() {
       "this is the shape that would otherwise read as 'nobody calls it'",
     );
     check("console commands land in the meter", rows["console|blue_idea"]?.ok === 1);
+    check("chat tool runs land in the meter, apart from x402", rows["chat|token-price"]?.ok === 1 && rows["x402|token-price"]?.ok === 2);
   }
 
   // ── 2. Junk fields never become fake tools ─────────────────────────────────
@@ -145,6 +147,7 @@ async function main() {
     mcp:     "app/api/mcp/route.ts",
     hub:     "app/api/hub/tools/[id]/call/route.ts",
     console: "app/api/console/route.ts",
+    chat:    "app/api/chat/route.ts",
   };
 
   // Read the surface union straight from the module so adding a surface to the

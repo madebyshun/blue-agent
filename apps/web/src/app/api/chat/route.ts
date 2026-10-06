@@ -36,6 +36,7 @@ import { baseStockByTickerOrSymbol, dollarAmount } from "@/lib/chat/trade-intent
 import { githubContextFor } from "@/lib/chat/github-context";
 import { wantsMyAlerts } from "@/lib/chat/intents";
 import { runInternalTool } from "@/lib/x402-internal-run";
+import { recordCall } from "@/lib/usage-daily";
 
 export const runtime = "nodejs";
 // Vercel kills serverless functions at 60s by default — explicit budget so
@@ -2442,6 +2443,9 @@ async function callHubTool(
       status  = r.status;
       data    = r.body;
       credits = r.creditsDebited ?? 0;
+      // Chat is the primary surface; count its tool runs with the others.
+      // A 402 (guest / no credits) is not a run of the tool, so it is not counted.
+      if (status !== 402) await recordCall(endpoint, "chat", status >= 200 && status < 300 ? "ok" : "err");
     }
 
     if (status === 402) {

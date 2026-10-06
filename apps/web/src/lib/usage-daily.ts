@@ -75,7 +75,14 @@ export type UsageSurface =
   /** /api/hub/tools/<id>/call — the Hub's own in-page runner. */
   | "hub"
   /** /api/console — the 5 `blue_*` commands. */
-  | "console";
+  | "console"
+  /**
+   * /api/chat — a catalog tool the chat model called, run in-process through
+   * runInternalTool. Added 2026-10-04: chat is the primary surface, and until
+   * then none of its tool calls were counted anywhere, so every keep/retire
+   * decision read the three minor surfaces as the whole picture.
+   */
+  | "chat";
 
 export type UsageOutcome = "ok" | "err";
 
@@ -140,7 +147,7 @@ export interface DayUsage {
   rows: Record<string, { surface: UsageSurface; tool: string; ok: number; err: number }> | null;
 }
 
-const SURFACES = new Set<string>(["x402", "mcp", "hub", "console"]);
+const SURFACES = new Set<string>(["x402", "mcp", "hub", "console", "chat"]);
 
 /**
  * Read the last `days` UTC days, newest first.
