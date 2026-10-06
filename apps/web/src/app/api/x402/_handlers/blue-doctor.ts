@@ -207,7 +207,8 @@ export default async function handler(_req: Request): Promise<Response> {
         measured_on: "2026-09-26",
         detail:
           "Every endpoint returned HTTP 401 with a paused-plan message. Billing, not an outage, and not a code fault. " +
-          "wallet-holdings, wallet-risk and the onchain-activity tools return 502 by design while this holds.",
+          "base-activity-score and token-distribution stay halted while this holds; wallet-holdings (on-chain discovery) and " +
+          "wallet-risk (GoPlus + explorer + chain) stopped depending on it on 2026-10-07.",
       },
       {
         upstream: "etherscan_v2",

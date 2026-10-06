@@ -1,5 +1,8 @@
 /**
- * wallet-holdings / wallet-risk — an outage must never be billed as a result.
+ * wallet-holdings — an outage must never be billed as a result.
+ *
+ * (wallet-risk's cases moved to scripts/wallet-risk-test.ts on 2026-10-07, when
+ *  it was rebuilt on GoPlus + explorer + chain and stopped reading Moralis.)
  *
  * WHY THIS EXISTS
  * ---------------
@@ -42,9 +45,7 @@
  *
  * NEGATIVE CONTROLS — revert the line, this suite must go red:
  *   a. `wallet-holdings.ts` `failLoud(...)` status 502 → 200 ............ case 1
- *   b. `wallet-risk.ts` `if (risk_score == null) verdict = "UNKNOWN"`
- *      → `"CLEAN"` ......................................................  case 2
- *   c. `wallet-risk.ts` the UPSTREAM_INCONSISTENT block, deleted ........  case 3
+ *   b. (wallet-risk controls now live in scripts/wallet-risk-test.ts)
  *   d. `lib/moralis.ts` legacy wrappers made primary again (`[]` on 401) . cases 1-2
  *   e. `encode.ts` `decimals: number` → `decimals?: number` with `?? 6` .  case 5
  *
@@ -178,16 +179,6 @@ const EMPTY_MORALIS = () => [] as unknown;
     check("an empty list the reader marks degraded is also 502, not 'empty'", status === 502 && body.tokens === null, `got ${status}`);
   }
 
-  {
-    const { status, body } = await run("wallet-risk");
-    check("risk returns 502 so the x402 route never settles", status === 502, `got ${status}`);
-    check("risk verdict is UNKNOWN", body.verdict === "UNKNOWN", String(body.verdict));
-    check("risk verdict is NOT CLEAN", body.verdict !== "CLEAN");
-    check("risk tx_count is null, NOT 0", body.tx_count === null, JSON.stringify(body.tx_count));
-    check("risk risk_score is null", body.risk_score === null, JSON.stringify(body.risk_score));
-    check("risk names the real cause", errCode(body) === "UPSTREAM_PLAN_PAUSED", String(errCode(body)));
-  }
-
   // ── Case 2: indexer healthy, LLM unreachable ──────────────────────────────
   // Counts are real and must be reported. The assessment is not, and must not
   // collapse into a clean bill of health.
@@ -221,25 +212,9 @@ const EMPTY_MORALIS = () => [] as unknown;
     check("an unpriced position is counted, never valued at $0 silently", body.unpriced_positions === 1 && (body.tokens as { value_usd: unknown }[]).some((t) => t.value_usd === null));
   }
 
-  {
-    const { status, body } = await run("wallet-risk");
-    check("risk succeeds — the counts were genuinely read", status === 200 && body.status === "ok", `${status} ${String(body.status)}`);
-    check("risk reports the real tx_count (30 native + 5 token)", body.tx_count === 35, JSON.stringify(body.tx_count));
-    check("risk exposes the chain nonce under its own name", body.outbound_tx_count === 24, JSON.stringify(body.outbound_tx_count));
-    check("unassessed is UNKNOWN, never CLEAN", body.verdict === "UNKNOWN", String(body.verdict));
-    check("no score was invented", body.risk_score === null, JSON.stringify(body.risk_score));
-  }
-
   // ── Case 3: indexer says nothing happened, the chain says otherwise ───────
   console.log("\n3. Indexer returns no history for a wallet with nonce 73");
   scenario = { moralisStatus: 200, moralisBody: EMPTY_MORALIS, rpcWei: 22_147_000_000_000_000n, rpcNonce: 73, ethPriceUsd: 3000 };
-
-  {
-    const { status, body } = await run("wallet-risk");
-    check("risk refuses to call a mis-read wallet empty", status === 502, `got ${status}`);
-    check("risk flags the disagreement", errCode(body) === "UPSTREAM_INCONSISTENT", String(errCode(body)));
-    check("risk verdict is UNKNOWN", body.verdict === "UNKNOWN", String(body.verdict));
-  }
 
   // (The holdings "Moralis says 0 wei, the chain says 0.022 ETH" case retired
   //  with the Moralis-only handler on 2026-10-07: native ETH is now read from
@@ -247,14 +222,6 @@ const EMPTY_MORALIS = () => [] as unknown;
   // ── Case 4: genuinely empty, and provably so ─────────────────────────────
   console.log("\n4. A real, verifiably unused wallet");
   scenario = { moralisStatus: 200, moralisBody: EMPTY_MORALIS, rpcWei: 0n, rpcNonce: 0, ethPriceUsd: 3000 };
-
-  {
-    const { status, body } = await run("wallet-risk");
-    check("risk succeeds", status === 200, `got ${status}`);
-    check("risk marks it empty, not error", body.status === "empty", String(body.status));
-    check("risk reports a measured zero", body.tx_count === 0, JSON.stringify(body.tx_count));
-    check("an unassessed wallet is still not CLEAN", body.verdict === "UNKNOWN", String(body.verdict));
-  }
 
   {
     const zeroEth = { ...ETH, amount: "0", raw: "0", usdValue: 0 };

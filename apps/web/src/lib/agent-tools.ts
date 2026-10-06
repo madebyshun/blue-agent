@@ -223,7 +223,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
   {
     id: "wallet-risk",
     name: "Wallet Risk",
-    description: "AML / risk screen for a Base wallet from real on-chain flow (Moralis).",
+    description: "Is this address known to be dangerous? GoPlus flags (theft, phishing, sanctions, laundering, mixer) with their sources, the explorer's scam mark, and chain facts (wallet / contract / EIP-7702 account, nonce, balance). Verdict in code: FLAGGED, CAUTION or NO_KNOWN_FLAGS — never CLEAN. Feed unread → 502, not charged. Base 8453 or Robinhood Chain 4663. No LLM.",
     agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
     category: "security",
     inputs: [

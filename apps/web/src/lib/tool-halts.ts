@@ -38,7 +38,6 @@ const UNDELIVERED =
 // re-halt here if that happens, for the same reason as before.
 
 export const HALTED_TOOLS: Readonly<Record<string, string>> = {
-  "wallet-risk": MORALIS,
   "token-distribution": MORALIS,
   "base-activity-score": MORALIS,
   "rh-rwa-dca": UNDELIVERED,

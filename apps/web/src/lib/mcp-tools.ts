@@ -322,11 +322,12 @@ export const MCP_TOOLS = [
   {
     name: "hub_wallet_risk",
     description:
-      "Risk and AML screen for a Base 8453 wallet from its real on-chain flow via Moralis — sanctions exposure, mixer proximity, and illicit-flow patterns in its transaction history. Use before sending funds TO an unknown address, and when a user asks whether a counterparty is safe to deal with. Triggers — \"is this wallet safe\", \"check this address\", \"who is 0x…\", \"is this counterparty clean\", \"AML check\". Distinct from hub_risk_gate, which screens a specific pending transaction; this screens the ADDRESS itself. Base 8453.",
+      "Is this ADDRESS known to be dangerous? Named flags from GoPlus (theft, phishing, sanctions, laundering, mixer) and the explorer's scam mark, plus chain facts (wallet, contract or EIP-7702 account; nonce). Verdict in code: FLAGGED / CAUTION / NO_KNOWN_FLAGS — never \"clean\"; an unread feed is a 502, not a pass. Use before sending funds TO an unknown address, and when a user asks whether a counterparty is safe to deal with. Triggers — \"is this wallet safe\", \"check this address\", \"who is 0x…\", \"is this counterparty clean\", \"AML check\". Distinct from hub_risk_gate, which screens a specific pending transaction; this screens the ADDRESS itself. Base 8453 or Robinhood Chain 4663.",
     inputSchema: {
       type: "object",
       properties: {
-        address: { type: "string", description: "Wallet address 0x… on Base 8453." },
+        address: { type: "string", description: "Wallet address 0x…." },
+        chain:   { type: "string", enum: ["base", "robinhood"], description: "Default base." },
       },
       required: ["address"],
     },
