@@ -2348,12 +2348,25 @@ function DiscoverySwap({ row, account }: { row: DiscoveryRow; account?: `0x${str
   );
 }
 
+/** Read tools whose result is text only (see ToolResultCard). */
+const TEXT_ONLY_TOOLS: ReadonlySet<string> = new Set([
+  "hub_honeypot", "hub_risk_gate", "hub_deep_analysis", "hub_token_pick", "hub_contract_trust",
+  "hub_market_fit", "hub_key_exposure", "blue_stream", "hub_hood_arrow",
+  "check_memo", "check_authorization", "check_wallet",
+  "hub_rh_movers", "hub_rh_new_listings", "hub_rh_search", "hub_rh_quote", "hub_rh_index", "hub_safe_trending",
+]);
+
 export function ToolResultCard({ tool, result }: { tool: string; result: Record<string, unknown> }) {
   // Always called inside the chat (ChatMessages) — read the canonical wallet
   // here and hand it to the action cards as a prop so they don't depend on chat.
   const { walletAddr } = useChat();
   const account = walletAddr as `0x${string}` | undefined;
   if (!result || typeof result !== "object") return null;
+  // Since 2026-10-13 a READ tool answers in text, not with a card: the
+  // discovery lists and the wallet are written by code (lib/chat/card-replies),
+  // the rest by the model from the tool's own data. Cards remain only where the
+  // user ACTS (sign, revoke, arm).
+  if (TEXT_ONLY_TOOLS.has(tool)) return null;
   const r = result;
 
   switch (tool) {

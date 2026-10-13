@@ -41,6 +41,34 @@ export function fmtPct(v: unknown): string | null {
   return n == null ? null : `${n > 0 ? "+" : ""}${n.toFixed(2)}%`;
 }
 
+
+import { discoveryRows } from "@/lib/chat/discovery-rows";
+
+/**
+ * A discovery result written as the ANSWER, in text (2026-10-13: Blue Chat
+ * stopped rendering result cards). Built by code from the same rows the card
+ * showed, so nothing in it can be invented; every row carries its chain and
+ * full contract, the only thing a follow-up trade can be armed with.
+ */
+function discoveryText(tool: string, r: Json): string | null {
+  const d = discoveryRows(tool, r);
+  if (!d) return null;
+  if (!d.rows.length) return d.note ? `**${d.title}** — ${d.note}` : null;
+  const lines = d.rows.map((row, i) => {
+    const chain = row.chain === "robinhood" ? "Robinhood Chain" : "Base";
+    const facts = [row.label, ...row.facts].filter(Boolean).join(" · ");
+    const addr = row.address ? `\n   \`${row.address}\` (${chain})` : ` (${chain}, no contract)`;
+    const noTrade = !row.swappable && row.noSwapReason ? ` — not tradable here: ${row.noSwapReason}` : "";
+    return `${i + 1}. **${row.symbol}**${facts ? ` — ${facts}` : ""}${noTrade}${addr}`;
+  });
+  return [
+    `**${d.title}**`,
+    ...lines,
+    d.more > 0 ? `…and ${d.more} more.` : "",
+    d.note ? `_${d.note}_` : "",
+  ].filter(Boolean).join("\n");
+}
+
 /** Chat tools whose reply is written by `cardReply` rather than the model. */
 export const CARD_REPLY_TOOLS = new Set([
   "hub_safe_trending",
@@ -53,14 +81,9 @@ export const CARD_REPLY_TOOLS = new Set([
   "hub_b20_inspect",
 ]);
 
-/**
- * The subset whose result renders as a CARD. `hub_b20_inspect` has no card —
- * its code-written reply IS the answer (a short list, because a model asked to
- * format the same fields printed a markdown table on one line on the
- * 2026-10-01 test share) — so the "already shown as a card" note must not be
- * attached to it.
- */
-export const CARD_RENDERED_TOOLS = new Set([...CARD_REPLY_TOOLS].filter((t) => t !== "hub_b20_inspect"));
+// Since 2026-10-13 no result renders as a card: the code-written reply IS the
+// answer, in text, so nothing is "already shown" and nothing is prefixed.
+export const CARD_RENDERED_TOOLS = new Set<string>();
 
 /**
  * The line shown under the card, or null to let the model answer.
@@ -82,7 +105,7 @@ export function cardReply(tool: string, result: unknown, args: Json = {}): strin
         honeypots > 0 ? `${honeypots} measured as a honeypot (no Swap button)` : "",
         flagged > 0 ? `${flagged} carry flags` : "",
       ].filter(Boolean).join(", ");
-      return `${ok.length} trending token${ok.length === 1 ? "" : "s"} on Base above, each with its tax read from the contract${tail ? ` — ${tail}` : ""}. A clean scan is not a buy signal; tap Trade on a row to buy or sell it.`;
+      return `${discoveryText(tool, r) ?? ""}\n\n${ok.length} trending token${ok.length === 1 ? "" : "s"} on Base, each with its tax read from the contract${tail ? ` — ${tail}` : ""}. A clean scan is not a buy signal; to trade one, say e.g. "buy 5 USDC of <contract>".`;
     }
     case "hub_rh_movers": {
       if (!Array.isArray(r.gainers) || !Array.isArray(r.losers)) return null;
@@ -93,14 +116,14 @@ export function cardReply(tool: string, result: unknown, args: Json = {}): strin
       const top = side(g);
       const bottom = side(l);
       if (!top && !bottom) return str(r.note) || "No Robinhood Chain stock token moved enough on a dollar-anchored pool to rank right now.";
-      return `Robinhood Chain movers (24h, pool price): ${[top ? `top ${top}` : "", bottom ? `bottom ${bottom}` : ""].filter(Boolean).join(" · ")}. Full list above; tap Trade on a row to buy or sell it.`;
+      return `${discoveryText(tool, r) ?? ""}\n\nRobinhood Chain movers (24h, pool price): ${[top ? `top ${top}` : "", bottom ? `bottom ${bottom}` : ""].filter(Boolean).join(" · ")}. To trade one, say e.g. "buy $5 of <ticker> on robinhood".`;
     }
     case "hub_rh_new_listings": {
       if (!Array.isArray(r.recent_deployments)) return null;
       const n = arr(r.recent_deployments).length;
       const unlisted = num(r.new_since_registry) ?? arr(r.new_only).length;
       if (n === 0) return "The Robinhood token factory deployed no new stock or ETF token in that window.";
-      return `${n} recent deployment${n === 1 ? "" : "s"} from the Robinhood token factory above (read from the factory's own events). A deployment proves provenance, not liquidity — most have no pool yet${unlisted > 0 ? `; ${unlisted} not yet in BlueAgent's registry, so no Swap button` : ""}.`;
+      return `${discoveryText(tool, r) ?? ""}\n\n${n} recent deployment${n === 1 ? "" : "s"} from the Robinhood token factory (read from the factory's own events). A deployment proves provenance, not liquidity — most have no pool yet${unlisted > 0 ? `; ${unlisted} not yet in BlueAgent's registry, so not tradable here` : ""}.`;
     }
     case "hub_rh_search": {
       if (!Array.isArray(r.matches)) return null;
@@ -109,8 +132,8 @@ export function cardReply(tool: string, result: unknown, args: Json = {}): strin
       if (m.length === 0) return `No Robinhood Chain stock or ETF token matches "${q}" in the registry.`;
       const first = m[0];
       return m.length === 1
-        ? `${str(first.ticker)} — ${str(first.name)} on Robinhood Chain (contract on the card).`
-        : `${m.length} Robinhood Chain matches for "${q}" above; the closest is ${str(first.ticker)} — ${str(first.name)}.`;
+        ? (discoveryText(tool, r) ?? `${str(first.ticker)} — ${str(first.name)} on Robinhood Chain.`)
+        : `${discoveryText(tool, r) ?? ""}\n\n${m.length} Robinhood Chain matches for "${q}"; the closest is ${str(first.ticker)} — ${str(first.name)}.`;
     }
     case "hub_rh_quote": {
       const ticker = str(r.ticker);
@@ -126,7 +149,7 @@ export function cardReply(tool: string, result: unknown, args: Json = {}): strin
       if (!Array.isArray(r.stocks) && !Array.isArray(r.etfs)) return null;
       const s = arr(r.stocks).length;
       const e = arr(r.etfs).length;
-      return `${s} stock and ${e} ETF tokens on Robinhood Chain in the registry — the first rows are above; ask for one by name to get its contract.`;
+      return `${discoveryText(tool, r) ?? ""}\n\n${s} stock and ${e} ETF tokens on Robinhood Chain in the registry; ask for one by name to get its contract.`;
     }
     case "hub_token_price": {
       const price = fmtUsd(r.usd);
@@ -199,3 +222,38 @@ export function cardReply(tool: string, result: unknown, args: Json = {}): strin
  */
 export const CARD_ALREADY_SHOWN =
   "[The user already sees this result as a card. Do NOT re-list its rows, re-tabulate it, or add labels or flags that are not in the data. Refer to it in at most one sentence.]\n";
+
+/**
+ * The connected wallet's holdings written as the ANSWER (2026-10-13: no more
+ * result cards). Code-written from the reads, so nothing is invented:
+ * largest USD value first, positions under $1 counted but not listed, an
+ * unpriced position shown without a value (never $0), and the Base list marked
+ * incomplete whenever its reader said so. Robinhood Chain's reader returns []
+ * on an explorer outage, so an empty RH leg is "none found", never "none held".
+ */
+type Holding = { symbol: string; amount: string; address: string; usdValue?: number; isNative?: boolean; trust?: string };
+export function walletText(base: Holding[], rh: Holding[], opts: { partialReason?: string; error?: string } = {}): string {
+  const fmtV = (v?: number) => (typeof v === "number" ? (v >= 1000 ? `$${v.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : `$${v.toFixed(2)}`) : "no price");
+  const amt = (a: string) => { const n = Number(a); return Number.isFinite(n) ? n.toLocaleString("en-US", { maximumFractionDigits: n < 1 ? 6 : 4 }) : a; };
+  const section = (title: string, list: Holding[], chain: string) => {
+    const sorted = [...list].sort((a, b) => (b.usdValue ?? -1) - (a.usdValue ?? -1));
+    const shown = sorted.filter((h) => h.usdValue == null || h.usdValue >= 1).slice(0, 12);
+    const dust = sorted.filter((h) => h.usdValue != null && h.usdValue < 1).length;
+    const rest = sorted.length - shown.length - dust;
+    const total = list.reduce((s, h) => s + (h.usdValue ?? 0), 0);
+    const lines = shown.map((h) => `- **${h.symbol || "?"}** ${amt(h.amount)} · ${fmtV(h.usdValue)}${h.trust === "unverified" ? " · unverified token" : ""}${h.isNative ? "" : ` · \`${h.address}\``}`);
+    return [
+      `**${title}** — ${list.length} token${list.length === 1 ? "" : "s"}${total > 0 ? `, about ${fmtV(total)} where priced` : ""} (${chain})`,
+      ...lines,
+      rest > 0 ? `- …and ${rest} more` : "",
+      dust > 0 ? `- ${dust} position${dust === 1 ? "" : "s"} under $1 not listed` : "",
+    ].filter(Boolean).join("\n");
+  };
+  if (opts.error && !base.length && !rh.length) return "Couldn't read the wallet right now — please try again in a moment.";
+  if (!base.length && !rh.length) return "No tokens found on Base or Robinhood Chain for this wallet.";
+  return [
+    base.length ? section("Base", base, "Base 8453") : "**Base** — no tokens found.",
+    opts.partialReason ? `_${opts.partialReason}_` : "",
+    rh.length ? section("Robinhood Chain", rh, "Robinhood Chain 4663") : "**Robinhood Chain** — none found (the explorer may not have answered).",
+  ].filter(Boolean).join("\n\n");
+}

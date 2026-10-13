@@ -31,7 +31,7 @@ import { normalizeWallet, resolveActingWallet } from "@/lib/acting-wallet";
 import { markAgentTurn } from "@/lib/device-agent";
 import { findByTicker as findRwaByTicker, findByContract as findRwaByContract } from "@/lib/robinhood/rwa-registry";
 import { CHAT_HIDDEN_TOOLS } from "@/lib/chat-hidden-tools";
-import { cardReply, CARD_ALREADY_SHOWN, CARD_RENDERED_TOOLS } from "@/lib/chat/card-replies";
+import { cardReply, CARD_ALREADY_SHOWN, CARD_RENDERED_TOOLS, walletText } from "@/lib/chat/card-replies";
 import { baseStockByTickerOrSymbol, dollarAmount } from "@/lib/chat/trade-intent";
 import { githubContextFor } from "@/lib/chat/github-context";
 import { forcedToolFor, wantsMyAlerts } from "@/lib/chat/intents";
@@ -2032,7 +2032,7 @@ async function callHubTool(
     const network = typeof args.network === "string" ? args.network : "base";
     const r = await checkMemo(txHash, network);
     const text = r.found
-      ? `Memo found: "${r.memo}". Reply with one short line stating the memo string. The result card shows the tx link.`
+      ? `Memo found: "${r.memo}"${r.caller ? `, sent by ${r.caller}` : ""}${r.txUrl ? `. Transaction: ${r.txUrl}` : ""}. Reply with one short line stating the memo string, with the transaction link.`
       : r.status === "invalid"
         ? "Invalid transaction hash. Reply with one short line telling the user the hash isn't valid."
         : r.status === "pending"
@@ -2057,9 +2057,9 @@ async function callHubTool(
     const r = await checkAuthorization({ token, account, scope, network });
     const text =
       r.status === "authorized"
-        ? `${r.account} IS authorized as a ${r.scopeLabel}. ${r.message} Reply with one short line confirming it; the card shows the policy.`
+        ? `${r.account} IS authorized as a ${r.scopeLabel}. ${r.message} Reply with one short line confirming it, naming the token and scope.`
         : r.status === "denied"
-          ? `${r.account} is NOT authorized as a ${r.scopeLabel}. ${r.message} Reply with one short line stating it's blocked; the card shows the policy.`
+          ? `${r.account} is NOT authorized as a ${r.scopeLabel}. ${r.message} Reply with one short line stating it's blocked, naming the token and scope.`
           : `Authorization couldn't be determined: ${r.message} Reply with one short line saying so — do NOT guess whether the address is allowed.`;
     return {
       text,
@@ -2268,14 +2268,14 @@ async function callHubTool(
       ? `Wallet lookup failed: ${r.error}. Reply with one short line telling the user it couldn't be read; do NOT invent figures.`
       : totalHoldings === 0
         ? "The connected wallet holds no tokens on Base or Robinhood Chain. Reply with one short line saying so — do NOT invent any token."
-        : `The wallet holds ${r.holdings.length} token(s) on Base + ${rhHoldings.length} on Robinhood: ${combinedTop}${totalHoldings > 5 ? ", …" : ""}. The result card lists them all (small dust <$1 hidden by default). Reply with ONE short line referencing the holdings across both chains — never invent tokens or numbers and never add a USD total of your own.`;
+        : `The wallet holds ${r.holdings.length} token(s) on Base + ${rhHoldings.length} on Robinhood: ${combinedTop}${totalHoldings > 5 ? ", …" : ""}. The full list is written for the user from the reads. Reply with ONE short line referencing the holdings across both chains — never invent tokens or numbers and never add a USD total of your own.`;
     // Fixed one-liner shown under the card (skips Phase 2). Counts are the real
     // per-chain held-token counts; the card is the source of truth for the list.
     const staticReply = r.error && totalHoldings === 0
       ? "Couldn't read the wallet right now — please try again in a moment."
       : totalHoldings === 0
         ? "This wallet holds no tokens on Base or Robinhood Chain."
-        : `Holdings above: ${r.holdings.length} on Base, ${rhHoldings.length} on Robinhood Chain.`;
+        : walletText(r.holdings, rhHoldings, { partialReason: r.partial ? r.partialReason : undefined, error: r.error });
     return {
       text,
       staticReply,

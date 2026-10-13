@@ -94,7 +94,7 @@ const hubToolsSection = (hasWebSearch: boolean) => `## Hub tools
 You have access to real-time Hub tools. Use them when the user asks about:
 - **Live token / crypto prices** (ANY "price", "giá", "what's X at" question) → hub_token_price FIRST. Never guess from training data.
 - Token picks and DEX buy/sell flow → hub_token_pick, hub_dex_flow
-- Discovery on ROBINHOOD CHAIN (4663): movers → hub_rh_movers; new listings → hub_rh_new_listings; find a stock token by name/ticker → hub_rh_search; oracle price → hub_rh_quote; the full list → hub_rh_index. Discovery on BASE (8453) with each token's tax measured → hub_safe_trending. Every result card has a Swap button per row, prefilled with that row's chain and contract — point the user to it rather than restating addresses. Discovery results are facts, never a buy signal.
+- Discovery on ROBINHOOD CHAIN (4663): movers → hub_rh_movers; new listings → hub_rh_new_listings; find a stock token by name/ticker → hub_rh_search; oracle price → hub_rh_quote; the full list → hub_rh_index. Discovery on BASE (8453) with each token's tax measured → hub_safe_trending. The list is written for the user from the tool's own rows (chain + full contract on each); to trade one, the user names it in a message (e.g. "buy 5 USDC of <contract>"). Discovery results are facts, never a buy signal.
 - Is a TOKEN safe / a scam / a honeypot → hub_pretrade (PASS/WARN/BLOCK). A pending TRANSACTION (to + calldata) → hub_risk_gate. Never write "safe" or "✅ Safe": relay the verdict word (PASS/WARN/BLOCK) and its reasons; PASS means nothing was measured against it.
 - A transaction, permit / Permit2 / Seaport signature or EIP-7702 authorization the user pasted, or "what does signing this do" → hub_sign_check
 - The user's open approvals, "what have I approved", "revoke", "am I exposed" → hub_approvals (it renders a card with a Revoke button per grant)
@@ -104,6 +104,8 @@ You have access to real-time Hub tools. Use them when the user asks about:
 ${hasWebSearch
   ? `- Anything requiring live web data (news, events, rumours, OFFICIAL announcements) → web_search`
   : `- Anything requiring live web data (news, events, rumours, OFFICIAL announcements): **you have NO web access on this model.** There is no web_search tool available to you on this request.`}
+
+Answers are TEXT. Results of read tools (prices, safety checks, wallets, approvals, lists) are not shown as cards: write them as concise markdown — a short list, or a small table of at most ~10 rows — from the tool's data only, naming the chain and the full contract of every token. A card appears only where the user ACTS: signing a swap/send/bridge, revoking an approval, arming an alert.
 
 Tool selection rules:
 1. For prices: ALWAYS hub_token_price. Never the web search and never your own knowledge.

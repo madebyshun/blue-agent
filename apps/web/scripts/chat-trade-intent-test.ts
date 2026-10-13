@@ -9,7 +9,7 @@
  *    failed payload returns null so the model (not code) answers.
  */
 import { dollarAmount, baseStockByTickerOrSymbol } from "../src/lib/chat/trade-intent";
-import { cardReply, CARD_REPLY_TOOLS, CARD_RENDERED_TOOLS } from "../src/lib/chat/card-replies";
+import { cardReply, CARD_REPLY_TOOLS, CARD_RENDERED_TOOLS, walletText } from "../src/lib/chat/card-replies";
 import { BASE_STOCKS } from "../src/lib/base-stocks/registry";
 
 let failures = 0;
@@ -50,7 +50,9 @@ const trending = cardReply("hub_safe_trending", {
     { status: "skipped", symbol: "C" },
   ],
 });
-ok("trending counts only status:ok rows", !!trending && trending.startsWith("2 trending tokens on Base"), trending ?? "");
+ok("trending counts only status:ok rows", !!trending && trending.includes("\n\n2 trending tokens on Base"), trending ?? "");
+ok("trending is written as a list (2026-10-13: no cards), one row per ok token", !!trending && trending.startsWith("**Trending on Base") && /\n1\. \*\*A\*\*/.test(trending) && !/\*\*C\*\*/.test(trending), trending ?? "");
+ok("a honeypot row says it is not tradable here", !!trending && /\*\*B\*\*.*not tradable here: measured as a honeypot/.test(trending));
 ok("trending names the honeypot count", !!trending && trending.includes("1 measured as a honeypot"));
 ok("trending says a scan is not a buy signal", !!trending && /not a buy signal/.test(trending));
 ok("empty trending is stated, not invented", cardReply("hub_safe_trending", { tokens: [] }) === "No trending Base token passed the liquidity floor right now.");
@@ -59,7 +61,8 @@ const movers = cardReply("hub_rh_movers", {
   gainers: [{ ticker: "MSTR", change_24h_pct: 4.2 }],
   losers: [{ ticker: "BABA", change_24h_pct: -3.15 }],
 });
-ok("movers quotes top and bottom from the payload", movers === "Robinhood Chain movers (24h, pool price): top MSTR +4.20% · bottom BABA -3.15%. Full list above; tap Trade on a row to buy or sell it.", movers ?? "");
+ok("movers quotes top and bottom from the payload", !!movers && movers.endsWith("Robinhood Chain movers (24h, pool price): top MSTR +4.20% · bottom BABA -3.15%. To trade one, say e.g. \"buy $5 of <ticker> on robinhood\"."), movers ?? "");
+ok("movers lists both rows in text", !!movers && /\*\*MSTR\*\*/.test(movers) && /\*\*BABA\*\*/.test(movers));
 
 const quote = cardReply("hub_rh_quote", { ticker: "NVDA", price_usd: 181.5, source: "chainlink", is_stale: true });
 ok("quote names the source and staleness", !!quote && quote.startsWith("NVDA on Robinhood Chain: $181.50 (Chainlink oracle, STALE"), quote ?? "");
@@ -67,7 +70,7 @@ ok("quote with an unknown source → null", cardReply("hub_rh_quote", { ticker: 
 ok("quote with no price says so", (cardReply("hub_rh_quote", { ticker: "ZZZ", price_usd: null }) ?? "").startsWith("No live price for ZZZ"));
 
 const search = cardReply("hub_rh_search", { query: "tesla", matches: [{ ticker: "TSLA", name: "Tesla" }] });
-ok("single search match", search === "TSLA — Tesla on Robinhood Chain (contract on the card).", search ?? "");
+ok("single search match is written as a row", !!search && /\*\*TSLA\*\*/.test(search) && /Tesla/.test(search), search ?? "");
 ok("no search match", cardReply("hub_rh_search", { query: "zzz", matches: [] }) === 'No Robinhood Chain stock or ETF token matches "zzz" in the registry.');
 
 const price = cardReply("hub_token_price", { symbol: "eth", usd: 2450.5, change24h: -1.234, marketCap: 2.95e11 });
@@ -75,7 +78,7 @@ ok("token price from CoinGecko fields", price === "ETH: $2,450.5 (24h -1.23%), m
 ok("token price without usd → null", cardReply("hub_token_price", { symbol: "eth" }) === null);
 
 const listings = cardReply("hub_rh_new_listings", { recent_deployments: [{}, {}], new_since_registry: 1 });
-ok("new listings counts deployments and unlisted", !!listings && listings.startsWith("2 recent deployments") && listings.includes("1 not yet in BlueAgent's registry"), listings ?? "");
+ok("new listings counts deployments and unlisted", !!listings && listings.includes("2 recent deployments") && listings.includes("1 not yet in BlueAgent's registry"), listings ?? "");
 
 const b20 = cardReply("hub_b20_inspect", {
   address: "0xb20000000000000000000078ee7ce2fE4908108C", network: "mainnet", isB20: true, symbol: "NVDAc", name: "NVIDIA Corporation",
@@ -101,8 +104,26 @@ const partial = cardReply("hub_b20_inspect", {
 }) ?? "";
 ok("b20 with an unread pause read never says 'nothing paused'", !partial.includes("nothing paused") && /pause state of mint could not be read/.test(partial) && /not paused: transfer, burn/.test(partial), partial);
 ok("b20 with an unread policy read never says 'open to all' for it", /send could not be read/.test(partial) && /receive open to all/.test(partial), partial);
-ok("b20 inspect is not marked as a card", !CARD_RENDERED_TOOLS.has("hub_b20_inspect") && CARD_RENDERED_TOOLS.has("hub_rh_quote"));
+ok("no tool is marked as an on-screen card any more (2026-10-13)", CARD_RENDERED_TOOLS.size === 0);
 
+console.log("walletText");
+{
+  const w = walletText(
+    [
+      { symbol: "USDC", amount: "10.125", address: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913", usdValue: 10.09, trust: "verified" },
+      { symbol: "ETH", amount: "0.0001", address: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", usdValue: 0.27, isNative: true },
+      { symbol: "NOCK", amount: "66", address: "0x1111111111111111111111111111111111111111", trust: "unverified" },
+    ],
+    [],
+    { partialReason: "2 balance reads did not complete." },
+  );
+  ok("wallet: priced rows first, with full contract", /\*\*USDC\*\* 10\.125 · \$10\.09 · `0x833589/.test(w), w);
+  ok("wallet: an unpriced row says 'no price', never $0", /\*\*NOCK\*\* 66 · no price · unverified token/.test(w));
+  ok("wallet: dust is counted, not listed", /1 position under \$1 not listed/.test(w) && !/\*\*ETH\*\*/.test(w));
+  ok("wallet: the reader's partial reason is shown", /2 balance reads did not complete/.test(w));
+  ok("wallet: an empty Robinhood leg is 'none found', not 'none held'", /Robinhood Chain\*\* — none found/.test(w));
+  ok("wallet: a failed read with nothing read says so", walletText([], [], { error: "x" }).startsWith("Couldn't read the wallet"));
+}
 ok("every card tool is a real chat tool name (hub_ prefix)", [...CARD_REPLY_TOOLS].every((t) => t.startsWith("hub_")));
 
 console.log(failures === 0 ? "\nchat-trade-intent-test: PASS" : `\nchat-trade-intent-test: FAIL — ${failures}`);
