@@ -27,6 +27,7 @@ const DAY = 86_400_000;
   const t = renderBrief(d, "md");
   ok("1. says it is the baseline", /baseline/i.test(t) && !/\*\*Balances\*\*/.test(t));
   ok("1. counts open approvals", /1 open on Base/.test(t));
+  ok("1. a chain with nothing priced says so, not $0.00", /Robinhood Chain 4663: 1 token, none priced/.test(renderBrief(diffSnapshots(snap({ holdings: [h({}), h({ chain: "robinhood", token: "0x9", usd: null, trust: "verified" })] }), null), "md")));
 }
 
 // 2. Changes: new, gone, changed, unchanged-below-threshold.
@@ -70,6 +71,8 @@ const DAY = 86_400_000;
   ok("4. unread approvals report nothing closed", d.grantsClosed.length === 0);
   ok("4. the unread parts are named", d.unread.includes("holdings on Robinhood Chain") && d.unread.includes("approvals on Base"));
   ok("4. renders 'Not read this time'", /Not read this time/.test(renderBrief(d, "md")));
+  const d2 = diffSnapshots(snap({ grants: [g({ level: "WARN" })], grantsRead: { base: false, robinhood: true } }), null);
+  ok("4. grants of an unread chain are not counted as flagged", d2.grantsRisky.length === 0);
   const base = baselineFor(cur, prev);
   ok("4. baseline keeps yesterday's RH holdings", base.holdings.some((r) => r.symbol === "TSLA") && base.holdingsRead.robinhood === "ok");
   ok("4. baseline keeps yesterday's Base grants", base.grants.length === 1 && base.grantsRead.base === true);

@@ -62,7 +62,9 @@ export function renderBrief(d: BriefDiff, fmt: BriefFormat, opts: { now?: number
     if (!t) continue;
     const delta = t.before === null ? "" : ` (${signedUsd(t.usd - t.before)})`;
     const gap = t.unpriced ? `, ${t.unpriced} unpriced` : "";
-    tl.push(`${CHAIN_LABEL[c as keyof typeof CHAIN_LABEL]}: ${usd(t.usd)}${delta} across ${t.priced} priced token${t.priced === 1 ? "" : "s"}${gap}`);
+    tl.push(t.priced === 0
+      ? `${CHAIN_LABEL[c as keyof typeof CHAIN_LABEL]}: ${t.unpriced} token${t.unpriced === 1 ? "" : "s"}, none priced`
+      : `${CHAIN_LABEL[c as keyof typeof CHAIN_LABEL]}: ${usd(t.usd)}${delta} across ${t.priced} priced token${t.priced === 1 ? "" : "s"}${gap}`);
   }
   if (tl.length) { out.push(""); out.push(b("Value")); for (const l of tl) out.push(`• ${e(l)}`); }
 

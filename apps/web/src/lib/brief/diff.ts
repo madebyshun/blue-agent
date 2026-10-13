@@ -124,7 +124,9 @@ export function diffSnapshots(cur: Snapshot, prev: Snapshot | null): BriefDiff {
   if (cur.riskStat && cur.riskStat.read < cur.riskStat.picked) unread.push(`token screen for ${cur.riskStat.picked - cur.riskStat.read} of ${cur.riskStat.picked} held Base tokens`);
 
   const rank = { BLOCK: 0, WARN: 1, INFO: 2 } as const;
-  const grantsRisky = cur.grants.filter((g) => g.level !== "INFO").sort((a, b) => rank[a.level] - rank[b.level]);
+  // Only chains whose approvals were read: a partial read's grants beside a
+  // missing "N open" line reads as a contradiction (measured 2026-10-13).
+  const grantsRisky = cur.grants.filter((g) => g.level !== "INFO" && cur.grantsRead[g.chain]).sort((a, b) => rank[a.level] - rank[b.level]);
 
   // Biggest moves first: gone and new, then changes by size.
   const order = { gone: 0, new: 1, changed: 2 } as const;
