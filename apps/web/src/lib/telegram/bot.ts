@@ -45,7 +45,13 @@ export interface TgMessage {
   from?: TgUser;
   chat: TgChat;
   text?: string;
+  /** Media messages carry their text here. */
+  caption?: string;
   date: number;
+  /** In a group, `/check` sent as a reply reads the address from this. */
+  reply_to_message?: TgMessage;
+  /** Service message: members added — includes this bot when it joins a group. */
+  new_chat_members?: TgUser[];
 }
 export interface TgUpdate {
   update_id: number;
@@ -76,7 +82,7 @@ export interface SendResult {
 export async function sendMessage(
   chatId: string | number,
   text: string,
-  opts?: { disablePreview?: boolean },
+  opts?: { disablePreview?: boolean; replyTo?: number },
 ): Promise<SendResult> {
   if (!BOT_TOKEN) return { ok: false, description: "TELEGRAM_BOT_TOKEN not set" };
   try {
@@ -88,6 +94,8 @@ export async function sendMessage(
         text,
         parse_mode: "HTML",
         disable_web_page_preview: opts?.disablePreview ?? true,
+        // In a group the answer threads under the message that asked for it.
+        ...(opts?.replyTo ? { reply_parameters: { message_id: opts.replyTo, allow_sending_without_reply: true } } : {}),
       }),
       signal: AbortSignal.timeout(10000),
     });

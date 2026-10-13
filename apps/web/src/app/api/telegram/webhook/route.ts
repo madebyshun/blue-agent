@@ -38,7 +38,9 @@
  */
 import { NextRequest, NextResponse, after } from "next/server";
 import { kvGetProbe } from "@/lib/kv";
-import { sendMessage, esc, shortAddr, type TgUpdate, type TgUser } from "@/lib/telegram/bot";
+import { sendMessage, esc, shortAddr, BOT_USERNAME, type TgUpdate, type TgUser } from "@/lib/telegram/bot";
+import { checkReply, txReply } from "@/lib/telegram/check";
+import { rateLimit } from "@/lib/rate-limit";
 import {
   consumeTgLinkCode,
   isValidTicker,
@@ -131,6 +133,8 @@ async function handleStart(rest: string, from?: TgUser): Promise<string> {
     `• <code>/alerts off</code> / <code>/alerts on</code> — Blue Chat price alerts for your linked wallet`,
     `• <code>/brief on</code> — every morning: what changed in your linked wallet (balances, unasked tokens, approvals)`,
     `• <code>/stocks</code> — onchain stocks now: DEX vs oracle gaps on Base and Robinhood Chain, NAV, session`,
+    `• <code>/check 0x…</code> — a token or wallet, before you touch it · <code>/tx 0x…</code> — what a transaction did`,
+    `• Add me to a group: <code>/check</code>, <code>/tx</code> and <code>/stocks</code> work there too (read-only)`,
   ];
   // Trading straight from a signal is its own switch (arrow-freeze.ts), off
   // since 2026-09-30 — only point at it while it exists.
@@ -212,6 +216,18 @@ async function handleWatchAlerts(arg: string, from?: TgUser): Promise<string> {
     ? `Blue Chat price alerts are OFF here. Send /alerts on to resume.`
     : `Blue Chat price alerts are ON for your linked wallet. Send /alerts off to stop them.`;
 }
+
+/** Commands that touch a linked wallet or a personal list: never in a group. */
+const PRIVATE_ONLY = new Set(["/link", "/brief", "/alerts", "/mute"]);
+
+/** What the bot says when added to a group, and to /help there. */
+const GROUP_INTRO = [
+  `👋 <b>Blue Agent</b> — read-only checks for this group, on Base 8453 and Robinhood Chain 4663.`,
+  `• <code>/check 0x…</code> — a token or wallet: impersonation, sell tax, flags. Reply <code>/check</code> to a message to check the address in it. Add <code>rh</code> for Robinhood Chain.`,
+  `• <code>/tx 0x…</code> — what a transaction did: tokens moved, approvals granted, poisoning moves.`,
+  `• <code>/stocks</code> — onchain stock tokens: DEX vs oracle vs NAV.`,
+  `I never ask for keys, never sign and never trade here. Your own wallet tools are in a private chat with me.`,
+].join("\n");
 
 /**
  * `/brief [on [HOUR]|off|now]` — the morning wallet brief (lib/brief, 2026-10-13):
@@ -458,16 +474,44 @@ export async function POST(req: NextRequest) {
 
   try {
     const msg = update.message;
-    if (!msg?.text) return NextResponse.json({ ok: true });
+    if (!msg) return NextResponse.json({ ok: true });
+    // Named types only: an update without a type is treated as a private chat.
+    const group = msg.chat.type === "group" || msg.chat.type === "supergroup";
+
+    // Added to a group: say what works here, once.
+    if (group && msg.new_chat_members?.some((m) => m.is_bot && (!BOT_USERNAME || m.username?.toLowerCase() === BOT_USERNAME.toLowerCase()))) {
+      await sendMessage(msg.chat.id, GROUP_INTRO);
+      return NextResponse.json({ ok: true });
+    }
+    if (!msg.text) return NextResponse.json({ ok: true });
 
     const rawText = msg.text.trim();
     const rawCmd = rawText.split(/\s+/)[0] ?? "";
-    const cmd = rawCmd.toLowerCase().split("@")[0]; // strip @botname in group chats
+    const [cmdName, addressee] = rawCmd.toLowerCase().split("@");
+    const cmd = cmdName; // strip @botname in group chats
     const rest = rawText.slice(rawCmd.length).trim();
+    // In a group, a command addressed to ANOTHER bot is not ours to answer.
+    if (addressee && BOT_USERNAME && addressee !== BOT_USERNAME.toLowerCase()) return NextResponse.json({ ok: true });
 
     let reply: string | null = null;
-    switch (cmd) {
+    if (group && PRIVATE_ONLY.has(cmd)) {
+      reply = `That one works in a private chat with me, so your wallet stays out of the group: t.me/${BOT_USERNAME || "blueagentbot_bot"}`;
+    } else switch (cmd) {
+      case "/check":
+      case "/tx": {
+        // Per chat: a group shares one bucket (lib/rate-limit `tgcheck`).
+        const rl = await rateLimit(`tg:${msg.chat.id}`, "tgcheck");
+        if (!rl.success) { reply = `Too many checks here in the last few minutes — try again shortly.`; break; }
+        const replied = msg.reply_to_message?.text ?? msg.reply_to_message?.caption;
+        reply = cmd === "/check" ? await checkReply(rest, replied) : await txReply(rest, replied);
+        break;
+      }
+      case "/help":
+        reply = group ? GROUP_INTRO : await handleStart("", msg.from);
+        break;
       case "/start":
+        // In a group /start carries no link payload and enrols no one: say what works here.
+        if (group) { reply = GROUP_INTRO; break; }
         reply = await handleStart(rest, msg.from);
         break;
       case "/link":
@@ -487,18 +531,20 @@ export async function POST(req: NextRequest) {
         break;
       case "/stocks":
         // Onchain stocks: both desks' DEX-vs-oracle gaps, Base NAV, session —
-        // plus the linked wallet's own stock tokens. Read-only.
-        reply = await buildStockBrief(msg.from?.id ? await addressForTgUser(msg.from.id) : null, "html");
+        // plus the linked wallet's own stock tokens, in a private chat only
+        // (a group must never see what someone holds). Read-only.
+        reply = await buildStockBrief(!group && msg.from?.id ? await addressForTgUser(msg.from.id) : null, "html");
         break;
       case "/track":
         reply = await handleTrack();
         break;
       default:
-        if (cmd.startsWith("/")) reply = `Unknown command. Send /start to see what I can do.`;
+        // Silent in groups: other bots' commands and chatter are not ours.
+        if (cmd.startsWith("/") && !group) reply = `Unknown command. Send /start to see what I can do.`;
     }
 
     if (reply) {
-      const sent = await sendMessage(msg.chat.id, reply);
+      const sent = await sendMessage(msg.chat.id, reply, group ? { replyTo: msg.message_id } : undefined);
       if (!sent.ok) {
         console.warn(`[tg-webhook] reply failed cmd=${cmd} chat=${msg.chat.id}: ${sent.description}`);
       }

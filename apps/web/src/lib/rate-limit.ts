@@ -57,6 +57,10 @@ export const RATE_LIMITS = {
   // unauthenticated code/token steps and per wallet/device after. A device
   // polls the token step every TOKEN_POLL_S (5 s) for at most 10 minutes.
   device: { limit: 30, windowSeconds: 60 },
+  // Telegram /check and /tx, per CHAT (a group shares one bucket): each runs
+  // GoPlus + RPC reads, and a busy group must not spend the free tiers the
+  // morning brief and the wallet cards depend on.
+  tgcheck: { limit: 20, windowSeconds: 600 },
 } as const;
 
 export type RateLimitKey = keyof typeof RATE_LIMITS;
