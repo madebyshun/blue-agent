@@ -56,7 +56,12 @@ export function baselineFor(cur: Snapshot, prev: Snapshot | null): Snapshot {
     if (!cur.grantsRead[c]) { grants.push(...prev.grants.filter((g) => g.chain === c)); grantsRead[c] = prev.grantsRead[c]; }
     else grants.push(...cur.grants.filter((g) => g.chain === c));
   }
-  return { ...cur, holdings, holdingsRead, grants, grantsRead };
+  // A held token GoPlus did not answer for today keeps yesterday's reading, so
+  // tomorrow's "worse than last time" compares against something real.
+  const screened = new Set((cur.risk ?? []).map((r) => r.token));
+  const held = new Set(holdings.map((r) => r.token));
+  const risk = [...(cur.risk ?? []), ...(prev.risk ?? []).filter((r) => !screened.has(r.token) && held.has(r.token))];
+  return { ...cur, holdings, holdingsRead, grants, grantsRead, risk };
 }
 
 export function diffSnapshots(cur: Snapshot, prev: Snapshot | null): BriefDiff {
@@ -106,6 +111,18 @@ export function diffSnapshots(cur: Snapshot, prev: Snapshot | null): BriefDiff {
     for (const g of now) if (!was.has(g.key)) grantsNew.push(g);
     for (const g of prev.grants) if (g.chain === c && !is.has(g.key)) grantsClosed.push(g);
   }
+  // Poisoning: every attempt the snapshot found in its window (it reads from
+  // the last brief onward), newest first.
+  const poison = cur.poison ?? [];
+  for (const c of BRIEF_CHAINS) if (cur.poisonRead && !cur.poisonRead[c]) unread.push(`transfer history on ${c === "base" ? "Base" : "Robinhood Chain"}`);
+
+  // Held-token risk: worse than last time = new to the brief.
+  const sev = { OK: 0, WARN: 1, BLOCK: 2 } as const;
+  const riskNow = (cur.risk ?? []).filter((r) => r.level !== "OK").sort((a, b) => sev[b.level] - sev[a.level]);
+  const before = new Map((prev?.risk ?? []).map((r) => [r.token, r]));
+  const riskNew = prev ? riskNow.filter((r) => { const b = before.get(r.token); return !b || sev[r.level] > sev[b.level]; }) : riskNow;
+  if (cur.riskStat && cur.riskStat.read < cur.riskStat.picked) unread.push(`token screen for ${cur.riskStat.picked - cur.riskStat.read} of ${cur.riskStat.picked} held Base tokens`);
+
   const rank = { BLOCK: 0, WARN: 1, INFO: 2 } as const;
   const grantsRisky = cur.grants.filter((g) => g.level !== "INFO").sort((a, b) => rank[a.level] - rank[b.level]);
 
@@ -116,6 +133,7 @@ export function diffSnapshots(cur: Snapshot, prev: Snapshot | null): BriefDiff {
 
   return {
     wallet: cur.wallet, at: cur.at, since: prev?.at ?? null,
-    totals, balances, unsolicited, grantsNew, grantsClosed, grantsRisky, grantsOpen, unread,
+    totals, balances, unsolicited, grantsNew, grantsClosed, grantsRisky, grantsOpen,
+    poison, riskNew, riskNow, riskStat: cur.riskStat ?? null, unread,
   };
 }

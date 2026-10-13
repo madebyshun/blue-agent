@@ -12,6 +12,8 @@
  * diffed against a full one would report every token as "gone").
  */
 import type { TxChain } from "@/lib/tx-chains";
+import type { PoisonEvent } from "./poison";
+import type { RiskRow } from "./held-risk";
 
 export type BriefChain = TxChain;
 export const BRIEF_CHAINS: readonly BriefChain[] = ["base", "robinhood"] as const;
@@ -56,6 +58,13 @@ export interface Snapshot {
   grants: GrantRow[];
   /** false = the approval audit could not read every source on that chain. */
   grantsRead: Record<BriefChain, boolean>;
+  /** Address-poisoning attempts seen in the window since the last brief.
+   *  Optional: baselines written before 2026-10-13 B+E lack it. */
+  poison?: PoisonEvent[];
+  poisonRead?: Record<BriefChain, boolean>;
+  /** GoPlus screen of the held Base tokens worth checking (held-risk.ts). */
+  risk?: RiskRow[];
+  riskStat?: { picked: number; read: number };
 }
 
 export type BalanceChange =
@@ -78,5 +87,11 @@ export interface BriefDiff {
   /** Every open grant at BLOCK or WARN right now, not only the new ones. */
   grantsRisky: GrantRow[];
   grantsOpen: Partial<Record<BriefChain, number>>;
+  poison: PoisonEvent[];
+  /** Held tokens flagged now and not (or less) flagged at the last brief. */
+  riskNew: RiskRow[];
+  /** Every held token flagged now. */
+  riskNow: RiskRow[];
+  riskStat: { picked: number; read: number } | null;
   unread: string[];
 }

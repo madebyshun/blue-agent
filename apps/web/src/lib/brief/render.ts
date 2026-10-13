@@ -11,6 +11,7 @@ const MAX_ROWS = 6;
 
 const short = (a: string) => (/^0x[a-fA-F0-9]{40}$/.test(a) ? `${a.slice(0, 6)}…${a.slice(-4)}` : a);
 const chainShort = (c: string) => (c === "robinhood" ? "RH" : "Base");
+export const txUrl = (c: string, tx: string) => (c === "robinhood" ? `https://robinhoodchain.blockscout.com/tx/${tx}` : `https://basescan.org/tx/${tx}`);
 
 export function usd(n: number): string {
   const s = Math.abs(n) >= 1000 ? Math.round(Math.abs(n)).toLocaleString("en-US") : Math.abs(n).toFixed(2);
@@ -37,6 +38,23 @@ export function renderBrief(d: BriefDiff, fmt: BriefFormat, opts: { now?: number
 
   out.push(`☀️ ${b("Wallet brief")} · ${short(d.wallet)} · ${d.since ? `since ${ago(now - d.since)}` : "first brief"}`);
   if (!d.since) out.push(e("This is the baseline. Tomorrow's brief lists what changed against it."));
+
+  // Poisoning first: it is the one item that asks the reader to do something
+  // (stop copying from history) before anything else in the brief.
+  if (d.poison.length) {
+    out.push(""); out.push(`🚨 ${b("Address-poisoning attempt")}`);
+    for (const p of d.poison.slice(0, 4)) {
+      const how = p.kind === "lookalike_out_zero"
+        ? "a zero-value transfer that looks as if YOU sent it"
+        : `a transfer${p.symbol ? ` of ${p.symbol}` : ""} into your wallet`;
+      const tx = txUrl(p.chain, p.tx);
+      out.push(`• ${e(`On ${chainShort(p.chain)}: ${how} from a look-alike.`)}`);
+      out.push(`  ${e("Fake:")} ${fmt === "html" ? `<code>${p.attacker}</code>` : `\`${p.attacker}\``}`);
+      out.push(`  ${e("Real (you paid it):")} ${fmt === "html" ? `<code>${p.twin}</code>` : `\`${p.twin}\``}`);
+      out.push(`  ${fmt === "html" ? `<a href="${tx}">transaction</a>` : `[transaction](${tx})`}`);
+    }
+    out.push(e("Never copy an address from your transaction history. Paste it from the person, or use a saved contact or a basename."));
+  }
 
   // Value of priced tokens per chain.
   const tl: string[] = [];
@@ -68,6 +86,19 @@ export function renderBrief(d: BriefDiff, fmt: BriefFormat, opts: { now?: number
     out.push(""); out.push(`⚠️ ${b("Tokens you did not ask for")}`);
     for (const r of d.unsolicited.slice(0, MAX_ROWS)) out.push(`• ${e(unsolicitedLine(r))}`);
     out.push(e("Do not trade, approve or open links for these: unknown tokens sent unasked are how airdrop-bait and address-poisoning scams start."));
+  }
+
+  if (d.riskStat && d.riskStat.picked) {
+    const list = d.since ? d.riskNew : d.riskNow;
+    out.push(""); out.push(b("Held tokens"));
+    if (list.length) {
+      for (const r of list.slice(0, MAX_ROWS)) out.push(`• ${e(`[${r.level}] ${r.symbol} (Base, ${short(r.token)}): ${r.flags.join(", ")}`)}`);
+      if (d.since && d.riskNow.length > list.length) out.push(e(`• ${d.riskNow.length - list.length} more still flagged, unchanged since the last brief.`));
+    } else {
+      out.push(e(d.riskNow.length
+        ? `• No new flag. ${d.riskNow.length} held token${d.riskNow.length === 1 ? " is" : "s are"} still flagged, as before.`
+        : `• ${d.riskStat.read} of your Base tokens screened (GoPlus): no sell block, owner balance control or pausable transfer named.`));
+    }
   }
 
   out.push(""); out.push(b("Approvals"));

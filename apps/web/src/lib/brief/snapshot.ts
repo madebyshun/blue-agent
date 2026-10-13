@@ -21,7 +21,14 @@ import { checkWallet } from "@/lib/wallet/holdings";
 import { readRobinhoodAddressBalances } from "@/lib/robinhood/blockscout";
 import { classifyToken } from "@/lib/wallet/token-trust";
 import { clientFor } from "@/lib/tx-chains";
+import { coinbaseCatalog } from "@/lib/base-stocks/coinbase-catalog";
+import { BASE_STOCKS } from "@/lib/base-stocks/registry";
+import { readPoison } from "./poison";
+import { heldRisk, pickForCheck } from "./held-risk";
 import { BRIEF_CHAINS, type BriefChain, type GrantRow, type HoldRow, type LegRead, type Snapshot } from "./types";
+
+/** First brief: look back this far for poisoning attempts. */
+const FIRST_WINDOW_MS = 7 * 86_400_000;
 
 const NATIVE = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
 const tokenId = (addr: string, isNative?: boolean) => (isNative || addr.toLowerCase() === NATIVE ? "native" : addr.toLowerCase());
@@ -114,11 +121,30 @@ export async function takeSnapshot(wallet: string, prev: Snapshot | null, now = 
   // queries, and two chains at once doubles the burst it was paced against.
   const gb = await grants("base", w);
   const gr = await grants("robinhood", w);
+
+  // Poisoning attempts since the last brief (a week back on the first one).
+  const since = prev?.at ?? now - FIRST_WINDOW_MS;
+  const [pb, pr] = await Promise.all([
+    readPoison("base", w, since).catch(() => ({ read: false, events: [] })),
+    readPoison("robinhood", w, since).catch(() => ({ read: false, events: [] })),
+  ]);
+
+  // Held-token screen (Base only — GoPlus has no 4663 token data). Coinbase
+  // stock tokens and the desk's B20s are the issuer's, not a contract to screen.
+  const catalog = await coinbaseCatalog().catch(() => null);
+  const stockSet = new Set([...(catalog ?? []).map((c) => c.contract), ...BASE_STOCKS.map((s) => s.token.toLowerCase())]);
+  const picked = pickForCheck(legs.base.rows, (t) => stockSet.has(t));
+  const hr = await heldRisk(picked).catch(() => ({ rows: [], picked: picked.length, read: 0 }));
+
   return {
     v: 1, at: now, wallet: w,
     holdings: [...legs.base.rows, ...legs.robinhood.rows],
     holdingsRead: { base: legs.base.read, robinhood: legs.robinhood.read },
     grants: [...gb.rows, ...gr.rows],
     grantsRead: { base: gb.read, robinhood: gr.read },
+    poison: [...pb.events, ...pr.events],
+    poisonRead: { base: pb.read, robinhood: pr.read },
+    risk: hr.rows,
+    riskStat: { picked: hr.picked, read: hr.read },
   };
 }
