@@ -40,6 +40,7 @@ const T = {
   approval: "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925",
   all:      "0x17307eab39ab6107e8899845ad3d59bd9653f200f220920489ca2b5937696c31",
   p2:       "0xda9fa7c1b00402c17d0161b249b1ab8bbec047c5a52207b9c112deffd817036b",
+  p2permit: "0xc6a377bfc4eb120024a8ac08eef205be16b817020812c73223e81d1bdb9708ec",
 };
 const tp = (a: string) => "0x" + a.slice(2).padStart(64, "0");
 const word = (n: bigint) => encodeAbiParameters([{ type: "uint256" }], [n]);
@@ -75,7 +76,11 @@ const stub = (async (input: RequestInfo | URL, init?: RequestInit) => {
     // Measured shape: topics padded to four with null.
     if (t0 === T.approval) return Response.json({ message: "OK", status: "1", result: [ROUTER, DAPP, EOA, THIEF, OLD].map((sp) => ({ address: USDC, topics: [T.approval, tp(OWNER), tp(sp), null], data: word(1n) })) });
     if (t0 === T.all) return Response.json({ message: "OK", status: "1", result: [{ address: NFT, topics: [T.all, tp(OWNER), tp(MARKET), null], data: word(1n) }] });
-    if (!t0 && addr?.toLowerCase() === PERMIT2.toLowerCase()) return Response.json({ message: "OK", status: "1", result: [{ address: PERMIT2, topics: [T.p2, tp(OWNER), tp(USDC), tp(UNI)], data: "0x" }] });
+    // The PRO API refuses an address query without topic0 (HTTP 402, measured
+    // 2026-10-13); Permit2 must be asked per event, with topic0.
+    if (!t0 && addr) return new Response("payment required", { status: 402 });
+    if (t0 === T.p2 && addr?.toLowerCase() === PERMIT2.toLowerCase()) return Response.json({ message: "OK", status: "1", result: [{ address: PERMIT2, topics: [T.p2, tp(OWNER), tp(USDC), tp(UNI)], data: "0x" }] });
+    if (t0 === T.p2permit && addr?.toLowerCase() === PERMIT2.toLowerCase()) return Response.json({ status: "0", message: "No records found", result: [] });
     return Response.json({ message: "No logs found", status: "0", result: [] });
   }
   if (url.startsWith("https://api.gopluslabs.io/")) {
@@ -167,7 +172,7 @@ const P2 = [{ type: "function", name: "approve", stateMutability: "nonpayable", 
   seen.length = 0;
   const k = await approvalAudit("base", OWNER, { fresh: true });
   const pro = seen.filter((u) => u.startsWith("https://api.blockscout.com/v2/api?chain_id=8453&apikey=proapi_test&module=logs"));
-  ok("with a key, the PRO API is asked first (chain_id + apikey)", pro.length === 3, `${pro.length} PRO request(s)`);
+  ok("with a key, the PRO API is asked first (chain_id + apikey)", pro.length === 4, `${pro.length} PRO request(s)`);
   ok("…and when it fails the keyless instance answers, same result", k.counts.live === 6 && k.unread.length === 0);
   ok("the key never reaches the per-chain instance", !seen.some((u) => u.includes("base.blockscout.com") && u.includes("proapi_test")));
   delete process.env.BLOCKSCOUT_API_KEY;

@@ -260,13 +260,19 @@ async function auditUncached(chain: TxChain, wallet: string): Promise<ApprovalAu
   const unread: string[] = [];
   // Sequential on purpose: four parallel queries per wallet tripped the free
   // explorer's rate limit (429) on the second wallet of a live test.
-  // Three queries: every Permit2 event for this owner comes from one contract,
-  // so it is one address-filtered query, not one per event type.
   const ercR = await logs(chain, T_APPROVAL, owner);
   await new Promise((res) => setTimeout(res, PACE_MS));
   const allR = await logs(chain, T_APPROVAL_ALL, owner);
   await new Promise((res) => setTimeout(res, PACE_MS));
-  const p2R = await logs(chain, null, owner, PERMIT2);
+  // Permit2: one query per event, WITH topic0. MEASURED 2026-10-13 on
+  // production: the single address-filtered query without topic0 got HTTP 402
+  // from the PRO API (free tier), and timed out on the keyless instance; the
+  // two queries with topic0 above it answered. Two cheap queries beat one
+  // that is refused.
+  const p2aR = await logs(chain, T_P2_APPROVAL, owner, PERMIT2);
+  await new Promise((res) => setTimeout(res, PACE_MS));
+  const p2pR = await logs(chain, T_P2_PERMIT, owner, PERMIT2);
+  const p2R = { logs: p2aR.logs && p2pR.logs ? [...p2aR.logs, ...p2pR.logs] : null, why: [p2aR.why, p2pR.why].filter(Boolean).join(" | ") };
   const erc = ercR.logs, all = allR.logs, p2 = p2R.logs;
   if (!erc) unread.push(`ERC-20 Approval history (explorer: ${ercR.why})`);
   if (!all) unread.push(`NFT ApprovalForAll history (explorer: ${allR.why})`);
