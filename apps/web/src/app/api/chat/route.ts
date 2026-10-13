@@ -1503,7 +1503,7 @@ async function callHubTool(
     // move funds from here.
     return {
       text: "Move-to-yield card rendered. The card shows the network, amount and Supply/Withdraw action — the user reviews and SIGNS in their own wallet (non-custodial). Do NOT restate numbers as a table, do NOT claim funds were moved, and do NOT quote an APY. Reply with one short line: tell the user to review and sign in the card.",
-      staticReply: "Your move-to-yield card is above — review the network, amount and action, then sign in your own wallet.",
+      staticReply: "Ready above — tap Review & sign to check the network, amount and action, then sign in your own wallet.",
       result: { kind: "yield_move", ...args },
     };
   }
@@ -1520,7 +1520,7 @@ async function callHubTool(
     const network = args.network === "robinhood" ? "robinhood" : "base";
     return {
       text: "Send card rendered on MAINNET (Base 8453 or Robinhood Chain 4663 — never a testnet). The card shows the network, recipient, asset and amount, and the user reviews and SIGNS the transfer in their own wallet (non-custodial). Do NOT claim funds were sent, do NOT restate the recipient as if confirmed, and do NOT describe this as a test. Reply with one short line: tell the user to review the recipient + amount and sign in the card.",
-      staticReply: "Your send card is above — double-check the network, recipient and amount, then sign the transfer in your own wallet.",
+      staticReply: "Ready above — tap Review & sign to check the recipient and amount, then sign the transfer in your own wallet.",
       result: { kind: "send", ...args, network },
     };
   }
@@ -1545,7 +1545,7 @@ async function callHubTool(
     if (usdIn && (!tokenIn || /^(usd|\$)$/i.test(tokenIn))) { tokenIn = "USDC"; amountIn = usdIn; }
     return {
       text: "Convert card rendered on BASE MAINNET (8453) — real funds, not a testnet. The card fetches a live 0x quote and the user reviews the rate and SIGNS in their own wallet (non-custodial). Do NOT quote a rate or output amount yourself, do NOT claim the swap happened, and do NOT describe this as a test. Reply with one short line: tell the user to review the quote in the card and sign.",
-      staticReply: "Your Base trade card is above — review the live quote, then sign the trade in your own wallet.",
+      staticReply: "Ready above — tap Review & sign to see the live quote, then sign the trade in your own wallet.",
       result: {
         kind: "swap",
         tokenIn, tokenOut, amountIn, network: "base",
@@ -1906,7 +1906,7 @@ async function callHubTool(
         : `Robinhood swap card rendered for ${modeDesc}. The card fetches the live Uniswap V3 route and shows a slippage picker; the user's own wallet signs approve (if selling or token↔token) + swap. Do NOT restate the fields as a table, do NOT claim the swap has executed. Reply with one short line telling the user to review the amount + slippage in the card and click the Confirm button to sign.`,
       staticReply: error
         ? `⚠️ ${error}`
-        : `Your Robinhood trade card (${modeDesc}) is above — review the amount and slippage, then sign in your own wallet.`,
+        : `Ready above (${modeDesc}) — tap Review & sign to check the amount and slippage, then sign in your own wallet.`,
       result: {
         kind: "robinhood_swap",
         direction,
@@ -1958,7 +1958,7 @@ async function callHubTool(
         : `Robinhood send card rendered — the user reviews the recipient/amount and SIGNS the transfer in their own wallet (non-custodial). Do NOT restate the fields as a table, do NOT claim the send has happened. Reply with one short line telling the user to review and sign in the card.`,
       staticReply: error
         ? `⚠️ ${error}`
-        : `Your Robinhood send card is above — review the recipient and amount, then sign the transfer in your own wallet.`,
+        : `Ready above — tap Review & sign to check the recipient and amount, then sign the transfer in your own wallet.`,
       result: {
         kind: "robinhood_send",
         fromAddress, toAddress, token: rawToken, amount, tokenSymbol,
@@ -2002,7 +2002,7 @@ async function callHubTool(
         : `Robinhood bridge card rendered — the user reviews the Relay quote in the card and SIGNS the source-chain tx in their own wallet (non-custodial). Do NOT restate the quote as a table, do NOT claim the bridge has completed. Reply with one short line telling the user to review and sign in the card; delivery is tracked on relay.link.`,
       staticReply: error
         ? `⚠️ ${error}`
-        : `Your Robinhood bridge card is above — review the Relay quote, then sign the source-chain tx in your own wallet. Delivery is tracked on relay.link.`,
+        : `Ready above — tap Review & sign to see the Relay quote, then sign the source-chain tx in your own wallet. Delivery is tracked on relay.link.`,
       result: {
         kind: "robinhood_bridge",
         fromChain, toChain, fromAddress, recipient, token: rawToken, amount, tokenSymbol,
@@ -2017,7 +2017,7 @@ async function callHubTool(
     // No server execution here, no private keys, no funds moved.
     return {
       text: "B20 manage card rendered. The card loads the token's live state and shows only the actions the connected wallet is authorized for — the user signs each action in their own wallet (non-custodial). Do NOT output cast commands, private keys, or Basescan write steps, and do NOT restate the actions as a table. Reply with one short line: tell the user to use the manage card above to sign their action.",
-      staticReply: "Your B20 manage card is above — it shows only the actions your connected wallet is authorized for. Review and sign your action there.",
+      staticReply: "Ready above — tap Review & sign; it shows only the actions your connected wallet is authorized for.",
       result: { kind: "b20_manage", ...args },
     };
   }
@@ -2094,7 +2094,7 @@ async function callHubTool(
     const sentence = ruleText.charAt(0).toUpperCase() + ruleText.slice(1);
     const how = ca.checkAt ? "checked at that time" : "checked every 5 minutes";
     const guard = tr.trade ? " When it fires, the trade card waits for your signature — nothing executes on its own." : "";
-    const line = `${sentence}.${now} Press **Arm** on the card to start — ${how}, free.${guard}`;
+    const line = `${sentence}.${now} Tap **Review & arm** above to start — ${how}, free.${guard}`;
     return {
       text: `${line}\n[Card rendered. Do not claim the alert is active until the user arms it.]`,
       staticReply: line,

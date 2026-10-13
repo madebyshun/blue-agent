@@ -4,6 +4,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { ApprovalsPanel, type AuditView } from "@/components/wallet/ApprovalsPanel";
+import { ActionStrip } from "@/components/wallet/ActionStrip";
 import { useAccount, useReadContracts, useBalance, useReadContract, useWriteContract, useSwitchChain, usePublicClient, useSendTransaction, useCapabilities, useSendCalls, useCallsStatus } from "wagmi";
 import { formatUnits, parseUnits, isAddress, namehash, encodeFunctionData } from "viem";
 import { base } from "viem/chains";
@@ -2348,6 +2349,9 @@ function DiscoverySwap({ row, account }: { row: DiscoveryRow; account?: `0x${str
   );
 }
 
+const shortAddr = (a?: string) => (a && /^0x[a-fA-F0-9]{40}$/.test(a) ? `${a.slice(0, 6)}…${a.slice(-4)}` : a || "?");
+const amt = (v: unknown) => (v === undefined || v === null || v === "" ? "" : String(v));
+
 /** Read tools whose result is text only (see ToolResultCard). */
 const TEXT_ONLY_TOOLS: ReadonlySet<string> = new Set([
   "hub_honeypot", "hub_risk_gate", "hub_deep_analysis", "hub_token_pick", "hub_contract_trust",
@@ -2377,12 +2381,30 @@ export function ToolResultCard({ tool, result }: { tool: string; result: Record<
     case "hub_contract_trust": return <ContractTrustCard result={r as ContractTrustResult} />;
     case "hub_market_fit":    return <MarketFitCard   result={r} />;
     case "hub_key_exposure":  return <KeyExposureCard  result={r} />;
-    case "hub_approvals":     return Array.isArray((r as { grants?: unknown }).grants) ? <ApprovalsPanel audit={r as unknown as AuditView} /> : null;
+    case "hub_approvals": {
+      if (!Array.isArray((r as { grants?: unknown }).grants)) return null;
+      const a = r as unknown as AuditView;
+      const parts = [`${a.counts.live} open approval${a.counts.live === 1 ? "" : "s"}`,
+        a.counts.block ? `${a.counts.block} to revoke now` : "", a.counts.warn ? `${a.counts.warn} to review` : ""].filter(Boolean).join(" · ");
+      return (
+        <ActionStrip summary={parts} chain={a.chain} cta="Review & revoke">
+          <ApprovalsPanel audit={a} />
+        </ActionStrip>
+      );
+    }
     case "blue_stream":       return <BlueStreamCard   result={r} />;
     // No "hub_b20_launch" case — the tool was retired 2026-09-08 along with its
     // card. Chat has no token-deploy path; /app/b20 is the one that exists.
     case "hub_hood_arrow":       return <HoodArrowCard   result={r as unknown as HoodArrowResult} />;
-    case "set_price_alert":      return r.kind === "price_alert_draft" ? <PriceAlertCard result={r as unknown as PriceAlertDraft} account={account} /> : null;
+    case "set_price_alert": {
+      if (r.kind !== "price_alert_draft") return null;
+      const d = r as unknown as PriceAlertDraft;
+      return (
+        <ActionStrip summary={d.rule} chain={null} cta={d.automation ? "Review & arm automation" : "Review & arm"}>
+          <PriceAlertCard result={d} account={account} />
+        </ActionStrip>
+      );
+    }
 
     // ── The four money cards: chat mounts the WALLET's own editors ───────────
     //
@@ -2403,14 +2425,18 @@ export function ToolResultCard({ tool, result }: { tool: string; result: Record<
       // quote a DIFFERENT trade — the user asked to spend token A and would be
       // shown a card spending ETH. Porting token→token into RhSwapCard is the
       // follow-up that retires this branch.
-      if (s.token_in_address) return <RobinhoodSwapCard result={s} />;
+      const rhSummary = `${s.direction === "sell" ? "Sell" : "Buy"} ${amt(s.amount)} ${s.token_symbol || shortAddr(s.token_address)}`.replace(/\s+/g, " ");
+      const rhCheck = { chain: "robinhood" as const, kind: "swap" as const, token: s.direction === "sell" ? "ETH" : s.token_address };
+      if (s.token_in_address) return <ActionStrip summary={rhSummary} chain="robinhood" check={rhCheck}><RobinhoodSwapCard result={s} /></ActionStrip>;
       return (
+        <ActionStrip summary={rhSummary} chain="robinhood" check={rhCheck}>
         <ConvertPanel account={account} seedChain="robinhood"
           rhDirection={s.direction === "sell" ? "sell" : s.direction === "buy" ? "buy" : undefined}
           rhToken={s.token_address}
           rhSymbol={s.token_symbol}
           rhNote={s.note}
           initialAmount={s.amount} />
+        </ActionStrip>
       );
     }
 
@@ -2421,10 +2447,13 @@ export function ToolResultCard({ tool, result }: { tool: string; result: Record<
       // a hint. WalletSendCard uses the connected wallet, which is the only
       // address that can actually produce a signature.
       return (
+        <ActionStrip summary={`Send ${amt(s.amount)} ${s.tokenSymbol || shortAddr(s.token) || "ETH"} → ${shortAddr(s.toAddress)}`} chain="robinhood"
+          check={{ chain: "robinhood", kind: "send", token: s.token || "ETH", recipient: s.toAddress }}>
         <WalletSendCard account={account} initialNetwork="robinhood"
           initialTo={s.toAddress}
           initialAmount={s.amount}
           initialAsset={s.token || undefined} />
+        </ActionStrip>
       );
     }
 
@@ -2435,8 +2464,12 @@ export function ToolResultCard({ tool, result }: { tool: string; result: Record<
       // card plumbs `recipient` all the way to bridge-prepare and prints it when
       // it differs. Mounting the editor here would quietly redirect the delivery
       // to the connected wallet: same amount, same token, wrong person.
-      if (s.recipient) return <RobinhoodBridgeCard result={s} />;
+      const from = s.fromChain === "robinhood" ? "Robinhood" : "Base", to = s.fromChain === "robinhood" ? "Base" : "Robinhood";
+      const bChain = s.fromChain === "robinhood" ? "robinhood" as const : "base" as const;
+      const bSummary = `Bridge ${amt(s.amount)} ${s.tokenSymbol || shortAddr(s.token) || "ETH"} ${from} → ${to}${s.recipient ? ` (to ${shortAddr(s.recipient)})` : ""}`;
+      if (s.recipient) return <ActionStrip summary={bSummary} chain={bChain}><RobinhoodBridgeCard result={s} /></ActionStrip>;
       return (
+        <ActionStrip summary={bSummary} chain={bChain}>
         <BankBridgeCard account={account}
           initialFromChain={s.fromChain}
           initialToken={s.token}
@@ -2448,11 +2481,12 @@ export function ToolResultCard({ tool, result }: { tool: string; result: Record<
           // auto-advancing into a quote it cannot build. "← Change" reopens the
           // editor either way.
           autoReview={!s.error} />
+        </ActionStrip>
       );
     }
 
-    case "blue_dca":             return <DcaCard          data={r as unknown as DcaResult} />;
-    case "hub_b20_manage":       return <B20ManageCard   result={r as B20ManageResult} />;
+    case "blue_dca":             return <ActionStrip summary="Recurring buy schedule" chain="base" cta="Review"><DcaCard data={r as unknown as DcaResult} /></ActionStrip>;
+    case "hub_b20_manage":       return <ActionStrip summary="B20 token management" chain="base" cta="Review & sign"><B20ManageCard result={r as B20ManageResult} /></ActionStrip>;
     case "check_memo":           return <MemoResultCard  result={r as MemoResultData} />;
     case "check_authorization":  return <AuthorizationResultCard result={r as AuthorizationResultData} />;
     case "check_wallet":         return <WalletCard      result={r as WalletResultData} />;
@@ -2467,11 +2501,14 @@ export function ToolResultCard({ tool, result }: { tool: string; result: Record<
       // network armed a TESTNET send while the wallet armed mainnet from the same
       // words (#256). There is no testnet branch left to fall into.
       return (
+        <ActionStrip summary={`Send ${amt(s.amount)} ${s.asset || "USDC"} → ${shortAddr(s.to)}`} chain={s.network === "robinhood" ? "robinhood" : "base"}
+          check={/^0x[a-fA-F0-9]{40}$/.test(s.to ?? "") ? { chain: s.network === "robinhood" ? "robinhood" : "base", kind: "send", token: /^0x[a-fA-F0-9]{40}$/.test(s.asset ?? "") ? s.asset : (s.asset ?? "").toUpperCase() === "ETH" ? "ETH" : null, recipient: s.to } : undefined}>
         <WalletSendCard account={account}
           initialNetwork={s.network === "robinhood" ? "robinhood" : "base"}
           initialTo={s.to}
           initialAmount={s.amount}
           initialAsset={s.asset || undefined} />
+        </ActionStrip>
       );
     }
 
@@ -2494,10 +2531,13 @@ export function ToolResultCard({ tool, result }: { tool: string; result: Record<
       // the card can name it in its "couldn't arm this" banner. `resolveSwapToken`
       // returns "" for anything it cannot verify, and "" must not become a token.
       return (
+        <ActionStrip summary={`Swap ${amt(s.amountIn)} ${s.tokenIn || "?"} → ${s.tokenOut || "?"}`} chain="base"
+          check={{ chain: "base", kind: "swap", token: s.tokenOutAddress || ((s.tokenOut ?? "").toUpperCase() === "ETH" ? "ETH" : null) }}>
         <ConvertPanel account={account} seedChain="base"
           initialSell={s.tokenInAddress || s.tokenIn}
           initialBuy={s.tokenOutAddress || s.tokenOut}
           initialAmount={s.amountIn} />
+        </ActionStrip>
       );
     }
 
