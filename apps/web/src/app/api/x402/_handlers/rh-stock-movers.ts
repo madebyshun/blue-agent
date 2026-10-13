@@ -15,7 +15,8 @@
 // are all unanchored are dropped into `excluded_unanchored`, never silently.
 
 import { RWA_TOKENS, RH_CHAIN } from "@/lib/robinhood/rwa-registry";
-import { poolsForToken, topPools, anchoredPools, resolvePrimaryPool, type PoolMeta } from "@/lib/robinhood/rwa-market";
+import { kvGet, kvSet } from "@/lib/kv";
+import { poolsForTokens, primaryFromPools, anchoredPools, type PoolMeta } from "@/lib/robinhood/rwa-market";
 
 // Dust-pool filter — protects the ranking from thin-liquidity noise.
 // A pool with $453 TVL and $0.01 24h volume can quote AAPL at $868 for a
@@ -24,7 +25,7 @@ import { poolsForToken, topPools, anchoredPools, resolvePrimaryPool, type PoolMe
 const DEFAULT_MIN_TVL_USD    = 5_000;
 const DEFAULT_MIN_VOLUME_USD = 500;
 
-export default async function handler(req: Request): Promise<Response> {
+async function compute(req: Request): Promise<Response> {
   try {
     let body: { limit?: number; min_tvl_usd?: number; min_volume_24h_usd?: number } = {};
     try { const t = await req.text(); if (t?.trim().startsWith("{")) body = JSON.parse(t); } catch {}
@@ -49,53 +50,36 @@ export default async function handler(req: Request): Promise<Response> {
     // intersection still does the real work: it drops non-RWA pools, and it is
     // what keeps an impersonator's pool out of the ranking.
     const stocks = RWA_TOKENS.filter((t) => t.kind === "stock" || t.kind === "etf");
-    const traded = new Set<string>();
-    for (const p of await topPools(100)) {
-      if (p.base_token) traded.add(p.base_token);
-      if (p.quote_token) traded.add(p.quote_token);
-    }
-    const candidates = stocks.filter((t) => traded.has(t.contract.toLowerCase()));
+    // Every registered stock/ETF token, asked for directly in batches of 30.
+    // Until 2026-10-13 the universe was "stocks that appear in topPools" —
+    // GeckoTerminal's page 1 by 24h volume, 20 pools — and launchpad memecoins
+    // now fill that page, so the answer was "no RWA token reports a change"
+    // while AAPL's own pools read +1.5% (measured that day).
+    const poolsBy = await poolsForTokens(stocks.map((t) => t.contract));
 
     type Scan =
       | { ok: true; rwa: (typeof RWA_TOKENS)[number]; pool: PoolMeta; is_primary_pool: boolean }
       | { ok: false; rwa: (typeof RWA_TOKENS)[number]; unanchored: false }
       | { ok: false; rwa: (typeof RWA_TOKENS)[number]; unanchored: true; pool_count: number; unanchored_tvl_usd: number };
 
-    const perToken = await Promise.all(
-      candidates.map(async (rwa): Promise<Scan | null> => {
-        try {
-          const pools = await poolsForToken(rwa.contract);
-          if (!pools.length) return null;
-          // #231. Only a dollar-anchored pool may rank. `poolsForToken` already
-          // orients price/change to OUR SIDE of the pool — that part was always
-          // correct — but side is not denomination, and the two were being read
-          // as the same guarantee. A move measured against another equity is
-          // not a move in dollars, so unanchored-only tokens leave the ranking.
-          const anchored = anchoredPools(pools);
-          if (!anchored.length) {
-            return {
-              ok: false, rwa, unanchored: true,
-              pool_count: pools.length,
-              unanchored_tvl_usd: pools.reduce((s, p) => s + (p.reserve_usd || 0), 0),
-            };
-          }
-          // Prefer the SAME pool the rest of the catalog calls primary (M1/M2/
-          // M5/L1) so a mover row and an OHLC series for one ticker describe one
-          // pool. `resolvePrimaryPool` re-reads the memoized GT URL, so this
-          // costs no extra network. Fall back to the deepest anchored pool that
-          // does report a change — a primary with `change_24h === null` would
-          // otherwise drop a real mover.
-          const primary = await resolvePrimaryPool(rwa.contract);
-          const best = primary.pool && primary.pool.change_24h !== null
-            ? primary.pool
-            : anchored.find((p) => p.change_24h !== null) ?? null;
-          if (!best) return { ok: false, rwa, unanchored: false };
-          return { ok: true, rwa, pool: best, is_primary_pool: best.pool_ref === primary.pool?.pool_ref };
-        } catch {
-          return null;
-        }
-      }),
-    );
+    const perToken: (Scan | null)[] = stocks.map((rwa): Scan | null => {
+      const pools = poolsBy.get(rwa.contract.toLowerCase());
+      if (!pools || !pools.length) return null;            // unread or untraded
+      const anchored = anchoredPools(pools);
+      if (!anchored.length) {
+        return {
+          ok: false, rwa, unanchored: true,
+          pool_count: pools.length,
+          unanchored_tvl_usd: pools.reduce((sum, p) => sum + (p.reserve_usd || 0), 0),
+        };
+      }
+      const primary = primaryFromPools(pools);
+      const best = primary && primary.change_24h !== null
+        ? primary
+        : anchored.find((p) => p.change_24h !== null) ?? null;
+      if (!best) return { ok: false, rwa, unanchored: false };
+      return { ok: true, rwa, pool: best, is_primary_pool: best.pool_ref === primary?.pool_ref };
+    });
 
     type WithToken = {
       rwa: (typeof RWA_TOKENS)[number];
@@ -240,4 +224,29 @@ export default async function handler(req: Request): Promise<Response> {
   } catch (e) {
     return Response.json({ error: "rh-stock-movers failed", message: (e as Error).message }, { status: 500 });
   }
+}
+
+/**
+ * 10-minute KV cache in front of the scan. The scan is seven GeckoTerminal
+ * calls, and GT's free tier 429s after one call in a burst (measured
+ * 2026-10-13) — a quota this tool shares with the Blue Hood poller. A 24h
+ * change read ten minutes ago is still the 24h change; `cached_at` says when.
+ * Only a result that found movers is cached, so an outage is never pinned.
+ */
+const CACHE_TTL_S = 600;
+export default async function handler(req: Request): Promise<Response> {
+  const text = await req.text().catch(() => "");
+  const url = new URL(req.url);
+  const key = `rh:movers:v1:${text.trim() || "{}"}:${url.searchParams.toString()}`;
+  try {
+    const hit = await kvGet<Record<string, unknown>>(key);
+    if (hit && typeof hit === "object" && hit.tool === "rh-stock-movers") return Response.json({ ...hit, cached: true });
+  } catch { /* cache is an optimisation only */ }
+  const res = await compute(new Request(req.url, { method: "POST", headers: { "content-type": "application/json" }, body: text || "{}" }));
+  if (res.status !== 200) return res;
+  const body = (await res.json()) as Record<string, unknown> & { universe?: { tokens_with_pool_change?: number } };
+  if ((body.universe?.tokens_with_pool_change ?? 0) > 0) {
+    try { await kvSet(key, { ...body, cached_at: new Date().toISOString() }, CACHE_TTL_S); } catch { /* best-effort */ }
+  }
+  return Response.json(body);
 }

@@ -430,6 +430,59 @@ export async function poolsForToken(contract: string): Promise<PoolMeta[]> {
   return pools;
 }
 
+/**
+ * Pools for MANY tokens at once — GeckoTerminal `tokens/multi` with
+ * `include=top_pools`, 30 tokens per call, sequential. Same PoolMeta (price
+ * from the pool's own rate × anchor, F6) and same deepest-first order as
+ * `poolsForToken`; a token whose call failed is ABSENT from the map (unread),
+ * a token with no pools maps to []. MEASURED 2026-10-13: movers gated its
+ * universe on `topPools` (page 1 = 20 pools by 24h volume), which launchpad
+ * memecoins now fill entirely — 0 of 203 stock tokens qualified while AAPL's
+ * own pools read +1.5%. Asking for the stock tokens directly is 7 calls.
+ */
+export async function poolsForTokens(contracts: readonly string[]): Promise<Map<string, PoolMeta[]>> {
+  const out = new Map<string, PoolMeta[]>();
+  const list = contracts.map((c) => c.toLowerCase());
+  for (let i = 0; i < list.length; i += 30) {
+    const chunk = list.slice(i, i + 30);
+    type Tok = { id?: string; relationships?: { top_pools?: { data?: { id?: string }[] } } };
+    const d = await fetchJson<{ data?: Tok[]; included?: (PoolItem & { id?: string; type?: string })[] }>(
+      `${GT}/tokens/multi/${chunk.join(",")}?include=top_pools`,
+    );
+    if (!d?.data) continue;                       // unread chunk: its tokens stay absent
+    const byId = new Map<string, PoolItem>();
+    for (const inc of d.included ?? []) if (inc.type === "pool" && inc.id) byId.set(inc.id, inc);
+    const perToken = d.data.map((t) => ({
+      contract: stripChainPrefix(t.id),
+      items: (t.relationships?.top_pools?.data ?? [])
+        .map((r) => (r.id ? byId.get(r.id) : undefined))
+        .filter((x): x is PoolItem => !!x),
+    }));
+    // One anchor valuation for the whole chunk (not one per token): the
+    // per-token version took 26 s for 203 tokens, against a 30 s tool budget.
+    const anchors = perToken.flatMap(({ contract, items }) => items.map((p) => sidesOf(p, contract).counterparty)).filter((c) => RH_ANCHORS.has(c));
+    const anchorUsd = await anchorUsdValues(anchors, RH_PRICE_SOURCE);
+    for (const { contract, items } of perToken) {
+      if (!items.length) { out.set(contract, []); continue; }
+      const pools = items
+        .map((p) => poolFromItem(p, contract, anchorUsd))
+        .filter((p): p is PoolMeta => p !== null)
+        .sort((a, b) => b.reserve_usd - a.reserve_usd);
+      out.set(contract, pools);
+    }
+    for (const c of chunk) if (!out.has(c)) out.set(c, []);
+  }
+  return out;
+}
+
+/** The primary pool among `pools` — the same rule as resolvePrimaryPool
+ *  (deepest USDG-quoted, else deepest USD-anchored), without a network call. */
+export function primaryFromPools(pools: PoolMeta[]): PoolMeta | null {
+  const anchored = anchoredPools(pools);
+  if (!anchored.length) return null;
+  return anchored.find((p) => p.counterparty_token === USDG_LOWER) ?? anchored[0];
+}
+
 /** Top pools on RH Chain by 24h volume (used by M4 movers). Price is the
  *  pool's own base-side price — caller cross-references our RWA registry
  *  by base_token to filter to RWA-only pools. */
