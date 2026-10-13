@@ -37,10 +37,10 @@ const EXPLORER: Record<TxChain, string> = {
   robinhood: "https://robinhoodchain.blockscout.com",
 };
 export const PERMIT2 = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
-const T_APPROVAL = "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925";      // Approval(address,address,uint256) — ERC-20 & ERC-721
-const T_APPROVAL_ALL = "0x17307eab39ab6107e8899845ad3d59bd9653f200f220920489ca2b5937696c31";  // ApprovalForAll(address,address,bool)
-const T_P2_APPROVAL = "0xda9fa7c1b00402c17d0161b249b1ab8bbec047c5a52207b9c112deffd817036b";   // Permit2 Approval(owner,token,spender,uint160,uint48)
-const T_P2_PERMIT = "0xc6a377bfc4eb120024a8ac08eef205be16b817020812c73223e81d1bdb9708ec";     // Permit2 Permit(owner,token,spender,uint160,uint48,uint48)
+export const T_APPROVAL = "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925";      // Approval(address,address,uint256) — ERC-20 & ERC-721
+export const T_APPROVAL_ALL = "0x17307eab39ab6107e8899845ad3d59bd9653f200f220920489ca2b5937696c31";  // ApprovalForAll(address,address,bool)
+export const T_P2_APPROVAL = "0xda9fa7c1b00402c17d0161b249b1ab8bbec047c5a52207b9c112deffd817036b";   // Permit2 Approval(owner,token,spender,uint160,uint48)
+export const T_P2_PERMIT = "0xc6a377bfc4eb120024a8ac08eef205be16b817020812c73223e81d1bdb9708ec";     // Permit2 Permit(owner,token,spender,uint160,uint48,uint48)
 const UNLIMITED = 2n ** 128n;
 const LONG_LIVED_S = 30 * 86_400;
 /** Spenders screened against GoPlus, most exposed first. Logged when exceeded. */

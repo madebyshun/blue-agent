@@ -54,5 +54,10 @@ for (const q of ["buy 1 USDC of NVDAc on Base", "what is a stock token?"]) {
   ok(`does not force stock_brief: "${q}"`, forcedToolFor(u(q)) !== "stock_brief");
 }
 
+// explain_tx (2026-10-13)
+ok("a pasted tx hash forces explain_tx", forcedToolFor(u("what did 0x79b250fc255ad86563229104a124f30fbfe35a0199a82352e0711c0b6ecb14fa do?")) === "explain_tx");
+ok("a bare hash forces explain_tx", forcedToolFor(u("0x79b250fc255ad86563229104a124f30fbfe35a0199a82352e0711c0b6ecb14fa")) === "explain_tx");
+ok("an address is not a hash", forcedToolFor(u("is 0x0b3e328455c4059EEb9e3f84b5543F74E24e7E1b safe?")) === "hub_pretrade");
+
 console.log(failures === 0 ? "\nchat-intents-test: PASS" : `\nchat-intents-test: FAIL — ${failures}`);
 process.exit(failures === 0 ? 0 : 1);

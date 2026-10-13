@@ -33,6 +33,7 @@ import { findByTicker as findRwaByTicker, findByContract as findRwaByContract } 
 import { CHAT_HIDDEN_TOOLS } from "@/lib/chat-hidden-tools";
 import { cardReply, CARD_ALREADY_SHOWN, CARD_RENDERED_TOOLS, walletText } from "@/lib/chat/card-replies";
 import { buildBrief, buildStockBrief } from "@/lib/brief/run";
+import { explainText, txExplain } from "@/lib/tx-explain";
 import { baseStockByTickerOrSymbol, dollarAmount } from "@/lib/chat/trade-intent";
 import { githubContextFor } from "@/lib/chat/github-context";
 import { forcedToolFor, wantsMyAlerts } from "@/lib/chat/intents";
@@ -1167,6 +1168,18 @@ Testnets are reachable by full id: base-sepolia, ethereum-sepolia, robinhood-tes
     },
   },
   {
+    name: "explain_tx",
+    description: "Explain what a transaction ALREADY DID, from the chain's own record: tokens/NFTs/ETH that moved to or from the connected wallet, approvals and Permit2 allowances granted, operators switched on, an EIP-7702 delegation, the fee — with warnings for unlimited grants, flagged spenders, and the zero-value 'sent by you' address-poisoning move. Works on Base (8453) and Robinhood Chain (4663); finds the chain itself if not given. ZERO LLM. Use when the user pastes a transaction hash (0x + 64 hex) or asks 'what did this tx do', 'explain this transaction', 'giao dịch này làm gì'. For something NOT yet signed use hub_sign_check instead.",
+    input_schema: {
+      type: "object",
+      properties: {
+        hash:  { type: "string", description: "Transaction hash, 0x + 64 hex characters, copied exactly from the user's message." },
+        chain: { type: "string", enum: ["base", "robinhood"], description: "Only if the user named the chain; omit to search both." },
+      },
+      required: ["hash"],
+    },
+  },
+  {
     name: "stock_brief",
     description: "Onchain stock tokens right now, on Base (8453, Coinbase B20) and Robinhood Chain (4663): each desk's largest DEX-vs-Chainlink-oracle gaps, the premium/discount to Coinbase's NAV on Base, which US session it is (weekend = oracle frozen at Friday's close) — and, when a wallet is connected, the stock tokens it holds with the same readings. Read from the Blue Hood desk snapshot and Coinbase's API; ZERO LLM; facts, not trade signals. Use for: 'how are my stocks', 'stock brief', 'tokenized stocks today', 'any stock gaps', 'weekend gap', 'NVDA premium to NAV', 'cổ phiếu onchain hôm nay'.",
     input_schema: { type: "object", properties: {}, required: [] },
@@ -2245,6 +2258,19 @@ async function callHubTool(
     }
     args = { ...args, address: hit.token, network: "mainnet" };
   }
+  if (toolName === "explain_tx") {
+    const hash = typeof args.hash === "string" ? args.hash.trim() : "";
+    const chain = args.chain === "base" || args.chain === "robinhood" ? args.chain : undefined;
+    const viewer = userAddress && /^0x[a-fA-F0-9]{40}$/.test(userAddress) ? userAddress : null;
+    try {
+      const x = await txExplain({ hash, chain, viewer });
+      if ("error" in x) return { text: `${x.error} Say so in one line.`, staticReply: x.error };
+      return { text: "The explanation is written for the user from the chain's record. Add nothing.", staticReply: explainText(x, "md"), result: { kind: "explain_tx" } };
+    } catch (e) {
+      return { text: "The transaction could not be read. Say so in one line — invent nothing.", staticReply: `Couldn't read that transaction right now (${(e as Error).message.slice(0, 80)}).` };
+    }
+  }
+
   if (toolName === "stock_brief") {
     const wallet = userAddress && /^0x[a-fA-F0-9]{40}$/.test(userAddress) ? userAddress : null;
     try {

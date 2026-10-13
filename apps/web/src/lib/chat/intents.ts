@@ -63,12 +63,14 @@ const BRIEF_RE = /\b(wallet|morning|daily)\s+brief\b|\bwhat(?:'s| has| did)?\s+c
 const STOCK_BRIEF_RE = /\bstock brief\b|\bhow (are|is) my (onchain |tokeni[sz]ed )?stocks?\b|\b(onchain|tokeni[sz]ed) stocks? (today|now|brief|overview)\b|\bstock (gaps?|premium|discount)\b|\bweekend gap\b|\b(premium|discount) to nav\b|cổ phiếu onchain|cổ phiếu (của )?(mình|tôi)/;
 
 export function forcedToolFor(messages: readonly { role: string; content: unknown }[]):
-  "hub_sign_check" | "hub_pretrade" | "wallet_brief" | "stock_brief" | "prepare_swap" | "robinhood_swap" | "prepare_send" | "robinhood_send" | null {
+  "hub_sign_check" | "hub_pretrade" | "explain_tx" | "wallet_brief" | "stock_brief" | "prepare_swap" | "robinhood_swap" | "prepare_send" | "robinhood_send" | null {
   const last = messages[messages.length - 1];
   if (last?.role !== "user" || typeof last.content !== "string") return null;
   const raw = last.content;
   const t = raw.toLowerCase();
   if (/"primarytype"\s*:/.test(t) && /"domain"\s*:/.test(t)) return "hub_sign_check";
+  // A pasted transaction hash: 64 hex, never a 40-hex address.
+  if (t.length <= 240 && /(^|[^0-9a-fx])0x[a-f0-9]{64}(?![0-9a-f])/.test(t)) return "explain_tx";
   const hasAddr = /0x[a-f0-9]{40}\b/.test(t);
   if (!hasAddr && t.length <= 160 && BRIEF_RE.test(t)) return "wallet_brief";
   if (!hasAddr && t.length <= 160 && STOCK_BRIEF_RE.test(t)) return "stock_brief";
