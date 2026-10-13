@@ -173,7 +173,7 @@ export async function txExplain(input: { hash: string; chain?: TxChain; viewer?:
   const cache = new Map<string, { symbol: string; decimals: number | null }>();
 
   const decoded = decodeCall(to ?? "", tx.input);
-  const methodLabel = method ?? (decoded.kind === "none" ? (to ? "plain ETH transfer" : "contract creation") : decoded.kind === "unknown" ? `call ${decoded.selector}` : `${decoded.kind} (by selector)`);
+  const methodLabel = method ?? (decoded.kind === "none" ? (to ? "plain ETH transfer" : "contract creation") : decoded.kind === "unknown" ? `call ${decoded.selector}${to ? ` on ${short(to)}` : ""}` : `${decoded.kind}() on ${short(to ?? "")}`);
   if (receipt.status !== "success") notes.push({ level: "INFO", code: "REVERTED", text: "The transaction reverted: nothing in it took effect except the fee." });
 
   const { moves, grants, others } = receipt.status === "success" ? readLogs(receipt.logs as RawLog[], subject) : { moves: [], grants: [], others: 0 };
@@ -239,7 +239,9 @@ export async function txExplain(input: { hash: string; chain?: TxChain; viewer?:
   if (receipt.status === "success" && !notes.some((n) => n.code === "POISON_ZERO")) {
     const z = foreignZeroTransfers(receipt.logs as RawLog[], from);
     if (z.victims) {
-      const syms = (await Promise.all(z.tokens.slice(0, 3).map((t) => meta(chain, t, cache)))).map((m) => m.symbol).join(", ");
+      const named = (await Promise.all(z.tokens.slice(0, 3).map((t) => meta(chain, t, cache)))).map((m) => m.symbol).join(", ");
+      const rest = z.tokens.length - 3;
+      const syms = rest > 0 ? `${named} and ${rest} other token${rest === 1 ? "" : "s"}` : named;
       notes.push({ level: "WARN", code: "POISON_CAMPAIGN", text: `This transaction moved 0 ${syms} out of ${z.victims} wallet${z.victims === 1 ? "" : "s"} that ${short(from)} does not own. That is an address-poisoning run: each victim now sees a look-alike address in their history, as if they had sent to it. Never copy an address from your history.` });
     }
   }
