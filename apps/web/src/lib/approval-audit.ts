@@ -95,8 +95,9 @@ export interface ApprovalAudit {
 
 let fetchImpl: typeof fetch = (...a) => fetch(...a);
 let RETRY_MS = 1_500;
-/** Tests inject a stub for the explorer requests (and skip the retry wait). */
-export function __setAuditFetch(f: typeof fetch | null, retryMs = 1_500) { fetchImpl = f ?? ((...a) => fetch(...a)); RETRY_MS = retryMs; }
+let PACE_MS = 250;
+/** Tests inject a stub for the explorer requests (and skip the waits). */
+export function __setAuditFetch(f: typeof fetch | null, retryMs = 1_500) { fetchImpl = f ?? ((...a) => fetch(...a)); RETRY_MS = retryMs; PACE_MS = retryMs === 0 ? 0 : 250; }
 
 type Log = { address: string; topics: (string | null)[]; data: string };
 
@@ -125,26 +126,49 @@ async function logs(chain: TxChain, topic0: string | null, owner: string, addres
   return logsFrom(chain, topic0, owner, address, false);
 }
 
+/** A rate-limit answer in either shape the explorer uses: HTTP 429, or the
+ *  Etherscan-compatible HTTP 200 + {status:"0", result:"Max rate limit reached"}. */
+function isRateLimited(status: number, j: { message?: string; result?: unknown } | null): boolean {
+  if (status === 429) return true;
+  const txt = `${j?.message ?? ""} ${typeof j?.result === "string" ? j.result : ""}`;
+  return /rate limit|too many/i.test(txt);
+}
+
+/**
+ * One explorer read with backoff on a rate limit. MEASURED 2026-10-13 on
+ * production with BLOCKSCOUT_API_KEY set: for a wallet with many approvals the
+ * ERC-20 query pages several times in a row, and the NFT and Permit2 queries
+ * after it came back unread 3 runs out of 3 — one 429 retry was not enough
+ * against a 5 rps tier. Up to three spaced retries (RETRY_MS, ×2, ×4).
+ */
+async function getLogsPage(url: string): Promise<{ ok: true; j: { message?: string; result?: Log[] | string } } | { ok: false }> {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    if (attempt > 0) await new Promise((res) => setTimeout(res, RETRY_MS * 2 ** (attempt - 1)));
+    let r: Response;
+    try { r = await fetchImpl(url, { headers: { "User-Agent": UA, Accept: "application/json" }, signal: AbortSignal.timeout(15_000) }); }
+    catch { return { ok: false }; }
+    const j = r.status === 429 ? null : await r.json().catch(() => null) as { message?: string; result?: Log[] | string } | null;
+    if (isRateLimited(r.status, j)) continue;
+    if (!r.ok || !j) return { ok: false };
+    return { ok: true, j };
+  }
+  return { ok: false };
+}
+
 async function logsFrom(chain: TxChain, topic0: string | null, owner: string, address: string | undefined, keyed: boolean): Promise<Log[] | null> {
   const t1 = "0x" + owner.slice(2).toLowerCase().padStart(64, "0");
   const out: Log[] = [];
   for (let page = 1; page <= 5; page++) {
+    // Pace pages under the keyed tier's 5 rps; the keyless tier is slower still.
+    if (page > 1) await new Promise((res) => setTimeout(res, PACE_MS));
     const sel = topic0 ? `&topic0=${topic0}&topic1=${t1}&topic0_1_opr=and` : `&topic1=${t1}`;
     const url = `${logsBase(chain, keyed)}module=logs&action=getLogs&fromBlock=0&toBlock=latest${address ? `&address=${address}` : ""}${sel}&page=${page}&offset=1000`;
-    try {
-      let r = await fetchImpl(url, { headers: { "User-Agent": UA, Accept: "application/json" }, signal: AbortSignal.timeout(15_000) });
-      // The free explorer tier answers 429 under bursts (measured 2026-10-07).
-      // One spaced retry; after that the source is reported unread.
-      if (r.status === 429) {
-        await new Promise((res) => setTimeout(res, RETRY_MS));
-        r = await fetchImpl(url, { headers: { "User-Agent": UA, Accept: "application/json" }, signal: AbortSignal.timeout(15_000) });
-      }
-      if (!r.ok) return page === 1 ? null : out;
-      const j = await r.json() as { message?: string; result?: Log[] | string };
-      if (!Array.isArray(j.result)) return /no logs/i.test(String(j.message)) ? out : (page === 1 ? null : out);
-      out.push(...j.result);
-      if (j.result.length < 1000) break;
-    } catch { return page === 1 ? null : out; }
+    const got = await getLogsPage(url);
+    if (!got.ok) return page === 1 ? null : out;
+    const j = got.j;
+    if (!Array.isArray(j.result)) return /no logs/i.test(String(j.message)) ? out : (page === 1 ? null : out);
+    out.push(...j.result);
+    if (j.result.length < 1000) break;
   }
   return out;
 }
@@ -226,7 +250,9 @@ async function auditUncached(chain: TxChain, wallet: string): Promise<ApprovalAu
   // Three queries: every Permit2 event for this owner comes from one contract,
   // so it is one address-filtered query, not one per event type.
   const erc = await logs(chain, T_APPROVAL, owner);
+  await new Promise((res) => setTimeout(res, PACE_MS));
   const all = await logs(chain, T_APPROVAL_ALL, owner);
+  await new Promise((res) => setTimeout(res, PACE_MS));
   const p2 = await logs(chain, null, owner, PERMIT2);
   if (!erc) unread.push("ERC-20 Approval history (explorer)");
   if (!all) unread.push("NFT ApprovalForAll history (explorer)");

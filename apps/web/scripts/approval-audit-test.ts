@@ -46,6 +46,7 @@ const word = (n: bigint) => encodeAbiParameters([{ type: "uint256" }], [n]);
 const MAXU = 2n ** 256n - 1n;
 const allowance: Record<string, bigint> = { [`${USDC}|${ROUTER}`]: MAXU, [`${USDC}|${DAPP}`]: 5_000_000n, [`${USDC}|${EOA}`]: 1_000_000n, [`${USDC}|${THIEF}`]: 10n ** 12n, [`${USDC}|${OLD}`]: 0n };
 let historyUp = true;
+let rateLimitedOnce = 0;   // answer this many explorer calls with the Etherscan-style 200 rate-limit body
 const seen: string[] = [];
 
 
@@ -68,6 +69,7 @@ const stub = (async (input: RequestInfo | URL, init?: RequestInit) => {
   if (url.startsWith("https://api.blockscout.com/")) return new Response("pro down in this test", { status: 503 });
   if (url.includes("blockscout.com/api?module=logs")) {
     if (!historyUp) return Response.json({ message: "Too many requests", result: null, status: "0" }, { status: 429 });
+    if (rateLimitedOnce > 0) { rateLimitedOnce--; return Response.json({ status: "0", message: "NOTOK", result: "Max rate limit reached" }); }
     const u = new URL(url);
     const t0 = u.searchParams.get("topic0"), addr = u.searchParams.get("address");
     // Measured shape: topics padded to four with null.
@@ -153,6 +155,12 @@ const P2 = [{ type: "function", name: "approve", stateMutability: "nonpayable", 
   const res = await HANDLERS["approval-audit"](new Request("https://x/api/x402/approval-audit", { method: "POST", body: JSON.stringify({ wallet: OWNER, fresh: true }) }));
   ok("the route answers 502 (not charged, not 'no approvals')", res.status === 502);
   historyUp = true;
+
+  console.log("5b. Etherscan-style rate limit (HTTP 200 + 'Max rate limit reached')");
+  rateLimitedOnce = 2;
+  const rl = await approvalAudit("base", OWNER, { fresh: true });
+  ok("two rate-limited answers are retried, and the full list still reads", rl.counts.live === 6 && rl.unread.length === 0, JSON.stringify({ c: rl.counts, u: rl.unread }));
+  rateLimitedOnce = 0;
 
   console.log("6. optional PRO key");
   process.env.BLOCKSCOUT_API_KEY = "proapi_test";
