@@ -44,13 +44,17 @@ export function renderBrief(d: BriefDiff, fmt: BriefFormat, opts: { now?: number
   if (d.poison.length) {
     out.push(""); out.push(`🚨 ${b("Address-poisoning attempt")}`);
     for (const p of d.poison.slice(0, 4)) {
-      const how = p.kind === "lookalike_out_zero"
-        ? "a zero-value transfer that looks as if YOU sent it"
-        : `a transfer${p.symbol ? ` of ${p.symbol}` : ""} into your wallet`;
+      const how = p.kind === "lookalike_in"
+        ? `a transfer${p.symbol ? ` of ${p.symbol}` : ""} into your wallet from a look-alike.`
+        : p.kind === "lookalike_out_zero"
+          ? "a zero-value transfer that looks as if YOU sent it, to a look-alike."
+          : `a zero-value ${p.symbol ?? "token"} transfer "from" your wallet that you did not send.`;
       const tx = txUrl(p.chain, p.tx);
-      out.push(`• ${e(`On ${chainShort(p.chain)}: ${how} from a look-alike.`)}`);
-      out.push(`  ${e("Fake:")} ${fmt === "html" ? `<code>${p.attacker}</code>` : `\`${p.attacker}\``}`);
-      out.push(`  ${e("Real (you paid it):")} ${fmt === "html" ? `<code>${p.twin}</code>` : `\`${p.twin}\``}`);
+      const code = (a: string) => (fmt === "html" ? `<code>${a}</code>` : `\`${a}\``);
+      out.push(`• ${e(`On ${chainShort(p.chain)}: ${how}`)}`);
+      out.push(`  ${e(p.twin ? "Fake:" : "Address it planted:")} ${code(p.attacker)}`);
+      if (p.twin) out.push(`  ${e("Real (you paid it):")} ${code(p.twin)}`);
+      else out.push(`  ${e("Poisoners mint an address that looks like one you pay. Never pay this one.")}`);
       out.push(`  ${fmt === "html" ? `<a href="${tx}">transaction</a>` : `[transaction](${tx})`}`);
     }
     out.push(e("Never copy an address from your transaction history. Paste it from the person, or use a saved contact or a basename."));

@@ -13,7 +13,8 @@ const W = "0x1111111111111111111111111111111111111111";
 const REAL = "0xabcd000000000000000000000000000000001234";
 const FAKE = "0xabcd999999999999999999999999999999991234";
 const OTHER = "0x5555555555555555555555555555555555555555";
-const x = (o: Partial<{ from: string; to: string; value: string; at: number; tx: string; symbol: string | null }>) => ({ from: W, to: REAL, value: "100", at: 1000, tx: "0xt", symbol: "USDC", ...o });
+const USDC = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913";
+const x = (o: Partial<{ from: string; to: string; value: string; at: number; tx: string; symbol: string | null; token: string }>) => ({ from: W, to: REAL, value: "100", at: 1000, tx: "0xt", symbol: "USDC", token: USDC, ...o });
 
 const outgoing = [x({ tx: "0xpay" }), x({ to: FAKE, value: "0", at: 2000, tx: "0xzero" })];
 const incoming = [x({ from: FAKE, to: W, value: "1", at: 3000, tx: "0xin" }), x({ from: OTHER, to: W, value: "0", at: 3000, tx: "0xother" }), x({ from: REAL, to: W, at: 3000, tx: "0xreal" })];
@@ -23,6 +24,23 @@ ok("catches the zero-value 'sent by you' trick", ev.some((e) => e.kind === "look
 ok("an unrelated zero transfer and the real payee are not flagged", ev.length === 2);
 ok("the window excludes older events", findPoison("base", W, incoming, outgoing, [], 2500).length === 1);
 ok("no payees → nothing to imitate", findPoison("base", W, incoming, [], [], 0).length === 0);
+// zero_out_unsigned — measured 2026-10-13: a busy victim's real payee falls outside the pages read.
+{
+  const PLANTED = "0x7777000000000000000000000000000000009999";
+  const out = [x({ to: PLANTED, value: "0", at: 2000, tx: "0xUNSIGNED" }), x({ to: OTHER, value: "0", at: 2000, tx: "0xSELF" })];
+  const senders = new Map([["0xunsigned", "0x9659000000000000000000000000000000002249"], ["0xself", W]]);
+  const ev2 = findPoison("base", W, [], out, [], 0, senders);
+  ok("a zero transfer out that the wallet did not send is flagged with no twin", ev2.length === 1 && ev2[0].kind === "zero_out_unsigned" && ev2[0].twin === null && ev2[0].attacker === PLANTED);
+  ok("the wallet's own zero transfer is not flagged", !ev2.some((e) => e.tx === "0xSELF"));
+  ok("an unknown sender claims nothing", findPoison("base", W, [], out, [], 0).length === 0);
+}
+// Fake-token "sent" lines must not make a look-alike a payee (victim 0x6a7e…, 13 Oct).
+{
+  const FAKE_USDC = "0xdafaf3ff5406c7ac17786868be2cc9ed6c4a8835";
+  const out = [x({ tx: "0xpay" }), x({ to: FAKE, value: "1000000", symbol: "U឵S឵Dꓚ", token: FAKE_USDC, tx: "0xfake" }), x({ to: FAKE, value: "0", at: 2000, tx: "0xzero2" })];
+  const ev3 = findPoison("base", W, [], out, [], 0);
+  ok("a fake-token 'payment' does not make the look-alike a payee", ev3.some((e) => e.kind === "lookalike_out_zero" && e.attacker === FAKE && e.twin === REAL));
+}
 
 ok("honeypot → BLOCK", classifyGoPlus({ is_honeypot: "1" }).level === "BLOCK");
 ok("sell tax 15% → WARN", classifyGoPlus({ sell_tax: "0.15" }).level === "WARN");
