@@ -76,10 +76,14 @@ export default async function handler(req: Request): Promise<Response> {
       }, { status: 502 });
     }
 
-    const hard = flags.hard, soft = flags.soft.filter((f) => SOFT.has(f));
-    const verdict = hard.length || explorer?.is_scam ? "FLAGGED" : soft.length ? "CAUTION" : "NO_KNOWN_FLAGS";
+    const hard = flags.hard, soft = flags.soft.filter((f) => SOFT.has(f)), unconfirmed = flags.unconfirmed;
+    // A GoPlus-only mark (no named source) is CAUTION, not FLAGGED; Blue Agent's
+    // own routers (lib/known-infra.ts) carry no flag — measured 2026-10-13.
+    const verdict = hard.length || explorer?.is_scam ? "FLAGGED" : soft.length || unconfirmed.length ? "CAUTION" : "NO_KNOWN_FLAGS";
     const reasons: string[] = [];
+    if (flags.infra) reasons.push(`${flags.infra}.${flags.ignored.length ? ` A feed's mark on it (${flags.ignored.map(flagLabel).join(", ")}) is about drainers that route through it, not this contract.` : ""}`);
     for (const f of hard) reasons.push(`GoPlus flag: ${flagLabel(f)}`);
+    for (const f of unconfirmed) reasons.push(`GoPlus mark, no named source behind it: ${flagLabel(f)}`);
     for (const f of soft) reasons.push(`GoPlus soft flag: ${flagLabel(f)}`);
     if (explorer?.is_scam) reasons.push("The chain explorer marks this address as a scam.");
     if (kind === "eip7702_account") reasons.push(`EIP-7702 account delegated to ${chainFacts.delegate}: its code, not only its key, controls it.`);
@@ -92,7 +96,7 @@ export default async function handler(req: Request): Promise<Response> {
       status: "ok",
       verdict,
       reasons,
-      flags: { hard, soft, source: flags.source || null },
+      flags: { hard, unconfirmed, soft, source: flags.source || null, infra: flags.infra },
       explorer: explorer ?? null,
       chain_facts: chainFacts,
       how_to_read: "FLAGGED: do not send to or trust this address. CAUTION: a soft mark — know who it is first. NO_KNOWN_FLAGS: no feed names it; that is not a clean bill of health.",

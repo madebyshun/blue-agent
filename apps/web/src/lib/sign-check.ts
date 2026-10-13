@@ -112,8 +112,14 @@ async function screenParty(chain: TxChain, who: string, role: string, reasons: S
     addressFlags(chain, who),
     codeAt(chain, who),
   ]);
+  if (flags?.infra) {
+    reasons.push({ level: "INFO", code: "PARTY_INFRA", text: `The ${role} is ${flags.infra}.${flags.ignored.length ? " A risk feed's mark on it is about drainers that route through it, not about this contract." : ""}` });
+    return;   // known infrastructure: no flag, and it is a contract by construction
+  }
   if (flags?.hard.length) {
     reasons.push({ level: "BLOCK", code: "PARTY_FLAGGED", text: `The ${role} ${who} is flagged for ${flags.hard.map(flagLabel).join(", ")}${flags.source ? ` (source: ${flags.source})` : ""}. Do not sign.` });
+  } else if (flags?.unconfirmed.length) {
+    reasons.push({ level: "WARN", code: "PARTY_FLAG_UNCONFIRMED", text: `GoPlus marks the ${role} ${short(who)} for ${flags.unconfirmed.map(flagLabel).join(", ")}, citing no other source. Not confirmed — know who it is before you sign.` });
   } else if (flags?.soft.length) {
     reasons.push({ level: "WARN", code: "PARTY_FLAG_DOUBT", text: `The ${role} ${short(who)} is marked by an address-risk feed: ${flags.soft.map(flagLabel).join(", ")}.` });
   } else if (!flags) {

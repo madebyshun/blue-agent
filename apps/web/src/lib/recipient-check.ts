@@ -26,12 +26,13 @@
  * 2026-10-07). No LLM.
  */
 import { clientFor, type TxChain } from "@/lib/tx-chains";
+import { knownInfra } from "@/lib/known-infra";
 
 export type RecipientCode =
   | "RECIPIENT_NOT_ADDRESS" | "RECIPIENT_ZERO" | "RECIPIENT_IS_TOKEN" | "RECIPIENT_FLAGGED"
   | "RECIPIENT_FLAG_DOUBT" | "RECIPIENT_LOOKALIKE" | "RECIPIENT_POISON_DUST" | "RECIPIENT_CONTRACT"
   | "RECIPIENT_7702" | "RECIPIENT_SELF" | "RECIPIENT_KNOWN" | "RECIPIENT_NEW"
-  | "RECIPIENT_FLAGS_UNREAD" | "RECIPIENT_HISTORY_UNREAD";
+  | "RECIPIENT_FLAGS_UNREAD" | "RECIPIENT_HISTORY_UNREAD" | "RECIPIENT_INFRA" | "RECIPIENT_FLAG_UNCONFIRMED";
 
 export type RecipientReason = { level: "BLOCK" | "WARN" | "INFO"; code: RecipientCode; text: string };
 
@@ -109,18 +110,46 @@ async function nativePayees(chain: TxChain, wallet: string): Promise<string[] | 
   return j.items.filter((t) => t.to?.hash && t.value && t.value !== "0").map((t) => t.to!.hash!);
 }
 
+export interface AddressFlags {
+  /** Theft / phishing / sanctions / laundering, named by a feed that cites a source → BLOCK. */
+  hard: string[];
+  /** The same kind of flag, but attributed only to GoPlus itself (data_source
+   *  "GoPlus", no SlowMist/BlockSec/OFAC behind it) → WARN, never BLOCK.
+   *  MEASURED 2026-10-13: exactly this shape flagged the 0x AllowanceHolder. */
+  unconfirmed: string[];
+  /** Mixer, blacklist doubt, fake KYC → WARN. */
+  soft: string[];
+  source: string;
+  isContract: boolean | null;
+  /** Set when the address is infrastructure Blue Agent routes through
+   *  (lib/known-infra.ts): every flag above is emptied and listed in `ignored`. */
+  infra: string | null;
+  ignored: string[];
+}
+
 /** GoPlus address_security for one address. null = the feed did not answer. */
-export async function addressFlags(chain: TxChain, addr: string): Promise<{ hard: string[]; soft: string[]; source: string; isContract: boolean | null } | null> {
+export async function addressFlags(chain: TxChain, addr: string): Promise<AddressFlags | null> {
   const j = await getJson(`https://api.gopluslabs.io/api/v1/address_security/${addr}?chain_id=${GOPLUS_CHAIN[chain]}`) as
     { code?: number; result?: Record<string, string> } | null;
   if (!j || j.code !== 1 || !j.result) return null;
   const r = j.result;
-  return {
-    hard: HARD_FLAGS.filter((f) => r[f] === "1"),
-    soft: SOFT_FLAGS.filter((f) => r[f] === "1"),
-    source: typeof r.data_source === "string" ? r.data_source : "",
+  const source = typeof r.data_source === "string" ? r.data_source.trim() : "";
+  const named = HARD_FLAGS.filter((f) => r[f] === "1");
+  const soft = SOFT_FLAGS.filter((f) => r[f] === "1");
+  // Only GoPlus's own attribution (or none at all) is not evidence enough to block.
+  const selfSourced = !source || /^goplus$/i.test(source);
+  const base: AddressFlags = {
+    hard: selfSourced ? [] : named,
+    unconfirmed: selfSourced ? named : [],
+    soft,
+    source,
     isContract: r.contract_address === "1" ? true : r.contract_address === "0" ? false : null,
+    infra: null,
+    ignored: [],
   };
+  const infra = knownInfra(chain, addr);
+  if (infra) return { ...base, hard: [], unconfirmed: [], soft: [], infra, ignored: [...named, ...soft] };
+  return base;
 }
 
 export const flagLabel = (f: string) => f.replace(/_/g, " ");
@@ -159,8 +188,12 @@ export async function recipientReasons(input: RecipientInput): Promise<Recipient
   // ── Security feed ────────────────────────────────────────────────────────
   if (!flags) {
     reasons.push({ level: "INFO", code: "RECIPIENT_FLAGS_UNREAD", text: "The address-risk feed (GoPlus) did not answer, so this address was not screened for theft, phishing or sanctions." });
+  } else if (flags.infra) {
+    reasons.push({ level: "INFO", code: "RECIPIENT_INFRA", text: `This is ${flags.infra}.${flags.ignored.length ? ` A risk feed marks it (${flags.ignored.map(flagLabel).join(", ")}) because drainers also route through public contracts; that mark is not about this contract.` : ""}` });
   } else if (flags.hard.length) {
     reasons.push({ level: "BLOCK", code: "RECIPIENT_FLAGGED", text: `This address is flagged for ${flags.hard.map(flagLabel).join(", ")}${flags.source ? ` (source: ${flags.source})` : ""}. Do not send to it.` });
+  } else if (flags.unconfirmed.length) {
+    reasons.push({ level: "WARN", code: "RECIPIENT_FLAG_UNCONFIRMED", text: `GoPlus marks this address for ${flags.unconfirmed.map(flagLabel).join(", ")}, citing no other source. Not confirmed — check who it belongs to before sending.` });
   } else if (flags.soft.length) {
     reasons.push({ level: "WARN", code: "RECIPIENT_FLAG_DOUBT", text: `An address-risk feed marks this address: ${flags.soft.map(flagLabel).join(", ")}${flags.source ? ` (source: ${flags.source})` : ""}. Make sure you know who it belongs to.` });
   }

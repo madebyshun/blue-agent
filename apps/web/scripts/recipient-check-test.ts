@@ -33,6 +33,8 @@ const CONTRACT = "0x5555555555555555555555555555555555555555";
 const DELEGATE = "0x6666666666666666666666666666666666666666";
 const ACCT7702 = "0x7777777777777777777777777777777777777777";
 const TOKEN    = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+const SELFFLAG = "0x8888888888888888888888888888888888888888"; // flagged, data_source "GoPlus" only
+const ALLOWH   = "0x0000000000001fF3684f28c67538d4D072C22734"; // 0x AllowanceHolder — flagged by GoPlus, measured 2026-10-13
 
 let goplusUp = true, historyUp = true;
 
@@ -58,6 +60,7 @@ const stub = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const addr = url.split("/address_security/")[1].split("?")[0].toLowerCase();
     if (addr === THIEF) return Response.json(gp({ stealing_attack: "1", sanctioned: "1", data_source: "SlowMist" }));
     if (addr === MIXERISH) return Response.json(gp({ mixer: "1" }));
+    if (addr === SELFFLAG || addr === ALLOWH.toLowerCase()) return Response.json(gp({ stealing_attack: "1", phishing_activities: "1", data_source: "GoPlus" }));
     if (addr === CONTRACT) return Response.json(gp({ contract_address: "1" }));
     return Response.json(gp({}));
   }
@@ -97,6 +100,12 @@ const lvl = (rs: { code: string; level: string }[], c: string) => rs.find((r) =>
     flagged?.level === "BLOCK" && /stealing attack/.test(flagged.text) && /sanctioned/.test(flagged.text) && /SlowMist/.test(flagged.text), flagged?.text);
   r = await recipientReasons({ chain: "base", recipient: MIXERISH, sender: SENDER });
   ok("a soft flag (mixer) is a WARN, not a block", lvl(r, "RECIPIENT_FLAG_DOUBT") === "WARN" && !r.some((x) => x.level === "BLOCK"));
+
+  r = await recipientReasons({ chain: "base", recipient: SELFFLAG, sender: SENDER });
+  ok("a hard flag attributed only to GoPlus → WARN unconfirmed, not BLOCK", lvl(r, "RECIPIENT_FLAG_UNCONFIRMED") === "WARN" && !r.some((x) => x.level === "BLOCK"));
+  r = await recipientReasons({ chain: "base", recipient: ALLOWH, sender: SENDER });
+  ok("the 0x AllowanceHolder (Blue Agent's own router) → INFO, its feed mark explained, no block or warn from it",
+    lvl(r, "RECIPIENT_INFRA") === "INFO" && !r.some((x) => /FLAG/.test(x.code)), JSON.stringify(r.map((x) => x.code)));
 
   console.log("2. address poisoning");
   ok("isLookalike: same head and tail, different middle", isLookalike(FRIEND, TWIN) && !isLookalike(FRIEND, FRIEND) && !isLookalike(FRIEND, STRANGER));

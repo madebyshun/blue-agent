@@ -352,29 +352,36 @@ async function auditUncached(chain: TxChain, wallet: string): Promise<ApprovalAu
   const exposure = (g: Raw) => { const b = meta.get(g.asset)?.balance; return g.type === "nft_operator" ? 1n : b == null ? 0n : (g.amount < b ? g.amount : b); };
   live.sort((a, b) => (exposure(b) > exposure(a) ? 1 : -1));
   const spenders = [...new Set(live.map((g) => g.spender))];
-  const screened = new Map<string, { flags: string[] | null; contract: boolean | null }>();
+  const screened = new Map<string, { flags: string[] | null; hard: string[]; unconfirmed: string[]; infra: string | null; contract: boolean | null }>();
   await pool(spenders.slice(0, MAX_SCREEN).map((s) => async () => {
     const [f, code] = await Promise.all([
       addressFlags(chain, s),
       client.getCode({ address: s as `0x${string}` }).then((c) => !!c && c !== "0x").catch(() => null),
     ]);
-    screened.set(s, { flags: f ? f.hard.concat(f.soft) : null, contract: code });
+    screened.set(s, {
+      flags: f ? [...f.hard, ...f.unconfirmed, ...f.soft] : null,
+      hard: f?.hard ?? [], unconfirmed: f?.unconfirmed ?? [], infra: f?.infra ?? null, contract: code,
+    });
   }));
   let note: string | null = null;
   if (spenders.length > MAX_SCREEN) note = `${spenders.length} distinct spenders; the ${MAX_SCREEN} with the most exposure were screened against the risk feed, the rest were not.`;
 
   const grants: Grant[] = live.map((g) => {
     const m = meta.get(g.asset);
-    const s = screened.get(g.spender) ?? { flags: null, contract: null };
+    const s = screened.get(g.spender) ?? { flags: null, hard: [], unconfirmed: [], infra: null, contract: null };
     const unlimited = g.amount >= UNLIMITED;
-    const hard = (s.flags ?? []).filter((f) => !["blacklist_doubt", "mixer", "fake_kyc"].includes(f));
     let level: Grant["level"] = "INFO", why = "A bounded allowance to a contract.";
-    if (hard.length) { level = "BLOCK"; why = `The spender is flagged for ${hard.map(flagLabel).join(", ")}. Revoke now.`; }
+    // BLOCK needs a flag a feed attributes to a named source. A GoPlus-only
+    // mark is WARN; on Blue Agent's own routers (lib/known-infra.ts) it is
+    // not a flag at all — measured 2026-10-13 on the 0x AllowanceHolder.
+    if (s.hard.length) { level = "BLOCK"; why = `The spender is flagged for ${s.hard.map(flagLabel).join(", ")}. Revoke now.`; }
+    else if (s.unconfirmed.length) { level = "WARN"; why = `GoPlus marks the spender for ${s.unconfirmed.map(flagLabel).join(", ")}, citing no other source. Not confirmed; revoke if you do not know this app.`; }
     else if (s.contract === false) { level = "WARN"; why = "The spender is a plain wallet, not an app contract — the way most drainers collect."; }
     else if (g.type === "nft_operator") { level = "WARN"; why = "Operator for the whole collection: it can move every item, including ones you buy later."; }
     else if (unlimited) { level = "WARN"; why = "Unlimited: if this spender is ever compromised, your whole balance of this token is exposed."; }
     else if (g.type === "permit2" && g.expiration != null && g.expiration > now + BigInt(LONG_LIVED_S)) { level = "WARN"; why = "A Permit2 grant that stays valid for more than 30 days."; }
-    if (level !== "BLOCK" && s.flags?.length) why += ` A risk feed also marks it: ${s.flags.map(flagLabel).join(", ")}.`;
+    if (s.infra) why = `${s.infra}. ${unlimited ? "Unlimited: revoke it if you no longer trade here." : "A bounded allowance."}`;
+    else if (level !== "BLOCK" && !s.unconfirmed.length && s.flags?.length) why += ` A risk feed also marks it: ${s.flags.map(flagLabel).join(", ")}.`;
 
     const revokeData = g.type === "erc20"
       ? encodeFunctionData({ abi: ERC20_ABI, functionName: "approve", args: [g.spender as `0x${string}`, 0n] })

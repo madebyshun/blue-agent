@@ -36,6 +36,7 @@ const THIEF  = "0xdddddddddddddddddddddddddddddddddddddddd"; // flagged contract
 const NFT    = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee01";
 const MARKET = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee02";
 const UNI    = "0xf0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0"; // Permit2 spender
+const ALLOWH = "0x0000000000001ff3684f28c67538d4d072c22734"; // 0x AllowanceHolder: GoPlus-only flag, measured 2026-10-13
 const T = {
   approval: "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925",
   all:      "0x17307eab39ab6107e8899845ad3d59bd9653f200f220920489ca2b5937696c31",
@@ -45,7 +46,7 @@ const T = {
 const tp = (a: string) => "0x" + a.slice(2).padStart(64, "0");
 const word = (n: bigint) => encodeAbiParameters([{ type: "uint256" }], [n]);
 const MAXU = 2n ** 256n - 1n;
-const allowance: Record<string, bigint> = { [`${USDC}|${ROUTER}`]: MAXU, [`${USDC}|${DAPP}`]: 5_000_000n, [`${USDC}|${EOA}`]: 1_000_000n, [`${USDC}|${THIEF}`]: 10n ** 12n, [`${USDC}|${OLD}`]: 0n };
+const allowance: Record<string, bigint> = { [`${USDC}|${ALLOWH}`]: 1_000_000n, [`${USDC}|${ROUTER}`]: MAXU, [`${USDC}|${DAPP}`]: 5_000_000n, [`${USDC}|${EOA}`]: 1_000_000n, [`${USDC}|${THIEF}`]: 10n ** 12n, [`${USDC}|${OLD}`]: 0n };
 let historyUp = true;
 let rateLimitedOnce = 0;   // answer this many explorer calls with the Etherscan-style 200 rate-limit body
 const seen: string[] = [];
@@ -74,7 +75,7 @@ const stub = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const u = new URL(url);
     const t0 = u.searchParams.get("topic0"), addr = u.searchParams.get("address");
     // Measured shape: topics padded to four with null.
-    if (t0 === T.approval) return Response.json({ message: "OK", status: "1", result: [ROUTER, DAPP, EOA, THIEF, OLD].map((sp) => ({ address: USDC, topics: [T.approval, tp(OWNER), tp(sp), null], data: word(1n) })) });
+    if (t0 === T.approval) return Response.json({ message: "OK", status: "1", result: [ROUTER, DAPP, EOA, THIEF, OLD, ALLOWH].map((sp) => ({ address: USDC, topics: [T.approval, tp(OWNER), tp(sp), null], data: word(1n) })) });
     if (t0 === T.all) return Response.json({ message: "OK", status: "1", result: [{ address: NFT, topics: [T.all, tp(OWNER), tp(MARKET), null], data: word(1n) }] });
     // The PRO API refuses an address query without topic0 (HTTP 402, measured
     // 2026-10-13); Permit2 must be asked per event, with topic0.
@@ -85,6 +86,7 @@ const stub = (async (input: RequestInfo | URL, init?: RequestInit) => {
   }
   if (url.startsWith("https://api.gopluslabs.io/")) {
     const a = url.split("/address_security/")[1].split("?")[0].toLowerCase();
+    if (a === ALLOWH) return Response.json({ code: 1, result: { stealing_attack: "1", phishing_activities: "1", sanctioned: "0", mixer: "0", blacklist_doubt: "0", data_source: "GoPlus" } });
     return Response.json({ code: 1, result: { stealing_attack: a === THIEF ? "1" : "0", sanctioned: "0", mixer: "0", blacklist_doubt: "0", data_source: a === THIEF ? "ScamSniffer" : "" } });
   }
   let req: { id?: number; method?: string; params?: unknown[] } | null = null;
@@ -125,7 +127,7 @@ const P2 = [{ type: "function", name: "approve", stateMutability: "nonpayable", 
   const find = (type: string, spender: string) => a.grants.find((g) => g.type === type && g.spender === spender.toLowerCase());
 
   console.log("1. state decides");
-  ok("6 live grants (4 ERC-20 + 1 operator + 1 Permit2); the revoked one is closed", a.counts.live === 6 && a.counts.closed_since === 1 && !find("erc20", OLD), JSON.stringify(a.counts));
+  ok("7 live grants (5 ERC-20 + 1 operator + 1 Permit2); the revoked one is closed", a.counts.live === 7 && a.counts.closed_since === 1 && !find("erc20", OLD), JSON.stringify(a.counts));
   ok("nothing unread", a.unread.length === 0, JSON.stringify(a.unread));
 
   ok("state is read through Multicall3, not one eth_call per grant", multicalls === 2, `${multicalls} multicall(s)`);
@@ -137,6 +139,10 @@ const P2 = [{ type: "function", name: "approve", stateMutability: "nonpayable", 
   ok("bounded to a contract → INFO", find("erc20", DAPP)?.level === "INFO");
   ok("operator-for-all → WARN", find("nft_operator", MARKET)?.level === "WARN");
   ok("Permit2 max → WARN, expires never", find("permit2", UNI)?.level === "WARN" && find("permit2", UNI)?.expires === "never");
+
+  const ah = find("erc20", ALLOWH);
+  ok("the 0x AllowanceHolder approval is NOT 'revoke now' (GoPlus-only mark on Blue Agent's own router)",
+    ah?.level === "INFO" && /AllowanceHolder/.test(ah.why) && !/Revoke now/.test(ah.why), JSON.stringify(ah && { l: ah.level, w: ah.why }));
 
   console.log("3. exposure");
   ok("exposure is min(allowance, balance): unlimited on a 7 USDC balance exposes 7", find("erc20", ROUTER)?.exposed === "7");
@@ -164,7 +170,7 @@ const P2 = [{ type: "function", name: "approve", stateMutability: "nonpayable", 
   console.log("5b. Etherscan-style rate limit (HTTP 200 + 'Max rate limit reached')");
   rateLimitedOnce = 2;
   const rl = await approvalAudit("base", OWNER, { fresh: true });
-  ok("two rate-limited answers are retried, and the full list still reads", rl.counts.live === 6 && rl.unread.length === 0, JSON.stringify({ c: rl.counts, u: rl.unread }));
+  ok("two rate-limited answers are retried, and the full list still reads", rl.counts.live === 7 && rl.unread.length === 0, JSON.stringify({ c: rl.counts, u: rl.unread }));
   rateLimitedOnce = 0;
 
   console.log("6. optional PRO key");
@@ -173,7 +179,7 @@ const P2 = [{ type: "function", name: "approve", stateMutability: "nonpayable", 
   const k = await approvalAudit("base", OWNER, { fresh: true });
   const pro = seen.filter((u) => u.startsWith("https://api.blockscout.com/v2/api?chain_id=8453&apikey=proapi_test&module=logs"));
   ok("with a key, the PRO API is asked first (chain_id + apikey)", pro.length === 4, `${pro.length} PRO request(s)`);
-  ok("…and when it fails the keyless instance answers, same result", k.counts.live === 6 && k.unread.length === 0);
+  ok("…and when it fails the keyless instance answers, same result", k.counts.live === 7 && k.unread.length === 0);
   ok("the key never reaches the per-chain instance", !seen.some((u) => u.includes("base.blockscout.com") && u.includes("proapi_test")));
   delete process.env.BLOCKSCOUT_API_KEY;
 
