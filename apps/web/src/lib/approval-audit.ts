@@ -118,12 +118,17 @@ function logsBase(chain: TxChain, keyed: boolean): string {
 }
 
 /** History by topic0 (or by emitting contract when `topic0` is null) and owner in topic1. */
-async function logs(chain: TxChain, topic0: string | null, owner: string, address?: string): Promise<Log[] | null> {
+async function logs(chain: TxChain, topic0: string | null, owner: string, address?: string): Promise<{ logs: Log[] | null; why: string }> {
+  let why = "";
   if (process.env.BLOCKSCOUT_API_KEY) {
+    lastFailure = "";
     const viaPro = await logsFrom(chain, topic0, owner, address, true);
-    if (viaPro) return viaPro;
+    if (viaPro) return { logs: viaPro, why: "" };
+    why = `pro → ${lastFailure || "unread"}`;
   }
-  return logsFrom(chain, topic0, owner, address, false);
+  lastFailure = "";
+  const inst = await logsFrom(chain, topic0, owner, address, false);
+  return { logs: inst, why: inst ? "" : [why, `instance → ${lastFailure || "unread"}`].filter(Boolean).join("; ") };
 }
 
 /** A rate-limit answer in either shape the explorer uses: HTTP 429, or the
@@ -141,15 +146,18 @@ function isRateLimited(status: number, j: { message?: string; result?: unknown }
  * after it came back unread 3 runs out of 3 — one 429 retry was not enough
  * against a 5 rps tier. Up to three spaced retries (RETRY_MS, ×2, ×4).
  */
+/** Last explorer failure, per query label — surfaced in `unread` so a failing
+ *  source says WHY (explorer's own words, never the key or the URL). */
+let lastFailure = "";
 async function getLogsPage(url: string): Promise<{ ok: true; j: { message?: string; result?: Log[] | string } } | { ok: false }> {
   for (let attempt = 0; attempt < 4; attempt++) {
     if (attempt > 0) await new Promise((res) => setTimeout(res, RETRY_MS * 2 ** (attempt - 1)));
     let r: Response;
     try { r = await fetchImpl(url, { headers: { "User-Agent": UA, Accept: "application/json" }, signal: AbortSignal.timeout(15_000) }); }
-    catch { return { ok: false }; }
+    catch (e) { lastFailure = `network: ${(e as Error).message.slice(0, 60)}`; return { ok: false }; }
     const j = r.status === 429 ? null : await r.json().catch(() => null) as { message?: string; result?: Log[] | string } | null;
-    if (isRateLimited(r.status, j)) continue;
-    if (!r.ok || !j) return { ok: false };
+    if (isRateLimited(r.status, j)) { lastFailure = `HTTP ${r.status} rate limited`; continue; }
+    if (!r.ok || !j) { lastFailure = `HTTP ${r.status}`; return { ok: false }; }
     return { ok: true, j };
   }
   return { ok: false };
@@ -166,7 +174,12 @@ async function logsFrom(chain: TxChain, topic0: string | null, owner: string, ad
     const got = await getLogsPage(url);
     if (!got.ok) return page === 1 ? null : out;
     const j = got.j;
-    if (!Array.isArray(j.result)) return /no logs/i.test(String(j.message)) ? out : (page === 1 ? null : out);
+    if (!Array.isArray(j.result)) {
+      // "No logs found" (instance) / "No records found" (Etherscan-style) = an empty answer, not a failure.
+      if (/no (logs|records)/i.test(`${j.message ?? ""} ${typeof j.result === "string" ? j.result : ""}`)) return out;
+      lastFailure = `${keyed ? "pro" : "instance"}: ${String(j.message ?? "").slice(0, 40)} ${typeof j.result === "string" ? j.result.slice(0, 80) : ""}`.trim();
+      return page === 1 ? null : out;
+    }
     out.push(...j.result);
     if (j.result.length < 1000) break;
   }
@@ -249,14 +262,15 @@ async function auditUncached(chain: TxChain, wallet: string): Promise<ApprovalAu
   // explorer's rate limit (429) on the second wallet of a live test.
   // Three queries: every Permit2 event for this owner comes from one contract,
   // so it is one address-filtered query, not one per event type.
-  const erc = await logs(chain, T_APPROVAL, owner);
+  const ercR = await logs(chain, T_APPROVAL, owner);
   await new Promise((res) => setTimeout(res, PACE_MS));
-  const all = await logs(chain, T_APPROVAL_ALL, owner);
+  const allR = await logs(chain, T_APPROVAL_ALL, owner);
   await new Promise((res) => setTimeout(res, PACE_MS));
-  const p2 = await logs(chain, null, owner, PERMIT2);
-  if (!erc) unread.push("ERC-20 Approval history (explorer)");
-  if (!all) unread.push("NFT ApprovalForAll history (explorer)");
-  if (!p2) unread.push("Permit2 history (explorer)");
+  const p2R = await logs(chain, null, owner, PERMIT2);
+  const erc = ercR.logs, all = allR.logs, p2 = p2R.logs;
+  if (!erc) unread.push(`ERC-20 Approval history (explorer: ${ercR.why})`);
+  if (!all) unread.push(`NFT ApprovalForAll history (explorer: ${allR.why})`);
+  if (!p2) unread.push(`Permit2 history (explorer: ${p2R.why})`);
 
   // Candidate pairs from history; state decides what is still open.
   const ercPairs = new Map<string, { token: string; spender: string }>();
