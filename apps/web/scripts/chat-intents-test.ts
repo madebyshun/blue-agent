@@ -3,7 +3,7 @@
  * Asking to SEE alerts must reach the alert store; asking to SET one must not
  * be hijacked (it needs set_price_alert and its arguments).
  */
-import { wantsMyAlerts } from "../src/lib/chat/intents";
+import { tradeToolFor, wantsMyAlerts } from "../src/lib/chat/intents";
 
 let failures = 0;
 const u = (content: string) => [{ role: "user", content }];
@@ -17,6 +17,15 @@ for (const q of ["alert me if ETH on Base drops 5% in 24h", "set a price alert f
 }
 ok("only the LAST message counts", !wantsMyAlerts([{ role: "user", content: "my alerts" }, { role: "assistant", content: "…" }]));
 ok("a long message is not a bare request", !wantsMyAlerts(u("my alerts " + "x".repeat(200))));
+
+// tradeToolFor — measured 2026-10-13: "Swap $1 eth to usdc on Base" ran no tool.
+for (const q of ["Swap $1 eth to usdc on Base", "swap 0.5 USDC to ETH on Base", "Buy 1 USDC of NVDAc on Base", "sell 0.001 NVDAc for USDC", "convert 10 usdc to eth"]) {
+  ok(`forces prepare_swap: "${q}"`, tradeToolFor(u(q)) === "prepare_swap");
+}
+ok("a Robinhood trade forces robinhood_swap", tradeToolFor(u("buy $5 of TSLA on robinhood")) === "robinhood_swap");
+for (const q of ["should I buy 1 ETH?", "how do I swap 5 USDC?", "swap ETH to USDC", "what is a swap", "I sold 2 ETH yesterday"]) {
+  ok(`does not force a trade: "${q}"`, tradeToolFor(u(q)) === null);
+}
 
 console.log(failures === 0 ? "\nchat-intents-test: PASS" : `\nchat-intents-test: FAIL — ${failures}`);
 process.exit(failures === 0 ? 0 : 1);

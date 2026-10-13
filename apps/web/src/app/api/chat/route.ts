@@ -34,7 +34,7 @@ import { CHAT_HIDDEN_TOOLS } from "@/lib/chat-hidden-tools";
 import { cardReply, CARD_ALREADY_SHOWN, CARD_RENDERED_TOOLS } from "@/lib/chat/card-replies";
 import { baseStockByTickerOrSymbol, dollarAmount } from "@/lib/chat/trade-intent";
 import { githubContextFor } from "@/lib/chat/github-context";
-import { wantsMyAlerts } from "@/lib/chat/intents";
+import { tradeToolFor, wantsMyAlerts } from "@/lib/chat/intents";
 import { runInternalTool } from "@/lib/x402-internal-run";
 import { recordCall } from "@/lib/usage-daily";
 
@@ -2990,6 +2990,11 @@ async function callVeniceStream(
       // but one visible token, even inside a <think> block, means the model ran
       // and the charge stands.
       let emittedOutput = false;
+      // This stream runs only when NO tool ran this turn, so no card exists.
+      // MEASURED 2026-10-13: the model copied an earlier turn's "Your Base
+      // trade card is above" with nothing built. Any claim of a card here is
+      // false; correct it at the end of the answer.
+      let shownText = "";
       // `finish_reason: "length"` — the reply hit max_tokens. Measured
       // 2026-10-01: a 6-file `blue audit` on Fast (768 tokens) streamed 179
       // characters and stopped mid-sentence, and on reasoning models the
@@ -3010,6 +3015,8 @@ async function callVeniceStream(
 
       const emit = (obj: object) => {
         emittedOutput = true;
+        const t = (obj as { delta?: { text?: string } }).delta?.text;
+        if (typeof t === "string") shownText += t;
         controller.enqueue(encoder.encode(`data: ${JSON.stringify(obj)}\n\n`));
       };
       const lengthNote = () => {
@@ -3136,6 +3143,9 @@ async function callVeniceStream(
           }
         }
         flush(true); // drain on stream end
+        if (/\bcards?\b[^.\n]{0,40}\b(above|below)\b/i.test(shownText)) {
+          emit({ delta: { text: "\n\n_(No card was built for this message — nothing ran. Ask again with the amount and both tokens, e.g. \"swap 1 USDC to ETH on Base\".)_" } });
+        }
         lengthNote();
       } finally {
         idle.clear();
@@ -3680,7 +3690,9 @@ export async function POST(req: NextRequest) {
       const outcome: Phase1Outcome = forceTool
         ? { status: "tools", toolCalls: [forcedToolCall(forceTool)] }
         : await detectToolCalls(
-            apiKey, effModelId, openaiMsgs, maxTok, autoSearch, undefined, undefined,
+            // An imperative trade ("swap 1 USDC to ETH") must reach its card
+            // tool; the model still writes the arguments (lib/chat/intents.ts).
+            apiKey, effModelId, openaiMsgs, maxTok, autoSearch, tradeToolFor(cleanMessages) ?? undefined, undefined,
             hasConnectorTools ? mcpTools : [],
           );
       if (outcome.status === "tools") {
@@ -3788,7 +3800,8 @@ export async function POST(req: NextRequest) {
     const outcome: Phase1Outcome = forceTool
       ? { status: "tools", toolCalls: [forcedToolCall(forceTool)] }
       : await detectToolCalls(
-          virtualsKey, virtualsModel, openaiMsgs, virtualsMax, virtualsAutoSearch, undefined, cfg,
+          // Imperative trade → its card tool, model-written args (lib/chat/intents.ts).
+          virtualsKey, virtualsModel, openaiMsgs, virtualsMax, virtualsAutoSearch, tradeToolFor(cleanMessages) ?? undefined, cfg,
           hasConnectorTools ? mcpTools : [],
         );
     if (outcome.status === "tools") {

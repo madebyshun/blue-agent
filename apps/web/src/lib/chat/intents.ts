@@ -24,3 +24,23 @@ export function wantsMyAlerts(messages: readonly { role: string; content: unknow
       || /\b(list|show|summari[sz]e|check) (all )?(my )?(price )?alerts\b/.test(t)
       || /\b(cảnh báo|alert) của tôi\b/.test(t);
 }
+
+/**
+ * The trade tool a message obviously asks for, or null. FORCES a real tool call
+ * (tool_choice on that one function; the model still writes its arguments).
+ * MEASURED 2026-10-13 in a manual test: "Swap $1 eth to usdc on Base" ran NO
+ * tool, and the reply copied the previous turn's "Your Base trade card is
+ * above" — a receipt for a card that did not exist. An imperative trade with a
+ * number in it has exactly one honest answer: build the card (or have the card
+ * say why it cannot). Questions ("should I buy…", "how do I swap…") are not
+ * forced — those are asking for an explanation, not a trade.
+ */
+export function tradeToolFor(messages: readonly { role: string; content: unknown }[]): "prepare_swap" | "robinhood_swap" | null {
+  const last = messages[messages.length - 1];
+  if (last?.role !== "user" || typeof last.content !== "string") return null;
+  const t = last.content.toLowerCase().trim();
+  if (t.length > 160 || !/\d/.test(t)) return null;
+  if (!/^(please\s+)?(swap|buy|sell|convert|trade)\b/.test(t)) return null;
+  if (/\?$|\b(should|how|why|can i|is it|what if)\b/.test(t)) return null;
+  return /\b(robinhood|rh chain|on rh|chain 4663)\b/.test(t) ? "robinhood_swap" : "prepare_swap";
+}

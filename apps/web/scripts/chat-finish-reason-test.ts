@@ -184,6 +184,14 @@ async function run(text: string, tier = "fast") {
     check("9.5 both stream parsers (plain and after-tools) drop tool markup", (src.match(/TOOL_MARKUP\.exec\(textBuf\)/g) ?? []).length === 2);
   }
 
+  console.log("10. a tool-free answer that claims a card gets corrected (measured 2026-10-13)");
+  script = { content: "Your Base trade card is above — review the live quote, then sign.", finish: "stop" };
+  r = await run("hello there");
+  check("10.1 the false receipt is followed by 'No card was built'", /No card was built for this message/.test(r.text), r.text.slice(-120));
+  script = { content: "Cards are a way to show results.", finish: "stop" };
+  r = await run("hello there");
+  check("10.2 an answer that merely mentions cards is left alone", !/No card was built/.test(r.text), r.text);
+
   console.log(failures === 0 ? "\nchat-finish-reason-test: PASS" : `\nchat-finish-reason-test: FAIL — ${failures}`);
   process.exit(failures === 0 ? 0 : 1);
 })();
