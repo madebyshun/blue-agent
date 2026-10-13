@@ -20,8 +20,9 @@ import { kv, kvGet, kvSAdd, kvSet, kvSRem, kvTryLock, kvDel } from "@/lib/kv";
 import { tgUserForAddress } from "@/lib/blue-hood/watchlist";
 import { sendMessage } from "@/lib/telegram/bot";
 import { baselineFor, diffSnapshots } from "./diff";
-import { renderBrief, type BriefFormat } from "./render";
-import { takeSnapshot } from "./snapshot";
+import { renderBrief, renderStocks, type BriefFormat } from "./render";
+import { readHoldings, takeSnapshot } from "./snapshot";
+import { stockBrief } from "./stocks";
 import type { Snapshot } from "./types";
 
 export const BRIEF_DEFAULT_HOUR_UTC = 1; // 08:00 in Vietnam (UTC+7)
@@ -60,7 +61,9 @@ export async function buildBrief(wallet: string, fmt: BriefFormat, opts: { commi
   const prev = await kvGet<Snapshot>(kSnap(wallet)).catch(() => null);
   const prevOk = prev && prev.v === 1 && Array.isArray(prev.holdings) ? prev : null;
   const cur = await takeSnapshot(wallet, prevOk, now);
-  const text = renderBrief(diffSnapshots(cur, prevOk), fmt, { now, openUrl: OPEN_URL });
+  // The stock part never blocks the brief: unread, it is simply left out.
+  const stocks = await stockBrief(cur.holdings, now).catch(() => null);
+  const text = renderBrief(diffSnapshots(cur, prevOk), fmt, { now, openUrl: OPEN_URL, stocks });
   if (opts.commit || !prevOk) await kvSet(kSnap(wallet), baselineFor(cur, prevOk), SNAP_TTL_S).catch(() => {});
   return { text, snapshot: cur, first: !prevOk };
 }
@@ -103,4 +106,20 @@ export async function runBriefPass(now: number, deadline: number): Promise<Brief
   } finally {
     await kvDel("brief:pass:lock");
   }
+}
+
+/**
+ * The stock brief on its own: both desks' largest DEX-vs-oracle gaps, NAV on
+ * Base, the US session — and, with a wallet, the stock tokens it holds.
+ */
+export async function buildStockBrief(wallet: string | null, fmt: BriefFormat, now = Date.now()): Promise<string> {
+  const holdings = wallet ? await readHoldings(wallet).catch(() => null) : null;
+  const d = await stockBrief(holdings, now);
+  const b = (s: string) => (fmt === "html" ? `<b>${s}</b>` : `**${s}**`);
+  const lines = [`📈 ${b("Onchain stocks")} · Base 8453 and Robinhood Chain 4663`, "", ...renderStocks(d, fmt, { held: true, movers: true })];
+  if (wallet && holdings && !d.held.length) lines.splice(2, 0, "You hold no stock tokens on either chain.", "");
+  lines.push("", fmt === "html"
+    ? "Oracle: Chainlink. DEX: the desk's pool reading. NAV: Coinbase. A gap is a measurement, not a trade signal."
+    : "_Oracle: Chainlink. DEX: the desk's pool reading. NAV: Coinbase's published value per token. A gap is a measurement, not a trade signal._");
+  return lines.join("\n");
 }

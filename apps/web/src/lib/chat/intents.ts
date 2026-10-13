@@ -59,8 +59,11 @@ export function tradeToolFor(messages: readonly { role: string; content: unknown
 /** "What changed in my wallet" — the brief, not the holdings list. */
 const BRIEF_RE = /\b(wallet|morning|daily)\s+brief\b|\bwhat(?:'s| has| did)?\s+chang\w*\b.*\b(wallet|portfolio)\b|\b(wallet|portfolio)\b.*\bwhat(?:'s| has)?\s+chang|\bovernight\b.*\b(wallet|portfolio)\b|\b(wallet|portfolio)\b.*\bovernight\b|\banything new in my (wallet|portfolio)\b|ví.*(thay đổi|có gì mới)|(thay đổi|có gì mới).*ví|tóm tắt ví|bản tin ví/;
 
+/** "How are my stocks" — the stock brief (desk gaps, NAV, session). */
+const STOCK_BRIEF_RE = /\bstock brief\b|\bhow (are|is) my (onchain |tokeni[sz]ed )?stocks?\b|\b(onchain|tokeni[sz]ed) stocks? (today|now|brief|overview)\b|\bstock (gaps?|premium|discount)\b|\bweekend gap\b|\b(premium|discount) to nav\b|cổ phiếu onchain|cổ phiếu (của )?(mình|tôi)/;
+
 export function forcedToolFor(messages: readonly { role: string; content: unknown }[]):
-  "hub_sign_check" | "hub_pretrade" | "wallet_brief" | "prepare_swap" | "robinhood_swap" | "prepare_send" | "robinhood_send" | null {
+  "hub_sign_check" | "hub_pretrade" | "wallet_brief" | "stock_brief" | "prepare_swap" | "robinhood_swap" | "prepare_send" | "robinhood_send" | null {
   const last = messages[messages.length - 1];
   if (last?.role !== "user" || typeof last.content !== "string") return null;
   const raw = last.content;
@@ -68,6 +71,7 @@ export function forcedToolFor(messages: readonly { role: string; content: unknow
   if (/"primarytype"\s*:/.test(t) && /"domain"\s*:/.test(t)) return "hub_sign_check";
   const hasAddr = /0x[a-f0-9]{40}\b/.test(t);
   if (!hasAddr && t.length <= 160 && BRIEF_RE.test(t)) return "wallet_brief";
+  if (!hasAddr && t.length <= 160 && STOCK_BRIEF_RE.test(t)) return "stock_brief";
   if (hasAddr && t.length <= 200 && /\b(safe|scam|rug|honeypot|legit|risky|trust)\b|an toàn|lừa đảo/.test(t)) return "hub_pretrade";
   if (t.length <= 160 && /\d/.test(t) && /^(please\s+)?(send|transfer|pay)\b/.test(t.trim()) && /\bto\b/.test(t) && !/\?$/.test(t.trim())) {
     return /\b(robinhood|rh chain|on rh|chain 4663)\b/.test(t) ? "robinhood_send" : "prepare_send";

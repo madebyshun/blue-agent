@@ -32,7 +32,7 @@ import { markAgentTurn } from "@/lib/device-agent";
 import { findByTicker as findRwaByTicker, findByContract as findRwaByContract } from "@/lib/robinhood/rwa-registry";
 import { CHAT_HIDDEN_TOOLS } from "@/lib/chat-hidden-tools";
 import { cardReply, CARD_ALREADY_SHOWN, CARD_RENDERED_TOOLS, walletText } from "@/lib/chat/card-replies";
-import { buildBrief } from "@/lib/brief/run";
+import { buildBrief, buildStockBrief } from "@/lib/brief/run";
 import { baseStockByTickerOrSymbol, dollarAmount } from "@/lib/chat/trade-intent";
 import { githubContextFor } from "@/lib/chat/github-context";
 import { forcedToolFor, wantsMyAlerts } from "@/lib/chat/intents";
@@ -1167,6 +1167,11 @@ Testnets are reachable by full id: base-sepolia, ethereum-sepolia, robinhood-tes
     },
   },
   {
+    name: "stock_brief",
+    description: "Onchain stock tokens right now, on Base (8453, Coinbase B20) and Robinhood Chain (4663): each desk's largest DEX-vs-Chainlink-oracle gaps, the premium/discount to Coinbase's NAV on Base, which US session it is (weekend = oracle frozen at Friday's close) — and, when a wallet is connected, the stock tokens it holds with the same readings. Read from the Blue Hood desk snapshot and Coinbase's API; ZERO LLM; facts, not trade signals. Use for: 'how are my stocks', 'stock brief', 'tokenized stocks today', 'any stock gaps', 'weekend gap', 'NVDA premium to NAV', 'cổ phiếu onchain hôm nay'.",
+    input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
     name: "wallet_brief",
     description: "What CHANGED in the CONNECTED wallet since its last brief, on Base (8453) and Robinhood Chain (4663): balances that moved, tokens that arrived unasked (impostors / airdrop bait), approvals opened or closed, and approvals still open that are flagged. Read live from the chains and computed in code; ZERO LLM. Use for: 'what changed in my wallet', 'wallet brief', 'morning brief', 'anything new in my wallet overnight', 'is my wallet ok today', 'ví mình có gì thay đổi'. Auto-uses the connected address (no argument). For a plain list of holdings use check_wallet instead.",
     input_schema: { type: "object", properties: {}, required: [] },
@@ -2240,6 +2245,16 @@ async function callHubTool(
     }
     args = { ...args, address: hit.token, network: "mainnet" };
   }
+  if (toolName === "stock_brief") {
+    const wallet = userAddress && /^0x[a-fA-F0-9]{40}$/.test(userAddress) ? userAddress : null;
+    try {
+      const text = await buildStockBrief(wallet, "md");
+      return { text: "The stock brief is written for the user from the reads. Add nothing, and never turn a gap into a buy/sell call.", staticReply: text, result: { kind: "stock_brief" } };
+    } catch (e) {
+      return { text: "The stock brief could not be read. Say so in one line — invent nothing.", staticReply: `Couldn't read the stock desks right now (${(e as Error).message.slice(0, 80)}).` };
+    }
+  }
+
   if (toolName === "wallet_brief") {
     // Server-executed: the same brief the Telegram morning pass sends
     // (lib/brief), rendered as markdown. A look from chat does NOT move the
@@ -3715,9 +3730,10 @@ export async function POST(req: NextRequest) {
       // Phase 1: detect tool intent (skipped for pure-knowledge commands).
       // Force check_wallet when the user clearly asks for their wallet balance
       // and a wallet is connected, so the wallet card reliably renders.
+      const briefForce = forcedToolFor(cleanMessages);
       const forceTool =
-        payer && forcedToolFor(cleanMessages) === "wallet_brief"
-          ? "wallet_brief"
+        payer && (briefForce === "wallet_brief" || briefForce === "stock_brief")
+          ? briefForce
           : payer && wantsWalletBalance(cleanMessages)
           ? "check_wallet"
           : payer && wantsMyAlerts(cleanMessages)
@@ -3828,9 +3844,10 @@ export async function POST(req: NextRequest) {
   // mirrored by hand — so it is closed structurally rather than left true by
   // coincidence. Not currently firing; asserted by chat-tool-honesty-check.
   if (!knowledgeOnly && !freeNoTools) {
+    const briefForce = forcedToolFor(cleanMessages);
     const forceTool =
-      payer && forcedToolFor(cleanMessages) === "wallet_brief"
-        ? "wallet_brief"
+      payer && (briefForce === "wallet_brief" || briefForce === "stock_brief")
+        ? briefForce
         : payer && wantsWalletBalance(cleanMessages)
         ? "check_wallet"
         : payer && wantsMyAlerts(cleanMessages)

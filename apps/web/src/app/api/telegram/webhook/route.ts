@@ -55,7 +55,7 @@ import { absoluteUrl } from "@/lib/site-url";
 import { setWatchAlertsMuted, watchAlertsMuted } from "@/lib/watches/deliver";
 import { kvSetNX } from "@/lib/kv";
 import { addressForTgUser } from "@/lib/blue-hood/watchlist";
-import { BRIEF_DEFAULT_HOUR_UTC, briefSub, sendBrief, subscribeBrief, unsubscribeBrief } from "@/lib/brief/run";
+import { BRIEF_DEFAULT_HOUR_UTC, briefSub, buildStockBrief, sendBrief, subscribeBrief, unsubscribeBrief } from "@/lib/brief/run";
 
 export const runtime = "nodejs";
 
@@ -130,6 +130,7 @@ async function handleStart(rest: string, from?: TgUser): Promise<string> {
     `• <code>/mute</code> — ${ARROWS_FROZEN ? "leave the broadcast list" : "stop broadcasts (your watchlist alerts stay)"}`,
     `• <code>/alerts off</code> / <code>/alerts on</code> — Blue Chat price alerts for your linked wallet`,
     `• <code>/brief on</code> — every morning: what changed in your linked wallet (balances, unasked tokens, approvals)`,
+    `• <code>/stocks</code> — onchain stocks now: DEX vs oracle gaps on Base and Robinhood Chain, NAV, session`,
   ];
   // Trading straight from a signal is its own switch (arrow-freeze.ts), off
   // since 2026-09-30 — only point at it while it exists.
@@ -483,6 +484,11 @@ export async function POST(req: NextRequest) {
         break;
       case "/brief":
         reply = await handleBrief(rest, msg.from);
+        break;
+      case "/stocks":
+        // Onchain stocks: both desks' DEX-vs-oracle gaps, Base NAV, session —
+        // plus the linked wallet's own stock tokens. Read-only.
+        reply = await buildStockBrief(msg.from?.id ? await addressForTgUser(msg.from.id) : null, "html");
         break;
       case "/track":
         reply = await handleTrack();

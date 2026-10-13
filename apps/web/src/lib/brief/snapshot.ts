@@ -90,6 +90,16 @@ async function grants(chain: BriefChain, wallet: string): Promise<{ read: boolea
   } catch { return { read: false, rows: [] }; }
 }
 
+/** Holdings on both chains, without approvals — for the stock brief. */
+export async function readHoldings(wallet: string): Promise<HoldRow[]> {
+  const w = wallet.toLowerCase();
+  const [bh, rh] = await Promise.all([
+    baseHoldings(w).catch(() => ({ read: "unread" as const, rows: [] as HoldRow[] })),
+    rhHoldings(w).catch(() => ({ read: "unread" as const, rows: [] as HoldRow[] })),
+  ]);
+  return [...bh.rows, ...rh.rows];
+}
+
 export async function takeSnapshot(wallet: string, prev: Snapshot | null, now = Date.now()): Promise<Snapshot> {
   const w = wallet.toLowerCase();
   const [bh, rh] = await Promise.all([

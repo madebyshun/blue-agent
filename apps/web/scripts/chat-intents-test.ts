@@ -46,5 +46,13 @@ for (const q of ["what's in my wallet", "check my balance", "how do I change wal
   ok(`does not force wallet_brief: "${q}"`, forcedToolFor(u(q)) !== "wallet_brief");
 }
 
+// stock_brief (2026-10-13)
+for (const q of ["how are my stocks?", "stock brief", "any stock gaps right now?", "what's the weekend gap", "NVDA premium to NAV", "cổ phiếu onchain hôm nay thế nào"]) {
+  ok(`forces stock_brief: "${q}"`, forcedToolFor(u(q)) === "stock_brief");
+}
+for (const q of ["buy 1 USDC of NVDAc on Base", "what is a stock token?"]) {
+  ok(`does not force stock_brief: "${q}"`, forcedToolFor(u(q)) !== "stock_brief");
+}
+
 console.log(failures === 0 ? "\nchat-intents-test: PASS" : `\nchat-intents-test: FAIL — ${failures}`);
 process.exit(failures === 0 ? 0 : 1);

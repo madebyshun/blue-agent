@@ -4,6 +4,7 @@
  * (./diff.ts); nothing here estimates, and no verdict word is chosen by a model.
  */
 import { CHAIN_LABEL, type BriefDiff, type GrantRow, type HoldRow } from "./types";
+import type { StockBriefData, StockRow } from "./stocks";
 
 export type BriefFormat = "html" | "md";
 const MAX_ROWS = 6;
@@ -28,7 +29,7 @@ function ago(ms: number): string {
   return h < 1 ? "under an hour ago" : h < 48 ? `${h}h ago` : `${Math.round(h / 24)} days ago`;
 }
 
-export function renderBrief(d: BriefDiff, fmt: BriefFormat, opts: { now?: number; openUrl?: string; footer?: boolean } = {}): string {
+export function renderBrief(d: BriefDiff, fmt: BriefFormat, opts: { now?: number; openUrl?: string; footer?: boolean; stocks?: StockBriefData | null } = {}): string {
   const now = opts.now ?? d.at;
   const e = (s: string) => (fmt === "html" ? s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") : s);
   const b = (s: string) => (fmt === "html" ? `<b>${s}</b>` : `**${s}**`);
@@ -59,6 +60,9 @@ export function renderBrief(d: BriefDiff, fmt: BriefFormat, opts: { now?: number
     }
     if (d.balances.length > MAX_ROWS) out.push(e(`• …and ${d.balances.length - MAX_ROWS} more`));
   }
+
+  const stockLines = opts.stocks ? renderStocks(opts.stocks, fmt, { held: true }) : [];
+  if (stockLines.length) { out.push(""); out.push(...stockLines); }
 
   if (d.unsolicited.length) {
     out.push(""); out.push(`⚠️ ${b("Tokens you did not ask for")}`);
@@ -104,4 +108,54 @@ function grantLine(g: GrantRow): string {
   const what = g.type === "nft_operator" ? `all ${g.symbol} items` : g.unlimited ? `unlimited ${g.symbol}` : `${amt(g.allowance)} ${g.symbol}`;
   const via = g.type === "permit2" ? " via Permit2" : "";
   return `[${g.level}] ${what}${via} → ${short(g.spender)} on ${chainShort(g.chain)}${g.level !== "INFO" ? `: ${g.why}` : ""}`;
+}
+
+// ── Stocks (lib/brief/stocks.ts) ─────────────────────────────────────────────
+
+export const SESSION_NOTE: Record<StockBriefData["session"], string> = {
+  regular: "US market is open: oracles update with the exchange.",
+  premarket: "US market is in pre-market: oracles hold the last close, DEX prices trade freely.",
+  afterhours: "US market has closed for the day: oracles hold today's close, DEX prices trade freely.",
+  weekend: "US market is closed for the weekend: oracles hold Friday's close while DEX prices keep trading, and any gap settles at Monday's open, in either direction.",
+};
+
+const px = (n: number | null) => (n == null ? "n/a" : n >= 1000 ? `$${Math.round(n).toLocaleString("en-US")}` : `$${n.toFixed(2)}`);
+const pct = (n: number) => `${n >= 0 ? "+" : ""}${n.toFixed(2)}%`;
+
+export function stockLine(r: StockRow): string {
+  const head = `${r.ticker} (${chainShort(r.chain)})${r.held ? ` · ${amt(r.held)} held` : ""}`;
+  const parts: string[] = [];
+  if (r.withheld) parts.push("DEX price withheld (row recorded before the price-source fix)");
+  else if (r.dex != null) parts.push(`DEX ${px(r.dex)}`);
+  if (r.oracle != null) parts.push(`oracle ${px(r.oracle)}${r.drift != null && !r.withheld ? ` (${pct(r.drift)})` : ""}`);
+  if (r.nav != null) parts.push(`NAV ${px(r.nav)}${r.premium != null && !r.withheld ? ` (${pct(r.premium)} vs NAV)` : ""}`);
+  if (!r.onDesk && r.oracle == null) parts.push("not on the Hood desk, no oracle read");
+  return `${head}: ${parts.join(" · ") || "no price read"}`;
+}
+
+export function renderStocks(d: StockBriefData, fmt: BriefFormat, opts: { held?: boolean; movers?: boolean } = {}): string[] {
+  const e = (s: string) => (fmt === "html" ? s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") : s);
+  const b = (s: string) => (fmt === "html" ? `<b>${s}</b>` : `**${s}**`);
+  const out: string[] = [];
+  if (opts.held !== false && d.held.length) {
+    out.push(b("Your onchain stocks"));
+    for (const r of d.held.slice(0, MAX_ROWS)) out.push(`• ${e(stockLine(r))}`);
+    if (d.held.length > MAX_ROWS) out.push(e(`• …and ${d.held.length - MAX_ROWS} more`));
+  }
+  if (opts.movers) {
+    for (const c of ["base", "robinhood"] as const) {
+      const label = c === "base" ? "Base 8453 desk" : "Robinhood Chain 4663 desk";
+      if (out.length) out.push("");
+      out.push(b(`${label}: largest DEX-vs-oracle gaps`));
+      if (d.desk[c] !== "ok") { out.push(e(`• Not shown: the desk snapshot is ${d.desk[c] === "stale" ? "older than ~11 minutes" : "unreadable"} right now.`)); continue; }
+      if (!d.movers[c].length) { out.push(e("• No gap measured on this desk right now.")); continue; }
+      for (const r of d.movers[c]) out.push(`• ${e(stockLine(r))}`);
+    }
+  }
+  if (out.length) {
+    out.push("");
+    out.push(e(SESSION_NOTE[d.session]));
+    if (d.held.some((r) => r.chain === "base") && !d.catalogRead) out.push(e("Coinbase NAV was not read this time."));
+  }
+  return out;
 }
