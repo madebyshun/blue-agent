@@ -34,7 +34,7 @@ import { CHAT_HIDDEN_TOOLS } from "@/lib/chat-hidden-tools";
 import { cardReply, CARD_ALREADY_SHOWN, CARD_RENDERED_TOOLS } from "@/lib/chat/card-replies";
 import { baseStockByTickerOrSymbol, dollarAmount } from "@/lib/chat/trade-intent";
 import { githubContextFor } from "@/lib/chat/github-context";
-import { tradeToolFor, wantsMyAlerts } from "@/lib/chat/intents";
+import { forcedToolFor, wantsMyAlerts } from "@/lib/chat/intents";
 import { runInternalTool } from "@/lib/x402-internal-run";
 import { recordCall } from "@/lib/usage-daily";
 
@@ -654,8 +654,20 @@ const ALL_HUB_TOOLS = [
     },
   },
   {
+    name: "hub_pretrade",
+    description: "THE answer to 'is this token safe / a scam / a honeypot?' for a token ADDRESS on Base 8453 or Robinhood Chain 4663: PASS / WARN / BLOCK with reasons, decided in code — impostor of a registered token, honeypot or tax read from the contract, not-a-token (a wallet or a liquidity pool), stock-token issuer policy and oracle drift. Relay the verdict word and its reasons as given. PASS means nothing was measured against it, never 'safe'.",
+    input_schema: {
+      type: "object",
+      properties: {
+        token: { type: "string", description: "Token contract 0x… exactly as the user gave it." },
+        chain: { type: "string", enum: ["base", "robinhood"], description: "Default base." },
+      },
+      required: ["token"],
+    },
+  },
+  {
     name: "hub_risk_gate",
-    description: "Screen any transaction before execution — rug check, AML, malicious contract patterns. Use when user wants to verify a transaction, address, or contract is safe.",
+    description: "Screen a PENDING TRANSACTION (a target address plus calldata/value the user is about to send) for drainer patterns, unlimited approvals, malicious contracts. NOT for 'is this token safe' — that is hub_pretrade.",
     input_schema: {
       type: "object",
       properties: {
@@ -1216,6 +1228,7 @@ const TOOL_ENDPOINT: Record<string, string> = {
   hub_honeypot:         "honeypot-check",
   hub_risk_gate:        "risk-gate",
   hub_sign_check:       "sign-check",
+  hub_pretrade:         "pre-trade-check",
   hub_approvals:        "approval-audit",
   hub_contract_trust:   "contract-trust",
   hub_key_exposure:     "key-exposure",
@@ -3692,7 +3705,7 @@ export async function POST(req: NextRequest) {
         : await detectToolCalls(
             // An imperative trade ("swap 1 USDC to ETH") must reach its card
             // tool; the model still writes the arguments (lib/chat/intents.ts).
-            apiKey, effModelId, openaiMsgs, maxTok, autoSearch, tradeToolFor(cleanMessages) ?? undefined, undefined,
+            apiKey, effModelId, openaiMsgs, maxTok, autoSearch, forcedToolFor(cleanMessages) ?? undefined, undefined,
             hasConnectorTools ? mcpTools : [],
           );
       if (outcome.status === "tools") {
@@ -3801,7 +3814,7 @@ export async function POST(req: NextRequest) {
       ? { status: "tools", toolCalls: [forcedToolCall(forceTool)] }
       : await detectToolCalls(
           // Imperative trade → its card tool, model-written args (lib/chat/intents.ts).
-          virtualsKey, virtualsModel, openaiMsgs, virtualsMax, virtualsAutoSearch, tradeToolFor(cleanMessages) ?? undefined, cfg,
+          virtualsKey, virtualsModel, openaiMsgs, virtualsMax, virtualsAutoSearch, forcedToolFor(cleanMessages) ?? undefined, cfg,
           hasConnectorTools ? mcpTools : [],
         );
     if (outcome.status === "tools") {

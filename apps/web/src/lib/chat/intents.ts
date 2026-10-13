@@ -44,3 +44,29 @@ export function tradeToolFor(messages: readonly { role: string; content: unknown
   if (/\?$|\b(should|how|why|can i|is it|what if)\b/.test(t)) return null;
   return /\b(robinhood|rh chain|on rh|chain 4663)\b/.test(t) ? "robinhood_swap" : "prepare_swap";
 }
+
+/**
+ * The ONE tool a message obviously needs, or null. Forced with tool_choice on
+ * that function; the model still writes the arguments. Measured 2026-10-13 in
+ * manual tests, each a wrong or missing tool:
+ *   • a pasted EIP-712 payload on the Fast preset spent its whole length
+ *     budget without calling hub_sign_check;
+ *   • "is 0x… safe?" went to hub_risk_gate (a TRANSACTION screen), whose
+ *     PROCEED on an empty call came back as "✅ Safe" — for VIRTUAL, whose
+ *     pre-trade check is WARN, and for a liquidity pool;
+ *   • "send 1 USDC to name.base.eth" ran no tool at all.
+ */
+export function forcedToolFor(messages: readonly { role: string; content: unknown }[]):
+  "hub_sign_check" | "hub_pretrade" | "prepare_swap" | "robinhood_swap" | "prepare_send" | "robinhood_send" | null {
+  const last = messages[messages.length - 1];
+  if (last?.role !== "user" || typeof last.content !== "string") return null;
+  const raw = last.content;
+  const t = raw.toLowerCase();
+  if (/"primarytype"\s*:/.test(t) && /"domain"\s*:/.test(t)) return "hub_sign_check";
+  const hasAddr = /0x[a-f0-9]{40}\b/.test(t);
+  if (hasAddr && t.length <= 200 && /\b(safe|scam|rug|honeypot|legit|risky|trust)\b|an toàn|lừa đảo/.test(t)) return "hub_pretrade";
+  if (t.length <= 160 && /\d/.test(t) && /^(please\s+)?(send|transfer|pay)\b/.test(t.trim()) && /\bto\b/.test(t) && !/\?$/.test(t.trim())) {
+    return /\b(robinhood|rh chain|on rh|chain 4663)\b/.test(t) ? "robinhood_send" : "prepare_send";
+  }
+  return tradeToolFor(messages);
+}
