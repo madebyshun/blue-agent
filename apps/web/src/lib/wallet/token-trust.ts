@@ -26,6 +26,42 @@
 import { YIELD_NETWORKS, VENUES } from "@/lib/yield-execution";
 import { RWA_TOKENS } from "@/lib/robinhood/rwa-registry";
 
+/** Invisible characters impostors splice in (soft hyphen, Khmer inherent
+ *  vowels U+17B4/5, zero-widths, bidi marks, variation selectors, BOM…). */
+const INVISIBLE = /[\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180B-\u180F\u200B-\u200F\u202A-\u202E\u2060-\u206F\u3164\uFE00-\uFE0F\uFEFF\uFFA0]/g;
+
+/** Letters from other scripts that render as Latin capitals. MEASURED
+ *  2026-10-13 on Base: live fake-USDC tokens "ÚSDС" (Cyrillic С),
+ *  "U឵S឵Dꓚ" (Khmer invisibles, Lisu ꓚ) and "ꓴ឵ՏᎠ឵Ꮳ" (Lisu, Armenian,
+ *  Cherokee) all classified "unverified" before this map. */
+const CONFUSABLE: Record<string, string> = {
+  // Cyrillic
+  "А": "A", "В": "B", "С": "C", "Е": "E", "Н": "H", "І": "I", "Ј": "J", "К": "K", "М": "M", "О": "O", "Р": "P", "Ѕ": "S", "Т": "T", "Х": "X", "У": "Y", "Ү": "Y",
+  "а": "A", "с": "C", "е": "E", "о": "O", "р": "P", "х": "X", "у": "Y", "і": "I", "ј": "J", "ѕ": "S", "ԁ": "D", "ԛ": "Q", "ԝ": "W",
+  // Greek
+  "Α": "A", "Β": "B", "Ε": "E", "Ζ": "Z", "Η": "H", "Ι": "I", "Κ": "K", "Μ": "M", "Ν": "N", "Ο": "O", "Ρ": "P", "Τ": "T", "Υ": "Y", "Χ": "X", "ο": "O", "ν": "V",
+  // Lisu (U+A4D0–A4FD)
+  "ꓐ": "B", "ꓑ": "P", "ꓓ": "D", "ꓔ": "T", "ꓖ": "G", "ꓗ": "K", "ꓙ": "J", "ꓚ": "C", "ꓜ": "Z", "ꓝ": "F", "ꓟ": "M", "ꓠ": "N", "ꓡ": "L", "ꓢ": "S", "ꓣ": "R", "ꓦ": "V", "ꓧ": "H", "ꓪ": "W", "ꓫ": "X", "ꓬ": "Y", "ꓮ": "A", "ꓰ": "E", "ꓲ": "I", "ꓳ": "O", "ꓴ": "U",
+  // Cherokee
+  "Ꭺ": "A", "Ᏼ": "B", "Ꮯ": "C", "Ꭰ": "D", "Ꭼ": "E", "Ꮐ": "G", "Ꮋ": "H", "Ꮶ": "K", "Ꮮ": "L", "Ꮇ": "M", "Ꮲ": "P", "Ꮪ": "S", "Ꭲ": "T", "Ꮩ": "V", "Ꮃ": "W", "Ꮓ": "Z", "Ꮳ": "C",
+  // Armenian
+  "Տ": "S", "Օ": "O", "Ս": "U", "օ": "O", "ս": "U",
+};
+
+/**
+ * Fold the cosmetic tricks impostors use so `$ETH`, `ETH `, `(ETH)`, a
+ * fullwidth `ＥＴＨ`, an accented `ÉTH` and a Cyrillic `ЕТН` all collide with
+ * `ETH`. Deliberately NOT a fuzzy match — only exact collision after folding
+ * look-alike letters and stripping non-alphanumerics, so `ETH2` stays its own
+ * symbol.
+ */
+export function normalizeSymbol(s: string): string {
+  const folded = (s || "").normalize("NFKD").replace(/\p{M}/gu, "").replace(INVISIBLE, "");
+  let out = "";
+  for (const ch of folded) out += CONFUSABLE[ch] ?? ch;
+  return out.toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
 export type TokenTrust =
   /** Address matches a token this repo already pins, or the chain confirmed it. */
   | "verified"
@@ -153,14 +189,6 @@ const PROTECTED: Record<TrustNetwork, Set<string>> = {
   robinhood:   new Set(VERIFIED.robinhood.values()),
 };
 
-/**
- * Fold the cosmetic tricks impostors use so `$ETH`, `ETH `, and `(ETH)` all
- * collide with `ETH`. Deliberately NOT a fuzzy match — only exact collision
- * after stripping non-alphanumerics, so `ETH2` stays its own symbol.
- */
-export function normalizeSymbol(s: string): string {
-  return (s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-}
 
 /**
  * Address is the identity; the symbol is just a label the token chose for
