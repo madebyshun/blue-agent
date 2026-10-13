@@ -73,6 +73,7 @@ const DAY = 86_400_000;
   ok("4. renders 'Not read this time'", /Not read this time/.test(renderBrief(d, "md")));
   const d2 = diffSnapshots(snap({ grants: [g({ level: "WARN" })], grantsRead: { base: false, robinhood: true } }), null);
   ok("4. grants of an unread chain are not counted as flagged", d2.grantsRisky.length === 0);
+  ok("4. no approvals read anywhere → the heading is not left empty", /Not read this time on either chain/.test(renderBrief(diffSnapshots(snap({ grantsRead: { base: false, robinhood: false } }), null), "md")));
   const base = baselineFor(cur, prev);
   ok("4. baseline keeps yesterday's RH holdings", base.holdings.some((r) => r.symbol === "TSLA") && base.holdingsRead.robinhood === "ok");
   ok("4. baseline keeps yesterday's Base grants", base.grants.length === 1 && base.grantsRead.base === true);

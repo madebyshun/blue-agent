@@ -106,6 +106,7 @@ export function renderBrief(d: BriefDiff, fmt: BriefFormat, opts: { now?: number
   out.push(""); out.push(b("Approvals"));
   const open = Object.entries(d.grantsOpen).map(([c, n]) => `${n} open on ${chainShort(c)}`);
   if (open.length) out.push(`• ${e(open.join(", "))}`);
+  else out.push(e("• Not read this time on either chain."));
   if (d.since) {
     if (d.grantsNew.length) {
       out.push(`• ${e(`${d.grantsNew.length} new since the last brief:`)}`);
