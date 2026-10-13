@@ -38,5 +38,13 @@ ok("trades still fall through to the trade tool", forcedToolFor(u("Buy 1 USDC of
 ok("'is ETH safe?' with no address forces nothing", forcedToolFor(u("is ETH safe?")) === null);
 ok("'how do I send USDC?' forces nothing", forcedToolFor(u("how do I send 5 USDC to a friend?")) === null);
 
+// wallet_brief (2026-10-13)
+for (const q of ["what changed in my wallet?", "wallet brief", "morning brief please", "anything new in my wallet overnight?", "ví mình có gì thay đổi", "What has changed in my portfolio since yesterday?"]) {
+  ok(`forces wallet_brief: "${q}"`, forcedToolFor(u(q)) === "wallet_brief");
+}
+for (const q of ["what's in my wallet", "check my balance", "how do I change wallets?", "what changed in 0x0b3e328455c4059EEb9e3f84b5543F74E24e7E1b's wallet"]) {
+  ok(`does not force wallet_brief: "${q}"`, forcedToolFor(u(q)) !== "wallet_brief");
+}
+
 console.log(failures === 0 ? "\nchat-intents-test: PASS" : `\nchat-intents-test: FAIL — ${failures}`);
 process.exit(failures === 0 ? 0 : 1);

@@ -32,6 +32,7 @@ import { markAgentTurn } from "@/lib/device-agent";
 import { findByTicker as findRwaByTicker, findByContract as findRwaByContract } from "@/lib/robinhood/rwa-registry";
 import { CHAT_HIDDEN_TOOLS } from "@/lib/chat-hidden-tools";
 import { cardReply, CARD_ALREADY_SHOWN, CARD_RENDERED_TOOLS, walletText } from "@/lib/chat/card-replies";
+import { buildBrief } from "@/lib/brief/run";
 import { baseStockByTickerOrSymbol, dollarAmount } from "@/lib/chat/trade-intent";
 import { githubContextFor } from "@/lib/chat/github-context";
 import { forcedToolFor, wantsMyAlerts } from "@/lib/chat/intents";
@@ -1166,6 +1167,11 @@ Testnets are reachable by full id: base-sepolia, ethereum-sepolia, robinhood-tes
     },
   },
   {
+    name: "wallet_brief",
+    description: "What CHANGED in the CONNECTED wallet since its last brief, on Base (8453) and Robinhood Chain (4663): balances that moved, tokens that arrived unasked (impostors / airdrop bait), approvals opened or closed, and approvals still open that are flagged. Read live from the chains and computed in code; ZERO LLM. Use for: 'what changed in my wallet', 'wallet brief', 'morning brief', 'anything new in my wallet overnight', 'is my wallet ok today', 'ví mình có gì thay đổi'. Auto-uses the connected address (no argument). For a plain list of holdings use check_wallet instead.",
+    input_schema: { type: "object", properties: {}, required: [] },
+  },
+  {
     name: "prepare_swap",
     description: "Open the CONVERT card — the wallet's own swap panel, mounted in chat — for a swap on BASE MAINNET (8453), routed through the 0x Swap API. The card fetches a LIVE quote and the user reviews it and SIGNS in their own wallet; nothing is swapped server-side. Use for: 'swap 0.1 ETH to USDC', 'trade 100 USDC for WETH', '兑换 50 USDC 到 ETH'.\n\nBASE MAINNET ONLY — real funds. There is no testnet: 0x routes against real liquidity, so a 'test' swap would spend real money under a false label. For a swap on ROBINHOOD CHAIN use robinhood_swap instead; the card itself also carries a network dropdown, so the user can move a Base swap to Robinhood without you calling again.\n\nZERO fabrication: NEVER invent a quote, rate, output amount, or price — only the card's live quote may be shown, and only by the card. Sell and buy tokens may each be a MAJOR symbol (ETH, WETH, USDC, cbBTC — these four are verified constants) or a 0x… contract address. Any other bare ticker does not identify a token on Base; pass the contract address if you have one from this conversation, otherwise pass the symbol through and the card will say it could not arm it and let the user paste the address.",
     input_schema: {
@@ -2234,6 +2240,24 @@ async function callHubTool(
     }
     args = { ...args, address: hit.token, network: "mainnet" };
   }
+  if (toolName === "wallet_brief") {
+    // Server-executed: the same brief the Telegram morning pass sends
+    // (lib/brief), rendered as markdown. A look from chat does NOT move the
+    // baseline the morning brief compares against (except the very first).
+    if (!userAddress || !/^0x[a-fA-F0-9]{40}$/.test(userAddress)) {
+      return { text: "No wallet is connected. Ask the user to connect one — do NOT invent anything.", staticReply: "Connect a wallet first — the brief reads what changed in it." };
+    }
+    try {
+      const { text, first } = await buildBrief(userAddress, "md");
+      const tail = first
+        ? "\n\nTo get this every morning on Telegram: link your wallet (tap “Get alerts on Telegram” on a price alert), then send `/brief on` to the bot."
+        : "\n\nEvery morning on Telegram: send `/brief on` to the bot once your wallet is linked.";
+      return { text: "The wallet brief is written for the user from the reads. Add nothing.", staticReply: text + tail, result: { kind: "wallet_brief" } };
+    } catch (e) {
+      return { text: "The wallet brief could not be read. Say so in one line — invent nothing.", staticReply: `Couldn't build the brief right now (${(e as Error).message.slice(0, 80)}). Try again in a moment.` };
+    }
+  }
+
   if (toolName === "check_wallet") {
     // Server-executed read of the CONNECTED wallet's FULL token list (Moralis,
     // RPC fallback). No payment, no signing. Honest: only tokens held (balance>0).
@@ -3692,7 +3716,9 @@ export async function POST(req: NextRequest) {
       // Force check_wallet when the user clearly asks for their wallet balance
       // and a wallet is connected, so the wallet card reliably renders.
       const forceTool =
-        payer && wantsWalletBalance(cleanMessages)
+        payer && forcedToolFor(cleanMessages) === "wallet_brief"
+          ? "wallet_brief"
+          : payer && wantsWalletBalance(cleanMessages)
           ? "check_wallet"
           : payer && wantsMyAlerts(cleanMessages)
             ? "my_alerts"
@@ -3803,7 +3829,9 @@ export async function POST(req: NextRequest) {
   // coincidence. Not currently firing; asserted by chat-tool-honesty-check.
   if (!knowledgeOnly && !freeNoTools) {
     const forceTool =
-      payer && wantsWalletBalance(cleanMessages)
+      payer && forcedToolFor(cleanMessages) === "wallet_brief"
+        ? "wallet_brief"
+        : payer && wantsWalletBalance(cleanMessages)
         ? "check_wallet"
         : payer && wantsMyAlerts(cleanMessages)
           ? "my_alerts"

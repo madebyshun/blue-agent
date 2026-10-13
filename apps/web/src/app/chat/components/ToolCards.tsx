@@ -2356,7 +2356,7 @@ const amt = (v: unknown) => (v === undefined || v === null || v === "" ? "" : St
 const TEXT_ONLY_TOOLS: ReadonlySet<string> = new Set([
   "hub_honeypot", "hub_risk_gate", "hub_deep_analysis", "hub_token_pick", "hub_contract_trust",
   "hub_market_fit", "hub_key_exposure", "blue_stream", "hub_hood_arrow",
-  "check_memo", "check_authorization", "check_wallet",
+  "check_memo", "check_authorization", "check_wallet", "wallet_brief",
   "hub_rh_movers", "hub_rh_new_listings", "hub_rh_search", "hub_rh_quote", "hub_rh_index", "hub_safe_trending",
 ]);
 

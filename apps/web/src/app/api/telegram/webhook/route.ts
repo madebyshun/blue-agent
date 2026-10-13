@@ -36,7 +36,7 @@
  * list — joining a firehose that cannot flow, under a promise that it will, is
  * the thing this bot must not do. Locked by scripts/arrow-freeze-check.ts §4.
  */
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { kvGetProbe } from "@/lib/kv";
 import { sendMessage, esc, shortAddr, type TgUpdate, type TgUser } from "@/lib/telegram/bot";
 import {
@@ -53,6 +53,9 @@ import { readPublicArrows } from "@/lib/blue-hood/public-feed";
 import { computeHitRate } from "@/lib/blue-hood/hit-rate-gate";
 import { absoluteUrl } from "@/lib/site-url";
 import { setWatchAlertsMuted, watchAlertsMuted } from "@/lib/watches/deliver";
+import { kvSetNX } from "@/lib/kv";
+import { addressForTgUser } from "@/lib/blue-hood/watchlist";
+import { BRIEF_DEFAULT_HOUR_UTC, briefSub, sendBrief, subscribeBrief, unsubscribeBrief } from "@/lib/brief/run";
 
 export const runtime = "nodejs";
 
@@ -126,6 +129,7 @@ async function handleStart(rest: string, from?: TgUser): Promise<string> {
     `• <code>/track</code> — public hit-rate${ARROWS_FROZEN ? " (historical)" : ""}`,
     `• <code>/mute</code> — ${ARROWS_FROZEN ? "leave the broadcast list" : "stop broadcasts (your watchlist alerts stay)"}`,
     `• <code>/alerts off</code> / <code>/alerts on</code> — Blue Chat price alerts for your linked wallet`,
+    `• <code>/brief on</code> — every morning: what changed in your linked wallet (balances, unasked tokens, approvals)`,
   ];
   // Trading straight from a signal is its own switch (arrow-freeze.ts), off
   // since 2026-09-30 — only point at it while it exists.
@@ -206,6 +210,37 @@ async function handleWatchAlerts(arg: string, from?: TgUser): Promise<string> {
   return (await watchAlertsMuted(from.id))
     ? `Blue Chat price alerts are OFF here. Send /alerts on to resume.`
     : `Blue Chat price alerts are ON for your linked wallet. Send /alerts off to stop them.`;
+}
+
+/**
+ * `/brief [on [HOUR]|off|now]` — the morning wallet brief (lib/brief, 2026-10-13):
+ * what changed in the linked wallet since the last brief — balances, tokens
+ * sent unasked, approvals opened or closed — on Base 8453 and Robinhood Chain
+ * 4663. Read-only. Needs a linked wallet: the link is the consent.
+ */
+async function handleBrief(arg: string, from?: TgUser): Promise<string> {
+  if (!from?.id) return `Couldn't read your Telegram id — please try again.`;
+  const wallet = await addressForTgUser(from.id);
+  if (!wallet) return `Link your wallet first: tap “Get alerts on Telegram” on a price alert in Blue Chat, then send /brief on.`;
+  const [verb, hourArg] = arg.trim().toLowerCase().split(/\s+/);
+  if (verb === "off") { await unsubscribeBrief(wallet); return `🔕 Morning brief is off for ${shortAddr(wallet)}.`; }
+  if (verb === "on") {
+    const h = hourArg === undefined ? BRIEF_DEFAULT_HOUR_UTC : Number(hourArg);
+    if (!Number.isInteger(h) || h < 0 || h > 23) return `Hour must be 0–23 (UTC), e.g. <code>/brief on 1</code> for 08:00 in Vietnam.`;
+    await subscribeBrief(wallet, from.id, h);
+    return `☀️ Morning brief is on for ${shortAddr(wallet)}: every day at ${String(h).padStart(2, "0")}:00 UTC. Send /brief now for one right away, /brief off to stop.`;
+  }
+  if (verb === "now") {
+    if (!(await kvSetNX(`brief:now:${from.id}`, 1, 600))) return `A brief was sent in the last 10 minutes — try again shortly.`;
+    // Sent after the response, not returned: building it can take ~20 s, and
+    // Telegram retries a webhook that is slow to answer.
+    after(() => sendBrief(wallet, String(from.id)).then(() => undefined, () => undefined));
+    return `Reading ${shortAddr(wallet)} on Base and Robinhood Chain — the brief follows in a moment.`;
+  }
+  const sub = await briefSub(wallet);
+  return sub
+    ? `Morning brief is ON for ${shortAddr(wallet)} at ${String(sub.hourUtc).padStart(2, "0")}:00 UTC. /brief now · /brief off`
+    : `Morning brief is OFF. <code>/brief on</code> sends what changed in ${shortAddr(wallet)} every morning (08:00 Vietnam; <code>/brief on HOUR</code> for another UTC hour).`;
 }
 
 /**
@@ -402,6 +437,8 @@ async function handleTrack(): Promise<string> {
 // ── Route ────────────────────────────────────────────────────────────────────
 
 /** GET is a deploy smoke-check only — reveals nothing, needs no secret. */
+export const maxDuration = 60;
+
 export async function GET() {
   return NextResponse.json({ ok: true, webhook: "blue-hood-telegram" });
 }
@@ -443,6 +480,9 @@ export async function POST(req: NextRequest) {
         break;
       case "/alerts":
         reply = await handleWatchAlerts(rest, msg.from);
+        break;
+      case "/brief":
+        reply = await handleBrief(rest, msg.from);
         break;
       case "/track":
         reply = await handleTrack();
