@@ -2495,6 +2495,17 @@ async function detectToolCalls(
 
 // ─── Venice Phase 2: tool synthesis stream ────────────────────────────────────
 
+/**
+ * Raw tool-call markup written as TEXT. MEASURED 2026-10-13 on the Fast
+ * preset: after a hub_risk_gate call the answer streamed
+ * "<｜DSML｜tool_calls><｜DSML｜invoke name="hub_honeypot">…" into the bubble —
+ * the model's own tool-call syntax, which the provider did not turn into
+ * tool_calls. Both stream parsers drop everything from the opening "<｜"
+ * (U+FF5C, the DeepSeek special-token bar) and say so in one line.
+ */
+const TOOL_MARKUP = /<\uFF5C|<\|(?:tool|DSML)/;
+const TOOL_MARKUP_NOTE = "_(The model tried to call another tool instead of writing its answer. The result card above is what was actually read — ask again for a written summary.)_";
+
 async function veniceToolStream(
   apiKey:          string,
   modelId:         string,
@@ -2521,13 +2532,22 @@ async function veniceToolStream(
 
   // Shared <think> parser (same logic as callVeniceStream)
   function makeThinkParser(controller: ReadableStreamDefaultController) {
-    let textBuf = ""; let inThink = false;
+    let textBuf = ""; let inThink = false; let suppressed = false;
     const emit = (obj: object) =>
       controller.enqueue(enc.encode(`data: ${JSON.stringify(obj)}\n\n`));
     function flush(isFinal = false) {
       let guard = 0;
+      if (suppressed) { textBuf = ""; return; }
       while (textBuf.length > 0 && guard++ < 200) {
         if (!inThink) {
+          const mm = TOOL_MARKUP.exec(textBuf);
+          if (mm) {
+            const before = textBuf.slice(0, mm.index);
+            if (before.trim()) emit({ delta: { text: before } });
+            textBuf = ""; suppressed = true;
+            emit({ delta: { text: (before.trim() ? "\n\n" : "") + TOOL_MARKUP_NOTE } });
+            return;
+          }
           const si = textBuf.indexOf("<think>");
           if (si === -1) {
             const safe = isFinal ? textBuf : textBuf.slice(0, Math.max(0, textBuf.length - 6));
@@ -3037,11 +3057,23 @@ async function callVeniceStream(
         }
       };
 
+      let suppressedMarkup = false;   // see TOOL_MARKUP
+
       // Flush textBuf through state machine — routes text to thinking vs content
       function flush(isFinal = false) {
         let guard = 0;
+        if (suppressedMarkup) { textBuf = ""; return; }
         while (textBuf.length > 0 && guard++ < 200) {
           if (!inThink) {
+            const mm = TOOL_MARKUP.exec(textBuf);
+            if (mm) {
+              const before = textBuf.slice(0, mm.index);
+              if (before.trim()) emit({ delta: { text: before } });
+              textBuf = "";
+              suppressedMarkup = true;
+              emit({ delta: { text: (before.trim() ? "\n\n" : "") + TOOL_MARKUP_NOTE } });
+              return;
+            }
             const si = textBuf.indexOf("<think>");
             if (si === -1) {
               // Keep last 6 chars buffered in case "<think>" spans chunks

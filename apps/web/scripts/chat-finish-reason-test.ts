@@ -168,6 +168,22 @@ async function run(text: string, tier = "fast") {
   check("8.1 the whole answer arrives (5 chunks x 120ms > 300ms idle)", r.text === "abcdefghijklmnopqrst", r.text);
   check("8.2 with no timeout note", !/Timed out/.test(r.text));
 
+  console.log("9. raw tool-call markup in the answer is never shown (measured 2026-10-13, Fast)");
+  script = { content: "Checked it.\n\n<\uFF5CDSML\uFF5Ctool_calls>\n<\uFF5CDSML\uFF5Cinvoke name=\"hub_honeypot\">\n</\uFF5CDSML\uFF5Cinvoke>", finish: "stop" };
+  r = await run("hello there");
+  check("9.1 the text before the markup is kept", r.text.startsWith("Checked it."), r.text);
+  check("9.2 no markup reaches the user", !/DSML|\uFF5C|invoke name/.test(r.text), r.text);
+  check("9.3 a plain note says what happened", /tried to call another tool/.test(r.text), r.text);
+  script = { content: "ab<\uFF5CDSML\uFF5Ctool_calls>zzzz", finish: "stop", mode: "slow" };
+  r = await run("hello there");
+  check("9.4 markup split across stream chunks is still caught", !/DSML|\uFF5C/.test(r.text) && r.text.startsWith("ab"), r.text);
+  {
+    // The leak was measured on the TOOL path (an answer after hub_risk_gate),
+    // which streams through its own parser in veniceToolStream.
+    const src = (await import("node:fs")).readFileSync(new URL("../src/app/api/chat/route.ts", import.meta.url), "utf8");
+    check("9.5 both stream parsers (plain and after-tools) drop tool markup", (src.match(/TOOL_MARKUP\.exec\(textBuf\)/g) ?? []).length === 2);
+  }
+
   console.log(failures === 0 ? "\nchat-finish-reason-test: PASS" : `\nchat-finish-reason-test: FAIL — ${failures}`);
   process.exit(failures === 0 ? 0 : 1);
 })();
