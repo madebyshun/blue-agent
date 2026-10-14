@@ -45,6 +45,7 @@ ok("no payees → nothing to imitate", findPoison("base", W, incoming, [], [], 0
 ok("honeypot → BLOCK", classifyGoPlus({ is_honeypot: "1" }).level === "BLOCK");
 ok("sell tax 15% → WARN", classifyGoPlus({ sell_tax: "0.15" }).level === "WARN");
 ok("sell tax 60% → BLOCK", classifyGoPlus({ sell_tax: "0.6" }).level === "BLOCK");
+ok("owner powers alone (VIRTUAL: owner_change_balance + hidden_owner) are not a flag", classifyGoPlus({ is_honeypot: "0", sell_tax: "0", owner_change_balance: "1", hidden_owner: "1" }).level === "OK");
 ok("empty fields are not flags", classifyGoPlus({ sell_tax: "", is_honeypot: undefined }).level === "OK");
 
 const h = (o: Partial<HoldRow>): HoldRow => ({ chain: "base", token: "0xaa", symbol: "A", amount: "1", usd: 5, trust: "unverified", ...o });

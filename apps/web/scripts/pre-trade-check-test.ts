@@ -50,6 +50,14 @@ const POOL = A(0x1008);              // Base: a v3-style pool holding CLEAN / HO
 const NO_CODE = A(0x1009);           // Base: nothing deployed (a wallet)
 const POOL_WETH = A(0x100a);         // Base: a pool holding CLEAN / WETH (WETH's symbol() never answers here)
 const WETH = "0x4200000000000000000000000000000000000006";
+const GP_CLEAN = A(0x100b);          // Base: no template tax; GoPlus measures 0% and names owner powers
+const GP_HONEY = A(0x100c);          // Base: no template tax; GoPlus says honeypot
+const GP_TAX = A(0x100d);            // Base: no template tax; GoPlus measures a 20% sell tax
+const GOPLUS: Record<string, Record<string, string>> = {
+  [GP_CLEAN]: { is_honeypot: "0", buy_tax: "0", sell_tax: "0", owner_change_balance: "1", hidden_owner: "1" },
+  [GP_HONEY]: { is_honeypot: "1", buy_tax: "0", sell_tax: "1" },
+  [GP_TAX]: { is_honeypot: "0", buy_tax: "0", sell_tax: "0.2" },
+};
 
 const NVDA = BASE_STOCKS[0];
 const RH_STOCK = RWA_TOKENS.find((t) => t.kind === "stock" && t.chainlinkFeed)!;
@@ -70,6 +78,9 @@ const CONTRACTS: Record<string, Fixture> = {
   [IMPOSTOR_CBBTC]: { symbol: "cbBTC", decimals: 8, buyTax: 0, sellTax: 0 },
   [RH_IMPOSTOR]: { symbol: RH_STOCK.ticker, decimals: 18 },
   [RH_UNLISTED]: { symbol: "NEWT", decimals: 18 },
+  [GP_CLEAN]: { symbol: "GPC", decimals: 18 },
+  [GP_HONEY]: { symbol: "GPH", decimals: 18 },
+  [GP_TAX]: { symbol: "GPT", decimals: 18 },
 };
 
 const word = (n: number) => encodeAbiParameters([{ type: "uint256" }], [BigInt(n)]);
@@ -124,6 +135,10 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   }
   if (url.includes("/send-prepare")) {
     return Response.json({ tx: { to: IMPOSTOR_USDC, data: "0xa9059cbb", value: "0" }, meta: {} });
+  }
+  if (url.includes("api.gopluslabs.io/api/v1/token_security/8453")) {
+    const addr = (new URL(url).searchParams.get("contract_addresses") ?? "").toLowerCase();
+    return Response.json({ code: 1, message: "OK", result: GOPLUS[addr] ? { [addr]: GOPLUS[addr] } : {} });
   }
   return new Response(JSON.stringify({ error: "not stubbed in test" }), { status: 502 });
 }) as typeof fetch;
@@ -184,12 +199,38 @@ async function run(input: Parameters<typeof preTradeCheck>[0]) {
   ok("a measured 15% sell tax → WARN", c.verdict === "WARN", texts(c));
   c = await run({ chain: "base", kind: "swap", token: CLEAN, now: WEEKDAY });
   ok("a measured clean tax → PASS with an INFO receipt", c.verdict === "PASS" && /read on-chain: clean/.test(texts(c)), texts(c));
+  // The RH desk is read now (2026-10-13), bounded by HEALTHY_MAX_AGE_S and
+  // through the F6 quarantine — absent, stale or pre-fix is "unavailable".
+  await kvDel(KV_SNAPSHOT_LATEST);
   c = await run({ chain: "robinhood", kind: "swap", token: RH_STOCK.contract, now: WEEKDAY });
-  // F6's price source is fixed (2026-10-01), but this check still does not read
-  // the RH desk (no freshness bound on that snapshot — see pre-trade-check.ts),
-  // so the gap is still said, under the same machine code.
-  ok("an RH stock token on a weekday → WARN: the oracle-vs-DEX check is not run here, said as a gap",
-    c.verdict === "WARN" && c.reasons.some((r) => r.code === "RH_ORACLE_GAP_PAUSED") && /not run here/.test(texts(c)) && !/weekend/.test(texts(c)), texts(c));
+  ok("an RH stock token with no RH desk snapshot → WARN DRIFT_UNAVAILABLE, never a guessed drift",
+    c.verdict === "WARN" && c.reasons.some((r) => r.code === "DRIFT_UNAVAILABLE") && !c.reasons.some((r) => r.code === "RH_ORACLE_GAP_PAUSED") && !/weekend/.test(texts(c)), texts(c));
+  const rhRow = (o: Record<string, unknown>) => ({ ticker: RH_STOCK.ticker, chain: "robinhood", contract: RH_STOCK.contract, dex_source: "pool_rate", verdict: "HOLD", ...o });
+  await kvSet(KV_SNAPSHOT_LATEST, { started_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(), tickers: [rhRow({ drift_pct: 4.2 })] });
+  c = await run({ chain: "robinhood", kind: "swap", token: RH_STOCK.contract, now: WEEKDAY });
+  ok("an hour-old RH desk → unavailable, not a stale drift", c.reasons.some((r) => r.code === "DRIFT_UNAVAILABLE") && !/4\.20%/.test(texts(c)), texts(c));
+  await kvSet(KV_SNAPSHOT_LATEST, { started_at: new Date().toISOString(), tickers: [rhRow({ drift_pct: 4.2, dex_source: undefined })] });
+  c = await run({ chain: "robinhood", kind: "swap", token: RH_STOCK.contract, now: WEEKDAY });
+  ok("an RH row recorded before the price fix (quarantined) → unavailable", c.reasons.some((r) => r.code === "DRIFT_UNAVAILABLE") && !/4\.20%/.test(texts(c)), texts(c));
+  await kvSet(KV_SNAPSHOT_LATEST, { started_at: new Date().toISOString(), tickers: [rhRow({ drift_pct: 4.2 })] });
+  c = await run({ chain: "robinhood", kind: "swap", token: RH_STOCK.contract, now: WEEKDAY });
+  ok("a fresh RH desk at +4.20% → WARN DRIFT naming the number and Robinhood Chain", c.verdict === "WARN" && c.reasons.some((r) => r.code === "DRIFT" && r.level === "WARN") && /\+4\.20%/.test(texts(c)) && /Robinhood Chain/.test(texts(c)), texts(c));
+  await kvSet(KV_SNAPSHOT_LATEST, { started_at: new Date().toISOString(), tickers: [rhRow({ drift_pct: -0.3 })] });
+  c = await run({ chain: "robinhood", kind: "swap", token: RH_STOCK.contract, now: WEEKDAY });
+  ok("a fresh RH desk at −0.30% on a weekday → PASS with an INFO receipt", c.verdict === "PASS" && /within 2% of the Chainlink oracle/.test(texts(c)), texts(c));
+  await kvSet(KV_SNAPSHOT_LATEST, { started_at: new Date().toISOString(), tickers: [{ ...rhRow({ drift_pct: 7 }), chain: "base" }] });
+  c = await run({ chain: "robinhood", kind: "swap", token: RH_STOCK.contract, now: WEEKDAY });
+  ok("a Base-marked row in the RH snapshot is not read as RH", c.reasons.some((r) => r.code === "DRIFT_UNAVAILABLE"), texts(c));
+  await kvDel(KV_SNAPSHOT_LATEST);
+
+  console.log("\n3b. GoPlus measures what the template read cannot (2026-10-13)");
+  c = await run({ chain: "base", kind: "swap", token: GP_CLEAN, now: WEEKDAY });
+  ok("GoPlus 0% tax → PASS with TAX_CLEAN, owner powers as INFO not a verdict",
+    c.verdict === "PASS" && c.reasons.some((r) => r.code === "TAX_CLEAN" && /GoPlus/.test(r.text)) && c.reasons.some((r) => r.code === "OWNER_POWERS" && r.level === "INFO"), texts(c));
+  c = await run({ chain: "base", kind: "swap", token: GP_HONEY, now: WEEKDAY });
+  ok("GoPlus honeypot → BLOCK", c.verdict === "BLOCK" && c.reasons.some((r) => r.code === "HONEYPOT"), texts(c));
+  c = await run({ chain: "base", kind: "swap", token: GP_TAX, now: WEEKDAY });
+  ok("GoPlus 20% sell tax → WARN SELL_LEVER", c.verdict === "WARN" && c.reasons.some((r) => r.code === "SELL_LEVER" && /20%/.test(r.text)), texts(c));
   c = await run({ chain: "robinhood", kind: "swap", token: RH_STOCK.contract, now: SATURDAY });
   ok("…and on a Saturday the weekend WARN joins it", /weekend/.test(texts(c)), texts(c));
   c = await run({ chain: "robinhood", kind: "swap", token: RH_STOCK_NO_FEED.contract, now: WEEKDAY });

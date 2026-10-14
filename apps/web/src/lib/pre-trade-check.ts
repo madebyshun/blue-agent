@@ -37,7 +37,11 @@ import { readTokenTax } from "@/lib/token-tax";
 import { measuredHoneypotVerdict } from "@/lib/honeypot-verdict";
 import { clientFor, isNativeToken, readTokenMeta, type TxChain } from "@/lib/tx-chains";
 import { kvGetProbe } from "@/lib/kv";
-import { KV_BASE_ROWS_LATEST, BASE_ROWS_MAX_AGE_MS } from "@/lib/blue-hood/kv-keys";
+import { KV_BASE_ROWS_LATEST, BASE_ROWS_MAX_AGE_MS, KV_SNAPSHOT_LATEST } from "@/lib/blue-hood/kv-keys";
+import { publishDeskRows } from "@/lib/blue-hood/quarantine";
+import { HEALTHY_MAX_AGE_S } from "@/lib/blue-hood/health";
+import { matchesChain, type HoodSnapshot } from "@/lib/blue-hood/types";
+import { classifyGoPlus, goplusTokenSecurity } from "@/lib/goplus-token";
 import { recipientReasons, type RecipientCode } from "@/lib/recipient-check";
 import { partitionBaseRows, type BaseDeskLatest } from "@/lib/blue-hood/types";
 import { HIGH_COST_PERCENT } from "@/lib/wallet/bridge-pairs";
@@ -50,7 +54,7 @@ export type ReasonCode =
   | "BRIDGE_COST" | "BRIDGE_COST_HIGH" | "NOT_ADDRESS" | "IMPOSTOR" | "HONEYPOT"
   | "SELL_LEVER" | "TAX_UNREAD" | "TAX_CLEAN" | "RH_UNREGISTERED" | "WEEKEND"
   | "RH_ORACLE_GAP_PAUSED" | "NO_ORACLE_FEED" | "ISSUER_POLICY" | "DRIFT" | "DRIFT_UNAVAILABLE"
-  | "NOT_A_TOKEN"
+  | "NOT_A_TOKEN" | "OWNER_POWERS"
   | RecipientCode;
 export type Reason = { level: "BLOCK" | "WARN" | "INFO"; code: ReasonCode; text: string };
 
@@ -149,16 +153,30 @@ async function tokenCheck(input: PreTradeInput): Promise<PreTradeCheck> {
       if (input.kind === "swap") {
         const wk = weekendReason(now);
         if (wk) reasons.push(wk);
-        // Plan §0b: said as a gap, never measured. F6's price source was fixed
-        // on 2026-10-01 (stamped RH rows now publish a pool-rate drift), but
-        // this check still does NOT read the RH desk: unlike Base
-        // (`BASE_ROWS_MAX_AGE_MS` on `KV_BASE_ROWS_LATEST`) the RH snapshot has
-        // no freshness bound a pre-trade read could honour, and a stale drift
-        // presented as current is worse than the gap. Wiring it needs that
-        // bound first; the code stays the same so dispatching agents keep
-        // working.
-        reasons.push({ level: "WARN", code: "RH_ORACLE_GAP_PAUSED", text: "Oracle-vs-DEX check for Robinhood Chain is not run here — check the pool price against the oracle yourself." });
-        if (!rwa.chainlinkFeed) reasons.push({ level: "INFO", code: "NO_ORACLE_FEED", text: "No Chainlink feed exists for this ticker yet — there is no oracle to compare against." });
+        // The RH desk, read the way the Base one is (2026-10-13): the
+        // snapshot's own `started_at` bounds it — HEALTHY_MAX_AGE_S, the line
+        // /api/hood/health and /api/hood/dislocation already draw — and rows
+        // go through the F6 quarantine, so a row recorded before the price
+        // fix has no drift to report. Stale, missing or withheld is
+        // "unavailable", never a guessed drift. RH_ORACLE_GAP_PAUSED is no
+        // longer emitted; the code stays in ReasonCode for agents that know it.
+        if (!rwa.chainlinkFeed) {
+          reasons.push({ level: "INFO", code: "NO_ORACLE_FEED", text: "No Chainlink feed exists for this ticker yet — there is no oracle to compare against." });
+        } else {
+          const desk = await kvGetProbe<HoodSnapshot>(KV_SNAPSHOT_LATEST);
+          const fresh = desk.status === "hit" && Array.isArray(desk.value?.tickers)
+            && Date.now() - new Date(desk.value.started_at).getTime() <= HEALTHY_MAX_AGE_S * 1000;
+          const row = fresh
+            ? publishDeskRows(desk.value.tickers.filter((t) => matchesChain(t, "robinhood"))).find((t) => t.contract.toLowerCase() === token.toLowerCase())
+            : undefined;
+          if (!row || row.drift_pct == null) {
+            reasons.push({ level: "WARN", code: "DRIFT_UNAVAILABLE", text: "The oracle-vs-DEX reading for this token is unavailable right now — check the pool price against the oracle yourself." });
+          } else if (Math.abs(row.drift_pct) >= STOCK_DRIFT_WARN_PCT) {
+            reasons.push({ level: "WARN", code: "DRIFT", text: `The DEX price is ${row.drift_pct > 0 ? "+" : ""}${row.drift_pct.toFixed(2)}% from the Chainlink oracle (Blue Hood desk, Robinhood Chain).` });
+          } else {
+            reasons.push({ level: "INFO", code: "DRIFT", text: `The DEX price is within ${STOCK_DRIFT_WARN_PCT}% of the Chainlink oracle (${row.drift_pct > 0 ? "+" : ""}${row.drift_pct.toFixed(2)}%, Blue Hood desk).` });
+          }
+        }
       }
       return finish("rh_stock_token", label, reasons);
     }
@@ -223,7 +241,19 @@ async function tokenCheck(input: PreTradeInput): Promise<PreTradeCheck> {
     const hp = measuredHoneypotVerdict(await readTokenTax(token));
     if (hp.verdict === "HONEYPOT") reasons.push({ level: "BLOCK", code: "HONEYPOT", text: "Measured sell tax ≥ 50% — once bought, this token cannot be sold." });
     else if (hp.verdict === "SUSPICIOUS") reasons.push({ level: "WARN", code: "SELL_LEVER", text: "Measured sell lever: a blacklist function or a sell tax ≥ 10%." });
-    else if (hp.verdict === "UNKNOWN") reasons.push({ level: "WARN", code: "TAX_UNREAD", text: "Tax not measured: Blue Agent reads buy/sell tax only from contracts built on the Virtuals agent-token template, and could not read one here. That is normal for most tokens and is not a sign of risk, but unmeasured is not zero, so try a small amount first." });
+    else if (hp.verdict === "UNKNOWN") {
+      // Not the Virtuals template: ask GoPlus (2026-10-13). Most Base tokens
+      // land here, and "tax not measured" on all of them taught users to skip
+      // the WARN. GoPlus measures honeypot and buy/sell tax by simulation;
+      // owner powers are reported as INFO, not as a verdict (goplus-token.ts).
+      const g = await goplusTokenSecurity(token);
+      const gp = g ? classifyGoPlus(g) : null;
+      if (gp?.level === "BLOCK") reasons.push({ level: "BLOCK", code: "HONEYPOT", text: `GoPlus: ${gp.flags.join(", ")}. Once bought, this token cannot be sold, or only at a heavy loss.` });
+      else if (gp?.level === "WARN") reasons.push({ level: "WARN", code: "SELL_LEVER", text: `GoPlus: ${gp.flags.join(", ")}.` });
+      else if (gp && gp.sellTax !== null) reasons.push({ level: "INFO", code: "TAX_CLEAN", text: `Buy/sell tax measured by GoPlus: ${+((gp.buyTax ?? 0) * 100).toFixed(1)}% / ${+(gp.sellTax * 100).toFixed(1)}%, not a honeypot.` });
+      else reasons.push({ level: "WARN", code: "TAX_UNREAD", text: "Tax not measured: neither the Virtuals agent-token template read nor GoPlus answered for this token. That is not a sign of risk, but unmeasured is not zero, so try a small amount first." });
+      if (gp?.powers.length) reasons.push({ level: "INFO", code: "OWNER_POWERS", text: `Owner powers (GoPlus): ${gp.powers.join(", ")}. Common in upgradeable and regulated tokens; know who controls it.` });
+    }
     else reasons.push({ level: "INFO", code: "TAX_CLEAN", text: "Buy/sell tax read on-chain: clean." });
   }
   return finish("crypto", symbol || token, reasons);
