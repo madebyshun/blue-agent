@@ -62,7 +62,7 @@
 // answer out loud.
 
 import { useSilentSender } from "@/lib/privy/silent-tx";
-import { useAutoConfirm } from "@/components/wallet/action-context";
+import { useAutoConfirm, useAutoReport } from "@/components/wallet/action-context";
 import { useEffect, useRef, useState } from "react";
 import {
   useAccount, useSwitchChain, useSendTransaction, usePublicClient, useWaitForTransactionReceipt,
@@ -300,6 +300,7 @@ export default function RhSwapCard({
   const valid = tokenReady && hasPool && !noFloor && amt > 0 && gate === "ok" && !quoting && pt.cleared && !pt.blocked;
   // A chat "yes" runs the same doSwap() once the card is ready to sign.
   useAutoConfirm(valid && !busy && step === "idle", (o) => { void doSwap(o); });
+  useAutoReport(step, err, txHash ? `${RH.explorer}/tx/${txHash}` : null);
 
   // Max and the quantity WORDS are ONE calculation, in BASE UNITS. Computing it
   // on `balance` (a float) is how "100%" lands a hair above the real holding

@@ -8,7 +8,7 @@
 // Non-custodial: server holds no keys, on-chain math bounds the final amount.
 
 import { useSilentSender } from "@/lib/privy/silent-tx";
-import { useAutoConfirm } from "@/components/wallet/action-context";
+import { useAutoConfirm, useAutoReport } from "@/components/wallet/action-context";
 import { useEffect, useRef, useState } from "react";
 import { useAccount, useSwitchChain, useSendTransaction, usePublicClient } from "wagmi";
 import { parseUnits } from "viem";
@@ -280,6 +280,7 @@ export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
   const busy = step === "approving" || step === "swapping";
   // A chat "yes" runs the same doSwap() once the card is ready to sign.
   useAutoConfirm(!!canSwap && !busy && step === "idle", (o) => { void doSwap(o); });
+  useAutoReport(step, err, txHash ? `${RH_EXPLORER}/tx/${txHash}` : null, { sentSteps: [] });
 
   async function doSwap(opts: { silent?: boolean } = {}) {
     if (!address) { setErr("Connect your wallet"); setStep("error"); return; }

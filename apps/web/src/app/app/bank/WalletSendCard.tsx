@@ -89,7 +89,7 @@ import {
   useCapabilities, useSendCalls, useCallsStatus,
 } from "wagmi";
 import { useSilentSender } from "@/lib/privy/silent-tx";
-import { useAutoConfirm } from "@/components/wallet/action-context";
+import { useAutoConfirm, useAutoReport } from "@/components/wallet/action-context";
 import { isAddress, getAddress, parseUnits, formatUnits, namehash, encodeFunctionData } from "viem";
 import { WALLET_CHAINS } from "@/lib/wallet/chains";
 import { ERC20_ABI } from "@/lib/yield-execution";
@@ -457,6 +457,7 @@ export default function WalletSendCard({
   const busy = step === "preparing" || step === "switching" || step === "signing" || step === "broadcasting";
   // A chat "yes" runs the same send() once the card is ready to sign.
   useAutoConfirm(valid && !busy && step === "idle" && isConnected, (o) => { void send(o); });
+  useAutoReport(step, err, txHash ? `${cfg.explorer}/tx/${txHash}` : null);
 
   // 25 / 50 / 100% presets computed in BASE UNITS (raw * bps / 10000n) so the
   // string handed to parseUnits can never carry more decimals than the token has,

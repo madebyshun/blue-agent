@@ -16,11 +16,18 @@
  * younger than CONFIRM_WINDOW_MS registers itself as pending. When the user
  * types "yes" (or ok / confirm / có / đồng ý), the newest one opens its card
  * and arms it (AutoConfirmContext); the card runs its own sign path once ready.
- * BLOCK refuses, WARN opens the card for a manual look instead of signing.
+ * BLOCK refuses. WARN explains in chat and needs a second "yes".
+ *
+ * No card on that path (2026-10-16, "không cần thao tác trên card nữa"): an
+ * armed card is mounted HIDDEN and runs itself; it reports its step machine
+ * up (useAutoReport) and this line shows signing → sent → done / failed. A
+ * failure re-arms the action, so "yes" again retries it, from a fresh card.
+ * If the card never starts (no quote, not enough balance), the line says so
+ * after START_TIMEOUT_MS and the card opens: there is something to look at.
  */
 import { useCallback, useContext, useEffect, useId, useMemo, useState, type ReactNode } from "react";
 import { usePreTradeCheck } from "@/components/wallet/PreTradeBanner";
-import { ActionMessageContext, AutoConfirmContext } from "@/components/wallet/action-context";
+import { ActionMessageContext, AutoConfirmContext, type AutoStatus } from "@/components/wallet/action-context";
 import { CONFIRM_WINDOW_MS, SILENT_MAX_USD, registerPending, type ConfirmOutcome } from "@/lib/chat/confirm";
 
 export type StripCheck = {
@@ -32,6 +39,17 @@ export type StripCheck = {
 
 const VERDICT_COLOR: Record<string, string> = { PASS: "#22C55E", WARN: "#F59E0B", BLOCK: "#EF4444" };
 const ADDR_OR_ETH = /^(0x[a-fA-F0-9]{40}|ETH)$/i;
+const START_TIMEOUT_MS = 25_000;
+
+function StatusLine({ s }: { s: AutoStatus | "waiting" | "stuck" }) {
+  const link = (href: string | null) => href
+    ? <a href={href} target="_blank" rel="noopener noreferrer" className="text-[#4FC3F7] hover:underline">View tx ↗</a> : null;
+  if (s === "waiting" || (typeof s === "object" && s.phase === "working")) return <span className="text-slate-400">· signing…</span>;
+  if (s === "stuck") return <span style={{ color: "#F59E0B" }}>· couldn&apos;t start: see the details below</span>;
+  if (s.phase === "sent") return <span className="text-slate-400">· sent, confirming… {link(s.href)}</span>;
+  if (s.phase === "done") return <span style={{ color: "#22C55E" }}>· ✓ {s.detail ? `Done: ${s.detail}` : "Done"} {link(s.href)}</span>;
+  return <span style={{ color: "#EF4444" }}>· ✗ {s.message} <span className="text-slate-500">Reply yes to retry.</span></span>;
+}
 
 type Pt = ReturnType<typeof usePreTradeCheck>;
 
@@ -73,6 +91,9 @@ export function ActionStrip({
 }) {
   const [open, setOpen] = useState(false);
   const [armed, setArmed] = useState(false);
+  const [warned, setWarned] = useState(false);
+  const [status, setStatus] = useState<AutoStatus | "waiting" | "stuck" | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const chainLabel = chain === "robinhood" ? "Robinhood Chain" : chain === "base" ? "Base" : null;
 
   const usable = !!check?.token && ADDR_OR_ETH.test(check.token);
@@ -88,11 +109,26 @@ export function ActionStrip({
     const v = usable ? pt.check?.verdict : undefined;
     const why = pt.check?.reasons.find((r) => r.level === v)?.text ?? "";
     if (v === "BLOCK") return { kind: "blocked", what, why };
-    if (v === "WARN") { setOpen(true); return { kind: "warn", what, why }; }
-    setOpen(true);
+    // A warning is said in chat; the same "yes" a second time signs anyway.
+    if (v === "WARN" && !warned) { setWarned(true); return { kind: "warn", what, why }; }
+    setStatus("waiting");
     setArmed(true);
     return { kind: "armed", what, silent };
-  }, [usable, pt.check, what, silent]);
+  }, [usable, pt.check, what, silent, warned]);
+
+  const report = useCallback((s: AutoStatus) => {
+    setStatus(s);
+    // A failed attempt goes back to pending: "yes" retries from a fresh card.
+    if (s.phase === "error") { setArmed(false); setAttempt((n) => n + 1); }
+  }, []);
+
+  // Armed but the card never started — no quote, not enough balance, wrong
+  // network. Say so and open it: now there IS something to look at.
+  useEffect(() => {
+    if (status !== "waiting") return;
+    const t = setTimeout(() => { setStatus((s) => (s === "waiting" ? "stuck" : s)); setOpen(true); }, START_TIMEOUT_MS);
+    return () => clearTimeout(t);
+  }, [status]);
 
   // Pending only while its message is recent and it has not been armed yet.
   const msg = useContext(ActionMessageContext);
@@ -102,23 +138,26 @@ export function ActionStrip({
     return registerPending({ id, createdAt: msg.createdAt, fire });
   }, [id, confirmable, msg?.createdAt, armed, fire]);
 
-  const auto = useMemo(() => ({ armed, silent }), [armed, silent]);
+  const auto = useMemo(() => ({ armed, silent, report }), [armed, silent, report]);
+  const card = <AutoConfirmContext.Provider value={auto}>{children}</AutoConfirmContext.Provider>;
 
   return (
     <div className="mt-2">
       <div className="flex items-center gap-2 flex-wrap font-mono text-[11px] rounded-lg border border-[#1A1A2E] bg-[#0a0a0f] px-3 py-2">
         <span className="text-slate-200">{summary}</span>
         {chainLabel && <span className="text-slate-500">· {chainLabel}</span>}
-        {usable && <VerdictChip pt={pt} />}
+        {usable && !status && <VerdictChip pt={pt} />}
+        {status && <StatusLine s={status} />}
         <button type="button" onClick={() => setOpen((o) => !o)}
           className="ml-auto px-2.5 py-1 rounded-md border border-[#4FC3F740] text-[#4FC3F7] hover:bg-[#4FC3F710]">
           {open ? "Hide" : `${cta} ▸`}
         </button>
       </div>
-      {open && (
-        <div className="mt-1">
-          <AutoConfirmContext.Provider value={auto}>{children}</AutoConfirmContext.Provider>
-        </div>
+      {(open || armed) && (
+        // ONE element either way, so opening "Review & sign" mid-signature only
+        // un-hides the card instead of remounting it. Chat-confirmed and not
+        // opened: the card runs out of sight; the line above reports it.
+        <div key={attempt} className="mt-1" hidden={!open}>{card}</div>
       )}
     </div>
   );

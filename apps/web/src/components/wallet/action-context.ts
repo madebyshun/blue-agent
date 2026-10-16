@@ -13,8 +13,39 @@ import { createContext, useContext, useEffect, useRef } from "react";
 
 export const ActionMessageContext = createContext<{ createdAt: number } | null>(null);
 
-export interface AutoConfirm { armed: boolean; silent: boolean }
+/** What a chat-confirmed card is doing, reported up to its ActionStrip so the
+ *  card itself can stay out of sight (ShunTr 2026-10-16: "chỉ cần chat ngôn
+ *  ngữ tự nhiên, không cần thao tác trên card"). */
+export type AutoStatus =
+  | { phase: "working" }
+  | { phase: "sent"; href: string | null }
+  | { phase: "done"; href: string | null; detail?: string }
+  | { phase: "error"; message: string };
+
+export interface AutoConfirm { armed: boolean; silent: boolean; report?: (s: AutoStatus) => void }
 export const AutoConfirmContext = createContext<AutoConfirm>({ armed: false, silent: false });
+
+/**
+ * In a signing card: report its own step machine to the strip while armed.
+ * `sentSteps`: submitted, waiting for the chain (or the bridge fill).
+ * `doneSteps`: finished. "idle" says nothing; "error" carries `err`; any other
+ * step is work in progress.
+ */
+export function useAutoReport(
+  step: string, err: string, href: string | null,
+  o: { sentSteps?: string[]; doneSteps?: string[]; detail?: string } = {},
+) {
+  const { armed, report } = useContext(AutoConfirmContext);
+  const sent = (o.sentSteps ?? ["broadcasting"]).includes(step);
+  const done = (o.doneSteps ?? ["done"]).includes(step);
+  useEffect(() => {
+    if (!armed || !report || step === "idle") return;
+    if (step === "error") report({ phase: "error", message: err || "Failed." });
+    else if (done) report({ phase: "done", href, detail: o.detail });
+    else if (sent) report({ phase: "sent", href });
+    else report({ phase: "working" });
+  }, [armed, report, step, err, href, sent, done, o.detail]);
+}
 
 /**
  * In a signing card: once the user confirmed in chat and the card is ready

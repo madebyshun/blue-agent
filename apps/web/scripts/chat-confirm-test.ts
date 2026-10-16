@@ -35,7 +35,7 @@ off2();
 ok("nothing pending → null (the message goes to the model)", confirmLatest() === null);
 ok("silent armed reply", confirmReply({ kind: "armed", what: "Swap 1 USDC → ETH on Base", silent: true }) === "Signing Swap 1 USDC → ETH on Base…");
 ok("wallet-prompt armed reply says to confirm in the wallet", /Confirm in your wallet/.test(confirmReply({ kind: "armed", what: "x", silent: false })));
-ok("a WARN asks for a manual look", /Review it above/.test(confirmReply({ kind: "warn", what: "x", why: "y" })));
+ok("a WARN asks for a second yes", /Reply yes again/.test(confirmReply({ kind: "warn", what: "x", why: "y" })));
 
 // The user's "$N" wins over the bare number the model wrote (measured on prod:
 // "swap $1 eth to usdc" armed 0.001 ETH once and 1 ETH once).

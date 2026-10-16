@@ -87,6 +87,6 @@ export function confirmLatest(now = Date.now()): ConfirmOutcome | null {
 export function confirmReply(o: ConfirmOutcome): string {
   if (o.kind === "blocked") return `Not signing: ${o.what} is blocked. ${o.why}`;
   if (o.kind === "already") return `${o.what} was already sent to your wallet above. Nothing else is waiting for a yes.`;
-  if (o.kind === "warn") return `${o.what} has a warning: ${o.why} Review it above and sign it there if you still want to.`;
+  if (o.kind === "warn") return `${o.what} has a warning: ${o.why} Reply yes again to sign it anyway.`;
   return o.silent ? `Signing ${o.what}…` : `Signing ${o.what}. Confirm in your wallet.`;
 }

@@ -44,7 +44,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useAccount, useSwitchChain, useWriteContract, useSendTransaction, useReadContract } from "wagmi";
 import { useSilentSender } from "@/lib/privy/silent-tx";
-import { useAutoConfirm } from "@/components/wallet/action-context";
+import { useAutoConfirm, useAutoReport } from "@/components/wallet/action-context";
 import { formatUnits, parseUnits, isAddress, getAddress, encodeFunctionData } from "viem";
 import { base } from "wagmi/chains";
 import { ERC20_ABI } from "@/lib/yield-execution";
@@ -382,6 +382,8 @@ export default function SwapCard({
   const busy = step === "approving" || step === "swapping";
   // A chat "yes" runs the same swap() once the card is ready to sign.
   useAutoConfirm(canSwap && step === "idle", (o) => { void swap(o); });
+  useAutoReport(step, err, txHash ? `https://basescan.org/tx/${txHash}` : null,
+    { detail: `${fmt(amt)} ${label(sell)} → ${buyAmount != null ? fmt(buyAmount) : ""} ${label(buy)}`.replace(/\s+/g, " ") });
 
   /** One transaction: silently through the embedded wallet when the user
    *  confirmed in chat and it is under the limit, else the wallet's prompt. */

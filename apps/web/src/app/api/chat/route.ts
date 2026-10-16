@@ -1485,7 +1485,7 @@ function fmtAmount(a: string): string {
  */
 function proposalLine(what: string, usd: number | null): string {
   const prompt = usd != null && usd < SILENT_MAX_USD ? "" : " Your wallet will ask you to confirm.";
-  return `${what}. Reply **yes** to sign, or tap Review & sign to see the live quote first.${prompt}`;
+  return `${what}. Reply **yes** to sign it.${prompt}`;
 }
 
 /**

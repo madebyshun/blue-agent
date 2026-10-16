@@ -10,7 +10,7 @@
 
 import { useContext, useEffect, useRef, useState } from "react";
 import { useSilentSender } from "@/lib/privy/silent-tx";
-import { AutoConfirmContext } from "@/components/wallet/action-context";
+import { AutoConfirmContext, useAutoReport } from "@/components/wallet/action-context";
 import {
   useAccount, useSwitchChain, useSendTransaction, useChainId,
   useWaitForTransactionReceipt,
@@ -371,6 +371,8 @@ export function RobinhoodBridgeCard({ result }: { result: RobinhoodBridgeResult 
   // idle — the bridge transaction. Each step at most once.
   const auto = useContext(AutoConfirmContext);
   const autoStage = useRef<"none" | "approve" | "send">("none");
+  useAutoReport(step, err, txHash ? `${fromCfg.explorer}/tx/${txHash}` : null,
+    { sentSteps: ["delivering"], doneSteps: ["filled"] });
   useEffect(() => {
     if (!auto.armed || !canSign || step !== "idle") return;
     if (needsApprove) {
