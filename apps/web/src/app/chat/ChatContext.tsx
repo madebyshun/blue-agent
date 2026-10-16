@@ -1,5 +1,5 @@
 "use client";
-import { confirmLatest, confirmReply, isConfirmWord } from "@/lib/chat/confirm";
+import { confirmLatest, confirmReply, forgetArmed, isConfirmWord } from "@/lib/chat/confirm";
 import {
   createContext, useContext, useState, useEffect,
   useRef, useCallback, useMemo,
@@ -663,7 +663,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     // chat, matched HERE in code — it never reaches the model, costs no
     // credits, and nothing but the user's own typed message can trigger it.
     // With nothing pending it goes to the model like any other message.
-    if (isConfirmWord(userMsg)) {
+    if (!isConfirmWord(userMsg)) forgetArmed();
+    else {
       const outcome = confirmLatest();
       if (outcome && activeTaskId) {
         const ctid = activeTaskId;

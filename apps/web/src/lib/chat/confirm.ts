@@ -32,7 +32,9 @@ export function isConfirmWord(text: string): boolean {
 export type ConfirmOutcome =
   | { kind: "armed"; what: string; silent: boolean }
   | { kind: "warn"; what: string; why: string }
-  | { kind: "blocked"; what: string; why: string };
+  | { kind: "blocked"; what: string; why: string }
+  /** Nothing pending, but this action was just armed by an earlier "yes". */
+  | { kind: "already"; what: string };
 
 export interface PendingAction {
   id: string;
@@ -58,18 +60,33 @@ export function latestPending(now = Date.now(), from: Iterable<PendingAction> = 
   return best;
 }
 
+/**
+ * The last action a "yes" armed. A second "yes" right after it must not reach
+ * the model: MEASURED on the PR preview 2026-10-16, the model read the bare
+ * "yes" as a request and proposed the same swap again, one more "yes" away
+ * from a duplicate trade. Forgotten as soon as the user types anything else,
+ * so a later "yes" to an ordinary question still goes to the model.
+ */
+let lastArmed: { what: string; at: number } | null = null;
+
+export function forgetArmed(): void { lastArmed = null; }
+
 /** Route a confirmation. null ⟹ nothing pending: the message goes to the model as usual. */
 export function confirmLatest(now = Date.now()): ConfirmOutcome | null {
   const p = latestPending(now);
-  if (!p) return null;
+  if (!p) {
+    if (lastArmed && now - lastArmed.at <= CONFIRM_WINDOW_MS) return { kind: "already", what: lastArmed.what };
+    return null;
+  }
   const out = p.fire();
-  if (out.kind === "armed") pending.delete(p.id);
+  if (out.kind === "armed") { pending.delete(p.id); lastArmed = { what: out.what, at: now }; }
   return out;
 }
 
 /** The assistant's local reply to a confirmation (no model call, no credits). */
 export function confirmReply(o: ConfirmOutcome): string {
   if (o.kind === "blocked") return `Not signing: ${o.what} is blocked. ${o.why}`;
+  if (o.kind === "already") return `${o.what} was already sent to your wallet above. Nothing else is waiting for a yes.`;
   if (o.kind === "warn") return `${o.what} has a warning: ${o.why} Review it above and sign it there if you still want to.`;
   return o.silent ? `Signing ${o.what}…` : `Signing ${o.what}. Confirm in your wallet.`;
 }
