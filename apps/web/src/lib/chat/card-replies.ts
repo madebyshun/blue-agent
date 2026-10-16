@@ -44,29 +44,61 @@ export function fmtPct(v: unknown): string | null {
 
 import { discoveryRows } from "@/lib/chat/discovery-rows";
 
+/** The token's explorer page — the contract travels inside the link, so a
+ *  follow-up trade still has it while the answer stays one line per row. */
+export function tokenLink(symbol: string, address: string | null, chain: "base" | "robinhood"): string {
+  if (!address) return `**${symbol}**`;
+  const host = chain === "robinhood" ? "https://robinhoodchain.blockscout.com/token/" : "https://basescan.org/token/";
+  return `[**${symbol}**](${host}${address})`;
+}
+
+/** Rows shown before "…and N more" (2026-10-16: answers read like Bankr's —
+ *  a summary line, then the few rows that matter). */
+const MAX_ROWS = 5;
+
 /**
- * A discovery result written as the ANSWER, in text (2026-10-13: Blue Chat
- * stopped rendering result cards). Built by code from the same rows the card
- * showed, so nothing in it can be invented; every row carries its chain and
- * full contract, the only thing a follow-up trade can be armed with.
+ * A discovery result written as the ANSWER, in text. Built by code from the
+ * same rows the card showed, so nothing in it can be invented. Each row is one
+ * line; its contract rides in the symbol's explorer link.
  */
 function discoveryText(tool: string, r: Json): string | null {
   const d = discoveryRows(tool, r);
   if (!d) return null;
   if (!d.rows.length) return d.note ? `**${d.title}** — ${d.note}` : null;
-  const lines = d.rows.map((row, i) => {
-    const chain = row.chain === "robinhood" ? "Robinhood Chain" : "Base";
-    const facts = [row.label, ...row.facts].filter(Boolean).join(" · ");
-    const addr = row.address ? `\n   \`${row.address}\` (${chain})` : ` (${chain}, no contract)`;
-    const noTrade = !row.swappable && row.noSwapReason ? ` — not tradable here: ${row.noSwapReason}` : "";
-    return `${i + 1}. **${row.symbol}**${facts ? ` — ${facts}` : ""}${noTrade}${addr}`;
+  const lines = d.rows.slice(0, MAX_ROWS).map((row) => {
+    const facts = row.facts.slice(0, 3).join(" · ");
+    const noTrade = !row.swappable && row.noSwapReason ? ` · not tradable: ${row.noSwapReason}` : "";
+    return `- ${tokenLink(row.symbol, row.address, row.chain)}${facts ? ` ${facts}` : ""}${noTrade}`;
   });
+  const more = d.more + Math.max(0, d.rows.length - MAX_ROWS);
   return [
     `**${d.title}**`,
     ...lines,
-    d.more > 0 ? `…and ${d.more} more.` : "",
-    d.note ? `_${d.note}_` : "",
+    more > 0 ? `…and ${more} more.` : "",
   ].filter(Boolean).join("\n");
+}
+
+/** Trending on Base, written short: who leads, then the top rows with the
+ *  change, the liquidity and only the flags that change a decision. "Tax not
+ *  measured" is left out of the list: every buy is checked before signing
+ *  (GoPlus measures it then), and nine rows of the same caveat buried the one
+ *  that mattered (measured on the 2026-10-16 share). */
+function trendingText(ok: Json[]): string {
+  const ch = (t: Json) => num(t.change_24h);
+  const leader = [...ok].filter((t) => ch(t) != null).sort((a, b) => (ch(b) ?? 0) - (ch(a) ?? 0))[0];
+  const head = leader ? `**Trending on Base**: ${str(leader.symbol)} leads, ${fmtPct(leader.change_24h)} in 24h.` : "**Trending on Base**";
+  const lines = ok.slice(0, MAX_ROWS).map((t) => {
+    const addr = typeof t.address === "string" && /^0x[a-fA-F0-9]{40}$/.test(t.address) ? t.address : null;
+    const flags = (Array.isArray(t.flags) ? t.flags : []).filter((f): f is string => typeof f === "string");
+    const hp = (t.honeypot as Json | null)?.verdict;
+    const risk = hp === "HONEYPOT" ? "honeypot, not tradable"
+      : flags.includes("IMPERSONATION_CHECK") ? "impersonator, not tradable"
+      : hp === "SAFE" ? "tax clean" : "";
+    const facts = [fmtPct(t.change_24h), fmtUsd(t.liquidity_usd) ? `liq ${fmtUsd(t.liquidity_usd)}` : "", risk].filter(Boolean).join(" · ");
+    return `- ${tokenLink(str(t.symbol) || "?", addr, "base")} ${facts}`;
+  });
+  const more = ok.length - Math.min(ok.length, MAX_ROWS);
+  return [head, ...lines, `${more > 0 ? `…and ${more} more. ` : ""}Say "buy $5 of <symbol>" to trade one; it's checked before you sign.`].join("\n");
 }
 
 /** Chat tools whose reply is written by `cardReply` rather than the model. */
@@ -99,13 +131,7 @@ export function cardReply(tool: string, result: unknown, args: Json = {}): strin
       if (!Array.isArray(r.tokens)) return null;
       const ok = arr(r.tokens).filter((t) => t.status === "ok");
       if (ok.length === 0) return "No trending Base token passed the liquidity floor right now.";
-      const honeypots = ok.filter((t) => (t.honeypot as Json | null)?.verdict === "HONEYPOT").length;
-      const flagged = ok.filter((t) => Array.isArray(t.flags) && t.flags.length > 0).length;
-      const tail = [
-        honeypots > 0 ? `${honeypots} measured as a honeypot (no Swap button)` : "",
-        flagged > 0 ? `${flagged} carry flags` : "",
-      ].filter(Boolean).join(", ");
-      return `${discoveryText(tool, r) ?? ""}\n\n${ok.length} trending token${ok.length === 1 ? "" : "s"} on Base, each with its tax read from the contract${tail ? ` — ${tail}` : ""}. A clean scan is not a buy signal; to trade one, say e.g. "buy 5 USDC of <contract>".`;
+      return trendingText(ok);
     }
     case "hub_rh_movers": {
       if (!Array.isArray(r.gainers) || !Array.isArray(r.losers)) return null;
@@ -224,36 +250,56 @@ export const CARD_ALREADY_SHOWN =
   "[The user already sees this result as a card. Do NOT re-list its rows, re-tabulate it, or add labels or flags that are not in the data. Refer to it in at most one sentence.]\n";
 
 /**
- * The connected wallet's holdings written as the ANSWER (2026-10-13: no more
- * result cards). Code-written from the reads, so nothing is invented:
- * largest USD value first, positions under $1 counted but not listed, an
- * unpriced position shown without a value (never $0), and the Base list marked
- * incomplete whenever its reader said so. Robinhood Chain's reader returns []
- * on an explorer outage, so an empty RH leg is "none found", never "none held".
+ * The connected wallet's holdings written as the ANSWER, short (2026-10-16,
+ * modelled on Bankr's reply): the total first, then per chain its total and
+ * the few priced positions that make it up. Unpriced tokens — on a busy
+ * wallet mostly airdropped spam, some named after phishing sites — are
+ * COUNTED, never listed: listing them put "www.afomo.top" in the answer.
+ * Code-written from the reads: no value is ever invented, an unpriced
+ * position is never $0, and an incomplete Base read says so.
  */
 type Holding = { symbol: string; amount: string; address: string; usdValue?: number; isNative?: boolean; trust?: string };
+const SHOW_PER_CHAIN = 5;
 export function walletText(base: Holding[], rh: Holding[], opts: { partialReason?: string; error?: string } = {}): string {
-  const fmtV = (v?: number) => (typeof v === "number" ? (v >= 1000 ? `$${v.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : `$${v.toFixed(2)}`) : "no price");
-  const amt = (a: string) => { const n = Number(a); return Number.isFinite(n) ? n.toLocaleString("en-US", { maximumFractionDigits: n < 1 ? 6 : 4 }) : a; };
-  const section = (title: string, list: Holding[], chain: string) => {
-    const sorted = [...list].sort((a, b) => (b.usdValue ?? -1) - (a.usdValue ?? -1));
-    const shown = sorted.filter((h) => h.usdValue == null || h.usdValue >= 1).slice(0, 12);
-    const dust = sorted.filter((h) => h.usdValue != null && h.usdValue < 1).length;
-    const rest = sorted.length - shown.length - dust;
-    const total = list.reduce((s, h) => s + (h.usdValue ?? 0), 0);
-    const lines = shown.map((h) => `- **${h.symbol || "?"}** ${amt(h.amount)} · ${fmtV(h.usdValue)}${h.trust === "unverified" ? " · unverified token" : ""}${h.isNative ? "" : ` · \`${h.address}\``}`);
-    return [
-      `**${title}** — ${list.length} token${list.length === 1 ? "" : "s"}${total > 0 ? `, about ${fmtV(total)} where priced` : ""} (${chain})`,
-      ...lines,
-      rest > 0 ? `- …and ${rest} more` : "",
-      dust > 0 ? `- ${dust} position${dust === 1 ? "" : "s"} under $1 not listed` : "",
-    ].filter(Boolean).join("\n");
+  const fmtV = (v: number) => (v >= 1000 ? `$${v.toLocaleString("en-US", { maximumFractionDigits: 0 })}` : `$${v.toFixed(2)}`);
+  const amt = (a: string) => {
+    const n = Number(a);
+    if (!Number.isFinite(n)) return a;
+    if (n >= 1e9) return `${+(n / 1e9).toFixed(2)}B`;
+    if (n >= 1e6) return `${+(n / 1e6).toFixed(2)}M`;
+    if (n >= 1e4) return `${+(n / 1e3).toFixed(1)}K`;
+    return n.toLocaleString("en-US", { maximumFractionDigits: n < 1 ? 6 : 4 });
   };
+  const priced = (l: Holding[]) => l.filter((h) => typeof h.usdValue === "number" && h.usdValue >= 1).sort((a, b) => b.usdValue! - a.usdValue!);
+  const total = (l: Holding[]) => l.reduce((s, h) => s + (h.usdValue ?? 0), 0);
+  const unpriced = [...base, ...rh].filter((h) => typeof h.usdValue !== "number").length;
+  const dust = [...base, ...rh].filter((h) => typeof h.usdValue === "number" && h.usdValue < 1).length;
+
   if (opts.error && !base.length && !rh.length) return "Couldn't read the wallet right now — please try again in a moment.";
   if (!base.length && !rh.length) return "No tokens found on Base or Robinhood Chain for this wallet.";
+
+  const section = (title: string, list: Holding[], chain: "base" | "robinhood") => {
+    if (!list.length) return chain === "robinhood" ? `**${title}**: none found (the explorer may not have answered).` : `**${title}**: no tokens found.`;
+    const p = priced(list);
+    const lines = p.slice(0, SHOW_PER_CHAIN).map((h) =>
+      `- ${h.isNative ? `**${h.symbol || "ETH"}**` : tokenLink(h.symbol || "?", h.address, chain)}: ${fmtV(h.usdValue!)} (${amt(h.amount)})${h.trust === "unverified" ? " · unverified" : ""}`);
+    const more = p.length - Math.min(p.length, SHOW_PER_CHAIN);
+    return [
+      `**${title}** (${p.length ? fmtV(total(list)) : "nothing priced"})`,
+      ...lines,
+      more > 0 ? `- …and ${more} more priced` : "",
+    ].filter(Boolean).join("\n");
+  };
+
+  const grand = total(base) + total(rh);
+  const tail = [
+    unpriced ? `${unpriced} token${unpriced === 1 ? "" : "s"} with no price (airdrops and spam usually land here)` : "",
+    dust ? `${dust} under $1` : "",
+  ].filter(Boolean).join(" and ");
   return [
-    base.length ? section("Base", base, "Base 8453") : "**Base** — no tokens found.",
-    opts.partialReason ? `_${opts.partialReason}_` : "",
-    rh.length ? section("Robinhood Chain", rh, "Robinhood Chain 4663") : "**Robinhood Chain** — none found (the explorer may not have answered).",
+    grand > 0 ? `Portfolio is about ${fmtV(grand)} where priced, across Base and Robinhood Chain.` : "Nothing in this wallet has a price right now.",
+    section("Base", base, "base"),
+    section("Robinhood Chain", rh, "robinhood"),
+    [tail ? `Also ${tail}.` : "", opts.partialReason ? "The Base list may be incomplete." : ""].filter(Boolean).join(" "),
   ].filter(Boolean).join("\n\n");
 }

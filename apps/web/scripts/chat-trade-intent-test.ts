@@ -45,16 +45,20 @@ ok("unknown shape → null", cardReply("hub_safe_trending", { foo: 1 }) === null
 
 const trending = cardReply("hub_safe_trending", {
   tokens: [
-    { status: "ok", symbol: "A", flags: [] },
-    { status: "ok", symbol: "B", flags: ["MICRO_CAP"], honeypot: { verdict: "HONEYPOT" } },
+    { status: "ok", symbol: "A", address: "0x1111111111111111111111111111111111111111", change_24h: 12.5, liquidity_usd: 3_090_000, flags: [], honeypot: { verdict: "SAFE" } },
+    { status: "ok", symbol: "B", address: "0x2222222222222222222222222222222222222222", change_24h: 905.39, liquidity_usd: 10_170_000, flags: ["MICRO_CAP"], honeypot: { verdict: "HONEYPOT" } },
+    { status: "ok", symbol: "D", change_24h: 1, flags: ["TAX_UNVERIFIED"], honeypot: { verdict: "UNKNOWN" } },
     { status: "skipped", symbol: "C" },
   ],
-});
-ok("trending counts only status:ok rows", !!trending && trending.includes("\n\n2 trending tokens on Base"), trending ?? "");
-ok("trending is written as a list (2026-10-13: no cards), one row per ok token", !!trending && trending.startsWith("**Trending on Base") && /\n1\. \*\*A\*\*/.test(trending) && !/\*\*C\*\*/.test(trending), trending ?? "");
-ok("a honeypot row says it is not tradable here", !!trending && /\*\*B\*\*.*not tradable here: measured as a honeypot/.test(trending));
-ok("trending names the honeypot count", !!trending && trending.includes("1 measured as a honeypot"));
-ok("trending says a scan is not a buy signal", !!trending && /not a buy signal/.test(trending));
+}) ?? "";
+// 2026-10-16: short, like Bankr — a summary line, then one line per row.
+ok("trending opens with who leads", trending.startsWith("**Trending on Base**: B leads, +905.39% in 24h."), trending);
+ok("one line per ok row, skipped rows left out", /\n- \[\*\*A\*\*\]\(https:\/\/basescan\.org\/token\/0x1111/.test(trending) && !/\*\*C\*\*/.test(trending), trending);
+ok("the contract rides in the symbol's link", trending.includes("(https://basescan.org/token/0x2222222222222222222222222222222222222222)"), trending);
+ok("a honeypot says not tradable", /\*\*B\*\*\]\([^)]*\) \+905\.39% · liq \$10\.17M · honeypot, not tradable/.test(trending), trending);
+ok("a measured clean tax is said; an unread one is not repeated per row", /\*\*A\*\*.*tax clean/.test(trending) && !/tax unverified|tax check UNKNOWN/i.test(trending), trending);
+ok("trending says how to trade and that it is checked first", /checked before you sign/.test(trending), trending);
+ok("at most five rows", cardReply("hub_safe_trending", { tokens: Array.from({ length: 9 }, (_, i) => ({ status: "ok", symbol: `T${i}`, change_24h: i })) })!.includes("…and 4 more."));
 ok("empty trending is stated, not invented", cardReply("hub_safe_trending", { tokens: [] }) === "No trending Base token passed the liquidity floor right now.");
 
 const movers = cardReply("hub_rh_movers", {
@@ -117,11 +121,15 @@ console.log("walletText");
     [],
     { partialReason: "2 balance reads did not complete." },
   );
-  ok("wallet: priced rows first, with full contract", /\*\*USDC\*\* 10\.125 · \$10\.09 · `0x833589/.test(w), w);
-  ok("wallet: an unpriced row says 'no price', never $0", /\*\*NOCK\*\* 66 · no price · unverified token/.test(w));
-  ok("wallet: dust is counted, not listed", /1 position under \$1 not listed/.test(w) && !/\*\*ETH\*\*/.test(w));
-  ok("wallet: the reader's partial reason is shown", /2 balance reads did not complete/.test(w));
-  ok("wallet: an empty Robinhood leg is 'none found', not 'none held'", /Robinhood Chain\*\* — none found/.test(w));
+  // 2026-10-16: short, like Bankr — total first, priced rows, unpriced counted.
+  ok("wallet: total first", w.startsWith("Portfolio is about $10.36 where priced, across Base and Robinhood Chain."), w);
+  ok("wallet: a priced row is value then amount, contract in the link", /- \[\*\*USDC\*\*\]\(https:\/\/basescan\.org\/token\/0x833589[^)]*\): \$10\.09 \(10\.125\)/.test(w), w);
+  ok("wallet: unpriced tokens are counted, never listed and never $0", /1 token with no price/.test(w) && !/NOCK/.test(w) && !/\$0\.00/.test(w), w);
+  ok("wallet: dust is counted, not listed", /1 under \$1/.test(w) && !/\*\*ETH\*\*/.test(w), w);
+  ok("wallet: an incomplete Base read is said", /The Base list may be incomplete/.test(w), w);
+  ok("wallet: an empty Robinhood leg is 'none found', not 'none held'", /\*\*Robinhood Chain\*\*: none found/.test(w), w);
+  const spam = walletText([{ symbol: "www.afomo.top ✅", amount: "9.999", address: "0x51fe049fd61a8de0651c1e7da421bc7446bdc549", trust: "unverified" }], []);
+  ok("wallet: a phishing-named airdrop never appears in the answer", !/afomo/.test(spam), spam);
   ok("wallet: a failed read with nothing read says so", walletText([], [], { error: "x" }).startsWith("Couldn't read the wallet"));
 }
 ok("every card tool is a real chat tool name (hub_ prefix)", [...CARD_REPLY_TOOLS].every((t) => t.startsWith("hub_")));
