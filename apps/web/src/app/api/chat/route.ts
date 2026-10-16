@@ -37,7 +37,7 @@ import { getBaseTokenPricesUsd } from "@/lib/wallet/token-prices";
 import { NATIVE_SENTINEL } from "@/lib/wallet/token-trust";
 import { SILENT_MAX_USD } from "@/lib/chat/confirm";
 import { explainText, txExplain } from "@/lib/tx-explain";
-import { baseStockByTickerOrSymbol, dollarAmount } from "@/lib/chat/trade-intent";
+import { baseStockByTickerOrSymbol, dollarAmount, userDollarAmount } from "@/lib/chat/trade-intent";
 import { githubContextFor } from "@/lib/chat/github-context";
 import { forcedToolFor, wantsMyAlerts } from "@/lib/chat/intents";
 import { runInternalTool } from "@/lib/x402-internal-run";
@@ -1520,6 +1520,18 @@ function stableUsd(symbol: string, amount: string): number | null {
   return /^(USDC|USDG|USDBC)$/i.test(symbol.trim()) && Number.isFinite(n) && n > 0 ? n : null;
 }
 
+/** The last user message's text, as sent to the model. */
+function lastUserText(msgs: object[]): string {
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const m = msgs[i] as { role?: string; content?: unknown };
+    if (m.role !== "user") continue;
+    if (typeof m.content === "string") return m.content;
+    if (Array.isArray(m.content)) return m.content.map((p) => (p && typeof p === "object" && typeof (p as { text?: unknown }).text === "string" ? (p as { text: string }).text : "")).join(" ");
+    return "";
+  }
+  return "";
+}
+
 function resolveSwapToken(token: string): string {
   const t = (token || "").trim();
   if (/^0x[a-fA-F0-9]{40}$/.test(t)) return t;
@@ -1900,6 +1912,14 @@ async function callHubTool(
     if (usdAmt && direction === "buy" && (!rawTokenIn || /^(usd|\$)$/i.test(rawTokenIn))) {
       rawTokenIn = "USDG";
       amount = usdAmt;
+    }
+    // A dollar amount of anything but USDG is not converted on Robinhood Chain
+    // yet: refuse to arm rather than let the card read "$5" as 5 tokens.
+    if (dollarAmount(amount)) {
+      return {
+        text: `The user gave a dollar amount for a Robinhood Chain swap that does not spend USDG. Ask for the amount in ${rawTokenIn || "ETH"} in one line.`,
+        staticReply: `On Robinhood Chain I can spend dollars only from USDG. Say it in ${rawTokenIn || "ETH"} instead, e.g. "swap 0.0005 ${rawTokenIn || "ETH"} to ${rawToken || "TSLA"} on robinhood".`,
+      };
     }
     const slippage_bps = typeof args.slippage_bps === "number" ? args.slippage_bps : undefined;
 
@@ -2736,6 +2756,13 @@ async function veniceToolStream(
           let args: Record<string, unknown> = {};
           try { args = JSON.parse(tc.function.arguments); } catch {}
           const mcpEntry = mcpMap?.get(tc.function.name);
+          // A swap's spend amount: the user's own "$N" wins over the bare number
+          // the model wrote (lib/chat/trade-intent.ts userDollarAmount).
+          if (tc.function.name === "prepare_swap" || tc.function.name === "robinhood_swap") {
+            const key = tc.function.name === "prepare_swap" ? "amountIn" : "amount";
+            const d = userDollarAmount(lastUserText(openaiMsgs), args[key]);
+            if (d) args = { ...args, [key]: `$${d}` };
+          }
           const out = mcpEntry
             ? await callMcpConnectorTool(mcpEntry, args)
             : await callHubTool(tc.function.name, args, userAddress);

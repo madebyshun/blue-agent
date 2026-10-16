@@ -2,6 +2,7 @@
  * chat-confirm-test — confirm-in-chat (lib/chat/confirm.ts, 2026-10-16).
  * Which words confirm, which pending action they reach, and what is refused.
  */
+import { userDollarAmount } from "../src/lib/chat/trade-intent";
 import { CONFIRM_WINDOW_MS, confirmLatest, confirmReply, isConfirmWord, latestPending, registerPending, SILENT_MAX_USD, type ConfirmOutcome } from "../src/lib/chat/confirm";
 
 let failures = 0;
@@ -31,6 +32,17 @@ ok("nothing pending → null (the message goes to the model)", confirmLatest() =
 ok("silent armed reply", confirmReply({ kind: "armed", what: "Swap 1 USDC → ETH on Base", silent: true }) === "Signing Swap 1 USDC → ETH on Base…");
 ok("wallet-prompt armed reply says to confirm in the wallet", /Confirm in your wallet/.test(confirmReply({ kind: "armed", what: "x", silent: false })));
 ok("a WARN asks for a manual look", /Review it above/.test(confirmReply({ kind: "warn", what: "x", why: "y" })));
+
+// The user's "$N" wins over the bare number the model wrote (measured on prod:
+// "swap $1 eth to usdc" armed 0.001 ETH once and 1 ETH once).
+ok("'$1' + model '1' → $1", userDollarAmount("swap $1 eth to usdc", "1") === "1");
+ok("'$1' + model nothing → $1", userDollarAmount("swap $1 eth to usdc", undefined) === "1");
+ok("'5 dollars' + model 5 → 5", userDollarAmount("buy 5 dollars of ETH", 5) === "5");
+ok("the model's own conversion (0.001, typed nowhere) is replaced by $1", userDollarAmount("swap $1 eth to usdc", "0.001") === "1");
+ok("a token amount the user typed is kept", userDollarAmount("swap 0.001 eth, about $2", "0.001") === null);
+ok("a quantity word is kept", userDollarAmount("swap half my eth, around $50", "half") === null);
+ok("no dollar figure → null", userDollarAmount("swap 1 eth to usdc", "1") === null);
+ok("two dollar figures are ambiguous → null", userDollarAmount("swap $1 eth, not $5", "1") === null);
 
 console.log(failures === 0 ? "\nchat-confirm-test: PASS" : `\nchat-confirm-test: FAIL — ${failures}`);
 process.exit(failures === 0 ? 0 : 1);
