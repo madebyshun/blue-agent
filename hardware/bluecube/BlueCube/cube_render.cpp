@@ -3,6 +3,7 @@
 #include "cube_render.h"
 #include <string.h>
 #include <stdio.h>
+#include <math.h>
 
 namespace cube {
 
@@ -287,93 +288,172 @@ static void drawFooter(Ctx& c, const Feed& f, const char* fallback) {
   drawModeDots(c, FOOT_Y + 3);
 }
 
-// ── buddy: the Blue Agent mascot as a 24x24 pixel-art face ───────────────────
-// The SERVER picks the mood from measured data (lib/cube/modes.ts buddyMood);
-// this only acts it out. Mouth, eyes, lids and the antenna light are painted
-// per mood over the base grid, whose own 'M' cells are only a reference.
-static const char* const FACE[24] = {
-  "..........KKKK..........",
-  ".........KrrRRK.........",
-  ".........KRRRRK.........",
-  "..........KKKK..........",
-  "...........KK...........",
-  "...........KK...........",
-  "...KKKKKKKKKKKKKKKKKK...",
-  "..KLLLLLLLLLLLLLLLLLLK..",
-  ".KLLLDLLLLLLLLLLLLDLLLK.",
-  ".KTTTTDTTTTTTTTTTDTTTTK.",
-  ".KTTTTTDTTTTTTTTDTTTTTK.",
-  ".KTTTTTYYTTTTTTYYTTTTTK.",
-  ".KTTTTYYwYTTTTYYwYTTTTK.",
-  ".KTTTTYYYYTTTTYYYYTTTTK.",
-  ".KTTTTTYYTTTTTTYYTTTTTK.",
-  ".KTTTTTTTTTTTTTTTTTTTTK.",
-  ".KTTTTTTTTTTTTTTTTTTTTK.",
-  ".KTTTTTTMTTTTTTMTTTTTTK.",
-  ".KTTTTTTTMMMMMMTTTTTTTK.",
-  ".KDTTTTTTTTTTTTTTTTTTDK.",
-  ".KDDTTTTTTTTTTTTTTTTDDK.",
-  "..KDDDDDDDDDDDDDDDDDDK..",
-  "...KKKKKKKKKKKKKKKKKK...",
-  "........................",
+// ── the mascot: BlueBot's character, drawn for a 128px screen ───────────────
+// BlueBot (github.com/madebyshun/bluebot) wears Blue Agent's mark: a rounded
+// square (superellipse, n = 4.6) filled cyan #34E9FE at the centre through
+// #2C73FF to deep blue #0A00FF at the rim, with two tall pill eyes cut out in
+// #050508. Its states tint that body and change the eyes and the corner
+// badge; the colours below are BlueBot's own (BotEngine.swift BotStates), so
+// the cube and the notch app are the same character.
+//
+// Every frame is composed in an off-screen canvas and pushed in one blit, so
+// a bounce or a shake never flickers on the ST7735.
+constexpr int BOX_W = 104, BOX_H = 100, BOX_X = (SCREEN - BOX_W) / 2, BOX_Y = 2;
+constexpr int BODY = 76;                       // body width = height, px
+constexpr uint16_t INK = 0x0021;               // #050508, the mark's eye cut-outs
+
+static uint16_t rgb(uint8_t r, uint8_t g, uint8_t b) {
+  return ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
+}
+
+// fx bits
+enum : uint16_t { FX_BOUNCE = 1, FX_SHAKE = 2, FX_ZZ = 4, FX_SWEAT = 8, FX_STARS = 16,
+                  FX_HEARTS = 32, FX_BREATHE = 64, FX_SCAN = 128, FX_DROOP = 256, FX_BLINK = 512 };
+
+struct BotCfg {
+  uint8_t r, g, b;   // state colour (BlueBot's)
+  float tint;        // how far the body leans to it; 0 = the pure mark
+  char eye;          // 'p' pill 'w' wide 'f' flat 'h' happy 'c' closed 't' tired
+                     // 's' spiral 'v' heart 'x' star 'k' wink 'l' look-up
+  char badge;        // 0 none, 'd' dots, '!' bang, '?' question, 'o' dot
+  uint16_t fx;
 };
-constexpr int FS = 4, FACE_W = 24 * FS, FACE_X = (SCREEN - FACE_W) / 2, FACE_Y = 4;
-constexpr uint16_t F_OUT = 0x1105, F_TEAL = 0x3DB5, F_LIGHT = 0x7F1A, F_DARK = 0x240F,
-                   F_EYE = 0xD7A7, F_SHINE = 0xF7FA, F_RED = 0xE185, F_RED_HI = 0xFC50;
 
-static bool sameLook(const FaceLook& a, const FaceLook& b) {
-  return a.mouth == b.mouth && a.eye == b.eye && a.lids == b.lids && a.ball == b.ball && a.x == b.x && a.y == b.y;
+static const BotCfg BOTS[] = {
+  /* Idle      */ {230, 233, 238, 0.00f, 'p', 0,   FX_BLINK},
+  /* Working   */ { 59, 158, 255, 0.50f, 'p', 'd', FX_BLINK},
+  /* Thinking  */ {139,  92, 246, 0.85f, 'l', 'd', 0},
+  /* Searching */ { 99, 101, 242, 0.80f, 'p', 'd', FX_SCAN},
+  /* Approval  */ {245, 165,  36, 0.92f, 'w', '!', FX_BOUNCE},
+  /* Question  */ { 34, 211, 238, 0.80f, 'p', '?', FX_BLINK},
+  /* Error     */ {244,  80,  94, 0.92f, 'f', '!', FX_SHAKE},
+  /* Finished  */ { 52, 212, 153, 0.88f, 'h', 'o', FX_STARS},
+  /* RateLimit */ {251, 146,  60, 0.90f, 't', 'o', FX_SWEAT},
+  /* Sleeping  */ {148, 162, 184, 0.75f, 'c', 0,   FX_ZZ | FX_BREATHE},
+  /* Dizzy     */ {244, 114, 182, 0.88f, 's', 0,   FX_SHAKE},
+  /* Love      */ {244, 114, 182, 0.60f, 'v', 0,   FX_HEARTS},
+  /* Proud     */ {250, 204,  21, 0.85f, 'x', 0,   FX_STARS | FX_BOUNCE},
+  /* Annoyed   */ {148, 162, 184, 0.80f, 'f', 0,   FX_DROOP},
+  /* Happy     */ { 52, 233, 254, 0.00f, 'h', 0,   FX_BOUNCE | FX_STARS},
+};
+
+const char* botName(Bot b) {
+  static const char* N[] = {"idle", "working", "thinking", "searching", "approval", "question", "error",
+                            "finished", "rate limit", "sleeping", "dizzy", "love", "proud", "annoyed", "happy"};
+  return N[(int)b];
 }
 
-static bool mouthCell(char m, int r, int c) {
-  switch (m) {
-    case 's': return (r == 16 && (c == 7 || c == 16)) || (r == 17 && (c == 8 || c == 15)) || (r == 18 && c >= 9 && c <= 14);
-    case 'f': return (r == 17 && c >= 9 && c <= 14) || (r == 18 && (c == 8 || c == 15));
-    case 'w': return (r == 17 && (c == 9 || c == 11 || c == 13)) || (r == 18 && (c == 10 || c == 12 || c == 14));
-    case 'o': return r >= 16 && r <= 19 && c >= 10 && c <= 13 && !((r == 16 || r == 19) && (c == 10 || c == 13));
-    case 'l': return r == 18 && c >= 9 && c <= 14;
+// Per-pixel body geometry, computed once: 255 = outside, else 0..63 = how far
+// from the centre (indexes the colour ramp).
+static uint8_t* bodyMap() {
+  static uint8_t* m = nullptr;
+  if (m) return m;
+  m = new uint8_t[BODY * BODY];
+  const float a = BODY / 2.0f, n = 4.6f;
+  for (int y = 0; y < BODY; y++)
+    for (int x = 0; x < BODY; x++) {
+      float u = (x + 0.5f - a) / a, v = (y + 0.5f - a) / a;
+      float e = powf(fabsf(u), n) + powf(fabsf(v), n);
+      if (e > 1.0f) { m[y * BODY + x] = 255; continue; }
+      float r = sqrtf(u * u + v * v) / 1.30f;          // ~0 centre .. ~1 corners
+      int k = (int)(r * 63.0f + 0.5f);
+      m[y * BODY + x] = (uint8_t)(k > 63 ? 63 : k);
+    }
+  return m;
+}
+
+static void lerp3(float t, const float A[3], const float B[3], float out[3]) {
+  for (int i = 0; i < 3; i++) out[i] = A[i] + (B[i] - A[i]) * t;
+}
+
+// 64-step colour ramp for one state. Tint 0 is the mark itself (cyan centre
+// → #2C73FF → deep-blue rim). A tinted state gets the SAME light-centre /
+// dark-rim shape in its own colour, mixed with the mark by `tint`. Mixing the
+// state colour straight into the blue made amber read as olive and red as
+// purple (seen in the preview), so the state ramp carries its own lightness.
+static void buildRamp(const BotCfg& c, uint16_t ramp[64]) {
+  const float G[3] = {0x34, 0xE9, 0xFE}, M[3] = {0x2C, 0x73, 0xFF}, D[3] = {0x0A, 0x00, 0xFF};
+  const float S[3] = {(float)c.r, (float)c.g, (float)c.b};
+  float light[3], dark[3];
+  for (int i = 0; i < 3; i++) { light[i] = S[i] + (255 - S[i]) * 0.35f; dark[i] = S[i] * 0.45f; }
+  for (int k = 0; k < 64; k++) {
+    float t = k / 63.0f, brand[3], st[3], o[3];
+    if (t < 0.55f) lerp3(t / 0.55f, G, M, brand); else lerp3((t - 0.55f) / 0.45f, M, D, brand);
+    if (t < 0.55f) lerp3(t / 0.55f, light, S, st); else lerp3((t - 0.55f) / 0.45f, S, dark, st);
+    for (int i = 0; i < 3; i++) o[i] = brand[i] + (st[i] - brand[i]) * c.tint;
+    ramp[k] = rgb((uint8_t)o[0], (uint8_t)o[1], (uint8_t)o[2]);
   }
-  return false;
 }
 
-static uint16_t faceCell(const FaceLook& L, int r, int c) {
-  char ch = FACE[r][c];
-  if (ch == 'M') ch = 'T';
-  if (r >= 15 && r <= 19 && c >= 2 && c <= 21 && mouthCell(L.mouth, r, c)) ch = 'M';
-  switch (ch) {
-    case 'K': case 'M': return F_OUT;
-    case 'T': return F_TEAL;
-    case 'L': return F_LIGHT;
-    case 'D': return F_DARK;
-    case 'Y': case 'w':
-      if (L.lids) return r == 13 ? F_DARK : F_TEAL;
-      if (ch == 'w') return F_SHINE;
-      return L.eye ? L.eye : F_EYE;
-    case 'R': return L.ball ? L.ball : F_RED;
-    case 'r': return L.ball ? L.ball : F_RED_HI;
+static void thickV(GFXcanvas16& cv, int x0, int y0, int x1, int y1, int x2, int y2, uint16_t col) {
+  for (int d = 0; d < 3; d++) {           // a 3px-thick chevron: (x0,y0) → (x1,y1) → (x2,y2)
+    cv.drawLine(x0, y0 + d, x1, y1 + d, col);
+    cv.drawLine(x1, y1 + d, x2, y2 + d, col);
   }
-  return BLACK;
 }
 
-// Every cell is drawn, black ones included, so a 2-4px move only leaves thin
-// strips of the old position to clear — no full wipe, no flicker.
-static void drawFace(Adafruit_GFX& g, FaceAnim& a, const FaceLook& L) {
-  int ox = a.shown.x, oy = a.shown.y;
-  for (int r = 0; r < 24; r++)
-    for (int c = 0; c < 24; c++)
-      g.fillRect(L.x + c * FS, L.y + r * FS, FS, FS, faceCell(L, r, c));
-  if (ox > -1000) {
-    if (ox < L.x) g.fillRect(ox, oy, L.x - ox, FACE_W, BLACK);
-    if (ox > L.x) g.fillRect(L.x + FACE_W, oy, ox - L.x, FACE_W, BLACK);
-    if (oy < L.y) g.fillRect(ox, oy, FACE_W, L.y - oy, BLACK);
-    if (oy > L.y) g.fillRect(ox, L.y + FACE_W, FACE_W, oy - L.y, BLACK);
+static void drawEye(GFXcanvas16& cv, char eye, int ex, int ey, int look, bool blink) {
+  const int w = 11, h = 22;
+  if (blink && (eye == 'p' || eye == 'w' || eye == 'l')) { cv.fillRoundRect(ex - 6, ey - 1, 13, 4, 2, INK); return; }
+  switch (eye) {
+    case 'w': cv.fillRoundRect(ex - 7 + look, ey - 13, 14, 26, 7, INK); break;
+    case 'f': cv.fillRoundRect(ex - 7, ey - 2, 15, 5, 2, INK); break;
+    case 'h': thickV(cv, ex - 7, ey + 3, ex, ey - 4, ex + 7, ey + 3, INK); break;     // ^
+    case 'c': thickV(cv, ex - 7, ey - 2, ex, ey + 4, ex + 7, ey - 2, INK); break;     // ‿
+    case 't': cv.fillRoundRect(ex - 5, ey - 2, w, 12, 5, INK);                          // half-lidded
+              cv.fillRect(ex - 7, ey - 3, 15, 3, INK); break;
+    case 's': cv.drawCircle(ex, ey, 7, INK); cv.drawCircle(ex, ey, 6, INK);
+              cv.drawCircle(ex + 1, ey, 3, INK); cv.fillCircle(ex, ey, 1, INK); break;
+    case 'v': { uint16_t p = rgb(255, 77, 109);
+                cv.fillCircle(ex - 3, ey - 2, 4, p); cv.fillCircle(ex + 3, ey - 2, 4, p);
+                cv.fillTriangle(ex - 7, ey, ex + 7, ey, ex, ey + 8, p); } break;
+    case 'x': { uint16_t y = INK;   // dark stars: gold ones vanish on the proud body
+                cv.fillTriangle(ex, ey - 8, ex - 3, ey + 2, ex + 3, ey + 2, y);
+                cv.fillTriangle(ex - 8, ey - 2, ex + 8, ey - 2, ex, ey + 3, y);
+                cv.fillTriangle(ex - 6, ey + 7, ex, ey + 1, ex - 1, ey - 2, y);
+                cv.fillTriangle(ex + 6, ey + 7, ex, ey + 1, ex + 1, ey - 2, y); } break;
+    case 'l': cv.fillRoundRect(ex - 5 + 4, ey - 15, w, h - 6, 5, INK); break;          // looking up-right
+    default:  cv.fillRoundRect(ex - 5 + look, ey - 11, w, h, 5, INK); break;          // pill
   }
-  a.shown = L;
 }
 
-// Blink every 3-5s for 140ms.
-static bool blinking(FaceAnim& a, uint32_t now, uint32_t rnd) {
-  if (a.nextBlink == 0) a.nextBlink = now + 1500 + (rnd % 2000);   // never blink on the first frame
+static void drawBadge(GFXcanvas16& cv, char badge, int x, int y, uint16_t col) {
+  if (!badge) return;
+  cv.fillCircle(x, y, 8, BLACK);                 // a dark ring so it reads on any body
+  cv.fillCircle(x, y, 7, col);
+  switch (badge) {
+    case 'd': for (int i = -1; i <= 1; i++) cv.fillRect(x + i * 4 - 1, y - 1, 2, 2, WHITE); break;
+    case '!': cv.fillRect(x - 1, y - 5, 2, 6, WHITE); cv.fillRect(x - 1, y + 3, 2, 2, WHITE); break;
+    case '?': cv.setTextSize(1); cv.setTextColor(WHITE); cv.setCursor(x - 2, y - 3); cv.print('?'); break;
+    default: cv.fillCircle(x, y, 2, WHITE); break;
+  }
+}
+
+static void sparkle(GFXcanvas16& cv, int x, int y, int s, uint16_t col) {
+  cv.drawFastHLine(x - s, y, 2 * s + 1, col);
+  cv.drawFastVLine(x, y - s, 2 * s + 1, col);
+}
+
+static void heart(GFXcanvas16& cv, int x, int y, uint16_t col) {
+  cv.fillCircle(x - 2, y, 2, col); cv.fillCircle(x + 2, y, 2, col);
+  cv.fillTriangle(x - 4, y + 1, x + 4, y + 1, x, y + 6, col);
+}
+
+static GFXcanvas16& botCanvas() {
+  static GFXcanvas16* cv = nullptr;
+  if (!cv) cv = new GFXcanvas16(BOX_W, BOX_H);
+  return *cv;
+}
+
+static bool botFrameDue(BotAnim& a, uint32_t now, bool force) {
+  if (!force && now - a.lastTick < 120) return false;
+  a.lastTick = now;
+  a.frame++;
+  return true;
+}
+
+static bool botBlinking(BotAnim& a, uint32_t now, uint32_t rnd) {
+  if (a.nextBlink == 0) a.nextBlink = now + 1500 + (rnd % 2000);   // never on the first frame
   if (now >= a.nextBlink && a.blinkUntil == 0) {
     a.blinkUntil = now + 140;
     a.nextBlink = now + 3000 + (rnd % 2000);
@@ -383,74 +463,123 @@ static bool blinking(FaceAnim& a, uint32_t now, uint32_t rnd) {
   return false;
 }
 
-static bool frameDue(FaceAnim& a, uint32_t now, bool force) {
-  if (!force && now - a.lastTick < 120) return false;
-  a.lastTick = now;
-  a.frame++;
-  return true;
+// Compose one frame of `state` and push it. Only re-blits when the frame
+// actually differs (position, blink, particle phase), so an idle bot costs
+// nothing between blinks.
+static void renderBot(Ctx& c, Bot state, BotAnim& a, bool force) {
+  const BotCfg& cfg = BOTS[(int)state];
+  uint32_t fr = a.frame;
+  int dx = 0, dy = 0, look = 0;
+  if (cfg.fx & FX_BOUNCE)  dy -= ((fr / 3) % 2) ? 4 : 0;
+  if (cfg.fx & FX_SHAKE)   dx = (fr % 2) ? 2 : -2;
+  if (cfg.fx & FX_BREATHE) dy += ((fr / 8) % 2);
+  if (cfg.fx & FX_DROOP)   dy += 4;
+  if (cfg.fx & FX_SCAN)    look = ((fr / 5) % 3) * 3 - 3;
+  bool blink = (cfg.fx & FX_BLINK) && botBlinking(a, c.now, c.rnd);
+  uint32_t phase = (cfg.fx & (FX_ZZ | FX_SWEAT | FX_STARS | FX_HEARTS)) ? (fr / 3) : 0;
+  uint32_t sig = ((uint32_t)state << 24) ^ ((uint32_t)(dx + 8) << 18) ^ ((uint32_t)(dy + 8) << 12)
+               ^ ((uint32_t)(look + 8) << 8) ^ (blink ? 0x80 : 0) ^ (phase & 0x7F);
+  if (!force && a.drawn && sig == a.sig) return;
+  a.sig = sig; a.drawn = true;
+
+  if (a.rampState != (int)state) { buildRamp(cfg, a.ramp); a.rampState = (int)state; }
+  GFXcanvas16& cv = botCanvas();
+  cv.fillScreen(BLACK);
+  const uint8_t* m = bodyMap();
+  int ox = (BOX_W - BODY) / 2 + dx, oy = (BOX_H - BODY) / 2 + dy;
+  uint16_t* buf = cv.getBuffer();
+  for (int y = 0; y < BODY; y++) {
+    int py = oy + y;
+    if (py < 0 || py >= BOX_H) continue;
+    for (int x = 0; x < BODY; x++) {
+      uint8_t k = m[y * BODY + x];
+      int px = ox + x;
+      if (k == 255 || px < 0 || px >= BOX_W) continue;
+      buf[py * BOX_W + px] = a.ramp[k];
+    }
+  }
+  // eyes: ±0.142 W from centre, 0.07 W above it (the mark's proportions)
+  int cx = ox + BODY / 2, cy = oy + BODY / 2 - 5;
+  if (cfg.eye == 'k') {                         // wink: left open, right ^
+    drawEye(cv, 'p', cx - 11, cy, 0, false);
+    drawEye(cv, 'h', cx + 11, cy, 0, false);
+  } else {
+    drawEye(cv, cfg.eye, cx - 11, cy, look, blink);
+    drawEye(cv, cfg.eye, cx + 11, cy, look, blink);
+  }
+  uint16_t stc = rgb(cfg.r, cfg.g, cfg.b);
+  drawBadge(cv, cfg.badge, ox + 9, oy + 9, stc);
+
+  if (cfg.fx & FX_ZZ) {                         // z z drifting up, top right
+    int k = phase % 3;
+    cv.setTextWrap(false);                      // a z past the edge must clip, not wrap to the left
+    cv.setTextColor(rgb(170, 180, 200));
+    cv.setTextSize(1); cv.setCursor(ox + BODY - 14 + k, oy + 2 - k * 2); cv.print('z');
+    cv.setTextSize(2); cv.setCursor(ox + BODY - 4 + k, oy - 10 - k * 2); cv.print('z');
+    cv.setTextSize(1);
+  }
+  if (cfg.fx & FX_SWEAT) {                      // a drop sliding down the right temple
+    int k = phase % 4;
+    uint16_t blue = rgb(125, 211, 252);
+    cv.fillCircle(ox + BODY - 8, oy + 16 + k * 3, 3, blue);
+    cv.fillTriangle(ox + BODY - 11, oy + 15 + k * 3, ox + BODY - 5, oy + 15 + k * 3, ox + BODY - 8, oy + 9 + k * 3, blue);
+  }
+  if (cfg.fx & FX_STARS) {                      // three sparkles taking turns
+    uint16_t gold = rgb(255, 214, 10);
+    const int P[3][2] = {{ox - 6, oy + 14}, {ox + BODY + 4, oy + 6}, {ox + BODY + 2, oy + BODY - 18}};
+    for (int i = 0; i < 3; i++) sparkle(cv, P[i][0], P[i][1], ((phase + i) % 3) == 0 ? 4 : 2, gold);
+  }
+  if (cfg.fx & FX_HEARTS) {                     // hearts rising on both sides
+    uint16_t pink = rgb(255, 77, 109);
+    int k = phase % 4;
+    heart(cv, ox - 4, oy + 30 - k * 5, pink);
+    heart(cv, ox + BODY + 4, oy + 20 - ((k + 2) % 4) * 5, pink);
+  }
+  c.g.drawRGBBitmap(BOX_X, BOX_Y, cv.getBuffer(), BOX_W, BOX_H);
 }
 
 static void caption(Ctx& c, const char* text, uint16_t col) {
-  c.g.fillRect(0, 106, SCREEN, 22, BLACK);
+  c.g.fillRect(0, 104, SCREEN, 24, BLACK);
   centerText(c.g, text && *text ? text : "...", 108, col);
   drawModeDots(c, 122);
 }
 
-void buddyTick(Ctx& c, const Feed& f, FaceAnim& a, bool force) {
-  if (!frameDue(a, c.now, force)) return;
-  char m = f.mood;
-  bool asleep = m != 'a' && c.clock.ok && c.clock.hh < 6;   // an outage keeps it awake
-
-  FaceLook L = {'s', 0, false, 0, FACE_X, FACE_Y};
-  if (asleep) {
-    L.mouth = 'l'; L.lids = true;
-  } else {
-    uint32_t fr = a.frame;
-    switch (m) {
-      case 'a': L.mouth = 'o'; L.eye = RED; L.x += (fr % 2) ? 2 : -2;
-                L.ball = (fr % 2) ? RED : 0x4000;                         break;
-      case 'w': L.mouth = 'w'; L.eye = AMBER; L.x += ((fr / 2) % 2) ? 1 : -1; break;
-      case 'd': L.y -= ((fr / 3) % 2) ? 4 : 0;                            break;
-      case 's': L.mouth = 'f'; L.eye = 0x8E7F; L.y += 4;                  break;
-      default:  L.ball = ((fr / 8) % 2) ? 0 : 0x8000;                     break;
-    }
-    if (m != 'a' && blinking(a, c.now, c.rnd)) L.lids = true;   // alarmed eyes stay open
+// The server's buddy mood (lib/cube/modes.ts buddyMood) → a BlueBot state.
+Bot moodBot(char mood, const Clock& ck) {
+  if (mood != 'a' && ck.ok && ck.hh < 6) return Bot::Sleeping;   // an outage keeps it awake
+  switch (mood) {
+    case 'a': return Bot::Error;       // a data source is down
+    case 'w': return Bot::RateLimit;   // a source is slow: sweating
+    case 'd': return Bot::Happy;       // BTC >= +3%
+    case 's': return Bot::Annoyed;     // BTC <= -3%
+    default:  return Bot::Idle;
   }
-  if (force || !sameLook(L, a.shown)) drawFace(c.g, a, L);
-
-  if (asleep) {                           // a z drifting up, right of the antenna
-    int k = (a.frame / 6) % 3;
-    c.g.fillRect(L.x + 15 * FS, L.y, 9 * FS, 6 * FS, BLACK);
-    c.g.setTextSize(k == 2 ? 2 : 1);
-    c.g.setTextColor(GRAY);
-    c.g.setCursor(L.x + 16 * FS + k * 4, L.y + 16 - k * 6);
-    c.g.print("z");
-    c.g.setTextSize(1);
-  }
-  if (force) caption(c, f.title, !f.ok || m == 'a' ? RED : m == 'w' ? AMBER : GRAY);
 }
 
-void thinkingTick(Ctx& c, const Agent& ag, FaceAnim& a, bool force) {
-  if (!frameDue(a, c.now, force)) return;
-  FaceLook L = {'l', 0, false, 0, FACE_X, FACE_Y};
-  if (blinking(a, c.now, c.rnd)) L.lids = true;
-  L.ball = ((a.frame / 3) % 2) ? CYAN : 0x0410;            // antenna "transmitting"
-  if (force || !sameLook(L, a.shown)) drawFace(c.g, a, L);
+void buddyTick(Ctx& c, const Feed& f, BotAnim& a, bool force) {
+  if (!botFrameDue(a, c.now, force)) return;
+  Bot b = moodBot(f.mood, c.clock);
+  renderBot(c, b, a, force);
+  if (force) caption(c, f.title, !f.ok || f.mood == 'a' ? RED : f.mood == 'w' ? AMBER : GRAY);
+}
 
-  // thought dots rising beside the antenna: . .. ...
-  int n = (a.frame / 3) % 4;
-  c.g.fillRect(FACE_X + 15 * FS, FACE_Y, 9 * FS, 6 * FS, BLACK);
-  for (int i = 0; i < n; i++) c.g.fillCircle(FACE_X + 16 * FS + i * 7, FACE_Y + 20 - i * 6, 2 + (i == 2), CYAN);
-  if (force) caption(c, ag.label[0] ? ag.label : "thinking", CYAN);
+void botTick(Ctx& c, Bot state, const char* text, uint16_t col, BotAnim& a, bool force) {
+  if (!botFrameDue(a, c.now, force)) return;
+  renderBot(c, state, a, force);
+  if (force) caption(c, text, col);
+}
+
+Bot cardBot(const Card& k) {
+  return k.tone == 'g' ? Bot::Finished : k.tone == 'w' ? Bot::Approval : k.tone == 'a' ? Bot::Error : Bot::Working;
 }
 
 // ── whole-screen dispatch for a mode ─────────────────────────────────────────
-void drawFeed(Ctx& c, const Feed& f, FaceAnim& face) {
+void drawFeed(Ctx& c, const Feed& f, BotAnim& bot) {
   Adafruit_GFX& g = c.g;
   if (f.isBuddy) {
-    g.fillScreen(BLACK);               // no clock bar in this mode: the face gets it all
-    face.reset();
-    buddyTick(c, f, face, true);
+    g.fillScreen(BLACK);               // no clock bar in this mode: the bot gets it all
+    bot.reset();
+    buddyTick(c, f, bot, true);
     return;
   }
   g.fillRect(0, 15, SCREEN, SCREEN - 15, BLACK);
