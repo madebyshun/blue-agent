@@ -33,8 +33,11 @@ import { findByTicker as findRwaByTicker, findByContract as findRwaByContract } 
 import { CHAT_HIDDEN_TOOLS } from "@/lib/chat-hidden-tools";
 import { cardReply, CARD_ALREADY_SHOWN, CARD_RENDERED_TOOLS, walletText } from "@/lib/chat/card-replies";
 import { buildBrief, buildStockBrief } from "@/lib/brief/run";
+import { getBaseTokenPricesUsd } from "@/lib/wallet/token-prices";
+import { NATIVE_SENTINEL } from "@/lib/wallet/token-trust";
+import { SILENT_MAX_USD } from "@/lib/chat/confirm";
 import { explainText, txExplain } from "@/lib/tx-explain";
-import { baseStockByTickerOrSymbol, dollarAmount } from "@/lib/chat/trade-intent";
+import { baseStockByTickerOrSymbol, dollarAmount, userDollarAmount } from "@/lib/chat/trade-intent";
 import { githubContextFor } from "@/lib/chat/github-context";
 import { forcedToolFor, wantsMyAlerts } from "@/lib/chat/intents";
 import { runInternalTool } from "@/lib/x402-internal-run";
@@ -1197,7 +1200,7 @@ Testnets are reachable by full id: base-sepolia, ethereum-sepolia, robinhood-tes
       properties: {
         tokenIn:  { type: "string", description: "Token to SELL — one of the majors ETH/WETH/USDC/cbBTC, the ticker of a verified Base stock token (e.g. NVDA), or a 0x… contract address on Base. Never invent an address." },
         tokenOut: { type: "string", description: "Token to RECEIVE — one of the majors ETH/WETH/USDC/cbBTC, the ticker of a verified Base stock token (e.g. NVDA, resolved server-side from BlueAgent's Base stock registry), or a 0x… contract address on Base. Never invent an address." },
-        amountIn: { type: "string", description: "Amount of tokenIn as a decimal string ('0.1'), OR a quantity word — 'all', 'max', 'half', '50%' — passed through verbatim for the card to resolve against the live balance. Never turn a word into a number yourself. For a DOLLAR amount ('buy $5 of NVDA on Base') pass tokenIn 'USDC' and amountIn '5'." },
+        amountIn: { type: "string", description: "Amount of tokenIn as a decimal string ('0.1'), OR a quantity word — 'all', 'max', 'half', '50%' — passed through verbatim for the card to resolve against the live balance. Never turn a word into a number yourself. For a DOLLAR amount of USDC ('buy $5 of NVDA on Base') pass tokenIn 'USDC' and amountIn '5'. For a dollar amount of ANOTHER token ('swap $1 of ETH to USDC') pass amountIn '$1' verbatim — the server converts it at the live price; never convert it yourself." },
       },
       required: ["tokenIn", "tokenOut", "amountIn"],
     },
@@ -1468,6 +1471,67 @@ const SWAP_TOKENS: Record<string, string> = {
  *  row there is cross-checked against base.org/stocks and asserted on-chain,
  *  so this is a registry lookup, never a name search); anything else → "" so
  *  the card asks the user. */
+/** "0.00041", "1,200" — a short, exact-enough display of a decimal string. */
+function fmtAmount(a: string): string {
+  const n = Number(a);
+  if (!Number.isFinite(n)) return a;
+  return n >= 1000 ? n.toLocaleString("en-US", { maximumFractionDigits: 2 }) : String(+n.toPrecision(6));
+}
+
+/**
+ * The Bankr-style proposal line (2026-10-16): what will happen, then how to
+ * confirm. Under SILENT_MAX_USD an embedded wallet signs on "yes" with no
+ * modal; at or above it (or unpriced) the wallet's own prompt still shows.
+ */
+function proposalLine(what: string, usd: number | null): string {
+  const prompt = usd != null && usd < SILENT_MAX_USD ? "" : " Your wallet will ask you to confirm.";
+  return `${what}. Reply **yes** to sign it.${prompt}`;
+}
+
+/**
+ * The amount to arm and its USD value. A dollar amount of a non-dollar token
+ * is converted at the live price (GeckoTerminal, as the wallet table prices
+ * it); a token amount is priced for the silent-sign limit only. A quantity
+ * word ("all", "half") passes through with no USD value.
+ */
+async function swapAmountUsd(tokenIn: string, tokenInAddress: string, amountIn: string): Promise<{ amount: string; usd: number | null; unpriced: boolean }> {
+  const dollars = dollarAmount(amountIn);
+  const isUsdc = tokenIn.toUpperCase() === "USDC";
+  if (isUsdc) {
+    const n = Number(dollars ?? amountIn);
+    return { amount: dollars ?? amountIn, usd: Number.isFinite(n) ? n : null, unpriced: false };
+  }
+  const addr = tokenIn.toUpperCase() === "ETH" ? NATIVE_SENTINEL : tokenInAddress;
+  const price = addr ? (await getBaseTokenPricesUsd([addr]).catch(() => new Map<string, number>())).get(addr.toLowerCase()) ?? null : null;
+  if (dollars) {
+    if (!price) return { amount: amountIn, usd: null, unpriced: true };
+    const units = Number(dollars) / price;
+    return { amount: String(+units.toPrecision(6)), usd: Number(dollars), unpriced: false };
+  }
+  const n = Number(amountIn);
+  return { amount: amountIn, usd: price && Number.isFinite(n) ? n * price : null, unpriced: false };
+}
+
+const shortA = (a: string) => (/^0x[a-fA-F0-9]{40}$/.test(a) ? `${a.slice(0, 6)}…${a.slice(-4)}` : a);
+/** USD value of an amount of a dollar stablecoin; null for anything else
+ *  (then the wallet's own prompt is kept — see proposalLine). */
+function stableUsd(symbol: string, amount: string): number | null {
+  const n = Number(amount);
+  return /^(USDC|USDG|USDBC)$/i.test(symbol.trim()) && Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/** The last user message's text, as sent to the model. */
+function lastUserText(msgs: object[]): string {
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const m = msgs[i] as { role?: string; content?: unknown };
+    if (m.role !== "user") continue;
+    if (typeof m.content === "string") return m.content;
+    if (Array.isArray(m.content)) return m.content.map((p) => (p && typeof p === "object" && typeof (p as { text?: unknown }).text === "string" ? (p as { text: string }).text : "")).join(" ");
+    return "";
+  }
+  return "";
+}
+
 function resolveSwapToken(token: string): string {
   const t = (token || "").trim();
   if (/^0x[a-fA-F0-9]{40}$/.test(t)) return t;
@@ -1544,7 +1608,12 @@ async function callHubTool(
     const network = args.network === "robinhood" ? "robinhood" : "base";
     return {
       text: "Send card rendered on MAINNET (Base 8453 or Robinhood Chain 4663 — never a testnet). The card shows the network, recipient, asset and amount, and the user reviews and SIGNS the transfer in their own wallet (non-custodial). Do NOT claim funds were sent, do NOT restate the recipient as if confirmed, and do NOT describe this as a test. Reply with one short line: tell the user to review the recipient + amount and sign in the card.",
-      staticReply: "Ready above — tap Review & sign to check the recipient and amount, then sign the transfer in your own wallet.",
+      staticReply: (() => {
+        const asset = typeof args.asset === "string" && args.asset ? args.asset : "USDC";
+        const amount = typeof args.amount === "string" || typeof args.amount === "number" ? String(args.amount) : "";
+        const to = typeof args.to === "string" ? args.to : "";
+        return proposalLine(`Send ${amount ? `${fmtAmount(amount)} ` : ""}${asset}${to ? ` to ${shortA(to)}` : ""} on ${network === "robinhood" ? "Robinhood Chain" : "Base"}`, stableUsd(asset, amount));
+      })(),
       result: { kind: "send", ...args, network },
     };
   }
@@ -1567,14 +1636,27 @@ async function callHubTool(
     // left the sell side empty or as a bare "USD" — an explicit token wins.
     const usdIn = dollarAmount(amountIn);
     if (usdIn && (!tokenIn || /^(usd|\$)$/i.test(tokenIn))) { tokenIn = "USDC"; amountIn = usdIn; }
+    const tokenInAddress = resolveSwapToken(tokenIn);
+    // "swap $1 of ETH" (2026-10-16): the dollar amount of a NON-dollar token is
+    // converted here, at the live price, never by the model — measured on a
+    // real chat, "$1 eth" became 0.001 ETH (~$2.44). Unpriced → refuse to arm.
+    const { amount, usd, unpriced } = await swapAmountUsd(tokenIn, tokenInAddress, amountIn);
+    if (unpriced) {
+      return {
+        text: `Could not price ${tokenIn} to convert ${amountIn}. Say so in one line and ask for the amount in ${tokenIn}.`,
+        staticReply: `Couldn't price ${tokenIn} right now to turn ${amountIn} into an amount. Say it in ${tokenIn}, e.g. "swap 0.0005 ${tokenIn} to ${tokenOut || "USDC"}".`,
+      };
+    }
+    amountIn = amount;
     return {
-      text: "Convert card rendered on BASE MAINNET (8453) — real funds, not a testnet. The card fetches a live 0x quote and the user reviews the rate and SIGNS in their own wallet (non-custodial). Do NOT quote a rate or output amount yourself, do NOT claim the swap happened, and do NOT describe this as a test. Reply with one short line: tell the user to review the quote in the card and sign.",
-      staticReply: "Ready above — tap Review & sign to see the live quote, then sign the trade in your own wallet.",
+      text: "Swap prepared on BASE MAINNET (8453) — real funds. The user confirms by replying yes (or opening Review & sign) and SIGNS in their own wallet (non-custodial). The reply is written for the user already: add nothing, never quote a rate or claim the swap happened.",
+      staticReply: proposalLine(`Swap ${fmtAmount(amountIn)} ${tokenIn}${usd != null ? ` (≈$${usd.toFixed(2)})` : ""} → ${tokenOut} on Base`, usd),
       result: {
         kind: "swap",
         tokenIn, tokenOut, amountIn, network: "base",
-        tokenInAddress:  resolveSwapToken(tokenIn),
+        tokenInAddress,
         tokenOutAddress: resolveSwapToken(tokenOut),
+        usdEstimate: usd,
       },
     };
   }
@@ -1831,6 +1913,14 @@ async function callHubTool(
       rawTokenIn = "USDG";
       amount = usdAmt;
     }
+    // A dollar amount of anything but USDG is not converted on Robinhood Chain
+    // yet: refuse to arm rather than let the card read "$5" as 5 tokens.
+    if (dollarAmount(amount)) {
+      return {
+        text: `The user gave a dollar amount for a Robinhood Chain swap that does not spend USDG. Ask for the amount in ${rawTokenIn || "ETH"} in one line.`,
+        staticReply: `On Robinhood Chain I can spend dollars only from USDG. Say it in ${rawTokenIn || "ETH"} instead, e.g. "swap 0.0005 ${rawTokenIn || "ETH"} to ${rawToken || "TSLA"} on robinhood".`,
+      };
+    }
     const slippage_bps = typeof args.slippage_bps === "number" ? args.slippage_bps : undefined;
 
     // Local resolver — extracted so token↔token can reuse it for tokenIn.
@@ -1930,7 +2020,7 @@ async function callHubTool(
         : `Robinhood swap card rendered for ${modeDesc}. The card fetches the live Uniswap V3 route and shows a slippage picker; the user's own wallet signs approve (if selling or token↔token) + swap. Do NOT restate the fields as a table, do NOT claim the swap has executed. Reply with one short line telling the user to review the amount + slippage in the card and click the Confirm button to sign.`,
       staticReply: error
         ? `⚠️ ${error}`
-        : `Ready above (${modeDesc}) — tap Review & sign to check the amount and slippage, then sign in your own wallet.`,
+        : proposalLine(`Swap ${modeDesc} on Robinhood Chain`, null),
       result: {
         kind: "robinhood_swap",
         direction,
@@ -1982,7 +2072,7 @@ async function callHubTool(
         : `Robinhood send card rendered — the user reviews the recipient/amount and SIGNS the transfer in their own wallet (non-custodial). Do NOT restate the fields as a table, do NOT claim the send has happened. Reply with one short line telling the user to review and sign in the card.`,
       staticReply: error
         ? `⚠️ ${error}`
-        : `Ready above — tap Review & sign to check the recipient and amount, then sign the transfer in your own wallet.`,
+        : proposalLine(`Send ${fmtAmount(amount)} ${tokenSymbol || shortA(rawToken)}${toAddress ? ` to ${shortA(toAddress)}` : ""} on Robinhood Chain`, stableUsd(tokenSymbol || "", amount)),
       result: {
         kind: "robinhood_send",
         fromAddress, toAddress, token: rawToken, amount, tokenSymbol,
@@ -2026,7 +2116,7 @@ async function callHubTool(
         : `Robinhood bridge card rendered — the user reviews the Relay quote in the card and SIGNS the source-chain tx in their own wallet (non-custodial). Do NOT restate the quote as a table, do NOT claim the bridge has completed. Reply with one short line telling the user to review and sign in the card; delivery is tracked on relay.link.`,
       staticReply: error
         ? `⚠️ ${error}`
-        : `Ready above — tap Review & sign to see the Relay quote, then sign the source-chain tx in your own wallet. Delivery is tracked on relay.link.`,
+        : proposalLine(`Bridge ${fmtAmount(amount)} ${tokenSymbol || shortA(rawToken)} from ${fromChain === "base" ? "Base" : "Robinhood Chain"} to ${toChain === "base" ? "Base" : "Robinhood Chain"} via Relay`, stableUsd(tokenSymbol || "", amount)),
       result: {
         kind: "robinhood_bridge",
         fromChain, toChain, fromAddress, recipient, token: rawToken, amount, tokenSymbol,
@@ -2666,6 +2756,13 @@ async function veniceToolStream(
           let args: Record<string, unknown> = {};
           try { args = JSON.parse(tc.function.arguments); } catch {}
           const mcpEntry = mcpMap?.get(tc.function.name);
+          // A swap's spend amount: the user's own "$N" wins over the bare number
+          // the model wrote (lib/chat/trade-intent.ts userDollarAmount).
+          if (tc.function.name === "prepare_swap" || tc.function.name === "robinhood_swap") {
+            const key = tc.function.name === "prepare_swap" ? "amountIn" : "amount";
+            const d = userDollarAmount(lastUserText(openaiMsgs), args[key]);
+            if (d) args = { ...args, [key]: `$${d}` };
+          }
           const out = mcpEntry
             ? await callMcpConnectorTool(mcpEntry, args)
             : await callHubTool(tc.function.name, args, userAddress);

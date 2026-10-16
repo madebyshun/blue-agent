@@ -8,7 +8,9 @@
 //   4. Relay solvers fill the destination chain — we surface the tracker link.
 // The server never signs, never holds keys, never touches the funds.
 
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
+import { useSilentSender } from "@/lib/privy/silent-tx";
+import { AutoConfirmContext, useAutoReport } from "@/components/wallet/action-context";
 import {
   useAccount, useSwitchChain, useSendTransaction, useChainId,
   useWaitForTransactionReceipt,
@@ -141,6 +143,13 @@ export function RobinhoodBridgeCard({ result }: { result: RobinhoodBridgeResult 
   const { address: connected, isConnected } = useAccount();
   const { switchChainAsync } = useSwitchChain();
   const { sendTransactionAsync } = useSendTransaction();
+  // Confirm-in-chat (lib/chat/confirm.ts): silent only for a chat-confirmed
+  // bridge under SILENT_MAX_USD, through the embedded wallet.
+  const silentSend = useSilentSender();
+  const sendTx = async (silent: boolean, tx: { to: `0x${string}`; data: `0x${string}`; value?: bigint; chainId: number }): Promise<`0x${string}`> => {
+    if (silent && silentSend && connected) { const h = await silentSend(connected, tx); if (h) return h; }
+    return sendTransactionAsync(tx);
+  };
   const walletChainId = useChainId();
 
   // Direction comes from the LLM marker and is display-only (#107). The bridge
@@ -357,6 +366,22 @@ export function RobinhoodBridgeCard({ result }: { result: RobinhoodBridgeResult 
     && step !== "switching" && step !== "approving" && step !== "sending" && step !== "delivering";
   const busy = step === "switching" || step === "approving" || step === "sending" || step === "delivering";
 
+  // A chat "yes" (lib/chat/confirm.ts) runs the same two steps the buttons do:
+  // approve when one is needed, then — once its receipt flips the card back to
+  // idle — the bridge transaction. Each step at most once.
+  const auto = useContext(AutoConfirmContext);
+  const autoStage = useRef<"none" | "approve" | "send">("none");
+  useAutoReport(step, err, txHash ? `${fromCfg.explorer}/tx/${txHash}` : null,
+    { sentSteps: ["delivering"], doneSteps: ["filled"] });
+  useEffect(() => {
+    if (!auto.armed || !canSign || step !== "idle") return;
+    if (needsApprove) {
+      if (autoStage.current === "none") { autoStage.current = "approve"; void doApprove({ silent: auto.silent }); }
+    } else if (autoStage.current !== "send") {
+      autoStage.current = "send"; void doSend({ silent: auto.silent });
+    }
+  }, [auto.armed, auto.silent, canSign, step, needsApprove]); // eslint-disable-line react-hooks/exhaustive-deps
+
   async function switchToFromChain() {
     setStep("switching"); setErr("");
     try {
@@ -368,7 +393,7 @@ export function RobinhoodBridgeCard({ result }: { result: RobinhoodBridgeResult 
     }
   }
 
-  async function doApprove() {
+  async function doApprove(opts: { silent?: boolean } = {}) {
     if (!prep?.approve) return;
     setErr(""); setStep("approving");
     try {
@@ -378,7 +403,7 @@ export function RobinhoodBridgeCard({ result }: { result: RobinhoodBridgeResult 
         try { await switchChainAsync({ chainId: fromCfg.id }); }
         catch { throw new Error(`Switch to ${fromCfg.label} Chain (${fromCfg.id}) and try again`); }
       }
-      const hash = await sendTransactionAsync({
+      const hash = await sendTx(!!opts.silent, {
         to:      prep.approve.to,
         data:    prep.approve.data,
         value:   BigInt(prep.approve.value),
@@ -394,7 +419,7 @@ export function RobinhoodBridgeCard({ result }: { result: RobinhoodBridgeResult 
     }
   }
 
-  async function doSend() {
+  async function doSend(opts: { silent?: boolean } = {}) {
     if (!prep?.tx || !prep?.meta) { setErr("Nothing to send yet"); setStep("error"); return; }
     if (!isConnected || !connected) { setErr("Connect your wallet"); setStep("error"); return; }
     setErr(""); setStep("sending");
@@ -403,7 +428,7 @@ export function RobinhoodBridgeCard({ result }: { result: RobinhoodBridgeResult 
         try { await switchChainAsync({ chainId: fromCfg.id }); }
         catch { throw new Error(`Switch to ${fromCfg.label} Chain (${fromCfg.id}) and try again`); }
       }
-      const hash = await sendTransactionAsync({
+      const hash = await sendTx(!!opts.silent, {
         to:      prep.tx.to,
         data:    prep.tx.data,
         value:   BigInt(prep.tx.value),
@@ -624,8 +649,8 @@ export function RobinhoodBridgeCard({ result }: { result: RobinhoodBridgeResult 
             onClick={
               !isConnected  ? undefined
               : wrongChain  ? switchToFromChain
-              : needsApprove ? doApprove
-              : doSend
+              : needsApprove ? () => { void doApprove(); }
+              : () => { void doSend(); }
             }
             disabled={!isConnected ? false : (wrongChain ? busy : (!canSign || busy))}
             className="w-full text-[12px] font-bold py-2.5 rounded-lg transition-all disabled:opacity-50"

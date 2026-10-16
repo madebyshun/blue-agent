@@ -2239,9 +2239,18 @@ export function SendCard({ result, account }: { result: SendResult; account?: `0
 //
 // The type stays: the `prepare_swap` case in the dispatcher below reads it to
 // seed `ConvertPanel`, which is now the only Base swap implementation in chat.
+/** USD value of a dollar-stablecoin amount, for the silent-sign limit; null
+ *  (keep the wallet's prompt) for anything else or an amount word. */
+function stableUsd(symbol: string | undefined, amount: unknown): number | null {
+  const n = Number(amount);
+  return /^(USDC|USDG|USDBC)$/i.test((symbol ?? "").trim()) && Number.isFinite(n) && n > 0 ? n : null;
+}
+
 type SwapResult = {
   tokenIn?: string; tokenOut?: string; amountIn?: string;
   tokenInAddress?: string; tokenOutAddress?: string; network?: string;
+  /** USD value of what is sold, priced server-side (null = unpriced). */
+  usdEstimate?: number | null;
 };
 
 // ── CONVERT in chat — the venue switch the two swap cards cannot make alone ───
@@ -2427,9 +2436,9 @@ export function ToolResultCard({ tool, result }: { tool: string; result: Record<
       // follow-up that retires this branch.
       const rhSummary = `${s.direction === "sell" ? "Sell" : "Buy"} ${amt(s.amount)} ${s.token_symbol || shortAddr(s.token_address)}`.replace(/\s+/g, " ");
       const rhCheck = { chain: "robinhood" as const, kind: "swap" as const, token: s.direction === "sell" ? "ETH" : s.token_address };
-      if (s.token_in_address) return <ActionStrip summary={rhSummary} chain="robinhood" check={rhCheck}><RobinhoodSwapCard result={s} /></ActionStrip>;
+      if (s.token_in_address) return <ActionStrip summary={rhSummary} chain="robinhood" check={rhCheck} confirmable><RobinhoodSwapCard result={s} /></ActionStrip>;
       return (
-        <ActionStrip summary={rhSummary} chain="robinhood" check={rhCheck}>
+        <ActionStrip summary={rhSummary} chain="robinhood" check={rhCheck} confirmable>
         <ConvertPanel account={account} seedChain="robinhood"
           rhDirection={s.direction === "sell" ? "sell" : s.direction === "buy" ? "buy" : undefined}
           rhToken={s.token_address}
@@ -2447,7 +2456,7 @@ export function ToolResultCard({ tool, result }: { tool: string; result: Record<
       // a hint. WalletSendCard uses the connected wallet, which is the only
       // address that can actually produce a signature.
       return (
-        <ActionStrip summary={`Send ${amt(s.amount)} ${s.tokenSymbol || shortAddr(s.token) || "ETH"} → ${shortAddr(s.toAddress)}`} chain="robinhood"
+        <ActionStrip summary={`Send ${amt(s.amount)} ${s.tokenSymbol || shortAddr(s.token) || "ETH"} → ${shortAddr(s.toAddress)}`} chain="robinhood" confirmable usd={stableUsd(s.tokenSymbol, s.amount)}
           check={{ chain: "robinhood", kind: "send", token: s.token || "ETH", recipient: s.toAddress }}>
         <WalletSendCard account={account} initialNetwork="robinhood"
           initialTo={s.toAddress}
@@ -2467,9 +2476,10 @@ export function ToolResultCard({ tool, result }: { tool: string; result: Record<
       const from = s.fromChain === "robinhood" ? "Robinhood" : "Base", to = s.fromChain === "robinhood" ? "Base" : "Robinhood";
       const bChain = s.fromChain === "robinhood" ? "robinhood" as const : "base" as const;
       const bSummary = `Bridge ${amt(s.amount)} ${s.tokenSymbol || shortAddr(s.token) || "ETH"} ${from} → ${to}${s.recipient ? ` (to ${shortAddr(s.recipient)})` : ""}`;
-      if (s.recipient) return <ActionStrip summary={bSummary} chain={bChain}><RobinhoodBridgeCard result={s} /></ActionStrip>;
+      const bUsd = stableUsd(s.tokenSymbol, s.amount);
+      if (s.recipient) return <ActionStrip summary={bSummary} chain={bChain} confirmable usd={bUsd}><RobinhoodBridgeCard result={s} /></ActionStrip>;
       return (
-        <ActionStrip summary={bSummary} chain={bChain}>
+        <ActionStrip summary={bSummary} chain={bChain} confirmable usd={bUsd}>
         <BankBridgeCard account={account}
           initialFromChain={s.fromChain}
           initialToken={s.token}
@@ -2501,7 +2511,7 @@ export function ToolResultCard({ tool, result }: { tool: string; result: Record<
       // network armed a TESTNET send while the wallet armed mainnet from the same
       // words (#256). There is no testnet branch left to fall into.
       return (
-        <ActionStrip summary={`Send ${amt(s.amount)} ${s.asset || "USDC"} → ${shortAddr(s.to)}`} chain={s.network === "robinhood" ? "robinhood" : "base"}
+        <ActionStrip summary={`Send ${amt(s.amount)} ${s.asset || "USDC"} → ${shortAddr(s.to)}`} chain={s.network === "robinhood" ? "robinhood" : "base"} confirmable usd={stableUsd(s.asset || "USDC", s.amount)}
           check={/^0x[a-fA-F0-9]{40}$/.test(s.to ?? "") ? { chain: s.network === "robinhood" ? "robinhood" : "base", kind: "send", token: /^0x[a-fA-F0-9]{40}$/.test(s.asset ?? "") ? s.asset : (s.asset ?? "").toUpperCase() === "ETH" ? "ETH" : null, recipient: s.to } : undefined}>
         <WalletSendCard account={account}
           initialNetwork={s.network === "robinhood" ? "robinhood" : "base"}
@@ -2531,7 +2541,8 @@ export function ToolResultCard({ tool, result }: { tool: string; result: Record<
       // the card can name it in its "couldn't arm this" banner. `resolveSwapToken`
       // returns "" for anything it cannot verify, and "" must not become a token.
       return (
-        <ActionStrip summary={`Swap ${amt(s.amountIn)} ${s.tokenIn || "?"} → ${s.tokenOut || "?"}`} chain="base"
+        <ActionStrip summary={`Swap ${amt(s.amountIn)} ${s.tokenIn || "?"} → ${s.tokenOut || "?"}`} chain="base" confirmable
+          usd={typeof s.usdEstimate === "number" ? s.usdEstimate : null}
           check={{ chain: "base", kind: "swap", token: s.tokenOutAddress || ((s.tokenOut ?? "").toUpperCase() === "ETH" ? "ETH" : null) }}>
         <ConvertPanel account={account} seedChain="base"
           initialSell={s.tokenInAddress || s.tokenIn}

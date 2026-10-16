@@ -76,6 +76,7 @@
 // it does not block Review, because refusing to let the user continue is the
 // confirm card's call to make, on its own evidence, with its own retry.
 
+import { useAutoConfirm } from "@/components/wallet/action-context";
 import { useEffect, useRef, useState } from "react";
 import { useAccount } from "wagmi";
 import { formatUnits, parseUnits } from "viem";
@@ -381,6 +382,10 @@ export default function BridgeCard({
   // accepted "999%" it would have resolved to 9.99× the balance.
   const isWord = QUANTITY_WORD_RE.test(amount.trim());
   const canReview = !!from && !!token && (amountOk || isWord) && outlook?.kind !== "refused";
+
+  // A chat "yes" presses Review once the form is ready; the RobinhoodBridgeCard
+  // that review mounts sits in the same AutoConfirmContext and signs itself.
+  useAutoConfirm(canReview && !intent, () => review());
 
   function review() {
     if (!canReview || !token) return;

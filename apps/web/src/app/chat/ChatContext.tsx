@@ -1,4 +1,5 @@
 "use client";
+import { confirmLatest, confirmReply, forgetArmed, isConfirmWord } from "@/lib/chat/confirm";
 import {
   createContext, useContext, useState, useEffect,
   useRef, useCallback, useMemo,
@@ -655,6 +656,53 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         return updated;
       });
       return;
+    }
+
+    // Confirm-in-chat (2026-10-16, lib/chat/confirm.ts): a bare "yes" / "ok" /
+    // "confirm" / "có" / "đồng ý" signs the newest pending action in this
+    // chat, matched HERE in code — it never reaches the model, costs no
+    // credits, and nothing but the user's own typed message can trigger it.
+    // With nothing pending it goes to the model like any other message.
+    if (!isConfirmWord(userMsg)) forgetArmed();
+    else {
+      const ctid = activeTaskId;
+      const replyAt = Date.now() + 1;
+      // The action rewrites this reply as it progresses (signing → done / failed),
+      // so its outcome reads as chat, not as a card. If the user has typed since,
+      // the final outcome is a NEW message at the bottom instead: a receipt
+      // that changes above later messages reads out of order (ShunTr 2026-10-16).
+      const sink = (text: string, final: boolean) => setTasksState(prev => {
+        const updated = prev.map(t => {
+          if (t.id !== ctid) return t;
+          const last = t.messages[t.messages.length - 1];
+          const isLast = last?.role === "assistant" && last.createdAt === replyAt;
+          if (final && !isLast) {
+            return { ...t, updatedAt: Date.now(), messages: [...t.messages, { role: "assistant" as const, content: text, createdAt: Date.now() }] };
+          }
+          if (!isLast && !t.messages.some(m => m.createdAt === replyAt)) return t;
+          return {
+            ...t, updatedAt: Date.now(),
+            messages: t.messages.map(m => m.role === "assistant" && m.createdAt === replyAt ? { ...m, content: text } : m),
+          };
+        });
+        saveTasks(updated, walletAddr);
+        return updated;
+      });
+      const outcome = ctid ? confirmLatest(Date.now(), sink) : null;
+      if (outcome && ctid) {
+        const cbase: Message[] = activeTask?.messages ?? [];
+        setInput("");
+        const turn: Message[] = [
+          { role: "user", content: userMsg, createdAt: replyAt - 1 },
+          { role: "assistant", content: confirmReply(outcome), createdAt: replyAt },
+        ];
+        setTasksState(prev => {
+          const updated = prev.map(t => t.id === ctid ? { ...t, messages: [...cbase, ...turn], updatedAt: Date.now() } : t);
+          saveTasks(updated, walletAddr);
+          return updated;
+        });
+        return;
+      }
     }
 
     // Gate on the SAME credit value the UI shows — `credits` is the unified

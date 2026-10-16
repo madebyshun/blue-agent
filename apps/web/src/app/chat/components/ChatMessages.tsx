@@ -3,6 +3,7 @@ import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useChat } from "../ChatContext";
 import { ToolResultCard } from "./ToolCards";
+import { ActionMessageContext } from "@/components/wallet/action-context";
 import { chatTierLabel } from "./presets";
 import ArtifactCard from "./ArtifactCard";
 import { isArtifactCardLang } from "../artifacts";
@@ -650,7 +651,11 @@ export default function ChatMessages() {
                             // below, so no progress signal is lost.
                             <React.Fragment key={j}>
                               {log.status === "done" && log.result != null && (
-                                <ToolResultCard tool={log.tool} result={log.result as Record<string, unknown>} />
+                                // createdAt lets a chat "yes" arm only a RECENT
+                                // proposal (lib/chat/confirm.ts), never one a reload revived.
+                                <ActionMessageContext.Provider value={{ createdAt: msg.createdAt ?? 0 }}>
+                                  <ToolResultCard tool={log.tool} result={log.result as Record<string, unknown>} />
+                                </ActionMessageContext.Provider>
                               )}
                             </React.Fragment>
                           ))}

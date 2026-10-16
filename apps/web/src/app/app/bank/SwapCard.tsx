@@ -43,7 +43,9 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useAccount, useSwitchChain, useWriteContract, useSendTransaction, useReadContract } from "wagmi";
-import { formatUnits, parseUnits, isAddress, getAddress } from "viem";
+import { useSilentSender } from "@/lib/privy/silent-tx";
+import { useAutoConfirm, useAutoReport } from "@/components/wallet/action-context";
+import { formatUnits, parseUnits, isAddress, getAddress, encodeFunctionData } from "viem";
 import { base } from "wagmi/chains";
 import { ERC20_ABI } from "@/lib/yield-execution";
 import { DATA_SUFFIX } from "@/constants/builderCode";
@@ -185,6 +187,9 @@ export default function SwapCard({
   const { switchChainAsync } = useSwitchChain();
   const { writeContractAsync } = useWriteContract();
   const { sendTransactionAsync } = useSendTransaction();
+  // Confirm-in-chat (lib/chat/confirm.ts): an embedded wallet may send without
+  // its modal, but only for a chat-confirmed swap under SILENT_MAX_USD.
+  const silentSend = useSilentSender();
 
   // Seeded ONCE. `useState(fn)` and not an effect: an effect would re-run and
   // stomp a token the user had since changed by hand, and these props arrive
@@ -375,8 +380,23 @@ export default function SwapCard({
   const canSwap = !!account && !!quote?.transaction && amt > 0 && gate === "ok" && !loading && buyDec != null
     && pt.cleared && !pt.blocked;
   const busy = step === "approving" || step === "swapping";
+  // A chat "yes" runs the same swap() once the card is ready to sign.
+  useAutoConfirm(canSwap && step === "idle", (o) => { void swap(o); });
+  useAutoReport(step, err, txHash ? `https://basescan.org/tx/${txHash}` : null,
+    { detail: `${fmt(amt)} ${label(sell)} → ${buyAmount != null ? fmt(buyAmount) : ""} ${label(buy)}`.replace(/\s+/g, " ") });
 
-  async function swap() {
+  /** One transaction: silently through the embedded wallet when the user
+   *  confirmed in chat and it is under the limit, else the wallet's prompt. */
+  async function sendTx(tx: { to: `0x${string}`; data: `0x${string}`; value?: bigint }, silent: boolean): Promise<`0x${string}`> {
+    if (silent && silentSend && account) {
+      const h = await silentSend(account, { ...tx, chainId: base.id });
+      if (h) return h;
+    }
+    return sendTransactionAsync({ ...tx, chainId: base.id });
+  }
+
+  async function swap(opts: { silent?: boolean } = {}) {
+    const silent = !!opts.silent;
     if (!account) { setErr("Connect your wallet"); setStep("error"); return; }
     if (quote?.needsKey) { setErr("Trading needs a 0x API key (ZEROX_API_KEY)"); setStep("error"); return; }
     if (!quote?.transaction) { setErr(quote?.error || "No route for this pair"); setStep("error"); return; }
@@ -401,20 +421,26 @@ export default function SwapCard({
       if (!sell.native && quote.issues?.allowance?.spender) {
         if (bal.decimals == null) throw new Error("Token scale unread — refusing to approve");
         setStep("approving");
-        await writeContractAsync({
-          address: sell.addr as `0x${string}`, abi: ERC20_ABI, functionName: "approve",
-          args: [quote.issues.allowance.spender, parseUnits(amount, bal.decimals)], chainId: base.id,
-        });
+        if (silent) {
+          await sendTx({
+            to: sell.addr as `0x${string}`,
+            data: encodeFunctionData({ abi: ERC20_ABI, functionName: "approve", args: [quote.issues.allowance.spender, parseUnits(amount, bal.decimals)] }),
+          }, true);
+        } else {
+          await writeContractAsync({
+            address: sell.addr as `0x${string}`, abi: ERC20_ABI, functionName: "approve",
+            args: [quote.issues.allowance.spender, parseUnits(amount, bal.decimals)], chainId: base.id,
+          });
+        }
       }
       setStep("swapping");
-      const hash = await sendTransactionAsync({
-        to: quote.transaction.to,
+      const hash = await sendTx({
+        to: quote.transaction.to as `0x${string}`,
         // Append the ERC-8021 builder-code suffix to the 0x swap calldata so the
         // tx is credited to BlueAgent on base.dev (0x… data + suffix without 0x).
         data: (quote.transaction.data + DATA_SUFFIX.slice(2)) as `0x${string}`,
         value: quote.transaction.value ? BigInt(quote.transaction.value) : undefined,
-        chainId: base.id,
-      });
+      }, silent);
       setTxHash(hash); setStep("done");
     } catch (e) {
       setErr(((e as Error).message || String(e)).slice(0, 160)); setStep("error");
@@ -558,7 +584,7 @@ export default function SwapCard({
         <UnverifiedBalance symbol={label(sell)} onRetry={() => { void bal.refetch(); }} busy={bal.refetching} />
       )}
 
-      <ConfirmButton tone="blue" onClick={swap} disabled={!canSwap || busy}>
+      <ConfirmButton tone="blue" onClick={() => { void swap(); }} disabled={!canSwap || busy}>
         {!isConnected ? "Connect your wallet"
           : busy ? (step === "approving" ? "Approve in wallet…" : "Confirm swap…")
           : overBalance ? "Insufficient balance"

@@ -88,6 +88,8 @@ import {
   useAccount, useSwitchChain, useSendTransaction, useWaitForTransactionReceipt, useReadContract,
   useCapabilities, useSendCalls, useCallsStatus,
 } from "wagmi";
+import { useSilentSender } from "@/lib/privy/silent-tx";
+import { useAutoConfirm, useAutoReport } from "@/components/wallet/action-context";
 import { isAddress, getAddress, parseUnits, formatUnits, namehash, encodeFunctionData } from "viem";
 import { WALLET_CHAINS } from "@/lib/wallet/chains";
 import { ERC20_ABI } from "@/lib/yield-execution";
@@ -246,6 +248,9 @@ export default function WalletSendCard({
   const { isConnected } = useAccount();
   const { switchChainAsync } = useSwitchChain();
   const { sendTransactionAsync } = useSendTransaction();
+  // Confirm-in-chat (lib/chat/confirm.ts): silent only for a chat-confirmed
+  // send under SILENT_MAX_USD, through the embedded wallet.
+  const silentSend = useSilentSender();
 
   const [network, setNetwork] = useState<SendNet>(initialNetwork);
   // The ARMED asset — one object, not a `"cash" | "native"` enum. The enum was
@@ -450,6 +455,9 @@ export default function WalletSendCard({
   const valid = !!toAddress && amt > 0 && gate === "ok" && bal.decimals != null && !memoTooLong
     && pt.cleared && !pt.blocked;
   const busy = step === "preparing" || step === "switching" || step === "signing" || step === "broadcasting";
+  // A chat "yes" runs the same send() once the card is ready to sign.
+  useAutoConfirm(valid && !busy && step === "idle" && isConnected, (o) => { void send(o); });
+  useAutoReport(step, err, txHash ? `${cfg.explorer}/tx/${txHash}` : null);
 
   // 25 / 50 / 100% presets computed in BASE UNITS (raw * bps / 10000n) so the
   // string handed to parseUnits can never carry more decimals than the token has,
@@ -540,7 +548,12 @@ export default function WalletSendCard({
     return { to: token, data };
   }
 
-  async function send() {
+  async function send(opts: { silent?: boolean } = {}) {
+    // A chat-confirmed send through the embedded wallet: one plain transaction,
+    // no modal (the 5792 batch and its gas sponsorship are skipped on this
+    // path — the user pays Base gas, a fraction of a cent).
+    const trySilent = async (tx: { to: `0x${string}`; data?: `0x${string}`; value?: bigint }): Promise<`0x${string}` | null> =>
+      opts.silent && silentSend && account ? silentSend(account, { ...tx, chainId }) : null;
     if (!account) { setErr("Connect your wallet"); setStep("error"); return; }
     if (!toAddress) {
       setErr(recipIsName ? "Couldn't resolve that name" : "Enter a valid 0x address"); setStep("error"); return;
@@ -574,9 +587,8 @@ export default function WalletSendCard({
         try { await switchChainAsync({ chainId }); }
         catch { throw new Error("Switch to Robinhood Chain (4663) and try again"); }
         setStep("signing");
-        const hash = await sendTransactionAsync({
-          to: j.tx.to, data: j.tx.data, value: BigInt(j.tx.value), chainId,
-        });
+        const rhTx = { to: j.tx.to as `0x${string}`, data: j.tx.data as `0x${string}`, value: BigInt(j.tx.value) };
+        const hash = (await trySilent(rhTx)) ?? await sendTransactionAsync({ ...rhTx, chainId });
         setTxHash(hash); setStep("broadcasting");
       } else {
         // Base — the user signs a transfer (cash), a native send, or a
@@ -588,6 +600,8 @@ export default function WalletSendCard({
         // `dec` is `bal.decimals`, read ON-CHAIN from this token. Never
         // `asset.decimals`, which came from a holdings payload.
         const call = buildBaseCall(toAddress, dec);
+        const silentHash = await trySilent(call);
+        if (silentHash) { setTxHash(silentHash); setStep("broadcasting"); return; }
 
         // EIP-5792 first, when the wallet does it. `wallet_sendCalls` is the
         // only transport that can carry the ERC-8021 builder-code suffix, and
@@ -896,7 +910,7 @@ export default function WalletSendCard({
 
       <PreTradeBanner pt={pt} />
 
-      <ConfirmButton onClick={send} disabled={!valid || busy || !isConnected}>
+      <ConfirmButton onClick={() => { void send(); }} disabled={!valid || busy || !isConnected}>
         {!isConnected ? "Connect your wallet"
           : busy
             ? (step === "preparing" ? "Preparing…"

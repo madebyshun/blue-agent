@@ -4,6 +4,7 @@
  * `api/chat/route.ts` because a route file may only export route handlers, and
  * these need a test (scripts/chat-trade-intent-test.ts).
  */
+import { QUANTITY_WORD_RE } from "@/lib/wallet/amount";
 import { findBaseStock, type BaseStock } from "@/lib/base-stocks/registry";
 
 /**
@@ -15,6 +16,31 @@ import { findBaseStock, type BaseStock } from "@/lib/base-stocks/registry";
 export function dollarAmount(raw: string): string | null {
   const m = raw.trim().match(/^\$\s*([0-9]+(?:\.[0-9]+)?)$|^([0-9]+(?:\.[0-9]+)?)\s*(?:usd|dollars?|bucks)$/i);
   return m ? (m[1] ?? m[2]) : null;
+}
+
+/**
+ * The user's own dollar amount, when the model dropped the "$" (2026-10-16).
+ *
+ * MEASURED on production: "swap $1 eth to usdc" reached prepare_swap once as
+ * amountIn "0.001" and once as "1" — a $1 request armed 1 ETH (~$2,440). The
+ * model is not trusted with that conversion: if the user's message carries
+ * exactly ONE dollar figure and the model's amount is that same number, empty,
+ * or a number the user never typed (its own conversion), the dollar figure is
+ * restored ("$1") and the server converts it at the live price. A number or
+ * quantity word the user did type is left alone.
+ */
+export function userDollarAmount(userText: string, modelAmount: unknown): string | null {
+  const hits = [...userText.matchAll(/\$\s*([0-9]+(?:\.[0-9]+)?)(?![0-9.])|\b([0-9]+(?:\.[0-9]+)?)\s*(?:usd|dollars?|bucks)\b/gi)];
+  if (hits.length !== 1) return null;
+  const n = hits[0][1] ?? hits[0][2];
+  const a = modelAmount == null ? "" : String(modelAmount).trim();
+  if (a === "" || dollarAmount(a) === n || (Number.isFinite(Number(a)) && Number(a) === Number(n))) return n;
+  // A quantity word the user typed ("all", "half") or a number they typed
+  // themselves ("swap 0.001 eth, about $2") is theirs — kept. A number that
+  // appears nowhere in their message is the model's own conversion — replaced.
+  if (QUANTITY_WORD_RE.test(a)) return null;
+  const typed = new Set((userText.match(/[0-9]+(?:\.[0-9]+)?/g) ?? []).map(Number));
+  return Number.isFinite(Number(a)) && typed.has(Number(a)) ? null : n;
 }
 
 /**
