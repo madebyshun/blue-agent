@@ -61,6 +61,8 @@
 // only index is one Blockscout, "which VEX?" is a question the card has to
 // answer out loud.
 
+import { useSilentSender } from "@/lib/privy/silent-tx";
+import { useAutoConfirm } from "@/components/wallet/action-context";
 import { useEffect, useRef, useState } from "react";
 import {
   useAccount, useSwitchChain, useSendTransaction, usePublicClient, useWaitForTransactionReceipt,
@@ -146,6 +148,13 @@ export default function RhSwapCard({
   const { isConnected } = useAccount();
   const { switchChainAsync } = useSwitchChain();
   const { sendTransactionAsync } = useSendTransaction();
+  // Confirm-in-chat (lib/chat/confirm.ts): a chat-confirmed swap under
+  // SILENT_MAX_USD goes through the embedded wallet without its modal.
+  const silentSend = useSilentSender();
+  const sendTx = async (silent: boolean, tx: { to: `0x${string}`; data: `0x${string}`; value?: bigint; chainId: number }): Promise<`0x${string}`> => {
+    if (silent && silentSend && account) { const h = await silentSend(account, tx); if (h) return h; }
+    return sendTransactionAsync(tx);
+  };
   // Public client on RH — waits for the approve to mine before the swap, so the
   // wallet simulates the swap against a non-zero allowance (else "likely to
   // fail"), and reads the OUT-side decimals fresh at sign time.
@@ -289,6 +298,8 @@ export default function RhSwapCard({
   // G2 — checked on what this swap BUYS: the token on a buy, ETH on a sell.
   const pt = usePreTradeCheck({ chain: "robinhood", kind: "swap", token: direction === "buy" ? (tokenReady ? activeAddr : null) : "ETH" });
   const valid = tokenReady && hasPool && !noFloor && amt > 0 && gate === "ok" && !quoting && pt.cleared && !pt.blocked;
+  // A chat "yes" runs the same doSwap() once the card is ready to sign.
+  useAutoConfirm(valid && !busy && step === "idle", (o) => { void doSwap(o); });
 
   // Max and the quantity WORDS are ONE calculation, in BASE UNITS. Computing it
   // on `balance` (a float) is how "100%" lands a hair above the real holding
@@ -333,7 +344,7 @@ export default function RhSwapCard({
     if (minedErr && step === "broadcasting") { setStep("error"); setErr("Trade reverted on-chain."); }
   }, [mined, minedErr, step]);
 
-  async function doSwap() {
+  async function doSwap(opts: { silent?: boolean } = {}) {
     if (!account) { setErr("Connect your wallet"); setStep("error"); return; }
     if (!tokenReady) { setErr("Pick a token or paste a valid 0x address"); setStep("error"); return; }
     if (!(amt > 0)) { setErr("Enter an amount"); setStep("error"); return; }
@@ -403,7 +414,7 @@ export default function RhSwapCard({
       // swap's wallet simulation sees the allowance (else "likely to fail").
       if (prep.approve) {
         setStep("approving");
-        const approveHash = await sendTransactionAsync({
+        const approveHash = await sendTx(!!opts.silent, {
           to: prep.approve.to, data: prep.approve.data, value: BigInt(prep.approve.value), chainId: RH_CHAIN_ID,
         });
         if (rhPublicClient) {
@@ -412,7 +423,7 @@ export default function RhSwapCard({
       }
 
       setStep("swapping");
-      const hash = await sendTransactionAsync({
+      const hash = await sendTx(!!opts.silent, {
         to: prep.swap.to, data: prep.swap.data, value: BigInt(prep.swap.value), chainId: RH_CHAIN_ID,
       });
       setTxHash(hash); setStep("broadcasting");
@@ -599,7 +610,7 @@ export default function RhSwapCard({
       {step === "error" && <p className="text-[10px] text-amber-400 mb-2">{err}</p>}
 
       <PreTradeBanner pt={pt} />
-      <ConfirmButton tone="blue" onClick={doSwap} disabled={!valid || busy}>
+      <ConfirmButton tone="blue" onClick={() => { void doSwap(); }} disabled={!valid || busy}>
         {!isConnected ? "Connect your wallet"
           : busy
             ? (step === "switching" ? "Switch network…"

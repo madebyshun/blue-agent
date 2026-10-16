@@ -1,4 +1,5 @@
 "use client";
+import { confirmLatest, confirmReply, isConfirmWord } from "@/lib/chat/confirm";
 import {
   createContext, useContext, useState, useEffect,
   useRef, useCallback, useMemo,
@@ -655,6 +656,30 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         return updated;
       });
       return;
+    }
+
+    // Confirm-in-chat (2026-10-16, lib/chat/confirm.ts): a bare "yes" / "ok" /
+    // "confirm" / "có" / "đồng ý" signs the newest pending action in this
+    // chat, matched HERE in code — it never reaches the model, costs no
+    // credits, and nothing but the user's own typed message can trigger it.
+    // With nothing pending it goes to the model like any other message.
+    if (isConfirmWord(userMsg)) {
+      const outcome = confirmLatest();
+      if (outcome && activeTaskId) {
+        const ctid = activeTaskId;
+        const cbase: Message[] = activeTask?.messages ?? [];
+        setInput("");
+        const turn: Message[] = [
+          { role: "user", content: userMsg, createdAt: Date.now() },
+          { role: "assistant", content: confirmReply(outcome), createdAt: Date.now() },
+        ];
+        setTasksState(prev => {
+          const updated = prev.map(t => t.id === ctid ? { ...t, messages: [...cbase, ...turn], updatedAt: Date.now() } : t);
+          saveTasks(updated, walletAddr);
+          return updated;
+        });
+        return;
+      }
     }
 
     // Gate on the SAME credit value the UI shows — `credits` is the unified

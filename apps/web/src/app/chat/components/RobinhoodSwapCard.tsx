@@ -7,6 +7,8 @@
 //   3. User signs approve (sell only), then the swap tx.
 // Non-custodial: server holds no keys, on-chain math bounds the final amount.
 
+import { useSilentSender } from "@/lib/privy/silent-tx";
+import { useAutoConfirm } from "@/components/wallet/action-context";
 import { useEffect, useRef, useState } from "react";
 import { useAccount, useSwitchChain, useSendTransaction, usePublicClient } from "wagmi";
 import { parseUnits } from "viem";
@@ -82,6 +84,13 @@ export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
   const { address, isConnected } = useAccount();
   const { switchChainAsync } = useSwitchChain();
   const { sendTransactionAsync } = useSendTransaction();
+  // Confirm-in-chat (lib/chat/confirm.ts): a chat-confirmed swap under
+  // SILENT_MAX_USD goes through the embedded wallet without its modal.
+  const silentSend = useSilentSender();
+  const sendTx = async (silent: boolean, tx: { to: `0x${string}`; data: `0x${string}`; value?: bigint; chainId: number }): Promise<`0x${string}`> => {
+    if (silent && silentSend && address) { const h = await silentSend(address, tx); if (h) return h; }
+    return sendTransactionAsync(tx);
+  };
   // Public client on RH — used to wait for prior tx to mine between calls
   // (approve → swap). Without this, MetaMask simulates the swap against
   // pre-approve state, sees allowance = 0, and warns "likely to fail".
@@ -269,8 +278,10 @@ export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
   const canSwap = !!address && hasPool && !noFloor && amt > 0 && gate === "ok" && !anyLoading && step !== "approving" && step !== "swapping"
     && pt.cleared && !pt.blocked;
   const busy = step === "approving" || step === "swapping";
+  // A chat "yes" runs the same doSwap() once the card is ready to sign.
+  useAutoConfirm(!!canSwap && !busy && step === "idle", (o) => { void doSwap(o); });
 
-  async function doSwap() {
+  async function doSwap(opts: { silent?: boolean } = {}) {
     if (!address) { setErr("Connect your wallet"); setStep("error"); return; }
     if (!token) { setErr("Missing token address"); setStep("error"); return; }
     if (!isT2T && (!hasPool || !quote?.pool)) { setErr("No pool available"); setStep("error"); return; }
@@ -372,7 +383,7 @@ export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
         for (let i = 0; i < calls.length; i++) {
           const c = calls[i];
           setStep(c.kind === "approve" ? "approving" : "swapping");
-          const hash = await sendTransactionAsync({
+          const hash = await sendTx(!!opts.silent, {
             to: c.to as `0x${string}`,
             data: c.data as `0x${string}`,
             value: BigInt(c.value),
@@ -411,7 +422,7 @@ export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
 
       if (prep.approve) {
         setStep("approving");
-        const approveHash = await sendTransactionAsync({
+        const approveHash = await sendTx(!!opts.silent, {
           to: prep.approve.to as `0x${string}`,
           data: prep.approve.data as `0x${string}`,
           value: 0n,
@@ -424,7 +435,7 @@ export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
         }
       }
       setStep("swapping");
-      const hash = await sendTransactionAsync({
+      const hash = await sendTx(!!opts.silent, {
         to: prep.swap.to as `0x${string}`,
         data: prep.swap.data as `0x${string}`,
         value: BigInt(prep.swap.value),
@@ -596,7 +607,7 @@ export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
           {step === "error" && prepRoute !== "none" && <p className="text-[10px] text-amber-400 mb-2">{err}</p>}
 
           <PreTradeBanner pt={pt} />
-          <button onClick={doSwap} disabled={!canSwap || busy}
+          <button onClick={() => { void doSwap(); }} disabled={!canSwap || busy}
             className="w-full text-[12px] font-bold py-2.5 rounded-lg transition-all disabled:opacity-50"
             style={(!isT2T && direction === "buy") || isT2T
               ? { background: "#22C55E15", color: "#22C55E", border: "1px solid #22C55E40" }

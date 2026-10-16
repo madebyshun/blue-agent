@@ -21,12 +21,14 @@
 // <PrivyProvider>, so they are called once here and published through a
 // context the default (Privy-off) tree never provides.
 import { useCallback } from "react";
-import { useSignMessage, useWallets } from "@privy-io/react-auth";
+import { useSendTransaction, useSignMessage, useWallets } from "@privy-io/react-auth";
 import { SilentSignContext, type SilentSigner } from "./silent-signer";
+import { SilentTxContext, type SilentSender } from "./silent-tx";
 
 export function PrivySilentSignBridge({ children }: { children: React.ReactNode }) {
   const { wallets } = useWallets();
   const { signMessage } = useSignMessage();
+  const { sendTransaction } = useSendTransaction();
 
   const signSilently = useCallback<SilentSigner>(async (address, message) => {
     const a = address.toLowerCase();
@@ -36,5 +38,26 @@ export function PrivySilentSignBridge({ children }: { children: React.ReactNode 
     return signature;
   }, [wallets, signMessage]);
 
-  return <SilentSignContext.Provider value={signSilently}>{children}</SilentSignContext.Provider>;
+  // Confirm-in-chat (2026-10-16, lib/chat/confirm.ts): after the user typed
+  // "yes" for a prepared action under SILENT_MAX_USD, the embedded wallet sends
+  // it without the modal. Same reasoning as the SIWE signature above — the key
+  // only signs for the authenticated user — plus the explicit typed
+  // confirmation of this one action. External wallets get null and keep their
+  // own prompt.
+  const sendSilently = useCallback<SilentSender>(async (from, tx) => {
+    const a = from.toLowerCase();
+    const embedded = wallets.find((w) => w.walletClientType === "privy" && w.address.toLowerCase() === a);
+    if (!embedded) return null;
+    const { hash } = await sendTransaction(
+      { to: tx.to, data: tx.data, value: tx.value, chainId: tx.chainId },
+      { address: embedded.address, uiOptions: { showWalletUIs: false } },
+    );
+    return hash;
+  }, [wallets, sendTransaction]);
+
+  return (
+    <SilentSignContext.Provider value={signSilently}>
+      <SilentTxContext.Provider value={sendSilently}>{children}</SilentTxContext.Provider>
+    </SilentSignContext.Provider>
+  );
 }
