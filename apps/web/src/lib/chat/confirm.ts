@@ -36,11 +36,15 @@ export type ConfirmOutcome =
   /** Nothing pending, but this action was just armed by an earlier "yes". */
   | { kind: "already"; what: string };
 
+/** Rewrites the assistant's reply to the "yes" as the action progresses, so
+ *  the outcome reads as chat (ShunTr 2026-10-16), not as a card. */
+export type StatusSink = (text: string) => void;
+
 export interface PendingAction {
   id: string;
   /** The chat message's creation time — not the mount time, which a reload resets. */
   createdAt: number;
-  fire: () => ConfirmOutcome;
+  fire: (sink?: StatusSink) => ConfirmOutcome;
 }
 
 const pending = new Map<string, PendingAction>();
@@ -72,13 +76,13 @@ let lastArmed: { what: string; at: number } | null = null;
 export function forgetArmed(): void { lastArmed = null; }
 
 /** Route a confirmation. null ⟹ nothing pending: the message goes to the model as usual. */
-export function confirmLatest(now = Date.now()): ConfirmOutcome | null {
+export function confirmLatest(now = Date.now(), sink?: StatusSink): ConfirmOutcome | null {
   const p = latestPending(now);
   if (!p) {
     if (lastArmed && now - lastArmed.at <= CONFIRM_WINDOW_MS) return { kind: "already", what: lastArmed.what };
     return null;
   }
-  const out = p.fire();
+  const out = p.fire(sink);
   if (out.kind === "armed") { pending.delete(p.id); lastArmed = { what: out.what, at: now }; }
   return out;
 }
@@ -89,4 +93,20 @@ export function confirmReply(o: ConfirmOutcome): string {
   if (o.kind === "already") return `${o.what} was already sent to your wallet above. Nothing else is waiting for a yes.`;
   if (o.kind === "warn") return `${o.what} has a warning: ${o.why} Reply yes again to sign it anyway.`;
   return o.silent ? `Signing ${o.what}…` : `Signing ${o.what}. Confirm in your wallet.`;
+}
+
+/** Pure: the chat text for an armed action's progress. Markdown (the reply renders it). */
+export function statusText(what: string, s:
+  | { phase: "working" } | { phase: "stuck" }
+  | { phase: "sent"; href: string | null }
+  | { phase: "done"; href: string | null; detail?: string }
+  | { phase: "error"; message: string }): string {
+  const link = (href: string | null) => (href ? ` [View tx ↗](${href})` : "");
+  switch (s.phase) {
+    case "working": return `Signing ${what}…`;
+    case "stuck": return `Couldn't start ${what}. The details are open above.`;
+    case "sent": return `Sent ${what}. Waiting for it to confirm…${link(s.href)}`;
+    case "done": return `✓ Done: ${s.detail ? `${s.detail} on ${what.split(" on ").pop()}` : what}.${link(s.href)}`;
+    case "error": return `✗ ${what} failed: ${s.message.replace(/\.$/, "")}. Reply **yes** to retry.`;
+  }
 }

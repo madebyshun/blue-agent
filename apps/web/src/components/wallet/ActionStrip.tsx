@@ -18,17 +18,19 @@
  * and arms it (AutoConfirmContext); the card runs its own sign path once ready.
  * BLOCK refuses. WARN explains in chat and needs a second "yes".
  *
- * No card on that path (2026-10-16, "không cần thao tác trên card nữa"): an
+ * Chat only (2026-10-16, "không cần thao tác trên card nữa"): a recent
+ * confirmable action renders NOTHING — the proposal is the model's text. An
  * armed card is mounted HIDDEN and runs itself; it reports its step machine
- * up (useAutoReport) and this line shows signing → sent → done / failed. A
- * failure re-arms the action, so "yes" again retries it, from a fresh card.
- * If the card never starts (no quote, not enough balance), the line says so
- * after START_TIMEOUT_MS and the card opens: there is something to look at.
+ * up (useAutoReport) and the reply to the "yes" is rewritten in place:
+ * signing → sent → done with the tx link / failed. A failure re-arms the
+ * action, so "yes" again retries it, from a fresh card. If the card never
+ * starts (no quote, not enough balance), after START_TIMEOUT_MS the reply
+ * says so and the card opens: now there is something to look at.
  */
-import { useCallback, useContext, useEffect, useId, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { usePreTradeCheck } from "@/components/wallet/PreTradeBanner";
 import { ActionMessageContext, AutoConfirmContext, type AutoStatus } from "@/components/wallet/action-context";
-import { CONFIRM_WINDOW_MS, SILENT_MAX_USD, registerPending, type ConfirmOutcome } from "@/lib/chat/confirm";
+import { CONFIRM_WINDOW_MS, SILENT_MAX_USD, registerPending, statusText, type ConfirmOutcome, type StatusSink } from "@/lib/chat/confirm";
 
 export type StripCheck = {
   chain: "base" | "robinhood";
@@ -41,15 +43,6 @@ const VERDICT_COLOR: Record<string, string> = { PASS: "#22C55E", WARN: "#F59E0B"
 const ADDR_OR_ETH = /^(0x[a-fA-F0-9]{40}|ETH)$/i;
 const START_TIMEOUT_MS = 25_000;
 
-function StatusLine({ s }: { s: AutoStatus | "waiting" | "stuck" }) {
-  const link = (href: string | null) => href
-    ? <a href={href} target="_blank" rel="noopener noreferrer" className="text-[#4FC3F7] hover:underline">View tx ↗</a> : null;
-  if (s === "waiting" || (typeof s === "object" && s.phase === "working")) return <span className="text-slate-400">· signing…</span>;
-  if (s === "stuck") return <span style={{ color: "#F59E0B" }}>· couldn&apos;t start: see the details below</span>;
-  if (s.phase === "sent") return <span className="text-slate-400">· sent, confirming… {link(s.href)}</span>;
-  if (s.phase === "done") return <span style={{ color: "#22C55E" }}>· ✓ {s.detail ? `Done: ${s.detail}` : "Done"} {link(s.href)}</span>;
-  return <span style={{ color: "#EF4444" }}>· ✗ {s.message} <span className="text-slate-500">Reply yes to retry.</span></span>;
-}
 
 type Pt = ReturnType<typeof usePreTradeCheck>;
 
@@ -105,12 +98,15 @@ export function ActionStrip({
   const silent = typeof usd === "number" && Number.isFinite(usd) && usd < SILENT_MAX_USD;
   const what = chainLabel ? `${summary} on ${chainLabel}` : summary;
 
-  const fire = useCallback((): ConfirmOutcome => {
+  // Where progress is written: the assistant's reply to the "yes" that armed it.
+  const sinkRef = useRef<StatusSink | null>(null);
+  const fire = useCallback((sink?: StatusSink): ConfirmOutcome => {
     const v = usable ? pt.check?.verdict : undefined;
     const why = pt.check?.reasons.find((r) => r.level === v)?.text ?? "";
     if (v === "BLOCK") return { kind: "blocked", what, why };
     // A warning is said in chat; the same "yes" a second time signs anyway.
     if (v === "WARN" && !warned) { setWarned(true); return { kind: "warn", what, why }; }
+    sinkRef.current = sink ?? null;
     setStatus("waiting");
     setArmed(true);
     return { kind: "armed", what, silent };
@@ -118,21 +114,29 @@ export function ActionStrip({
 
   const report = useCallback((s: AutoStatus) => {
     setStatus(s);
+    sinkRef.current?.(statusText(what, s));
     // A failed attempt goes back to pending: "yes" retries from a fresh card.
     if (s.phase === "error") { setArmed(false); setAttempt((n) => n + 1); }
-  }, []);
+  }, [what]);
 
   // Armed but the card never started — no quote, not enough balance, wrong
   // network. Say so and open it: now there IS something to look at.
   useEffect(() => {
     if (status !== "waiting") return;
-    const t = setTimeout(() => { setStatus((s) => (s === "waiting" ? "stuck" : s)); setOpen(true); }, START_TIMEOUT_MS);
+    const t = setTimeout(() => {
+      setStatus("stuck"); setOpen(true);
+      sinkRef.current?.(statusText(what, { phase: "stuck" }));
+    }, START_TIMEOUT_MS);
     return () => clearTimeout(t);
-  }, [status]);
+  }, [status, what]);
 
   // Pending only while its message is recent and it has not been armed yet.
   const msg = useContext(ActionMessageContext);
   const id = useId();
+  // Chat mode: a confirmable action proposed within the window is driven by
+  // chat alone — no line, no button; the proposal and the outcome are both
+  // text. An older one (reloaded chat) keeps the line and its Review button.
+  const [chatMode] = useState(() => confirmable && !!msg?.createdAt && Date.now() - msg.createdAt <= CONFIRM_WINDOW_MS);
   useEffect(() => {
     if (!confirmable || !msg?.createdAt || armed || Date.now() - msg.createdAt > CONFIRM_WINDOW_MS) return;
     return registerPending({ id, createdAt: msg.createdAt, fire });
@@ -141,24 +145,26 @@ export function ActionStrip({
   const auto = useMemo(() => ({ armed, silent, report }), [armed, silent, report]);
   const card = <AutoConfirmContext.Provider value={auto}>{children}</AutoConfirmContext.Provider>;
 
+  const cardBox = (open || armed) && (
+    // ONE element either way, so opening it mid-signature only un-hides the
+    // card instead of remounting it.
+    <div key={attempt} className="mt-1" hidden={!open}>{card}</div>
+  );
+
+  if (chatMode && !open) return <>{cardBox}</>;
+
   return (
     <div className="mt-2">
       <div className="flex items-center gap-2 flex-wrap font-mono text-[11px] rounded-lg border border-[#1A1A2E] bg-[#0a0a0f] px-3 py-2">
         <span className="text-slate-200">{summary}</span>
         {chainLabel && <span className="text-slate-500">· {chainLabel}</span>}
-        {usable && !status && <VerdictChip pt={pt} />}
-        {status && <StatusLine s={status} />}
+        {usable && <VerdictChip pt={pt} />}
         <button type="button" onClick={() => setOpen((o) => !o)}
           className="ml-auto px-2.5 py-1 rounded-md border border-[#4FC3F740] text-[#4FC3F7] hover:bg-[#4FC3F710]">
           {open ? "Hide" : `${cta} ▸`}
         </button>
       </div>
-      {(open || armed) && (
-        // ONE element either way, so opening "Review & sign" mid-signature only
-        // un-hides the card instead of remounting it. Chat-confirmed and not
-        // opened: the card runs out of sight; the line above reports it.
-        <div key={attempt} className="mt-1" hidden={!open}>{card}</div>
-      )}
+      {cardBox}
     </div>
   );
 }

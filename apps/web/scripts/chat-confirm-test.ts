@@ -3,7 +3,7 @@
  * Which words confirm, which pending action they reach, and what is refused.
  */
 import { userDollarAmount } from "../src/lib/chat/trade-intent";
-import { CONFIRM_WINDOW_MS, confirmLatest, confirmReply, forgetArmed, isConfirmWord, latestPending, registerPending, SILENT_MAX_USD, type ConfirmOutcome } from "../src/lib/chat/confirm";
+import { CONFIRM_WINDOW_MS, confirmLatest, confirmReply, forgetArmed, statusText, isConfirmWord, latestPending, registerPending, SILENT_MAX_USD, type ConfirmOutcome } from "../src/lib/chat/confirm";
 
 let failures = 0;
 function ok(label: string, cond: boolean, detail = "") { console.log(`  ${cond ? "PASS" : "FAIL"}  ${label}${detail ? ` — ${detail}` : ""}`); if (!cond) failures++; }
@@ -47,6 +47,18 @@ ok("a token amount the user typed is kept", userDollarAmount("swap 0.001 eth, ab
 ok("a quantity word is kept", userDollarAmount("swap half my eth, around $50", "half") === null);
 ok("no dollar figure → null", userDollarAmount("swap 1 eth to usdc", "1") === null);
 ok("two dollar figures are ambiguous → null", userDollarAmount("swap $1 eth, not $5", "1") === null);
+
+// Progress is chat text, not a card (2026-10-16).
+const W = "Swap 1 USDC → ETH on Base";
+ok("done reads as chat with the tx link", statusText(W, { phase: "done", href: "https://basescan.org/tx/0xabc", detail: "1 USDC → 0.000403 ETH" })
+  === "✓ Done: 1 USDC → 0.000403 ETH on Base. [View tx ↗](https://basescan.org/tx/0xabc)");
+ok("a failure says how to retry", /Reply \*\*yes\*\* to retry/.test(statusText(W, { phase: "error", message: "Trade cancelled." })));
+ok("a sink passed to confirmLatest reaches the action", (() => {
+  let got: unknown = "unset";
+  const offS = registerPending({ id: "sink", createdAt: Date.now() - 1, fire: (sink) => { got = sink; return { kind: "armed", what: W, silent: true }; } });
+  const f = () => {}; confirmLatest(Date.now(), f); offS(); forgetArmed();
+  return got === f;
+})());
 
 console.log(failures === 0 ? "\nchat-confirm-test: PASS" : `\nchat-confirm-test: FAIL — ${failures}`);
 process.exit(failures === 0 ? 0 : 1);

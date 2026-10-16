@@ -665,14 +665,25 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     // With nothing pending it goes to the model like any other message.
     if (!isConfirmWord(userMsg)) forgetArmed();
     else {
-      const outcome = confirmLatest();
-      if (outcome && activeTaskId) {
-        const ctid = activeTaskId;
+      const ctid = activeTaskId;
+      const replyAt = Date.now() + 1;
+      // The action rewrites this reply as it progresses (signing → done / failed),
+      // so its outcome reads as chat, not as a card.
+      const sink = (text: string) => setTasksState(prev => {
+        const updated = prev.map(t => t.id !== ctid ? t : {
+          ...t, updatedAt: Date.now(),
+          messages: t.messages.map(m => m.role === "assistant" && m.createdAt === replyAt ? { ...m, content: text } : m),
+        });
+        saveTasks(updated, walletAddr);
+        return updated;
+      });
+      const outcome = ctid ? confirmLatest(Date.now(), sink) : null;
+      if (outcome && ctid) {
         const cbase: Message[] = activeTask?.messages ?? [];
         setInput("");
         const turn: Message[] = [
-          { role: "user", content: userMsg, createdAt: Date.now() },
-          { role: "assistant", content: confirmReply(outcome), createdAt: Date.now() },
+          { role: "user", content: userMsg, createdAt: replyAt - 1 },
+          { role: "assistant", content: confirmReply(outcome), createdAt: replyAt },
         ];
         setTasksState(prev => {
           const updated = prev.map(t => t.id === ctid ? { ...t, messages: [...cbase, ...turn], updatedAt: Date.now() } : t);
