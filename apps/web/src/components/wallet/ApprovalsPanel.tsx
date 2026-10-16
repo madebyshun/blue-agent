@@ -37,6 +37,8 @@ export interface AuditView {
   error?: string;
 }
 
+/** Said as what to do, not as a code (2026-10-16). */
+const LEVEL_WORD: Record<Level, string> = { BLOCK: "Revoke now", WARN: "Review", INFO: "Low risk" };
 const COLOR: Record<Level, string> = { BLOCK: "#EF4444", WARN: "#F59E0B", INFO: "#94a3b8" };
 const EXPLORER: Record<number, string> = { 8453: "https://basescan.org", 4663: "https://robinhoodchain.blockscout.com" };
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
@@ -110,7 +112,7 @@ export function ApprovalsPanel({ audit: initial }: { audit: AuditView }) {
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <div className="font-mono text-[10px] font-bold" style={{ color: COLOR[g.level] }}>
-                    {g.level} · {TYPE_LABEL[g.type]} · {g.symbol}
+                    {LEVEL_WORD[g.level]} · {TYPE_LABEL[g.type]} · {g.symbol}
                   </div>
                   <div className="font-mono text-[10px] text-slate-300 break-all">
                     {g.allowance}{g.exposed && g.allowance !== g.exposed ? ` (exposed now: ${g.exposed})` : ""} → {short(g.spender)}

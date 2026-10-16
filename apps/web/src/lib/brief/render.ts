@@ -120,7 +120,7 @@ export function renderBrief(d: BriefDiff, fmt: BriefFormat, opts: { now?: number
   }
   if (d.grantsRisky.length) {
     const nb = d.grantsRisky.filter((g) => g.level === "BLOCK").length, nw = d.grantsRisky.length - nb;
-    out.push(`• ${e(`Flagged and still open: ${[nb ? `${nb} BLOCK` : "", nw ? `${nw} WARN` : ""].filter(Boolean).join(", ")}. Ask Blue Chat "check my approvals" to review and revoke.`)}`);
+    out.push(`• ${e(`Still open: ${[nb ? `${nb} to revoke now` : "", nw ? `${nw} to review` : ""].filter(Boolean).join(", ")}. Ask Blue Chat "check my approvals" to review and revoke.`)}`);
     // Only BLOCK gets a line: every unlimited approval is a WARN, and a brief
     // that re-lists thirty of them each morning stops being read.
     for (const g of d.grantsRisky.filter((x) => x.level === "BLOCK" && !d.grantsNew.includes(x)).slice(0, 3)) out.push(`  – ${e(grantLine(g))}`);

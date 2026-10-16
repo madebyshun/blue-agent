@@ -148,9 +148,11 @@ function ActionItem({ r, first }: { r: ActionRow; first: boolean }) {
       <div className="font-mono text-[11px] text-[#CBD5E1] mt-1 break-all">{actionSummary(r)}</div>
       <div className="flex items-center gap-2 font-mono text-[9.5px] text-[#64748B] mt-1">
         <span>{ago(r.created_at)}</span>
-        {verdict && (
+        {verdict && verdict !== "PASS" && (
+          // Plain words, and only when the check had something to say (2026-10-16).
           <span style={{ color: VERDICT_COLOR[verdict] ?? "#64748B" }} title={(r.check?.reasons ?? []).join("\n")}>
-            check {verdict}
+            {verdict === "BLOCK" ? "stopped" : verdict === "WARN" ? "warned" : "not checked"}
+            {r.check?.reasons?.[0] ? `: ${r.check.reasons[0].length > 60 ? `${r.check.reasons[0].slice(0, 59).trimEnd()}…` : r.check.reasons[0]}` : ""}
           </span>
         )}
         {r.tx_hash && cfg && (
