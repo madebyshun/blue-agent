@@ -28,9 +28,11 @@
  * says so and the card opens: now there is something to look at.
  */
 import { useCallback, useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { useAccount } from "wagmi";
 import { usePreTradeCheck } from "@/components/wallet/PreTradeBanner";
+import { useIsEmbeddedWallet } from "@/lib/privy/silent-tx";
 import { ActionMessageContext, AutoConfirmContext, type AutoStatus } from "@/components/wallet/action-context";
-import { CONFIRM_WINDOW_MS, SILENT_MAX_USD, registerPending, statusText, type ConfirmOutcome, type StatusSink } from "@/lib/chat/confirm";
+import { CONFIRM_WINDOW_MS, SILENT_MAX_USD, forgetArmed, registerPending, settleArmed, statusText, type ConfirmOutcome, type StatusSink } from "@/lib/chat/confirm";
 
 export type StripCheck = {
   chain: "base" | "robinhood";
@@ -95,7 +97,11 @@ export function ActionStrip({
     recipient: check?.recipient ?? null, enabled: usable,
   });
 
-  const silent = typeof usd === "number" && Number.isFinite(usd) && usd < SILENT_MAX_USD;
+  // Silent only where it can be: the connected wallet is this user's Privy
+  // embedded one. MetaMask and the rest always prompt, and the reply says so.
+  const { address } = useAccount();
+  const embedded = useIsEmbeddedWallet(address);
+  const silent = embedded && typeof usd === "number" && Number.isFinite(usd) && usd < SILENT_MAX_USD;
   const what = chainLabel ? `${summary} on ${chainLabel}` : summary;
 
   // Where progress is written: the assistant's reply to the "yes" that armed it.
@@ -114,7 +120,11 @@ export function ActionStrip({
 
   const report = useCallback((s: AutoStatus) => {
     setStatus(s);
-    sinkRef.current?.(statusText(what, s));
+    const final = s.phase === "done" || s.phase === "error";
+    if (s.phase === "done") settleArmed();
+    if (s.phase === "error") forgetArmed();
+    sinkRef.current?.(statusText(what, s), final);
+    if (final) sinkRef.current = null;
     // A failed attempt goes back to pending: "yes" retries from a fresh card.
     if (s.phase === "error") { setArmed(false); setAttempt((n) => n + 1); }
   }, [what]);
@@ -125,7 +135,7 @@ export function ActionStrip({
     if (status !== "waiting") return;
     const t = setTimeout(() => {
       setStatus("stuck"); setOpen(true);
-      sinkRef.current?.(statusText(what, { phase: "stuck" }));
+      sinkRef.current?.(statusText(what, { phase: "stuck" }), true);
     }, START_TIMEOUT_MS);
     return () => clearTimeout(t);
   }, [status, what]);

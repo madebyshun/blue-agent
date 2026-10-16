@@ -3,7 +3,7 @@
  * Which words confirm, which pending action they reach, and what is refused.
  */
 import { userDollarAmount } from "../src/lib/chat/trade-intent";
-import { CONFIRM_WINDOW_MS, confirmLatest, confirmReply, forgetArmed, statusText, isConfirmWord, latestPending, registerPending, SILENT_MAX_USD, type ConfirmOutcome } from "../src/lib/chat/confirm";
+import { CONFIRM_WINDOW_MS, confirmLatest, confirmReply, forgetArmed, settleArmed, statusText, isConfirmWord, latestPending, registerPending, SILENT_MAX_USD, type ConfirmOutcome } from "../src/lib/chat/confirm";
 
 let failures = 0;
 function ok(label: string, cond: boolean, detail = "") { console.log(`  ${cond ? "PASS" : "FAIL"}  ${label}${detail ? ` — ${detail}` : ""}`); if (!cond) failures++; }
@@ -24,7 +24,10 @@ const first = confirmLatest();
 ok("confirmLatest fires the pending action", first?.kind === "armed");
 const again = confirmLatest();
 ok("…a second yes cannot sign it twice, and is answered locally (never reaches the model)",
-  again?.kind === "already" && /already sent/.test(confirmReply(again)), again ? confirmReply(again) : "null");
+  again?.kind === "already" && /Still waiting on your wallet/.test(confirmReply(again)), again ? confirmReply(again) : "null");
+settleArmed();
+const after = confirmLatest();
+ok("…once it is done, a yes says so", after?.kind === "already" && /already done/.test(confirmReply(after)), after ? confirmReply(after) : "null");
 forgetArmed();
 ok("…any other message in between hands a later yes back to the model", confirmLatest() === null);
 off();

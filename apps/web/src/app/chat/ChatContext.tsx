@@ -668,11 +668,22 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       const ctid = activeTaskId;
       const replyAt = Date.now() + 1;
       // The action rewrites this reply as it progresses (signing → done / failed),
-      // so its outcome reads as chat, not as a card.
-      const sink = (text: string) => setTasksState(prev => {
-        const updated = prev.map(t => t.id !== ctid ? t : {
-          ...t, updatedAt: Date.now(),
-          messages: t.messages.map(m => m.role === "assistant" && m.createdAt === replyAt ? { ...m, content: text } : m),
+      // so its outcome reads as chat, not as a card. If the user has typed since,
+      // the final outcome is a NEW message at the bottom instead: a receipt
+      // that changes above later messages reads out of order (ShunTr 2026-10-16).
+      const sink = (text: string, final: boolean) => setTasksState(prev => {
+        const updated = prev.map(t => {
+          if (t.id !== ctid) return t;
+          const last = t.messages[t.messages.length - 1];
+          const isLast = last?.role === "assistant" && last.createdAt === replyAt;
+          if (final && !isLast) {
+            return { ...t, updatedAt: Date.now(), messages: [...t.messages, { role: "assistant" as const, content: text, createdAt: Date.now() }] };
+          }
+          if (!isLast && !t.messages.some(m => m.createdAt === replyAt)) return t;
+          return {
+            ...t, updatedAt: Date.now(),
+            messages: t.messages.map(m => m.role === "assistant" && m.createdAt === replyAt ? { ...m, content: text } : m),
+          };
         });
         saveTasks(updated, walletAddr);
         return updated;

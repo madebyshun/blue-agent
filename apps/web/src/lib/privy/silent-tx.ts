@@ -17,3 +17,12 @@ export const SilentTxContext = createContext<SilentSender | null>(null);
 export function useSilentSender(): SilentSender | null {
   return useContext(SilentTxContext);
 }
+
+/** Lower-cased addresses of this user's Privy embedded wallets — the only
+ *  wallets that can sign without a prompt. Empty when Privy is off. */
+export const EmbeddedWalletsContext = createContext<readonly string[]>([]);
+
+export function useIsEmbeddedWallet(address: string | null | undefined): boolean {
+  const list = useContext(EmbeddedWalletsContext);
+  return !!address && list.includes(address.toLowerCase());
+}

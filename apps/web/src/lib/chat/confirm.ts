@@ -33,12 +33,13 @@ export type ConfirmOutcome =
   | { kind: "armed"; what: string; silent: boolean }
   | { kind: "warn"; what: string; why: string }
   | { kind: "blocked"; what: string; why: string }
-  /** Nothing pending, but this action was just armed by an earlier "yes". */
-  | { kind: "already"; what: string };
+  /** Nothing pending, but this action was just armed by an earlier "yes":
+   *  still at the wallet (settled=false) or already finished. */
+  | { kind: "already"; what: string; settled: boolean };
 
 /** Rewrites the assistant's reply to the "yes" as the action progresses, so
  *  the outcome reads as chat (ShunTr 2026-10-16), not as a card. */
-export type StatusSink = (text: string) => void;
+export type StatusSink = (text: string, final: boolean) => void;
 
 export interface PendingAction {
   id: string;
@@ -71,26 +72,31 @@ export function latestPending(now = Date.now(), from: Iterable<PendingAction> = 
  * from a duplicate trade. Forgotten as soon as the user types anything else,
  * so a later "yes" to an ordinary question still goes to the model.
  */
-let lastArmed: { what: string; at: number } | null = null;
+let lastArmed: { what: string; at: number; settled: boolean } | null = null;
 
 export function forgetArmed(): void { lastArmed = null; }
+/** The armed action finished (done). A failure calls forgetArmed instead: it
+ *  goes back to pending, and the next "yes" retries it. */
+export function settleArmed(): void { if (lastArmed) lastArmed.settled = true; }
 
 /** Route a confirmation. null ⟹ nothing pending: the message goes to the model as usual. */
 export function confirmLatest(now = Date.now(), sink?: StatusSink): ConfirmOutcome | null {
   const p = latestPending(now);
   if (!p) {
-    if (lastArmed && now - lastArmed.at <= CONFIRM_WINDOW_MS) return { kind: "already", what: lastArmed.what };
+    if (lastArmed && now - lastArmed.at <= CONFIRM_WINDOW_MS) return { kind: "already", what: lastArmed.what, settled: lastArmed.settled };
     return null;
   }
   const out = p.fire(sink);
-  if (out.kind === "armed") { pending.delete(p.id); lastArmed = { what: out.what, at: now }; }
+  if (out.kind === "armed") { pending.delete(p.id); lastArmed = { what: out.what, at: now, settled: false }; }
   return out;
 }
 
 /** The assistant's local reply to a confirmation (no model call, no credits). */
 export function confirmReply(o: ConfirmOutcome): string {
   if (o.kind === "blocked") return `Not signing: ${o.what} is blocked. ${o.why}`;
-  if (o.kind === "already") return `${o.what} was already sent to your wallet above. Nothing else is waiting for a yes.`;
+  if (o.kind === "already") return o.settled
+    ? `${o.what} is already done. Nothing else is waiting for a yes.`
+    : `Still waiting on your wallet for ${o.what}. Confirm it there, or reject it to cancel.`;
   if (o.kind === "warn") return `${o.what} has a warning: ${o.why} Reply yes again to sign it anyway.`;
   return o.silent ? `Signing ${o.what}…` : `Signing ${o.what}. Confirm in your wallet.`;
 }

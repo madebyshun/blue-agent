@@ -20,10 +20,10 @@
 // Same context trick as identity-bridge.tsx: Privy hooks throw outside
 // <PrivyProvider>, so they are called once here and published through a
 // context the default (Privy-off) tree never provides.
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { useSendTransaction, useSignMessage, useWallets } from "@privy-io/react-auth";
 import { SilentSignContext, type SilentSigner } from "./silent-signer";
-import { SilentTxContext, type SilentSender } from "./silent-tx";
+import { EmbeddedWalletsContext, SilentTxContext, type SilentSender } from "./silent-tx";
 
 export function PrivySilentSignBridge({ children }: { children: React.ReactNode }) {
   const { wallets } = useWallets();
@@ -55,9 +55,16 @@ export function PrivySilentSignBridge({ children }: { children: React.ReactNode 
     return hash;
   }, [wallets, sendTransaction]);
 
+  const embeddedList = useMemo(
+    () => wallets.filter((w) => w.walletClientType === "privy").map((w) => w.address.toLowerCase()),
+    [wallets],
+  );
+
   return (
     <SilentSignContext.Provider value={signSilently}>
-      <SilentTxContext.Provider value={sendSilently}>{children}</SilentTxContext.Provider>
+      <SilentTxContext.Provider value={sendSilently}>
+        <EmbeddedWalletsContext.Provider value={embeddedList}>{children}</EmbeddedWalletsContext.Provider>
+      </SilentTxContext.Provider>
     </SilentSignContext.Provider>
   );
 }
