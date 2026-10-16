@@ -34,6 +34,8 @@ export type PreTradeResult = {
   asset_type: string;
   label: string;
   reasons: { level: "BLOCK" | "WARN" | "INFO"; text: string }[];
+  /** Stock swaps: measured DEX-vs-oracle gap (%), null = unavailable. */
+  drift_pct?: number | null;
 };
 
 export function usePreTradeCheck(input: {

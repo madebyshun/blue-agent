@@ -29,11 +29,22 @@ function VerdictChip({ check }: { check: StripCheck }) {
   const usable = !!check.token && ADDR_OR_ETH.test(check.token);
   const pt = usePreTradeCheck({ chain: check.chain, kind: check.kind, token: usable ? check.token : null, recipient: check.recipient ?? null, enabled: usable });
   if (!usable) return null;
-  if (pt.state === "loading") return <span className="text-slate-500">checking…</span>;
-  const v = pt.check?.verdict;
-  if (!v) return <span className="text-slate-500">check unavailable</span>;
-  const why = pt.check?.reasons.find((r) => r.level === v)?.text;
-  return <span title={why} style={{ color: VERDICT_COLOR[v] }}>{v}</span>;
+  if (pt.state === "loading") return <span className="text-slate-500">· checking…</span>;
+  const c = pt.check;
+  const v = c?.verdict;
+  if (!c || !v) return <span className="text-slate-500">· check unavailable</span>;
+  const why = c.reasons.find((r) => r.level === v)?.text;
+  // A stock token's gap to its oracle is price information, shown as the number.
+  const gap = typeof c.drift_pct === "number" ? `DEX ${c.drift_pct > 0 ? "+" : ""}${c.drift_pct.toFixed(2)}% vs oracle` : null;
+  // A token the user picked from a verified list (native, a pinned major, a
+  // registry stock) needs no "PASS": nothing was in doubt. Only a doubt, a
+  // refusal, or an unknown token's clean read is worth the space (2026-10-16).
+  if (v === "PASS" && c.asset_type !== "crypto") return gap ? <span className="text-slate-400">· {gap}</span> : null;
+  return (
+    <span title={why} style={{ color: VERDICT_COLOR[v] }}>
+      <span className="text-slate-500">· </span>{v}{gap ? <span className="text-slate-400"> · {gap}</span> : null}
+    </span>
+  );
 }
 
 export function ActionStrip({
@@ -52,7 +63,6 @@ export function ActionStrip({
       <div className="flex items-center gap-2 flex-wrap font-mono text-[11px] rounded-lg border border-[#1A1A2E] bg-[#0a0a0f] px-3 py-2">
         <span className="text-slate-200">{summary}</span>
         {chainLabel && <span className="text-slate-500">· {chainLabel}</span>}
-        {check && <span className="text-slate-500">·</span>}
         {check && <VerdictChip check={check} />}
         <button type="button" onClick={() => setOpen((o) => !o)}
           className="ml-auto px-2.5 py-1 rounded-md border border-[#4FC3F740] text-[#4FC3F7] hover:bg-[#4FC3F710]">

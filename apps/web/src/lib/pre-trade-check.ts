@@ -65,6 +65,12 @@ export interface PreTradeCheck {
   label: string;
   reasons: Reason[];
   checked_at: string;
+  /** Stock tokens on a swap: the DEX-vs-Chainlink gap the desk measured, in
+   *  percent (positive = DEX above the oracle). null = looked for and not
+   *  available (stale desk, no row, quarantined); absent = not a stock swap.
+   *  It is price information about a token the user already chose, so the
+   *  one-line action shows the number rather than a verdict word (2026-10-16). */
+  drift_pct?: number | null;
   /** Set when the address is a liquidity pool: the two tokens it holds, so a
    *  caller can offer to check the right one. Read from the pool itself. */
   pool?: { token0: { address: string; symbol: string }; token1: { address: string; symbol: string } };
@@ -105,10 +111,22 @@ function impostorLevel(kind: PreTradeInput["kind"]): Reason["level"] {
   return kind === "send" ? "WARN" : "BLOCK";
 }
 
+/** How an impostor's symbol is named in a reason: a look-alike spelling
+ *  ("ÚSDС") is named together with what it reads as ("USDC"), so the text
+ *  never calls the fake by its own name as if that were the real token. */
+function impostorNames(symbol: string): { shown: string; real: string } {
+  const norm = normalizeSymbol(symbol);
+  const plain = /^[\x20-\x7E]*$/.test(symbol);
+  return plain || !norm ? { shown: symbol, real: symbol } : { shown: `${symbol} (reads as ${norm})`, real: norm };
+}
+
 function weekendReason(now: Date): Reason | null {
   const m = nyseMarketStatus(now);
   return m.session === "weekend"
-    ? { level: "WARN", code: "WEEKEND", text: "US market is closed for the weekend — the oracle is frozen at Friday's close and the DEX price can drift from it." }
+    // INFO since 2026-10-16: said on EVERY stock swap from Friday night to
+    // Monday morning, the WARN was the one users learned to click through. The
+    // measured gap (DRIFT, ≥ 2%) is what carries the warning now.
+    ? { level: "INFO", code: "WEEKEND", text: "US market is closed for the weekend: the oracle holds Friday's close while the DEX keeps trading." }
     : null;
 }
 
@@ -121,7 +139,7 @@ export async function preTradeCheck(input: PreTradeInput): Promise<PreTradeCheck
     tokenCheck(input),
     recipientReasons({ chain: input.chain, recipient, sender: input.sender ?? null, token: input.token }),
   ]);
-  const merged = finish(t.asset_type, t.label, [...t.reasons, ...r]);
+  const merged: PreTradeCheck = { ...finish(t.asset_type, t.label, [...t.reasons, ...r]), ...(t.drift_pct !== undefined ? { drift_pct: t.drift_pct } : {}) };
   return t.pool ? { ...merged, pool: t.pool } : merged;
 }
 
@@ -150,6 +168,7 @@ async function tokenCheck(input: PreTradeInput): Promise<PreTradeCheck> {
     const rwa = findRwaByContract(token);
     if (rwa && (rwa.kind === "stock" || rwa.kind === "etf")) {
       const label = `${rwa.kind === "etf" ? "ETF token" : "Stock token"} (Robinhood, Jersey) · tracks ${rwa.ticker}`;
+      let drift: number | null | undefined;
       if (input.kind === "swap") {
         const wk = weekendReason(now);
         if (wk) reasons.push(wk);
@@ -169,6 +188,7 @@ async function tokenCheck(input: PreTradeInput): Promise<PreTradeCheck> {
           const row = fresh
             ? publishDeskRows(desk.value.tickers.filter((t) => matchesChain(t, "robinhood"))).find((t) => t.contract.toLowerCase() === token.toLowerCase())
             : undefined;
+          drift = row?.drift_pct ?? null;
           if (!row || row.drift_pct == null) {
             reasons.push({ level: "WARN", code: "DRIFT_UNAVAILABLE", text: "The oracle-vs-DEX reading for this token is unavailable right now — check the pool price against the oracle yourself." });
           } else if (Math.abs(row.drift_pct) >= STOCK_DRIFT_WARN_PCT) {
@@ -178,13 +198,14 @@ async function tokenCheck(input: PreTradeInput): Promise<PreTradeCheck> {
           }
         }
       }
-      return finish("rh_stock_token", label, reasons);
+      const out = finish("rh_stock_token", label, reasons);
+      return drift === undefined ? out : { ...out, drift_pct: drift };
     }
     if (rwa) return finish("major", rwa.ticker, reasons); // WETH / USDG rows
     let symbol = "";
     try { symbol = (await readTokenMeta("robinhood", token as `0x${string}`)).symbol; } catch { /* unread */ }
     if (classifyToken({ address: token, symbol, isNative: false }, "robinhood") === "impostor") {
-      reasons.push({ level: impostorLevel(input.kind), code: "IMPOSTOR", text: `This contract calls itself ${symbol} but is not the registered ${symbol} token on Robinhood Chain — an impersonator.` });
+      reasons.push({ level: impostorLevel(input.kind), code: "IMPOSTOR", text: `This contract calls itself ${impostorNames(symbol).shown} but is not the registered ${impostorNames(symbol).real} token on Robinhood Chain — an impersonator.` });
       return finish("crypto", symbol || token, reasons);
     }
     if (input.kind === "swap") {
@@ -198,6 +219,7 @@ async function tokenCheck(input: PreTradeInput): Promise<PreTradeCheck> {
   if (stock) {
     const label = `B20 tokenized stock (Coinbase) · tracks ${stock.ticker}`;
     reasons.push({ level: "INFO", code: "ISSUER_POLICY", text: "B20 tokens can carry issuer transfer policies — a transfer the policy forbids will revert." });
+    let drift: number | null | undefined;
     if (input.kind === "swap") {
       const wk = weekendReason(now);
       if (wk) reasons.push(wk);
@@ -210,13 +232,17 @@ async function tokenCheck(input: PreTradeInput): Promise<PreTradeCheck> {
       const row = fresh
         ? partitionBaseRows(desk.value.rows).attributed.find((t) => t.contract.toLowerCase() === token.toLowerCase())
         : undefined;
+      drift = row?.drift_pct ?? null;
       if (!row || row.drift_pct == null) {
         reasons.push({ level: "WARN", code: "DRIFT_UNAVAILABLE", text: "The oracle-vs-DEX reading for this token is unavailable right now." });
       } else if (Math.abs(row.drift_pct) >= STOCK_DRIFT_WARN_PCT) {
         reasons.push({ level: "WARN", code: "DRIFT", text: `The DEX price is ${row.drift_pct > 0 ? "+" : ""}${row.drift_pct.toFixed(2)}% from the Chainlink oracle (Blue Hood desk).` });
+      } else {
+        reasons.push({ level: "INFO", code: "DRIFT", text: `The DEX price is within ${STOCK_DRIFT_WARN_PCT}% of the Chainlink oracle (${row.drift_pct > 0 ? "+" : ""}${row.drift_pct.toFixed(2)}%, Blue Hood desk).` });
       }
     }
-    return finish("b20_stock_token", label, reasons);
+    const out = finish("b20_stock_token", label, reasons);
+    return drift === undefined ? out : { ...out, drift_pct: drift };
   }
 
   let symbol = "";
@@ -234,7 +260,7 @@ async function tokenCheck(input: PreTradeInput): Promise<PreTradeCheck> {
   // A registered B20 stock's symbol from another contract is an impostor too.
   const norm = normalizeSymbol(symbol);
   if (trust === "impostor" || (norm && BASE_STOCKS.some((s) => normalizeSymbol(s.symbol) === norm))) {
-    reasons.push({ level: impostorLevel(input.kind), code: "IMPOSTOR", text: `This contract calls itself ${symbol} but is not the verified ${symbol} on Base — an impersonator.` });
+    reasons.push({ level: impostorLevel(input.kind), code: "IMPOSTOR", text: `This contract calls itself ${impostorNames(symbol).shown} but is not the verified ${impostorNames(symbol).real} on Base — an impersonator.` });
     return finish("crypto", symbol || token, reasons);
   }
   if (input.kind === "swap") {

@@ -50,6 +50,7 @@ const POOL = A(0x1008);              // Base: a v3-style pool holding CLEAN / HO
 const NO_CODE = A(0x1009);           // Base: nothing deployed (a wallet)
 const POOL_WETH = A(0x100a);         // Base: a pool holding CLEAN / WETH (WETH's symbol() never answers here)
 const WETH = "0x4200000000000000000000000000000000000006";
+const IMPOSTOR_HOMO = A(0x100e);     // Base: "ÚSDС" — the live fake USDC (accent + Cyrillic С)
 const GP_CLEAN = A(0x100b);          // Base: no template tax; GoPlus measures 0% and names owner powers
 const GP_HONEY = A(0x100c);          // Base: no template tax; GoPlus says honeypot
 const GP_TAX = A(0x100d);            // Base: no template tax; GoPlus measures a 20% sell tax
@@ -79,6 +80,7 @@ const CONTRACTS: Record<string, Fixture> = {
   [RH_IMPOSTOR]: { symbol: RH_STOCK.ticker, decimals: 18 },
   [RH_UNLISTED]: { symbol: "NEWT", decimals: 18 },
   [GP_CLEAN]: { symbol: "GPC", decimals: 18 },
+  [IMPOSTOR_HOMO]: { symbol: "ÚSDС", decimals: 6 },
   [GP_HONEY]: { symbol: "GPH", decimals: 18 },
   [GP_TAX]: { symbol: "GPT", decimals: 18 },
 };
@@ -223,6 +225,10 @@ async function run(input: Parameters<typeof preTradeCheck>[0]) {
   ok("a Base-marked row in the RH snapshot is not read as RH", c.reasons.some((r) => r.code === "DRIFT_UNAVAILABLE"), texts(c));
   await kvDel(KV_SNAPSHOT_LATEST);
 
+  c = await run({ chain: "base", kind: "swap", token: IMPOSTOR_HOMO, now: WEEKDAY });
+  ok("a look-alike 'ÚSDС' → BLOCK, named by what it reads as, never as 'the verified ÚSDС'",
+    c.verdict === "BLOCK" && /reads as USDC/.test(texts(c)) && /not the verified USDC on Base/.test(texts(c)), texts(c));
+
   console.log("\n3b. GoPlus measures what the template read cannot (2026-10-13)");
   c = await run({ chain: "base", kind: "swap", token: GP_CLEAN, now: WEEKDAY });
   ok("GoPlus 0% tax → PASS with TAX_CLEAN, owner powers as INFO not a verdict",
@@ -243,6 +249,7 @@ async function run(input: Parameters<typeof preTradeCheck>[0]) {
   await kvDel(KV_BASE_ROWS_LATEST);
   c = await run({ chain: "base", kind: "swap", token: NVDA.token, now: WEEKDAY });
   ok("a B20 stock with no Base desk rows → WARN: the reading is unavailable (never a guessed drift)", c.verdict === "WARN" && /unavailable/.test(texts(c)), texts(c));
+  ok("…drift_pct is null (looked for, not available), not 0", c.drift_pct === null, String(c.drift_pct));
   // The Robinhood desk's snapshot is NOT where Base rows live — a Base row
   // planted there must not be read (this test once passed against that key).
   await kvSet(KV_SNAPSHOT_LATEST, { tickers: [{ chain: "base", contract: NVDA.token, drift_pct: 9.9 }] });
@@ -254,11 +261,14 @@ async function run(input: Parameters<typeof preTradeCheck>[0]) {
   await kvSet(KV_BASE_ROWS_LATEST, { started_at: new Date().toISOString(), rows: [{ chain: "base", contract: NVDA.token, drift_pct: 3.1 }] });
   c = await run({ chain: "base", kind: "swap", token: NVDA.token, now: WEEKDAY });
   ok("a measured +3.10% drift → WARN naming the number and its source", c.verdict === "WARN" && /\+3\.10%/.test(texts(c)) && /Blue Hood/.test(texts(c)), texts(c));
+  ok("…drift_pct carries 3.1", c.drift_pct === 3.1, String(c.drift_pct));
   await kvSet(KV_BASE_ROWS_LATEST, { started_at: new Date().toISOString(), rows: [{ chain: "base", contract: NVDA.token, drift_pct: 0.4 }] });
   c = await run({ chain: "base", kind: "swap", token: NVDA.token, now: WEEKDAY });
   ok("a 0.4% drift on a weekday → PASS (the issuer-policy line is INFO)", c.verdict === "PASS" && /INFO:B20 tokens can carry issuer transfer policies/.test(texts(c)), texts(c));
   c = await run({ chain: "base", kind: "swap", token: NVDA.token, now: SATURDAY });
-  ok("…the same token on a Saturday → WARN", c.verdict === "WARN" && /weekend/.test(texts(c)), texts(c));
+  ok("…the same token on a Saturday → PASS: the weekend is INFO now, the measured gap carries any warning (2026-10-16)",
+    c.verdict === "PASS" && /INFO:US market is closed for the weekend/.test(texts(c)), texts(c));
+  ok("…and the gap travels as a number for the one-line action", c.drift_pct === 0.4, String(c.drift_pct));
 
   c = await run({ chain: "base", kind: "swap", token: POOL, now: WEEKDAY });
   ok("a pool address → WARN NOT_A_TOKEN naming its two tokens, not 'tax not measured'",
