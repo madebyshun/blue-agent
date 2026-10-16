@@ -22,7 +22,11 @@ export type AutoStatus =
   | { phase: "done"; href: string | null; detail?: string }
   | { phase: "error"; message: string };
 
-export interface AutoConfirm { armed: boolean; silent: boolean; report?: (s: AutoStatus) => void }
+export interface AutoConfirm {
+  armed: boolean; silent: boolean; report?: (s: AutoStatus) => void;
+  /** The strip's warning was said in chat and the user said "yes" again. */
+  warnAck?: boolean;
+}
 export const AutoConfirmContext = createContext<AutoConfirm>({ armed: false, silent: false });
 
 /**

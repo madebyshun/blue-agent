@@ -23,7 +23,8 @@
  * token or bridge cost changes; `cleared` is what a card gates its sign
  * button on — false while the answer for the CURRENT input is loading.
  */
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
+import { AutoConfirmContext } from "@/components/wallet/action-context";
 import { sessionFetch } from "@/lib/session-client";
 
 /** Backoff between attempts after a transient failure (429 / 5xx / network). */
@@ -118,8 +119,11 @@ export function usePreTradeCheck(input: {
   // Held while the answer for THIS input is still on its way, and while our
   // own rate limit refuses to give one. An unavailable check does not hold
   // (§7 #14: BLOCK only on evidence) — the banner says so.
+  // A warning the user was told about in chat and answered with a second
+  // "yes" (ActionStrip) is acknowledged: that reply IS the checkbox.
+  const auto = useContext(AutoConfirmContext);
   const cleared = state !== "loading" && state !== "throttled"
-    && (!check || check.verdict === "PASS" || (check.verdict === "WARN" && ack));
+    && (!check || check.verdict === "PASS" || (check.verdict === "WARN" && (ack || (auto.armed && !!auto.warnAck))));
   const blocked = check?.verdict === "BLOCK";
   return { check, state, ack, setAck, cleared, blocked, retry };
 }
@@ -141,11 +145,16 @@ export function PreTradeBanner({ pt }: { pt: ReturnType<typeof usePreTradeCheck>
   }
   const color = check.verdict === "BLOCK" ? "#f87171" : check.verdict === "WARN" ? "#fbbf24" : "#64748b";
   const shown = check.reasons.filter((r) => check.verdict !== "PASS" || r.level === "INFO");
+  // Nothing in doubt, nothing to add: say nothing (2026-10-16 — no "CHECKED"
+  // badge; the user reads a sentence only when there is something to know).
+  if (check.verdict === "PASS" && shown.length === 0) return null;
   return (
     <div className="rounded-lg border px-2.5 py-2 mb-3" style={{ borderColor: `${color}40`, background: `${color}0d` }}>
-      <div className="text-[9px] font-bold tracking-widest" style={{ color }}>
-        {check.verdict === "BLOCK" ? "BLOCKED" : check.verdict === "WARN" ? "CHECK BEFORE SIGNING" : "CHECKED"} · {check.label}
-      </div>
+      {check.verdict !== "PASS" && (
+        <div className="text-[10px] font-semibold" style={{ color }}>
+          {check.verdict === "BLOCK" ? "Won't sign" : "Before you sign"}: {check.label}
+        </div>
+      )}
       {shown.length > 0 && (
         <ul className="mt-1 space-y-0.5">
           {shown.map((r, i) => (
