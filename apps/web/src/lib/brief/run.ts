@@ -20,7 +20,8 @@ import { kv, kvGet, kvSAdd, kvSet, kvSRem, kvTryLock, kvDel } from "@/lib/kv";
 import { tgUserForAddress } from "@/lib/blue-hood/watchlist";
 import { sendMessage } from "@/lib/telegram/bot";
 import { baselineFor, diffSnapshots } from "./diff";
-import { renderBrief, renderStocks, type BriefFormat } from "./render";
+import { renderBrief, renderStocks, SESSION_NOTE, type BriefFormat } from "./render";
+import { renderReport } from "./stock-report";
 import { readHoldings, takeSnapshot } from "./snapshot";
 import { stockBrief } from "./stocks";
 import type { Snapshot } from "./types";
@@ -116,10 +117,16 @@ export async function buildStockBrief(wallet: string | null, fmt: BriefFormat, n
   const holdings = wallet ? await readHoldings(wallet).catch(() => null) : null;
   const d = await stockBrief(holdings, now);
   const b = (s: string) => (fmt === "html" ? `<b>${s}</b>` : `**${s}**`);
-  const lines = [`📈 ${b("Onchain stocks")} · Base 8453 and Robinhood Chain 4663`, "", ...renderStocks(d, fmt, { held: true, movers: true })];
+  const e = (s: string) => (fmt === "html" ? s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") : s);
+  const at = new Date(now).toISOString().slice(11, 16);
+  const lines = [`📈 ${b("Stock tokens vs the real stock")} · ${at} UTC`, "", ...renderStocks(d, fmt, { held: true, sessionNote: false })];
+  const stale = (["robinhood", "base"] as const).filter((c) => d.desk[c] !== "ok");
+  lines.push(...renderReport(d.report, e, b));
+  for (const c of stale) lines.push("", e(`${c === "base" ? "Base" : "Robinhood Chain"}: not shown, the desk reading is ${d.desk[c] === "stale" ? "older than ~11 minutes" : "unreadable"} right now.`));
+  lines.push("", e(SESSION_NOTE[d.session]));
   if (wallet && holdings && !d.held.length) lines.splice(2, 0, "You hold no stock tokens on either chain.", "");
   lines.push("", fmt === "html"
-    ? "Oracle: Chainlink. DEX: the desk's pool reading. NAV: Coinbase. A gap is a measurement, not a trade signal."
-    : "_Oracle: Chainlink. DEX: the desk's pool reading. NAV: Coinbase's published value per token. A gap is a measurement, not a trade signal._");
+    ? "Gap = DEX price vs the Chainlink oracle. Buying above the oracle means paying more than the stock is worth. Data, not a buy signal."
+    : "_Gap = DEX price vs the Chainlink oracle. Buying above the oracle means paying more than the stock is worth. Data, not a buy signal._");
   return lines.join("\n");
 }

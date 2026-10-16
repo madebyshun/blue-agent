@@ -29,6 +29,7 @@ import { RWA_TOKENS } from "@/lib/robinhood/rwa-registry";
 import { nyseMarketStatus } from "@/lib/robinhood/rwa-market";
 import { coinbaseCatalog, navPremiumPct, type CoinbaseStock } from "@/lib/base-stocks/coinbase-catalog";
 import type { BriefChain, HoldRow } from "./types";
+import { classifyDesk, cheaperVenue, type StockReport } from "./stock-report";
 
 export type Session = "regular" | "premarket" | "afterhours" | "weekend";
 export type DeskState = "ok" | "stale" | "unread";
@@ -58,6 +59,8 @@ export interface StockBriefData {
   held: StockRow[];
   /** Largest |drift| per desk, non-stale desks only. */
   movers: Record<BriefChain, StockRow[]>;
+  /** Above / below / in line / held back, per fresh desk (stock-report.ts). */
+  report: StockReport;
 }
 
 export const MOVERS_PER_DESK = 5;
@@ -134,7 +137,16 @@ export function assembleStocks(input: {
       .map((r) => fromDesk(c, r, cat, null));
   }
 
+  const report: StockReport = { desks: {}, cheaper: [] };
+  for (const c of ["base", "robinhood"] as const) {
+    if (input.desks[c].state === "ok") report.desks[c] = classifyDesk(c, input.desks[c].rows);
+  }
+  if (input.desks.base.state === "ok" && input.desks.robinhood.state === "ok") {
+    report.cheaper = cheaperVenue(input.desks.base.rows, input.desks.robinhood.rows);
+  }
+
   return {
+    report,
     session: nyseMarketStatus(new Date(input.now)).session,
     desk: { base: input.desks.base.state, robinhood: input.desks.robinhood.state },
     catalogRead: input.catalog !== null,
