@@ -30,7 +30,7 @@ export function isConfirmWord(text: string): boolean {
 
 /** What happened when a confirmation was routed to a pending action. */
 export type ConfirmOutcome =
-  | { kind: "armed"; what: string; silent: boolean }
+  | { kind: "armed"; what: string; silent: boolean; verb?: "sign" | "arm" }
   | { kind: "warn"; what: string; why: string }
   | { kind: "blocked"; what: string; why: string }
   /** Nothing pending, but this action was just armed by an earlier "yes":
@@ -98,6 +98,7 @@ export function confirmReply(o: ConfirmOutcome): string {
     ? `${o.what} is already done. Nothing else is waiting for a yes.`
     : `Still waiting on your wallet for ${o.what}. Confirm it there, or reject it to cancel.`;
   if (o.kind === "warn") return `${o.what} has a warning: ${o.why} Reply yes again to sign it anyway.`;
+  if (o.verb === "arm") return `Turning on: ${o.what}…`;
   return o.silent ? `Signing ${o.what}…` : `Signing ${o.what}. Confirm in your wallet.`;
 }
 
@@ -105,14 +106,15 @@ export function confirmReply(o: ConfirmOutcome): string {
 export function statusText(what: string, s:
   | { phase: "working" } | { phase: "stuck" }
   | { phase: "sent"; href: string | null }
-  | { phase: "done"; href: string | null; detail?: string }
-  | { phase: "error"; message: string }): string {
+  | { phase: "done"; href: string | null; detail?: string; text?: string }
+  | { phase: "error"; message: string }, verb: "sign" | "arm" = "sign"): string {
   const link = (href: string | null) => (href ? ` [View tx ↗](${href})` : "");
   switch (s.phase) {
-    case "working": return `Signing ${what}…`;
+    case "working": return verb === "arm" ? `Turning on: ${what}…` : `Signing ${what}…`;
     case "stuck": return `Couldn't start ${what}. The details are open above.`;
     case "sent": return `Sent ${what}. Waiting for it to confirm…${link(s.href)}`;
-    case "done": return `✓ Done: ${s.detail ? `${s.detail} on ${what.split(" on ").pop()}` : what}.${link(s.href)}`;
-    case "error": return `✗ ${what} failed: ${s.message.replace(/\.$/, "")}. Reply **yes** to retry.`;
+    case "done": if (s.text) return s.text;
+      return `✓ Done: ${s.detail ? `${s.detail} on ${what.split(" on ").pop()}` : what}.${link(s.href)}`;
+    case "error": return verb === "arm" ? `✗ Couldn't turn it on: ${s.message.replace(/\.$/, "")}. Reply **yes** to retry.` : `✗ ${what} failed: ${s.message.replace(/\.$/, "")}. Reply **yes** to retry.`;
   }
 }

@@ -134,7 +134,7 @@ export function renderReport(rep: StockReport, e: (s: string) => string, b: (s: 
   if (rep.cheaper.length) {
     out.push("", b("Same stock, both chains"));
     for (const r of rep.cheaper.slice(0, MAX_LISTED)) {
-      out.push(`• ${e(`${r.ticker}: cheaper on ${CHAIN[r.cheaper]} by ${r.by.toFixed(1)} points (Base ${pct(r.base)}, Robinhood Chain ${pct(r.robinhood)} vs the stock)`)}`);
+      out.push(`• ${e(`${r.ticker}: ${r.by.toFixed(1)}% cheaper on ${CHAIN[r.cheaper]} (Base ${pct(r.base)}, Robinhood Chain ${pct(r.robinhood)} vs the stock)`)}`);
     }
   }
   return out;
