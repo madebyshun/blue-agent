@@ -2409,7 +2409,7 @@ export function ToolResultCard({ tool, result }: { tool: string; result: Record<
       if (r.kind !== "price_alert_draft") return null;
       const d = r as unknown as PriceAlertDraft;
       return (
-        <ActionStrip summary={d.rule} chain={null} cta={d.automation ? "Review & arm automation" : "Review & arm"}>
+        <ActionStrip summary={d.rule} chain={null} cta={d.automation ? "Review & arm automation" : "Review & arm"} confirmable verb="arm">
           <PriceAlertCard result={d} account={account} />
         </ActionStrip>
       );

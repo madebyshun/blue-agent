@@ -68,8 +68,11 @@ function VerdictChip({ pt }: { pt: Pt }) {
 }
 
 export function ActionStrip({
-  summary, chain, check, cta = "Review & sign", usd = null, confirmable = false, children,
+  summary, chain, check, cta = "Review & sign", usd = null, confirmable = false, verb = "sign", children,
 }: {
+  /** "arm": a "yes" turns on an alert or automation (no transaction), and the
+   *  replies say so instead of "Signing". */
+  verb?: "sign" | "arm";
   summary: string;
   chain: "base" | "robinhood" | null;
   check?: StripCheck;
@@ -115,19 +118,19 @@ export function ActionStrip({
     sinkRef.current = sink ?? null;
     setStatus("waiting");
     setArmed(true);
-    return { kind: "armed", what, silent };
-  }, [usable, pt.check, what, silent, warned]);
+    return { kind: "armed", what, silent: verb === "arm" ? true : silent, verb };
+  }, [usable, pt.check, what, silent, warned, verb]);
 
   const report = useCallback((s: AutoStatus) => {
     setStatus(s);
     const final = s.phase === "done" || s.phase === "error";
     if (s.phase === "done") settleArmed();
     if (s.phase === "error") forgetArmed();
-    sinkRef.current?.(statusText(what, s), final);
+    sinkRef.current?.(statusText(what, s, verb), final);
     if (final) sinkRef.current = null;
     // A failed attempt goes back to pending: "yes" retries from a fresh card.
     if (s.phase === "error") { setArmed(false); setAttempt((n) => n + 1); }
-  }, [what]);
+  }, [what, verb]);
 
   // Armed but the card never started — no quote, not enough balance, wrong
   // network. Say so and open it: now there IS something to look at.
@@ -135,7 +138,7 @@ export function ActionStrip({
     if (status !== "waiting") return;
     const t = setTimeout(() => {
       setStatus("stuck"); setOpen(true);
-      sinkRef.current?.(statusText(what, { phase: "stuck" }), true);
+      sinkRef.current?.(statusText(what, { phase: "stuck" }, verb), true);
     }, START_TIMEOUT_MS);
     return () => clearTimeout(t);
   }, [status, what]);

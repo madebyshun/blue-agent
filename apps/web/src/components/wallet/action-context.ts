@@ -19,7 +19,7 @@ export const ActionMessageContext = createContext<{ createdAt: number } | null>(
 export type AutoStatus =
   | { phase: "working" }
   | { phase: "sent"; href: string | null }
-  | { phase: "done"; href: string | null; detail?: string }
+  | { phase: "done"; href: string | null; detail?: string; text?: string }
   | { phase: "error"; message: string };
 
 export interface AutoConfirm { armed: boolean; silent: boolean; report?: (s: AutoStatus) => void }
@@ -33,7 +33,7 @@ export const AutoConfirmContext = createContext<AutoConfirm>({ armed: false, sil
  */
 export function useAutoReport(
   step: string, err: string, href: string | null,
-  o: { sentSteps?: string[]; doneSteps?: string[]; detail?: string } = {},
+  o: { sentSteps?: string[]; doneSteps?: string[]; detail?: string; doneText?: string } = {},
 ) {
   const { armed, report } = useContext(AutoConfirmContext);
   const sent = (o.sentSteps ?? ["broadcasting"]).includes(step);
@@ -41,10 +41,10 @@ export function useAutoReport(
   useEffect(() => {
     if (!armed || !report || step === "idle") return;
     if (step === "error") report({ phase: "error", message: err || "Failed." });
-    else if (done) report({ phase: "done", href, detail: o.detail });
+    else if (done) report({ phase: "done", href, detail: o.detail, ...(o.doneText ? { text: o.doneText } : {}) });
     else if (sent) report({ phase: "sent", href });
     else report({ phase: "working" });
-  }, [armed, report, step, err, href, sent, done, o.detail]);
+  }, [armed, report, step, err, href, sent, done, o.detail, o.doneText]);
 }
 
 /**

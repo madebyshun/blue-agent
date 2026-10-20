@@ -4,6 +4,8 @@
  */
 import type { TickerSnapshot } from "../src/lib/blue-hood/types";
 import { classifyDesk, cheaperVenue, renderReport, MIN_TVL_USD } from "../src/lib/brief/stock-report";
+import { stockChainFromText } from "../src/lib/chat/intents";
+import { toMarkdown } from "../src/lib/brief/run";
 
 let failures = 0;
 function ok(label: string, cond: boolean, detail = "") { console.log(`  ${cond ? "PASS" : "FAIL"}  ${label}${detail ? ` — ${detail}` : ""}`); if (!cond) failures++; }
@@ -38,8 +40,19 @@ ok("a held-back reading is never compared", cheaperVenue([row("CRWV", 1, 900_000
 const text = renderReport({ desks: { robinhood: d }, cheaper: ch }, (s) => s, (s) => `**${s}**`).join("\n");
 ok("rendered: a listed gap carries pool and volume", /AMD \+14\.8% · pool \$740K · 24h vol \$50K/.test(text), text);
 ok("rendered: held-back line explains itself", /Held back: CRWV \+42\.0%, SNDK \+21\.8%\. A gap that size is more likely a bad reading/.test(text));
-ok("rendered: cross-chain line names both gaps", /MSTR: cheaper on Base by 1\.3 points \(Base \+1\.6%, Robinhood Chain \+2\.9% vs the stock\)/.test(text));
+ok("rendered: cross-chain line names both gaps", /MSTR: 1\.3% cheaper on Base \(Base \+1\.6%, Robinhood Chain \+2\.9% vs the stock\)/.test(text));
 ok("rendered: no verdict codes, no buy words", !/\b(PASS|WARN|BLOCK|buy now|sell now)\b/i.test(text));
+
+// The chain the user asked about (2026-10-20: "stock tokens on base" got both).
+ok("'stock tokens on base' → Base only", stockChainFromText("stock tokens on base") === "base");
+ok("'cổ phiếu onchain trên Robinhood' → Robinhood Chain only", stockChainFromText("cổ phiếu onchain trên Robinhood") === "robinhood");
+ok("'stock tokens today' → both", stockChainFromText("stock tokens today") === null);
+ok("'NVDA on Base vs RH' → both", stockChainFromText("NVDA on Base vs RH") === null);
+ok("'database' is not Base", stockChainFromText("stock database") === null);
+
+// Markdown: one paragraph per line, bullets as a list.
+const md = toMarkdown(["**Robinhood Chain**", "Priced above the stock:", "• AMD +14.8%", "• ORCL +5.5%", "In line: AAPL", "", "Note"]);
+ok("markdown keeps lines apart and lists bullets", md === "**Robinhood Chain**\n\nPriced above the stock:\n\n- AMD +14.8%\n- ORCL +5.5%\n\nIn line: AAPL\n\nNote", JSON.stringify(md));
 
 console.log(failures === 0 ? "\nstock-report-test: PASS" : `\nstock-report-test: FAIL — ${failures}`);
 process.exit(failures === 0 ? 0 : 1);

@@ -11,6 +11,7 @@ import { useEnsureSession } from "@/hooks/useEnsureSession";
 import { ConnectButton } from "@/components/ConnectModal";
 import { localTz } from "@/lib/cron-schedule";
 import { TelegramAlertsButton } from "@/components/wallet/TelegramAlertsButton";
+import { useAutoConfirm, useAutoReport } from "@/components/wallet/action-context";
 
 export interface PriceAlertDraft {
   kind: "price_alert_draft";
@@ -47,6 +48,14 @@ export function PriceAlertCard({ result, account }: { result: PriceAlertDraft; a
     }
   }
 
+  // Chat "yes" (lib/chat/confirm.ts): arm once, and report back as chat.
+  useAutoConfirm(!!account && state === "idle", () => { void arm(); });
+  const when = result.body.check_at ? "at its set time" : "every 5 minutes";
+  useAutoReport(state, msg, null, {
+    doneSteps: ["armed"],
+    doneText: `✓ On: ${result.rule}. I check it ${when}, free. See or pause it in [Scheduled](/cron).`,
+  });
+
   return (
     <div className="rounded-xl border border-[#1A1A2E] bg-[#0B0B12] p-3 my-2 max-w-[520px]">
       <p className="font-mono text-[10px] text-slate-500 mb-1">
@@ -55,7 +64,7 @@ export function PriceAlertCard({ result, account }: { result: PriceAlertDraft; a
       <p className="text-[13px] text-slate-200">{result.rule.charAt(0).toUpperCase() + result.rule.slice(1)}.</p>
       <p className="font-mono text-[10px] text-slate-500 mt-1">
         {result.body.trade
-          ? "When it fires, a trade card lands in the “Price alerts” chat with the live quote and the pre-trade check. It waits for your signature — nothing executes on its own."
+          ? "When it fires, the trade is prepared in the “Price alerts” chat with the live quote and the trade check, and waits for your yes. Nothing executes on its own."
           : "Lands in Scheduled → Alerts and in the “Price alerts” chat. An alert is a message, not an order — nothing is traded."}
       </p>
       <div className="mt-2.5">

@@ -62,6 +62,18 @@ const BRIEF_RE = /\b(wallet|morning|daily)\s+brief\b|\bwhat(?:'s| has| did)?\s+c
 /** "How are my stocks" — the stock brief (desk gaps, NAV, session). */
 const STOCK_BRIEF_RE = /\bstock brief\b|\bhow (are|is) my (onchain |tokeni[sz]ed )?stocks?\b|\b(onchain|tokeni[sz]ed) stocks? (today|now|brief|overview)\b|\bstock (gaps?|premium|discount)\b|\bweekend gap\b|\b(premium|discount) to nav\b|cổ phiếu onchain|cổ phiếu (của )?(mình|tôi)/;
 
+/**
+ * Which stock desk the user asked about, read from their own words (2026-10-20:
+ * "stock tokens on base" answered with both chains). Exactly one chain named
+ * ⇒ that chain; none or both ⇒ null (the report covers both).
+ */
+export function stockChainFromText(text: string): "base" | "robinhood" | null {
+  const t = text.toLowerCase();
+  const base = /\bbase\b|\b8453\b|coinbase|\bb20\b/.test(t);
+  const rh = /\brobinhood\b|\brh\b|\b4663\b/.test(t);
+  return base && !rh ? "base" : rh && !base ? "robinhood" : null;
+}
+
 export function forcedToolFor(messages: readonly { role: string; content: unknown }[]):
   "hub_sign_check" | "hub_pretrade" | "explain_tx" | "wallet_brief" | "stock_brief" | "prepare_swap" | "robinhood_swap" | "prepare_send" | "robinhood_send" | null {
   const last = messages[messages.length - 1];

@@ -39,7 +39,7 @@ import { SILENT_MAX_USD } from "@/lib/chat/confirm";
 import { explainText, txExplain } from "@/lib/tx-explain";
 import { baseStockByTickerOrSymbol, dollarAmount, userDollarAmount } from "@/lib/chat/trade-intent";
 import { githubContextFor } from "@/lib/chat/github-context";
-import { forcedToolFor, wantsMyAlerts } from "@/lib/chat/intents";
+import { forcedToolFor, stockChainFromText, wantsMyAlerts } from "@/lib/chat/intents";
 import { runInternalTool } from "@/lib/x402-internal-run";
 import { recordCall } from "@/lib/usage-daily";
 
@@ -1185,7 +1185,9 @@ Testnets are reachable by full id: base-sepolia, ethereum-sepolia, robinhood-tes
   {
     name: "stock_brief",
     description: "Onchain stock tokens right now, on Base (8453, Coinbase B20) and Robinhood Chain (4663): each desk's largest DEX-vs-Chainlink-oracle gaps, the premium/discount to Coinbase's NAV on Base, which US session it is (weekend = oracle frozen at Friday's close) — and, when a wallet is connected, the stock tokens it holds with the same readings. Read from the Blue Hood desk snapshot and Coinbase's API; ZERO LLM; facts, not trade signals. Use for: 'how are my stocks', 'stock brief', 'tokenized stocks today', 'any stock gaps', 'weekend gap', 'NVDA premium to NAV', 'cổ phiếu onchain hôm nay'.",
-    input_schema: { type: "object", properties: {}, required: [] },
+    input_schema: { type: "object", properties: {
+      chain: { type: "string", enum: ["base", "robinhood"], description: "Only when the user named ONE chain ('stock tokens on Base'). Omit for both." },
+    }, required: [] },
   },
   {
     name: "wallet_brief",
@@ -2207,10 +2209,10 @@ async function callHubTool(
         : ` It is ${fmtPrice(resolved.priceNow)} now (${resolved.priceSource ?? "source unknown"}).`;
     const sentence = ruleText.charAt(0).toUpperCase() + ruleText.slice(1);
     const how = ca.checkAt ? "checked at that time" : "checked every 5 minutes";
-    const guard = tr.trade ? " When it fires, the trade card waits for your signature — nothing executes on its own." : "";
-    const line = `${sentence}.${now} Tap **Review & arm** above to start — ${how}, free.${guard}`;
+    const guard = tr.trade ? " When it fires, I prepare the trade and you confirm it, nothing executes on its own." : "";
+    const line = `${sentence}.${now} ${how.charAt(0).toUpperCase() + how.slice(1)}, free.${guard} Reply **yes** to turn it on.`;
     return {
-      text: `${line}\n[Card rendered. Do not claim the alert is active until the user arms it.]`,
+      text: `${line}\n[Draft only. Do not claim the alert is active until the user replies yes.]`,
       staticReply: line,
       result: {
         kind: "price_alert_draft",
@@ -2363,8 +2365,9 @@ async function callHubTool(
 
   if (toolName === "stock_brief") {
     const wallet = userAddress && /^0x[a-fA-F0-9]{40}$/.test(userAddress) ? userAddress : null;
+    const only = args.chain === "base" || args.chain === "robinhood" ? args.chain : undefined;
     try {
-      const text = await buildStockBrief(wallet, "md");
+      const text = await buildStockBrief(wallet, "md", Date.now(), only);
       return { text: "The stock brief is written for the user from the reads. Add nothing, and never turn a gap into a buy/sell call.", staticReply: text, result: { kind: "stock_brief" } };
     } catch (e) {
       return { text: "The stock brief could not be read. Say so in one line — invent nothing.", staticReply: `Couldn't read the stock desks right now (${(e as Error).message.slice(0, 80)}).` };
@@ -2762,6 +2765,12 @@ async function veniceToolStream(
             const key = tc.function.name === "prepare_swap" ? "amountIn" : "amount";
             const d = userDollarAmount(lastUserText(openaiMsgs), args[key]);
             if (d) args = { ...args, [key]: `$${d}` };
+          }
+          // The stock report's chain: the user's own words decide, in code
+          // (a forced call carries no args at all).
+          if (tc.function.name === "stock_brief") {
+            const c = stockChainFromText(lastUserText(openaiMsgs));
+            args = c ? { ...args, chain: c } : (args.chain === "base" || args.chain === "robinhood" ? args : {});
           }
           const out = mcpEntry
             ? await callMcpConnectorTool(mcpEntry, args)

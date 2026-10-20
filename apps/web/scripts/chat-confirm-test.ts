@@ -63,5 +63,11 @@ ok("a sink passed to confirmLatest reaches the action", (() => {
   return got === f;
 })());
 
+// Arming an alert by "yes" (2026-10-20): its own words, no wallet prompt.
+ok("arm reply says turning on, not signing", confirmReply({ kind: "armed", what: "alert me when ETH on Base rises to or above $5,000", silent: true, verb: "arm" }).startsWith("Turning on:"));
+ok("arm progress says turning on", statusText("x", { phase: "working" }, "arm").startsWith("Turning on:"));
+ok("arm failure offers a retry", /Couldn't turn it on: no session\. Reply \*\*yes\*\* to retry/.test(statusText("x", { phase: "error", message: "no session." }, "arm")));
+ok("a done text overrides the swap wording", statusText("x", { phase: "done", href: null, text: "✓ On: alert." }) === "✓ On: alert.");
+
 console.log(failures === 0 ? "\nchat-confirm-test: PASS" : `\nchat-confirm-test: FAIL — ${failures}`);
 process.exit(failures === 0 ? 0 : 1);
