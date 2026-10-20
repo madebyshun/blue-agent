@@ -2529,8 +2529,12 @@ async function callHubTool(
         };
       }
       if (d.code === "INSUFFICIENT_CREDITS" && typeof d.needed === "number") {
+        // Said in code (2026-10-21): the model read this as "the tool is out of
+        // credits" and sent the user to top up "the screener at the Hub".
+        const bal = typeof d.balance === "number" ? d.balance : null;
         return {
           text: `[${toolName}: not enough credits — need ${d.needed}, top up to continue]`,
+          staticReply: `This answer costs ${d.needed} credits and you have ${bal ?? "fewer"}. Top up below, or ask again tomorrow when your 500 free daily credits are back.`,
           // `balance` is whatever the ledger read — never a stand-in 0.
           insufficient: { needed: d.needed, balance: typeof d.balance === "number" ? d.balance : undefined, tool: toolName },
         };
