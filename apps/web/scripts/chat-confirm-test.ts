@@ -74,5 +74,7 @@ ok("a done text overrides the swap wording", statusText("x", { phase: "done", hr
 ok("silent progress names the step", statusText("Swap 1 USDC → META on Base", { phase: "working", note: "approving the token first" }) === "Signing Swap 1 USDC → META on Base… (approving the token first)");
 ok("wallet-prompt progress says to confirm", /\(swapping\)\. Confirm in your wallet\.$/.test(statusText("x", { phase: "working", note: "swapping" }, "sign", false)));
 
+ok("a second yes on an alert does not talk about signing", !/sign/i.test(confirmReply({ kind: "already", what: "alert me when TSLA…", settled: false, silent: true, verb: "arm" })));
+
 console.log(failures === 0 ? "\nchat-confirm-test: PASS" : `\nchat-confirm-test: FAIL — ${failures}`);
 process.exit(failures === 0 ? 0 : 1);

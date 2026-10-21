@@ -111,6 +111,7 @@ export const CARD_REPLY_TOOLS = new Set([
   "hub_rh_index",
   "hub_token_price",
   "hub_b20_inspect",
+  "hub_pretrade",
 ]);
 
 // Since 2026-10-13 no result renders as a card: the code-written reply IS the
@@ -176,6 +177,22 @@ export function cardReply(tool: string, result: unknown, args: Json = {}): strin
       const s = arr(r.stocks).length;
       const e = arr(r.etfs).length;
       return `${discoveryText(tool, r) ?? ""}\n\n${s} stock and ${e} ETF tokens on Robinhood Chain in the registry; ask for one by name to get its contract.`;
+    }
+    // "Is this token safe?" answered in code (2026-10-21: the Fast model wrote
+    // "PASS — … audited, and the USDC logo appears in the system").
+    case "hub_pretrade": {
+      const v = str(r.verdict);
+      const label = str(r.label) || "This token";
+      const chain = r.chain === "robinhood" ? "Robinhood Chain" : "Base";
+      const reasons = arr(r.reasons);
+      const of = (lvl: string) => reasons.filter((x) => x.level === lvl).map((x) => str(x.text)).filter(Boolean);
+      if (v === "BLOCK") return `Don't trade it. ${of("BLOCK").join(" ")}`.trim();
+      if (v === "WARN") return `Be careful with ${label} on ${chain}: ${of("WARN").join(" ")}`.trim();
+      if (v === "PASS") {
+        const info = of("INFO");
+        return `Nothing found against ${label} on ${chain}.${info.length ? ` ${info.join(" ")}` : ""} That is what could be checked, not a guarantee.`;
+      }
+      return null;
     }
     case "hub_token_price": {
       const price = fmtUsd(r.usd);

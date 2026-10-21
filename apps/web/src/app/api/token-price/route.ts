@@ -52,7 +52,30 @@ const COIN_IDS: Record<string, string> = {
   cbbtc:      "coinbase-wrapped-btc",
   blue:       "blueagent",         // attempt — gracefully 404 if not listed yet
   blueagent:  "blueagent",
+  // Measured on CoinGecko /search 2026-10-21 (rank in brackets).
+  virtual:    "virtual-protocol",  // [120]; "price of VIRTUAL" 404'd in chat
+  degen:      "degen-base",        // [597]
 };
+
+/**
+ * A symbol not in COIN_IDS: CoinGecko's own search, the highest-ranked coin
+ * whose symbol is EXACTLY this one. Several coins share most symbols; the
+ * ranked one is what a person asking "price of X" means, and the reply names
+ * the coin id so the pick is visible.
+ */
+async function searchCoinId(symbol: string): Promise<string | null> {
+  try {
+    const r = await fetch(`${CG}/search?query=${encodeURIComponent(symbol)}`, { signal: AbortSignal.timeout(5_000) });
+    if (!r.ok) return null;
+    const j = (await r.json()) as { coins?: { id: string; symbol: string; market_cap_rank: number | null }[] };
+    const hit = (j.coins ?? [])
+      .filter((c) => c.symbol.toLowerCase() === symbol && c.market_cap_rank != null)
+      .sort((a, b) => (a.market_cap_rank as number) - (b.market_cap_rank as number))[0];
+    return hit?.id ?? null;
+  } catch {
+    return null;
+  }
+}
 
 // CoinGecko platform slugs for token_price by contract.
 const PLATFORM: Record<string, string> = {
@@ -93,7 +116,7 @@ export async function POST(req: NextRequest) {
 
   // ── Mode A: by symbol ────────────────────────────────────────────────────
   if (symbol) {
-    const coinId = COIN_IDS[symbol] ?? symbol;       // fall through with raw symbol
+    const coinId = COIN_IDS[symbol] ?? (await searchCoinId(symbol)) ?? symbol;
     const data   = await getCoinGeckoPrices([coinId], {
       include: { change24h: true, marketCap: true, volume24h: true },
       timeoutMs: 6_000,

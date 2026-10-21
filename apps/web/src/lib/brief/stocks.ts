@@ -61,6 +61,8 @@ export interface StockBriefData {
   movers: Record<BriefChain, StockRow[]>;
   /** Above / below / in line / held back, per fresh desk (stock-report.ts). */
   report: StockReport;
+  /** Every row of each fresh desk, for a one-ticker quote. */
+  rows: Record<BriefChain, StockRow[]>;
 }
 
 export const MOVERS_PER_DESK = 5;
@@ -145,8 +147,14 @@ export function assembleStocks(input: {
     report.cheaper = cheaperVenue(input.desks.base.rows, input.desks.robinhood.rows);
   }
 
+  const rows = { base: [] as StockRow[], robinhood: [] as StockRow[] };
+  for (const c of ["base", "robinhood"] as const) {
+    if (input.desks[c].state === "ok") rows[c] = input.desks[c].rows.map((r) => fromDesk(c, r, cat, null));
+  }
+
   return {
     report,
+    rows,
     session: nyseMarketStatus(new Date(input.now)).session,
     desk: { base: input.desks.base.state, robinhood: input.desks.robinhood.state },
     catalogRead: input.catalog !== null,
@@ -161,4 +169,40 @@ export async function stockBrief(holdings: HoldRow[] | null, now = Date.now()): 
     coinbaseCatalog().catch(() => null),
   ]);
   return assembleStocks({ holdings, desks: { base, robinhood }, catalog, now });
+}
+
+const CHAIN_LABEL: Record<BriefChain, string> = { base: "Base", robinhood: "Robinhood Chain" };
+const usd = (n: number | null) => (n == null ? null : n >= 1000 ? `$${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}` : `$${n.toFixed(2)}`);
+
+/**
+ * Pure: one stock token's price on its desk(s), in one or two lines — DEX,
+ * Chainlink oracle, the gap, and Coinbase NAV on Base. Every number is the
+ * desk's own reading; null when the ticker is on no fresh desk.
+ */
+export function stockQuoteText(d: StockBriefData, ticker: string, chain: BriefChain | null): string | null {
+  const T = ticker.toUpperCase();
+  const chains = (chain ? [chain] : ["base", "robinhood"]) as BriefChain[];
+  const lines: string[] = [];
+  for (const c of chains) {
+    const r = d.rows[c].find((x) => x.ticker === T);
+    if (!r) {
+      if (chain) lines.push(d.desk[c] === "ok" ? `${T} is not on the ${CHAIN_LABEL[c]} stock desk.` : `${CHAIN_LABEL[c]}: the desk reading is ${d.desk[c] === "stale" ? "older than ~11 minutes" : "unreadable"} right now.`);
+      continue;
+    }
+    const parts = [
+      r.dex != null && !r.withheld ? `DEX ${usd(r.dex)}` : null,
+      r.oracle != null ? `Chainlink oracle ${usd(r.oracle)}` : null,
+      typeof r.drift === "number" && !r.withheld ? `gap ${r.drift >= 0 ? "+" : "−"}${Math.abs(r.drift).toFixed(2)}%` : null,
+      r.nav != null ? `Coinbase NAV ${usd(r.nav)}` : null,
+    ].filter(Boolean);
+    lines.push(`${T} on ${CHAIN_LABEL[c]}: ${parts.join(" · ") || "no price read"}.`);
+  }
+  if (!lines.length) return null;
+  const SESSION: Record<Session, string> = {
+    regular: "US market open.",
+    premarket: "US market in pre-market: the oracle holds the last close.",
+    afterhours: "US market closed for the day: the oracle holds today's close.",
+    weekend: "US market closed for the weekend: the oracle holds Friday's close.",
+  };
+  return `${lines.join("\n")}\n\n${SESSION[d.session]}`;
 }

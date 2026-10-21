@@ -96,7 +96,9 @@ function chatReq(headers: Record<string, string>) {
   return new NextRequest("http://localhost/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headers },
-    body: JSON.stringify({ messages: [{ role: "user", content: "find tesla on robinhood chain" }], tier: "balanced" }),
+    // Worded so lib/chat/market-intents.ts does NOT route it in code: this suite
+    // needs the model's own (scripted) arguments, including a missing query.
+    body: JSON.stringify({ messages: [{ role: "user", content: "check the robinhood registry for tesla" }], tier: "balanced" }),
   });
 }
 async function sseEvents(res: Response): Promise<Array<Record<string, unknown>>> {
