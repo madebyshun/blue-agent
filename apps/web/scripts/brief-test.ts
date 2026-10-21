@@ -89,7 +89,7 @@ const DAY = 86_400_000;
   ok("5. risky lists BLOCK before WARN", d.grantsRisky.map((x) => x.level).join(",") === "BLOCK,WARN");
   const t = renderBrief(d, "md");
   ok("5. new grant line names Permit2 and the reason", /\[BLOCK\] unlimited WETH via Permit2 → 0x2222…2222 on Base: spender is a flagged drainer/.test(t));
-  ok("5. counts flagged", /Flagged and still open: 1 BLOCK, 1 WARN/.test(t));
+  ok("5. counts flagged, in plain words", /Still open: 1 to revoke now, 1 to review/.test(t));
   ok("5. points at revoke in chat", /check my approvals/.test(t));
   ok("5. an old WARN is counted, not re-listed", !/unlimited to an EOA/.test(t));
 }

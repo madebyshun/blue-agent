@@ -74,7 +74,8 @@ export async function checkReply(arg: string, replied?: string): Promise<string>
 
   if (code) {
     const c = await preTradeCheck({ chain, kind: "swap", token: addr });
-    const verdictLine = c.verdict === "PASS" ? "PASS: no blocking risk found by these checks" : c.verdict;
+    // Plain words, not the code (2026-10-16). A clean read is what was measured, never "safe".
+    const verdictLine = c.verdict === "PASS" ? "nothing found against it" : c.verdict === "BLOCK" ? "don't trade it" : "be careful";
     const lines = [`${ICON[c.verdict]} ${head}`, `${esc(c.label)}: <b>${verdictLine}</b>`];
     for (const r of c.reasons.slice(0, 5)) lines.push(`${ICON[r.level]} ${esc(r.text)}`);
     if (c.pool) lines.push(`This is a pool. Its tokens: ${esc(c.pool.token0.symbol)} <code>${c.pool.token0.address}</code>, ${esc(c.pool.token1.symbol)} <code>${c.pool.token1.address}</code>`);
@@ -88,7 +89,8 @@ export async function checkReply(arg: string, replied?: string): Promise<string>
   if (!flags) return `${head}\nℹ️ A wallet, not a contract. The address-risk feed (GoPlus) did not answer, so it was not screened — that is not a pass.`;
   const verdict = flags.hard.length || scam ? "FLAGGED" : flags.soft.length || flags.unconfirmed.length ? "CAUTION" : "NO_KNOWN_FLAGS";
   const icon = verdict === "FLAGGED" ? "🔴" : verdict === "CAUTION" ? "🟡" : "⚪";
-  const lines = [`${icon} ${head}`, `A wallet, not a contract: <b>${verdict}</b>`];
+  const word = verdict === "FLAGGED" ? "flagged" : verdict === "CAUTION" ? "some marks against it" : "nothing known against it";
+  const lines = [`${icon} ${head}`, `A wallet, not a contract: <b>${word}</b>`];
   if (flags.infra) lines.push(`ℹ️ ${esc(flags.infra)}.`);
   for (const f of flags.hard) lines.push(`🔴 GoPlus: ${esc(flagLabel(f))}${flags.source ? ` (${esc(flags.source)})` : ""}`);
   for (const f of flags.unconfirmed) lines.push(`🟡 GoPlus mark with no named source: ${esc(flagLabel(f))}`);

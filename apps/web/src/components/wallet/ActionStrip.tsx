@@ -60,9 +60,13 @@ function VerdictChip({ pt }: { pt: Pt }) {
   // registry stock) needs no "PASS": nothing was in doubt. Only a doubt, a
   // refusal, or an unknown token's clean read is worth the space (2026-10-16).
   if (v === "PASS" && c.asset_type !== "crypto") return gap ? <span className="text-slate-400">· {gap}</span> : null;
+  // Said as a short phrase, never the code word (2026-10-16): the reason the
+  // check gave, clipped; the full sentence sits in the tooltip.
+  const phrase = v === "PASS" ? "nothing found against it"
+    : why ? (why.length > 64 ? `${why.slice(0, 63).trimEnd()}…` : why) : v === "BLOCK" ? "won't sign" : "check before signing";
   return (
     <span title={why} style={{ color: VERDICT_COLOR[v] }}>
-      <span className="text-slate-500">· </span>{v}{gap ? <span className="text-slate-400"> · {gap}</span> : null}
+      <span className="text-slate-500">· </span>{phrase}{gap ? <span className="text-slate-400"> · {gap}</span> : null}
     </span>
   );
 }
@@ -155,7 +159,7 @@ export function ActionStrip({
     return registerPending({ id, createdAt: msg.createdAt, fire });
   }, [id, confirmable, msg?.createdAt, armed, fire]);
 
-  const auto = useMemo(() => ({ armed, silent, report }), [armed, silent, report]);
+  const auto = useMemo(() => ({ armed, silent, report, warnAck: warned }), [armed, silent, report, warned]);
   const card = <AutoConfirmContext.Provider value={auto}>{children}</AutoConfirmContext.Provider>;
 
   const cardBox = (open || armed) && (

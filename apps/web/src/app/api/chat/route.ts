@@ -646,7 +646,7 @@ const ALL_HUB_TOOLS = [
   },
   {
     name: "hub_sign_check",
-    description: "What will signing this do? Use when the user pastes a transaction, an EIP-712 signature request (permit, Permit2, Seaport order) or an EIP-7702 authorization a dapp asked them to sign, or asks \"is this signature safe\" / \"what does this approve\". Decodes it and simulates a transaction; returns PASS / WARN / BLOCK and summary lines decided in code. Relay the summary lines and the verdict as given; never soften a BLOCK. Base 8453 or Robinhood Chain 4663.",
+    description: "What will signing this do? Use when the user pastes a transaction, an EIP-712 signature request (permit, Permit2, Seaport order) or an EIP-7702 authorization a dapp asked them to sign, or asks \"is this signature safe\" / \"what does this approve\". Decodes it and simulates a transaction; returns a verdict (PASS / WARN / BLOCK) and summary lines decided in code. Relay the summary lines; say the verdict in plain words, never the code word (BLOCK → 'don't sign it'), and never soften a BLOCK. Base 8453 or Robinhood Chain 4663.",
     input_schema: {
       type: "object",
       properties: {
@@ -660,7 +660,7 @@ const ALL_HUB_TOOLS = [
   },
   {
     name: "hub_pretrade",
-    description: "THE answer to 'is this token safe / a scam / a honeypot?' for a token ADDRESS on Base 8453 or Robinhood Chain 4663: PASS / WARN / BLOCK with reasons, decided in code — impostor of a registered token, honeypot or tax read from the contract, not-a-token (a wallet or a liquidity pool), stock-token issuer policy and oracle drift. Relay the verdict word and its reasons as given. PASS means nothing was measured against it, never 'safe'.",
+    description: "THE answer to 'is this token safe / a scam / a honeypot?' for a token ADDRESS on Base 8453 or Robinhood Chain 4663: PASS / WARN / BLOCK with reasons, decided in code — impostor of a registered token, honeypot or tax read from the contract, not-a-token (a wallet or a liquidity pool), stock-token issuer policy and oracle drift. Relay its reasons in plain words, never the code word: BLOCK → 'don't trade it' and why; WARN → what to watch; PASS → what was measured and that nothing was found against it, never 'safe'.",
     input_schema: {
       type: "object",
       properties: {
