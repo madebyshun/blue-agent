@@ -40,6 +40,7 @@ import { explainText, txExplain } from "@/lib/tx-explain";
 import { baseStockByTickerOrSymbol, dollarAmount, userDollarAmount } from "@/lib/chat/trade-intent";
 import { githubContextFor } from "@/lib/chat/github-context";
 import { forcedToolFor, stockChainFromText, wantsMyAlerts } from "@/lib/chat/intents";
+import { NO_LIVE_SOURCE, looksLikeMarketData, marketCallsFor, marketHoursText } from "@/lib/chat/market-intents";
 import { runInternalTool } from "@/lib/x402-internal-run";
 import { recordCall } from "@/lib/usage-daily";
 
@@ -2370,6 +2371,31 @@ async function callHubTool(
     }
   }
 
+  if (toolName === "market_hours") {
+    const line = marketHoursText(new Date());
+    return { text: `${line}\n[Computed from the New York clock. Add nothing.]`, staticReply: line };
+  }
+  if (toolName === "stock_quote") {
+    const ticker = typeof args.ticker === "string" ? args.ticker.toUpperCase() : "";
+    const only = args.chain === "base" || args.chain === "robinhood" ? args.chain : null;
+    try {
+      const { stockBrief, stockQuoteText } = await import("@/lib/brief/stocks");
+      const line = stockQuoteText(await stockBrief(null), ticker, only)
+        ?? `${ticker} is not a stock token on the Base or Robinhood Chain desk that Blue Agent reads.`;
+      return { text: `${line}\n[Desk readings. Add nothing, and never turn a gap into a buy/sell call.]`, staticReply: line, result: { kind: "stock_quote", ticker } };
+    } catch (e) {
+      return { text: toolFailed(toolName, (e as Error).message), staticReply: `Couldn't read the stock desks right now. Try again in a minute.` };
+    }
+  }
+  if (toolName === "hub_dex_flow" && typeof args.token === "string" && !/^0x[a-fA-F0-9]{40}$/.test(args.token.trim())) {
+    const sym = args.token.replace(/^\$/, "").trim();
+    const addr = await baseAddressForSymbol(sym);
+    if (!addr) {
+      const msg = `I couldn't find ${sym.toUpperCase()} on Base by name. Paste its contract address and ask again.`;
+      return { text: `${msg} Reply with this line.`, staticReply: msg };
+    }
+    args = { ...args, token: addr };
+  }
   if (toolName === "stock_brief") {
     const wallet = userAddress && /^0x[a-fA-F0-9]{40}$/.test(userAddress) ? userAddress : null;
     const only = args.chain === "base" || args.chain === "robinhood" ? args.chain : undefined;
@@ -2602,6 +2628,39 @@ interface VenicePhase1Resp {
 // ~4-5s call; this replaces it with a zero-latency local stub.
 function forcedToolCall(name: string): VeniceToolCall {
   return { id: `forced_${name}`, type: "function", function: { name, arguments: "{}" } };
+}
+
+/** A market tool call decided in code, with its arguments (lib/chat/market-intents.ts). */
+function marketToolCall(name: string, args: Record<string, unknown>, i: number): VeniceToolCall {
+  return { id: `market_${i}_${name}`, type: "function", function: { name, arguments: JSON.stringify(args) } };
+}
+
+/** Market calls for this message, unless an action, a safety check or a brief
+ *  already owns it (forcedToolFor runs first and wins). */
+function routedMarketCalls(messages: readonly { role: string; content: unknown }[]): VeniceToolCall[] | null {
+  const owned = forcedToolFor(messages);
+  if (owned && owned !== "stock_brief") return null;
+  const calls = marketCallsFor(messages);
+  return calls ? calls.map((c, i) => marketToolCall(c.name, c.args, i)) : null;
+}
+
+/** A Base token's contract from its symbol, via CoinGecko's own listing (the
+ *  highest-ranked coin with exactly that symbol). Null when not found. */
+async function baseAddressForSymbol(symbol: string): Promise<string | null> {
+  try {
+    const s = await fetch(`https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(symbol)}`, { signal: AbortSignal.timeout(6000) })
+      .then((r) => (r.ok ? r.json() : null)) as { coins?: { id: string; symbol: string; market_cap_rank: number | null }[] } | null;
+    const hit = (s?.coins ?? [])
+      .filter((c) => c.symbol.toLowerCase() === symbol.toLowerCase())
+      .sort((a, b) => (a.market_cap_rank ?? 1e9) - (b.market_cap_rank ?? 1e9))[0];
+    if (!hit) return null;
+    const c = await fetch(`https://api.coingecko.com/api/v3/coins/${hit.id}?localization=false&tickers=false&market_data=false&community_data=false&developer_data=false`, { signal: AbortSignal.timeout(6000) })
+      .then((r) => (r.ok ? r.json() : null)) as { platforms?: Record<string, string> } | null;
+    const a = c?.platforms?.base;
+    return a && /^0x[a-fA-F0-9]{40}$/.test(a) ? a : null;
+  } catch {
+    return null;
+  }
 }
 
 async function callVenicePhase1(
@@ -3894,7 +3953,11 @@ export async function POST(req: NextRequest) {
       // Forced tool → skip Phase 1 entirely: we already decided the tool and it
       // takes no LLM-authored args, so a full detection round-trip would only
       // echo back what we're forcing. Synthesize the tool_call locally instead.
-      const outcome: Phase1Outcome = forceTool
+      // A market question gets its tool from code (lib/chat/market-intents.ts).
+      const marketCalls = forceTool ? null : routedMarketCalls(cleanMessages);
+      const outcome: Phase1Outcome = marketCalls
+        ? { status: "tools", toolCalls: marketCalls }
+        : forceTool
         ? { status: "tools", toolCalls: [forcedToolCall(forceTool)] }
         : await detectToolCalls(
             // An imperative trade ("swap 1 USDC to ETH") must reach its card
@@ -3914,6 +3977,11 @@ export async function POST(req: NextRequest) {
       // tool-free path and the only one invisible at `hasHubTools` time.
       if (outcome.status === "unreachable") {
         openaiMsgs[0] = { role: "system", content: buildSystem(false, true) };
+      }
+      // A live-data question no tool took is not answered from memory.
+      if (looksLikeMarketData(lastUserText(openaiMsgs))) {
+        await undoDebit?.();
+        return textToSSE(NO_LIVE_SOURCE);
       }
     }
 
@@ -4007,7 +4075,10 @@ export async function POST(req: NextRequest) {
           : undefined;
     // Forced tool → synthesize the tool_call and skip the Phase 1 LLM round-trip
     // (see the Venice branch above for the full rationale).
-    const outcome: Phase1Outcome = forceTool
+    const marketCalls = forceTool ? null : routedMarketCalls(cleanMessages);
+    const outcome: Phase1Outcome = marketCalls
+      ? { status: "tools", toolCalls: marketCalls }
+      : forceTool
       ? { status: "tools", toolCalls: [forcedToolCall(forceTool)] }
       : await detectToolCalls(
           // Imperative trade → its card tool, model-written args (lib/chat/intents.ts).
@@ -4026,6 +4097,11 @@ export async function POST(req: NextRequest) {
     // fixed anything.
     if (outcome.status === "unreachable") {
       openaiMsgs[0] = { role: "system", content: buildSystem(false, true) };
+    }
+    // A live-data question no tool took is not answered from memory.
+    if (looksLikeMarketData(lastUserText(openaiMsgs))) {
+      await undoDebit?.();
+      return textToSSE(NO_LIVE_SOURCE);
     }
   }
   return callVeniceStream(

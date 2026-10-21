@@ -35,7 +35,7 @@ export type ConfirmOutcome =
   | { kind: "blocked"; what: string; why: string }
   /** Nothing pending, but this action was just armed by an earlier "yes":
    *  still at the wallet (settled=false) or already finished. */
-  | { kind: "already"; what: string; settled: boolean; silent?: boolean };
+  | { kind: "already"; what: string; settled: boolean; silent?: boolean; verb?: "sign" | "arm" };
 
 /** Rewrites the assistant's reply to the "yes" as the action progresses, so
  *  the outcome reads as chat (ShunTr 2026-10-16), not as a card. */
@@ -72,7 +72,7 @@ export function latestPending(now = Date.now(), from: Iterable<PendingAction> = 
  * from a duplicate trade. Forgotten as soon as the user types anything else,
  * so a later "yes" to an ordinary question still goes to the model.
  */
-let lastArmed: { what: string; at: number; settled: boolean; silent: boolean } | null = null;
+let lastArmed: { what: string; at: number; settled: boolean; silent: boolean; verb?: "sign" | "arm" } | null = null;
 
 export function forgetArmed(): void { lastArmed = null; }
 /** The armed action finished (done). A failure calls forgetArmed instead: it
@@ -83,17 +83,22 @@ export function settleArmed(): void { if (lastArmed) lastArmed.settled = true; }
 export function confirmLatest(now = Date.now(), sink?: StatusSink): ConfirmOutcome | null {
   const p = latestPending(now);
   if (!p) {
-    if (lastArmed && now - lastArmed.at <= CONFIRM_WINDOW_MS) return { kind: "already", what: lastArmed.what, settled: lastArmed.settled, silent: lastArmed.silent };
+    if (lastArmed && now - lastArmed.at <= CONFIRM_WINDOW_MS) return { kind: "already", what: lastArmed.what, settled: lastArmed.settled, silent: lastArmed.silent, verb: lastArmed.verb };
     return null;
   }
   const out = p.fire(sink);
-  if (out.kind === "armed") { pending.delete(p.id); lastArmed = { what: out.what, at: now, settled: false, silent: out.silent }; }
+  if (out.kind === "armed") { pending.delete(p.id); lastArmed = { what: out.what, at: now, settled: false, silent: out.silent, verb: out.verb }; }
   return out;
 }
 
 /** The assistant's local reply to a confirmation (no model call, no credits). */
 export function confirmReply(o: ConfirmOutcome): string {
   if (o.kind === "blocked") return `Not signing: ${o.what} is blocked. ${o.why}`;
+  // Turning on an alert signs nothing (measured 2026-10-21: the second yes
+  // said "is signing from your wallet" for an alert).
+  if (o.kind === "already" && o.verb === "arm") return o.settled
+    ? `That is already on. Nothing else is waiting for a yes.`
+    : `Already turning it on. No need to reply again; it shows above in a moment.`;
   if (o.kind === "already") return o.settled
     ? `${o.what} is already done. Nothing else is waiting for a yes.`
     : o.silent
