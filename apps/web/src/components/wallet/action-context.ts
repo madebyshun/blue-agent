@@ -17,13 +17,24 @@ export const ActionMessageContext = createContext<{ createdAt: number } | null>(
  *  card itself can stay out of sight (ShunTr 2026-10-16: "chỉ cần chat ngôn
  *  ngữ tự nhiên, không cần thao tác trên card"). */
 export type AutoStatus =
-  | { phase: "working" }
+  | { phase: "working"; note?: string }
   | { phase: "sent"; href: string | null }
   | { phase: "done"; href: string | null; detail?: string; text?: string }
   | { phase: "error"; message: string };
 
 export interface AutoConfirm { armed: boolean; silent: boolean; report?: (s: AutoStatus) => void }
 export const AutoConfirmContext = createContext<AutoConfirm>({ armed: false, silent: false });
+
+/** What each card step means, said in the chat reply while it runs, so a
+ *  two-transaction action (approve, then swap) visibly moves. */
+const STEP_NOTE: Record<string, string> = {
+  switching: "switching network",
+  preparing: "preparing",
+  approving: "approving the token first",
+  swapping: "swapping",
+  signing: "signing",
+  sending: "sending",
+};
 
 /**
  * In a signing card: report its own step machine to the strip while armed.
@@ -43,7 +54,7 @@ export function useAutoReport(
     if (step === "error") report({ phase: "error", message: err || "Failed." });
     else if (done) report({ phase: "done", href, detail: o.detail, ...(o.doneText ? { text: o.doneText } : {}) });
     else if (sent) report({ phase: "sent", href });
-    else report({ phase: "working" });
+    else report({ phase: "working", ...(STEP_NOTE[step] ? { note: STEP_NOTE[step] } : {}) });
   }, [armed, report, step, err, href, sent, done, o.detail, o.doneText]);
 }
 

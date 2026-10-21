@@ -35,7 +35,7 @@ export type ConfirmOutcome =
   | { kind: "blocked"; what: string; why: string }
   /** Nothing pending, but this action was just armed by an earlier "yes":
    *  still at the wallet (settled=false) or already finished. */
-  | { kind: "already"; what: string; settled: boolean };
+  | { kind: "already"; what: string; settled: boolean; silent?: boolean };
 
 /** Rewrites the assistant's reply to the "yes" as the action progresses, so
  *  the outcome reads as chat (ShunTr 2026-10-16), not as a card. */
@@ -72,7 +72,7 @@ export function latestPending(now = Date.now(), from: Iterable<PendingAction> = 
  * from a duplicate trade. Forgotten as soon as the user types anything else,
  * so a later "yes" to an ordinary question still goes to the model.
  */
-let lastArmed: { what: string; at: number; settled: boolean } | null = null;
+let lastArmed: { what: string; at: number; settled: boolean; silent: boolean } | null = null;
 
 export function forgetArmed(): void { lastArmed = null; }
 /** The armed action finished (done). A failure calls forgetArmed instead: it
@@ -83,11 +83,11 @@ export function settleArmed(): void { if (lastArmed) lastArmed.settled = true; }
 export function confirmLatest(now = Date.now(), sink?: StatusSink): ConfirmOutcome | null {
   const p = latestPending(now);
   if (!p) {
-    if (lastArmed && now - lastArmed.at <= CONFIRM_WINDOW_MS) return { kind: "already", what: lastArmed.what, settled: lastArmed.settled };
+    if (lastArmed && now - lastArmed.at <= CONFIRM_WINDOW_MS) return { kind: "already", what: lastArmed.what, settled: lastArmed.settled, silent: lastArmed.silent };
     return null;
   }
   const out = p.fire(sink);
-  if (out.kind === "armed") { pending.delete(p.id); lastArmed = { what: out.what, at: now, settled: false }; }
+  if (out.kind === "armed") { pending.delete(p.id); lastArmed = { what: out.what, at: now, settled: false, silent: out.silent }; }
   return out;
 }
 
@@ -96,7 +96,11 @@ export function confirmReply(o: ConfirmOutcome): string {
   if (o.kind === "blocked") return `Not signing: ${o.what} is blocked. ${o.why}`;
   if (o.kind === "already") return o.settled
     ? `${o.what} is already done. Nothing else is waiting for a yes.`
-    : `Still waiting on your wallet for ${o.what}. Confirm it there, or reject it to cancel.`;
+    : o.silent
+      // Measured 2026-10-21: a Base stock buy signs an approve, waits for it,
+      // then swaps — long enough that the user typed "yes" again.
+      ? `Already on it: ${o.what} is signing from your wallet. No need to reply again; the result appears above in a few seconds.`
+      : `Still waiting on your wallet for ${o.what}. Confirm it there, or reject it to cancel.`;
   if (o.kind === "warn") return `${o.what} has a warning: ${o.why} Reply yes again to sign it anyway.`;
   if (o.verb === "arm") return `Turning on: ${o.what}…`;
   return o.silent ? `Signing ${o.what}…` : `Signing ${o.what}. Confirm in your wallet.`;
@@ -104,13 +108,17 @@ export function confirmReply(o: ConfirmOutcome): string {
 
 /** Pure: the chat text for an armed action's progress. Markdown (the reply renders it). */
 export function statusText(what: string, s:
-  | { phase: "working" } | { phase: "stuck" }
+  | { phase: "working"; note?: string } | { phase: "stuck" }
   | { phase: "sent"; href: string | null }
   | { phase: "done"; href: string | null; detail?: string; text?: string }
-  | { phase: "error"; message: string }, verb: "sign" | "arm" = "sign"): string {
+  | { phase: "error"; message: string }, verb: "sign" | "arm" = "sign", silent = true): string {
   const link = (href: string | null) => (href ? ` [View tx ↗](${href})` : "");
   switch (s.phase) {
-    case "working": return verb === "arm" ? `Turning on: ${what}…` : `Signing ${what}…`;
+    case "working": {
+      if (verb === "arm") return `Turning on: ${what}…`;
+      const step = s.note ? ` (${s.note})` : "";
+      return silent ? `Signing ${what}…${step}` : `Signing ${what}${step}. Confirm in your wallet.`;
+    }
     case "stuck": return `Couldn't start ${what}. The details are open above.`;
     case "sent": return `Sent ${what}. Waiting for it to confirm…${link(s.href)}`;
     case "done": if (s.text) return s.text;

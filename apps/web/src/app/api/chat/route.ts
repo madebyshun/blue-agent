@@ -1561,6 +1561,13 @@ function resolveSwapToken(token: string): string {
  * is true (no data came back) and closing the substitution door explicitly,
  * because "the tool failed" alone still leaves "…so I'll recall it" open.
  */
+/** Tools that run several model calls in parallel need longer than the 30 s
+ *  default inside chat (route maxDuration is 120 s). Measured 2026-10-21:
+ *  deep-analysis — three LLM calls plus two explorer reads — 504'd at 30 s. */
+const TOOL_TIMEOUT_MS: Readonly<Record<string, number>> = {
+  "deep-analysis": 75_000,
+};
+
 function toolFailed(toolName: string, why: string): string {
   return `[${toolName} FAILED — ${why}. NO DATA was returned. `
     + `Tell the user this lookup failed and stop. Do NOT supply the value from `
@@ -2506,7 +2513,7 @@ async function callHubTool(
         body:      args,
         user:      userAddress,
         service:   isInternal,
-        timeoutMs: 30_000,
+        timeoutMs: TOOL_TIMEOUT_MS[endpoint] ?? 30_000,
       });
       status  = r.status;
       data    = r.body;
@@ -2542,7 +2549,16 @@ async function callHubTool(
       return { text: toolFailed(toolName, "the service asked for payment") };
     }
     if (status < 200 || status >= 300) {
-      return { text: toolFailed(toolName, `the service returned HTTP ${status}`) };
+      // Said in code (2026-10-21): on a 504 the model wrote "Let me run the
+      // safety bundle instead" and then ran nothing. A failed lookup ends the
+      // answer; it never promises a next step the turn will not take.
+      const why = status === 504
+        ? `it did not finish within ${Math.round((TOOL_TIMEOUT_MS[endpoint] ?? 30_000) / 1000)} seconds`
+        : `the service answered with an error (HTTP ${status})`;
+      return {
+        text: toolFailed(toolName, `the service returned HTTP ${status}`),
+        staticReply: `That lookup failed: ${why}. You were not charged for it. Try again in a minute.`,
+      };
     }
 
     // Unwrap nested { result: ... } if present — EXCEPT for a JSON-RPC reply.

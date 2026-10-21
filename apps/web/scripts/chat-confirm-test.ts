@@ -24,7 +24,8 @@ const first = confirmLatest();
 ok("confirmLatest fires the pending action", first?.kind === "armed");
 const again = confirmLatest();
 ok("…a second yes cannot sign it twice, and is answered locally (never reaches the model)",
-  again?.kind === "already" && /Still waiting on your wallet/.test(confirmReply(again)), again ? confirmReply(again) : "null");
+  again?.kind === "already" && /Already on it: .* No need to reply again/.test(confirmReply(again)), again ? confirmReply(again) : "null");
+ok("…with a wallet prompt, a second yes points at the wallet", /Still waiting on your wallet/.test(confirmReply({ kind: "already", what: "x", settled: false, silent: false })));
 settleArmed();
 const after = confirmLatest();
 ok("…once it is done, a yes says so", after?.kind === "already" && /already done/.test(confirmReply(after)), after ? confirmReply(after) : "null");
@@ -68,6 +69,10 @@ ok("arm reply says turning on, not signing", confirmReply({ kind: "armed", what:
 ok("arm progress says turning on", statusText("x", { phase: "working" }, "arm").startsWith("Turning on:"));
 ok("arm failure offers a retry", /Couldn't turn it on: no session\. Reply \*\*yes\*\* to retry/.test(statusText("x", { phase: "error", message: "no session." }, "arm")));
 ok("a done text overrides the swap wording", statusText("x", { phase: "done", href: null, text: "✓ On: alert." }) === "✓ On: alert.");
+
+// Progress names the step, so an approve-then-swap visibly moves (2026-10-21).
+ok("silent progress names the step", statusText("Swap 1 USDC → META on Base", { phase: "working", note: "approving the token first" }) === "Signing Swap 1 USDC → META on Base… (approving the token first)");
+ok("wallet-prompt progress says to confirm", /\(swapping\)\. Confirm in your wallet\.$/.test(statusText("x", { phase: "working", note: "swapping" }, "sign", false)));
 
 console.log(failures === 0 ? "\nchat-confirm-test: PASS" : `\nchat-confirm-test: FAIL — ${failures}`);
 process.exit(failures === 0 ? 0 : 1);
