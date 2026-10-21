@@ -52,6 +52,7 @@ import { DATA_SUFFIX } from "@/constants/builderCode";
 import { useRecordAction } from "@/hooks/useRecordAction";
 import { PreTradeBanner, usePreTradeCheck } from "@/components/wallet/PreTradeBanner";
 import { BASE_MAJORS } from "@/lib/wallet/token-trust";
+import { BASE_STOCKS } from "@/lib/base-stocks/registry";
 import { useSpendableBalance } from "@/lib/wallet/useSpendableBalance";
 import { resolveSpend } from "@/lib/wallet/read-state";
 // A quantity WORD ("all"/"max"/"half"/"N%") — chat passes these through verbatim
@@ -111,8 +112,15 @@ function seedToken(want: string | undefined, fallback: Token): { token: Token; u
   if (isAddress(s)) {
     const addr = getAddress(s);
     const major = TOKENS.find(t => t.addr.toLowerCase() === addr.toLowerCase());
+    if (major) return { token: major };
+    // A Base stock token in the verified registry wears its registry symbol
+    // (METAc): the registry already asserted this contract is that stock.
+    // Measured 2026-10-21: "buy $1 of META on Base" reported "→ 0.001427
+    // 0xb200…707C".
+    const stock = BASE_STOCKS.find(t => t.token.toLowerCase() === addr.toLowerCase());
+    if (stock) return { token: { sym: stock.symbol, addr, decimals: 8 } };
     // No `sym`: the chip falls back to the address, which is what identifies it.
-    return { token: major ?? { sym: "", addr } };
+    return { token: { sym: "", addr } };
   }
   const k = s.toLowerCase();
   if (k === "native") return { token: ETH };

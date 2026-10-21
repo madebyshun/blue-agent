@@ -156,7 +156,7 @@ export const MODEL_PRESETS: ModelPreset[] = [
 export default function ChatInput() {
   const {
     input, setInput, send, stop, streaming, outOfCredits,
-    error, credits, cost, chatTier, holderTier, setChatTier,
+    error, notice, credits, cost, chatTier, holderTier, setChatTier,
     cmdMenu, setCmdMenu, cmdFilter, setCmdFilter,
     // `webSearch` / `setWebSearch` intentionally NOT destructured — the toggle
     // that used them is removed (see the comment where it stood). They remain on
@@ -458,6 +458,9 @@ export default function ChatInput() {
               </span>
             </div>
           </div>
+        )}
+        {notice && !error && (
+          <p className="font-mono text-xs mb-2 px-1 text-[#4FC3F7]">{notice}</p>
         )}
         {error && !outOfCredits && (
           <p className="font-mono text-xs mb-2 px-1 text-red-400">{error}</p>

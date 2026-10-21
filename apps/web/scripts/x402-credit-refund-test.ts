@@ -18,6 +18,12 @@ process.env.INTERNAL_SERVICE_KEY = "test-internal-key";
 
 import { NextRequest } from "next/server";
 import { getBalance, getLedgerHistory } from "../src/lib/credit-ledger";
+import { CREDIT_PRICE_OVERRIDE } from "../src/lib/credit-pricing";
+
+// contract-trust costs nothing in chat since 2026-10-21 (one question, one
+// price). This suite tests the REFUND RAIL, not a price, so it prices the
+// tool for its own run only.
+(CREDIT_PRICE_OVERRIDE as Record<string, number>)["contract-trust"] = 300;
 
 let passes = 0;
 let failures = 0;

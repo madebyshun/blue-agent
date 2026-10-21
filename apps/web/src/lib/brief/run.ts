@@ -20,10 +20,11 @@ import { kv, kvGet, kvSAdd, kvSet, kvSRem, kvTryLock, kvDel } from "@/lib/kv";
 import { tgUserForAddress } from "@/lib/blue-hood/watchlist";
 import { sendMessage } from "@/lib/telegram/bot";
 import { baselineFor, diffSnapshots } from "./diff";
-import { renderBrief, renderStocks, type BriefFormat } from "./render";
+import { renderBrief, renderStocks, SESSION_NOTE, type BriefFormat } from "./render";
+import { renderReport } from "./stock-report";
 import { readHoldings, takeSnapshot } from "./snapshot";
 import { stockBrief } from "./stocks";
-import type { Snapshot } from "./types";
+import type { BriefChain, Snapshot } from "./types";
 
 export const BRIEF_DEFAULT_HOUR_UTC = 1; // 08:00 in Vietnam (UTC+7)
 const OPEN_URL = "https://app.blueagent.dev/chat";
@@ -112,14 +113,44 @@ export async function runBriefPass(now: number, deadline: number): Promise<Brief
  * The stock brief on its own: both desks' largest DEX-vs-oracle gaps, NAV on
  * Base, the US session — and, with a wallet, the stock tokens it holds.
  */
-export async function buildStockBrief(wallet: string | null, fmt: BriefFormat, now = Date.now()): Promise<string> {
+export async function buildStockBrief(wallet: string | null, fmt: BriefFormat, now = Date.now(), only?: BriefChain): Promise<string> {
   const holdings = wallet ? await readHoldings(wallet).catch(() => null) : null;
   const d = await stockBrief(holdings, now);
+  // One chain asked for ⇒ only that chain: its held tokens, its desk, no
+  // cross-chain section (2026-10-20, "stock tokens on base" answered both).
+  if (only) {
+    d.held = d.held.filter((r) => r.chain === only);
+    d.report = { desks: { [only]: d.report.desks[only] }, cheaper: [] };
+  }
+  const chains = (only ? [only] : ["robinhood", "base"]) as BriefChain[];
+  const where = only ? ` on ${only === "base" ? "Base" : "Robinhood Chain"}` : "";
   const b = (s: string) => (fmt === "html" ? `<b>${s}</b>` : `**${s}**`);
-  const lines = [`📈 ${b("Onchain stocks")} · Base 8453 and Robinhood Chain 4663`, "", ...renderStocks(d, fmt, { held: true, movers: true })];
-  if (wallet && holdings && !d.held.length) lines.splice(2, 0, "You hold no stock tokens on either chain.", "");
+  const e = (s: string) => (fmt === "html" ? s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") : s);
+  const at = new Date(now).toISOString().slice(11, 16);
+  const lines = [`📈 ${b(`Stock tokens${where} vs the real stock`)} · ${at} UTC`, "", ...renderStocks(d, fmt, { held: true, sessionNote: false })];
+  if (wallet && holdings && !d.held.length) lines.push(`You hold no stock tokens${where || " on either chain"}.`, "");
+  lines.push(...renderReport(d.report, e, b));
+  for (const c of chains) {
+    if (d.desk[c] !== "ok") lines.push("", e(`${c === "base" ? "Base" : "Robinhood Chain"}: not shown, the desk reading is ${d.desk[c] === "stale" ? "older than ~11 minutes" : "unreadable"} right now.`));
+  }
+  lines.push("", e(SESSION_NOTE[d.session]));
   lines.push("", fmt === "html"
-    ? "Oracle: Chainlink. DEX: the desk's pool reading. NAV: Coinbase. A gap is a measurement, not a trade signal."
-    : "_Oracle: Chainlink. DEX: the desk's pool reading. NAV: Coinbase's published value per token. A gap is a measurement, not a trade signal._");
-  return lines.join("\n");
+    ? "Gap = DEX price vs the Chainlink oracle. Buying above the oracle means paying more than the stock is worth. Data, not a buy signal."
+    : "_Gap = DEX price vs the Chainlink oracle. Buying above the oracle means paying more than the stock is worth. Data, not a buy signal._");
+  return fmt === "html" ? lines.join("\n") : toMarkdown(lines);
+}
+
+/** Markdown collapses single newlines into one paragraph (measured in chat
+ *  2026-10-20: the whole report rendered as one run-on block). Bullets become
+ *  a list, every other line its own paragraph. */
+export function toMarkdown(lines: string[]): string {
+  const out: string[] = [];
+  for (const l of lines) {
+    const isItem = l.startsWith("• ");
+    const prev = out[out.length - 1];
+    const line = isItem ? `- ${l.slice(2)}` : l;
+    if (prev !== undefined && prev !== "" && !(isItem && prev.startsWith("- "))) out.push("");
+    if (line !== "" || (prev !== undefined && prev !== "")) out.push(line);
+  }
+  return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }

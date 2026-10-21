@@ -171,7 +171,7 @@ export function stockLine(r: StockRow): string {
   return `${head}: ${parts.join(" · ") || "no price read"}`;
 }
 
-export function renderStocks(d: StockBriefData, fmt: BriefFormat, opts: { held?: boolean; movers?: boolean } = {}): string[] {
+export function renderStocks(d: StockBriefData, fmt: BriefFormat, opts: { held?: boolean; movers?: boolean; sessionNote?: boolean } = {}): string[] {
   const e = (s: string) => (fmt === "html" ? s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") : s);
   const b = (s: string) => (fmt === "html" ? `<b>${s}</b>` : `**${s}**`);
   const out: string[] = [];
@@ -192,7 +192,7 @@ export function renderStocks(d: StockBriefData, fmt: BriefFormat, opts: { held?:
   }
   if (out.length) {
     out.push("");
-    out.push(e(SESSION_NOTE[d.session]));
+    if (opts.sessionNote !== false) out.push(e(SESSION_NOTE[d.session]));
     if (d.held.some((r) => r.chain === "base") && !d.catalogRead) out.push(e("Coinbase NAV was not read this time."));
   }
   return out;

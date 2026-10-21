@@ -39,7 +39,7 @@ import { SILENT_MAX_USD } from "@/lib/chat/confirm";
 import { explainText, txExplain } from "@/lib/tx-explain";
 import { baseStockByTickerOrSymbol, dollarAmount, userDollarAmount } from "@/lib/chat/trade-intent";
 import { githubContextFor } from "@/lib/chat/github-context";
-import { forcedToolFor, wantsMyAlerts } from "@/lib/chat/intents";
+import { forcedToolFor, stockChainFromText, wantsMyAlerts } from "@/lib/chat/intents";
 import { runInternalTool } from "@/lib/x402-internal-run";
 import { recordCall } from "@/lib/usage-daily";
 
@@ -1185,7 +1185,9 @@ Testnets are reachable by full id: base-sepolia, ethereum-sepolia, robinhood-tes
   {
     name: "stock_brief",
     description: "Onchain stock tokens right now, on Base (8453, Coinbase B20) and Robinhood Chain (4663): each desk's largest DEX-vs-Chainlink-oracle gaps, the premium/discount to Coinbase's NAV on Base, which US session it is (weekend = oracle frozen at Friday's close) — and, when a wallet is connected, the stock tokens it holds with the same readings. Read from the Blue Hood desk snapshot and Coinbase's API; ZERO LLM; facts, not trade signals. Use for: 'how are my stocks', 'stock brief', 'tokenized stocks today', 'any stock gaps', 'weekend gap', 'NVDA premium to NAV', 'cổ phiếu onchain hôm nay'.",
-    input_schema: { type: "object", properties: {}, required: [] },
+    input_schema: { type: "object", properties: {
+      chain: { type: "string", enum: ["base", "robinhood"], description: "Only when the user named ONE chain ('stock tokens on Base'). Omit for both." },
+    }, required: [] },
   },
   {
     name: "wallet_brief",
@@ -1559,6 +1561,13 @@ function resolveSwapToken(token: string): string {
  * is true (no data came back) and closing the substitution door explicitly,
  * because "the tool failed" alone still leaves "…so I'll recall it" open.
  */
+/** Tools that run several model calls in parallel need longer than the 30 s
+ *  default inside chat (route maxDuration is 120 s). Measured 2026-10-21:
+ *  deep-analysis — three LLM calls plus two explorer reads — 504'd at 30 s. */
+const TOOL_TIMEOUT_MS: Readonly<Record<string, number>> = {
+  "deep-analysis": 75_000,
+};
+
 function toolFailed(toolName: string, why: string): string {
   return `[${toolName} FAILED — ${why}. NO DATA was returned. `
     + `Tell the user this lookup failed and stop. Do NOT supply the value from `
@@ -2207,10 +2216,10 @@ async function callHubTool(
         : ` It is ${fmtPrice(resolved.priceNow)} now (${resolved.priceSource ?? "source unknown"}).`;
     const sentence = ruleText.charAt(0).toUpperCase() + ruleText.slice(1);
     const how = ca.checkAt ? "checked at that time" : "checked every 5 minutes";
-    const guard = tr.trade ? " When it fires, the trade card waits for your signature — nothing executes on its own." : "";
-    const line = `${sentence}.${now} Tap **Review & arm** above to start — ${how}, free.${guard}`;
+    const guard = tr.trade ? " When it fires, I prepare the trade and you confirm it, nothing executes on its own." : "";
+    const line = `${sentence}.${now} ${how.charAt(0).toUpperCase() + how.slice(1)}, free.${guard} Reply **yes** to turn it on.`;
     return {
-      text: `${line}\n[Card rendered. Do not claim the alert is active until the user arms it.]`,
+      text: `${line}\n[Draft only. Do not claim the alert is active until the user replies yes.]`,
       staticReply: line,
       result: {
         kind: "price_alert_draft",
@@ -2363,8 +2372,9 @@ async function callHubTool(
 
   if (toolName === "stock_brief") {
     const wallet = userAddress && /^0x[a-fA-F0-9]{40}$/.test(userAddress) ? userAddress : null;
+    const only = args.chain === "base" || args.chain === "robinhood" ? args.chain : undefined;
     try {
-      const text = await buildStockBrief(wallet, "md");
+      const text = await buildStockBrief(wallet, "md", Date.now(), only);
       return { text: "The stock brief is written for the user from the reads. Add nothing, and never turn a gap into a buy/sell call.", staticReply: text, result: { kind: "stock_brief" } };
     } catch (e) {
       return { text: "The stock brief could not be read. Say so in one line — invent nothing.", staticReply: `Couldn't read the stock desks right now (${(e as Error).message.slice(0, 80)}).` };
@@ -2503,7 +2513,7 @@ async function callHubTool(
         body:      args,
         user:      userAddress,
         service:   isInternal,
-        timeoutMs: 30_000,
+        timeoutMs: TOOL_TIMEOUT_MS[endpoint] ?? 30_000,
       });
       status  = r.status;
       data    = r.body;
@@ -2526,8 +2536,12 @@ async function callHubTool(
         };
       }
       if (d.code === "INSUFFICIENT_CREDITS" && typeof d.needed === "number") {
+        // Said in code (2026-10-21): the model read this as "the tool is out of
+        // credits" and sent the user to top up "the screener at the Hub".
+        const bal = typeof d.balance === "number" ? d.balance : null;
         return {
           text: `[${toolName}: not enough credits — need ${d.needed}, top up to continue]`,
+          staticReply: `This answer costs ${d.needed} credits and you have ${bal ?? "fewer"}. Top up below, or ask again tomorrow when your 500 free daily credits are back.`,
           // `balance` is whatever the ledger read — never a stand-in 0.
           insufficient: { needed: d.needed, balance: typeof d.balance === "number" ? d.balance : undefined, tool: toolName },
         };
@@ -2535,7 +2549,16 @@ async function callHubTool(
       return { text: toolFailed(toolName, "the service asked for payment") };
     }
     if (status < 200 || status >= 300) {
-      return { text: toolFailed(toolName, `the service returned HTTP ${status}`) };
+      // Said in code (2026-10-21): on a 504 the model wrote "Let me run the
+      // safety bundle instead" and then ran nothing. A failed lookup ends the
+      // answer; it never promises a next step the turn will not take.
+      const why = status === 504
+        ? `it did not finish within ${Math.round((TOOL_TIMEOUT_MS[endpoint] ?? 30_000) / 1000)} seconds`
+        : `the service answered with an error (HTTP ${status})`;
+      return {
+        text: toolFailed(toolName, `the service returned HTTP ${status}`),
+        staticReply: `That lookup failed: ${why}. You were not charged for it. Try again in a minute.`,
+      };
     }
 
     // Unwrap nested { result: ... } if present — EXCEPT for a JSON-RPC reply.
@@ -2762,6 +2785,12 @@ async function veniceToolStream(
             const key = tc.function.name === "prepare_swap" ? "amountIn" : "amount";
             const d = userDollarAmount(lastUserText(openaiMsgs), args[key]);
             if (d) args = { ...args, [key]: `$${d}` };
+          }
+          // The stock report's chain: the user's own words decide, in code
+          // (a forced call carries no args at all).
+          if (tc.function.name === "stock_brief") {
+            const c = stockChainFromText(lastUserText(openaiMsgs));
+            args = c ? { ...args, chain: c } : (args.chain === "base" || args.chain === "robinhood" ? args : {});
           }
           const out = mcpEntry
             ? await callMcpConnectorTool(mcpEntry, args)

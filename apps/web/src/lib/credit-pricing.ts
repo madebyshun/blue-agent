@@ -132,9 +132,42 @@ function roundCredits(n: number): number {
  * — the caller should still respect daily allowance / rate limit, but no
  * credits are deducted.
  */
+/**
+ * Credit prices set apart from the x402 USDC price, for people asking in
+ * chat. The USDC price an agent pays per call is unchanged.
+ *
+ * ShunTr 2026-10-21: one question, one price. Every tool chat offers costs
+ * nothing on top of the chat message (10 / 50 / 200 cr by model). Charging
+ * both made one question cost twice; at 300 cr the 500 free daily credits
+ * bought a single trending answer, and a deep analysis at 1,000 cr was 100×
+ * the question the user thought they were asking. Blue Agent carries the
+ * model cost of the tools that run their own model call.
+ */
+export const CREDIT_PRICE_OVERRIDE: Readonly<Record<string, number>> = {
+  // data only
+  "safe-trending": 0,
+  "token-pick-signal": 0,
+  "blue-registry": 0,
+  "token-price": 0,
+  "rh-stock-movers": 0,
+  "rh-stock-new-listings": 0,
+  "rh-stock-quote": 0,
+  "rh-stock-search": 0,
+  "rh-rwa-index": 0,
+  // run a model call of their own
+  "deep-analysis": 0,
+  "risk-gate": 0,
+  "contract-trust": 0,
+  "dex-flow": 0,
+  "honeypot-check": 0,
+  "blue-compose": 0,
+};
+
 export function toolCreditCost(toolId: string, tier: TierInfo): number {
   // Every tier is metered. Max gets the deepest discount (40% off) but still
   // pays — no tier is free/unlimited.
+  const fixed = CREDIT_PRICE_OVERRIDE[toolId];
+  if (typeof fixed === "number") return fixed > 0 ? applyDiscount(fixed, tier) : 0;
   const tool = AGENT_TOOLS.find(t => t.id === toolId);
   const usd  = parseUsd(tool?.price);
   if (usd === null || usd <= 0) return 0;

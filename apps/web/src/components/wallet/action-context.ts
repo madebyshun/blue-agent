@@ -17,9 +17,9 @@ export const ActionMessageContext = createContext<{ createdAt: number } | null>(
  *  card itself can stay out of sight (ShunTr 2026-10-16: "chỉ cần chat ngôn
  *  ngữ tự nhiên, không cần thao tác trên card"). */
 export type AutoStatus =
-  | { phase: "working" }
+  | { phase: "working"; note?: string }
   | { phase: "sent"; href: string | null }
-  | { phase: "done"; href: string | null; detail?: string }
+  | { phase: "done"; href: string | null; detail?: string; text?: string }
   | { phase: "error"; message: string };
 
 export interface AutoConfirm {
@@ -29,6 +29,17 @@ export interface AutoConfirm {
 }
 export const AutoConfirmContext = createContext<AutoConfirm>({ armed: false, silent: false });
 
+/** What each card step means, said in the chat reply while it runs, so a
+ *  two-transaction action (approve, then swap) visibly moves. */
+const STEP_NOTE: Record<string, string> = {
+  switching: "switching network",
+  preparing: "preparing",
+  approving: "approving the token first",
+  swapping: "swapping",
+  signing: "signing",
+  sending: "sending",
+};
+
 /**
  * In a signing card: report its own step machine to the strip while armed.
  * `sentSteps`: submitted, waiting for the chain (or the bridge fill).
@@ -37,7 +48,7 @@ export const AutoConfirmContext = createContext<AutoConfirm>({ armed: false, sil
  */
 export function useAutoReport(
   step: string, err: string, href: string | null,
-  o: { sentSteps?: string[]; doneSteps?: string[]; detail?: string } = {},
+  o: { sentSteps?: string[]; doneSteps?: string[]; detail?: string; doneText?: string } = {},
 ) {
   const { armed, report } = useContext(AutoConfirmContext);
   const sent = (o.sentSteps ?? ["broadcasting"]).includes(step);
@@ -45,10 +56,10 @@ export function useAutoReport(
   useEffect(() => {
     if (!armed || !report || step === "idle") return;
     if (step === "error") report({ phase: "error", message: err || "Failed." });
-    else if (done) report({ phase: "done", href, detail: o.detail });
+    else if (done) report({ phase: "done", href, detail: o.detail, ...(o.doneText ? { text: o.doneText } : {}) });
     else if (sent) report({ phase: "sent", href });
-    else report({ phase: "working" });
-  }, [armed, report, step, err, href, sent, done, o.detail]);
+    else report({ phase: "working", ...(STEP_NOTE[step] ? { note: STEP_NOTE[step] } : {}) });
+  }, [armed, report, step, err, href, sent, done, o.detail, o.doneText]);
 }
 
 /**
