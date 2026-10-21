@@ -82,6 +82,9 @@ export function marketCallsFor(messages: readonly { role: string; content: unkno
   if (/\b(alert me|notify me|tell me when|ping me|báo tôi)\b/.test(t)) return null;
   // "…and buy $1 there": a trade inside the question belongs to the trade tools.
   if (/\b(buy|sell|swap|mua|bán)\b.*(\$\s?\d|\d+(\.\d+)?\s?(usdc|usd|eth|đô))/.test(t)) return null;
+  // The weekend gap is explained from what the desk actually does, in code
+  // (2026-10-21: the model's own explanation invented a weekly NAV schedule).
+  if (/\bweekend gap\b|\bgap\b.*\bweekend\b|\bweekend\b.*\bgap\b/.test(t) && /^(why|how|what|explain)/.test(t)) return [{ name: "weekend_gap", args: {} }];
   if (/^(why|how does|how do|explain|what does|what is a |what's a )/.test(t)) return null;
 
   if (/\b(us |stock |nyse |nasdaq )?market (is )?(open|closed)\b|\bis the (us |stock )?market open\b|\bmarket hours\b|thị trường (mỹ|chứng khoán) (mở|đóng)/.test(t)) {
@@ -174,3 +177,7 @@ export function marketHoursText(now: Date = new Date()): string {
   if (m < 20 * 60) return `No, the regular session has closed; it is after-hours (${clock}). It opens again at 9:30 AM ET on the next trading day. ${tail}`;
   return `No, the US stock market is closed (it is ${clock}). It opens again at 9:30 AM ET on the next trading day. ${tail}`;
 }
+
+/** Why a stock token's gap behaves differently on weekends — what the desk does. */
+export const WEEKEND_GAP_TEXT =
+  "On weekends the US stock market is closed, so each stock token's Chainlink oracle holds Friday's closing price. The token itself keeps trading in DEX pools on Base and Robinhood Chain, so weekend news moves the pool price but not the oracle, and the gap can grow.\n\nWhen the market opens on Monday the oracle updates to the new stock price. The gap then closes from either side: the oracle catches up with the pool, or the pool comes back to the oracle. Ask \"stock tokens today\" to see the current gaps.";

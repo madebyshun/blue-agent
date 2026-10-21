@@ -40,7 +40,7 @@ import { explainText, txExplain } from "@/lib/tx-explain";
 import { baseStockByTickerOrSymbol, dollarAmount, userDollarAmount } from "@/lib/chat/trade-intent";
 import { githubContextFor } from "@/lib/chat/github-context";
 import { forcedToolFor, stockChainFromText, wantsMyAlerts } from "@/lib/chat/intents";
-import { NO_LIVE_SOURCE, looksLikeMarketData, marketCallsFor, marketHoursText } from "@/lib/chat/market-intents";
+import { NO_LIVE_SOURCE, WEEKEND_GAP_TEXT, looksLikeMarketData, marketCallsFor, marketHoursText } from "@/lib/chat/market-intents";
 import { runInternalTool } from "@/lib/x402-internal-run";
 import { recordCall } from "@/lib/usage-daily";
 
@@ -2373,6 +2373,9 @@ async function callHubTool(
     }
   }
 
+  if (toolName === "weekend_gap") {
+    return { text: `${WEEKEND_GAP_TEXT}\n[Add nothing.]`, staticReply: WEEKEND_GAP_TEXT };
+  }
   if (toolName === "market_hours") {
     const line = marketHoursText(new Date());
     return { text: `${line}\n[Computed from the New York clock. Add nothing.]`, staticReply: line };
@@ -3109,18 +3112,20 @@ Keep it short, practical, and actionable.`,
 Blue Chat understands natural language — no commands needed.
 
 Try asking:
-"price of ETH" or "NVDA on Base"
-"what's trending on Base?"
-"stock tokens today"
-"what launched on Base in the last hour?"
-"is this token safe: 0x..."
-"swap $5 usdc to eth", then reply "yes"
-"send 10 usdc to name.base.eth"
-"alert me when ETH on Base goes above $3,000"
-"what changed in my wallet?"
-"check my approvals"
+
+- "price of ETH" or "NVDA on Base"
+- "what's trending on Base?"
+- "stock tokens today"
+- "what launched on Base in the last hour?"
+- "is this token safe: 0x..."
+- "swap $5 usdc to eth", then reply "yes"
+- "send 10 usdc to name.base.eth"
+- "alert me when ETH on Base goes above $3,000"
+- "what changed in my wallet?"
+- "check my approvals"
 
 Type /credits to check balance.
+
 Type /skill install <url> for custom skills.`,
 };
 

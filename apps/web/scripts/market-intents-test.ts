@@ -35,7 +35,7 @@ const CASES: [string, string][] = [
   ["find Palantir on Robinhood Chain", 'hub_rh_search{"query":"Palantir"}'],
   ["how many stock tokens are on Robinhood Chain?", "hub_rh_index"],
   ["is the US market open?", "market_hours"],
-  ["why is the weekend gap different?", "none"],
+  ["why is the weekend gap different?", "weekend_gap"],
   ["compare ETH price and what's trending on Base", 'hub_safe_trending + hub_token_price{"symbol":"eth"}'],
   ["META is cheaper on which chain, and buy $1 there", "none"],
   ["alert me when TSLA on Robinhood Chain drops 5% in 24 hours", "none"],
