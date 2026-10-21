@@ -40,7 +40,13 @@ process.env.VIRTUALS_API_KEY = "test-virtuals-key";
 
 import { NextRequest } from "next/server";
 import { getBalance, getLedgerHistory } from "../src/lib/credit-ledger";
-import { toolCreditCost } from "../src/lib/credit-pricing";
+import { toolCreditCost, CREDIT_PRICE_OVERRIDE } from "../src/lib/credit-pricing";
+
+// rh-stock-search is free in chat since 2026-10-21 (data-only tools cost
+// nothing on top of the message). This suite tests the DEBIT RAIL, not a
+// price, and needs a paid tool that runs hermetically — so it prices this
+// pure registry lookup for its own run only.
+(CREDIT_PRICE_OVERRIDE as Record<string, number>)["rh-stock-search"] = 40;
 import { getTierInfo } from "../src/lib/credits";
 
 let passes = 0;
