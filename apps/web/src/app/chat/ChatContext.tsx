@@ -1,4 +1,5 @@
 "use client";
+import { useIsEmbeddedWallet } from "@/lib/privy/silent-tx";
 import { confirmLatest, confirmReply, forgetArmed, isConfirmWord } from "@/lib/chat/confirm";
 import {
   createContext, useContext, useState, useEffect,
@@ -55,6 +56,9 @@ interface ChatContextValue {
   streaming:          boolean;
   error:              string | null;
   setError:           (e: string | null) => void;
+  /** A neutral one-line note above the input (not an error) — e.g. why the
+   *  wallet is about to ask for a signature. */
+  notice:             string | null;
   input:              string;
   setInput:           (v: string) => void;
   send:               (text: string) => void;
@@ -144,6 +148,9 @@ function formatCountdown(ms: number): string {
 }
 
 const ChatCtx = createContext<ChatContextValue | null>(null);
+
+/** Shown above the input while an external wallet's sign-in box is open. */
+const SIGN_IN_NOTICE = "Sign in once to use your credits: your wallet will ask for a signature. It is not a transaction, moves no funds, and lasts 30 days.";
 
 export function ChatProvider({ children }: { children: ReactNode }) {
   // ── Wallet / credits ──────────────────────────────────────────────────────
@@ -388,6 +395,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   // ── Cross-device sync ─────────────────────────────────────────────────────
   const siweSignIn = useSiweSignIn();
+  const embeddedWallet = useIsEmbeddedWallet(walletAddr);
   // Charging a wallet needs proof it is this wallet (SIWE, 2026-09-30).
   const { ensureSession, hasSession, fetchWithSession } = useEnsureSession();
   const signIn     = useCallback(
@@ -592,6 +600,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   useEffect(() => { streamingRef.current = streaming; }, [streaming]);
   useEffect(() => { activeTaskRef.current = activeTaskId; }, [activeTaskId]);
   const [error,        setError]       = useState<string | null>(null);
+  const [notice,       setNotice]      = useState<string | null>(null);
   const [input,        setInput]       = useState("");
   const [sidebarTab,   setSidebarTab]  = useState<SidebarTab>("none");
   const [cmdMenu,      setCmdMenu]     = useState(false);
@@ -721,11 +730,18 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     // signature — no transaction — covers 30 days; the free tier costs nothing
     // and needs none. A refused signature sends nothing and says why.
     if (walletAddr && chatTier !== "free") {
+      // Say why BEFORE the wallet pops its signature box (ShunTr 2026-10-21:
+      // "sao tin nhắn đầu tiên lại phải ký vậy?"). An embedded wallet signs
+      // with no box, so it gets no note.
+      const prompting = !embeddedWallet && !(await hasSession(walletAddr));
+      if (prompting) setNotice(SIGN_IN_NOTICE);
       try {
         await ensureSession(walletAddr);
       } catch (e) {
         setError(`Sign in with your wallet to use credits — ${(e as Error).message || "the signature was cancelled"}. Nothing was sent.`);
         return;
+      } finally {
+        if (prompting) setNotice(null);
       }
     }
 
@@ -1150,7 +1166,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, [
     streaming, activeTask, activeTaskId, chatTier, walletAddr, cost, credits,
     isUnlimited,
-    webSearch, pendingFiles, ensureSession,
+    webSearch, pendingFiles, ensureSession, hasSession, embeddedWallet,
   ]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const send = useCallback(async (text: string) => {
@@ -1162,7 +1178,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // ── Context value ─────────────────────────────────────────────────────────
   const value: ChatContextValue = {
     tasks, activeTaskId, activeTask, createNewTask, selectTask, deleteTask,
-    streaming, error, setError, input, setInput, send, stop,
+    streaming, error, setError, notice, input, setInput, send, stop,
     chatTier, setChatTier,
     artifacts, artifactsPanelOpen, setArtifactsPanelOpen,
     crons, addCron, updateCron, deleteCron, runCron, cronRunning, schedule,
