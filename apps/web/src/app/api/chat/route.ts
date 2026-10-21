@@ -35,7 +35,8 @@ import { cardReply, CARD_ALREADY_SHOWN, CARD_RENDERED_TOOLS, walletText } from "
 import { buildBrief, buildStockBrief } from "@/lib/brief/run";
 import { getBaseTokenPricesUsd } from "@/lib/wallet/token-prices";
 import { NATIVE_SENTINEL } from "@/lib/wallet/token-trust";
-import { SILENT_MAX_USD } from "@/lib/chat/confirm";
+import { SILENT_MAX_USD, isConfirmWord } from "@/lib/chat/confirm";
+import { PAID_CONFIRM_TOOLS, paidPrompt, parkPaidCall, takePaidCall } from "@/lib/chat/paid-tools";
 import { explainText, txExplain } from "@/lib/tx-explain";
 import { baseStockByTickerOrSymbol, dollarAmount, userDollarAmount } from "@/lib/chat/trade-intent";
 import { githubContextFor } from "@/lib/chat/github-context";
@@ -2588,6 +2589,27 @@ function forcedToolCall(name: string): VeniceToolCall {
   return { id: `forced_${name}`, type: "function", function: { name, arguments: "{}" } };
 }
 
+/** A paid tool call the user confirmed with "yes" (lib/chat/paid-tools.ts). */
+function paidToolCall(name: string, args: Record<string, unknown>): VeniceToolCall {
+  return { id: `paid_${name}`, type: "function", function: { name, arguments: JSON.stringify(args) } };
+}
+
+/** What a paid chat tool costs this wallet, and its balance (null = unread). */
+async function quotePaidTool(toolName: string, wallet: string): Promise<{ cost: number; balance: number | null } | null> {
+  const id = TOOL_ENDPOINT[toolName];
+  if (!id) return null;
+  try {
+    const [{ fetchBlueBalance, getTierInfo }, { toolCreditCost }, { getBalance }] = await Promise.all([
+      import("@/lib/credits"), import("@/lib/credit-pricing"), import("@/lib/credit-ledger"),
+    ]);
+    const cost = toolCreditCost(id, getTierInfo(await fetchBlueBalance(wallet)));
+    const balance = await getBalance(wallet).then((b) => b.balance).catch(() => null);
+    return { cost, balance };
+  } catch {
+    return null;
+  }
+}
+
 async function callVenicePhase1(
   apiKey:          string,
   modelId:         string,
@@ -2775,6 +2797,18 @@ async function veniceToolStream(
           if (tc.function.name === "stock_brief") {
             const c = stockChainFromText(lastUserText(openaiMsgs));
             args = c ? { ...args, chain: c } : (args.chain === "base" || args.chain === "robinhood" ? args : {});
+          }
+          // A tool that runs its own model call costs credits on top of the
+          // message: it says its price and waits for the user's "yes" first
+          // (lib/chat/paid-tools.ts). A call carried in by that "yes" has an
+          // id starting "paid_" and runs.
+          if (!mcpEntry && userAddress && PAID_CONFIRM_TOOLS.has(tc.function.name) && !tc.id.startsWith("paid_")) {
+            const quoted = await quotePaidTool(tc.function.name, userAddress);
+            if (quoted && quoted.cost > 0) {
+              await parkPaidCall(userAddress, { tool: tc.function.name, args, at: Date.now() });
+              const line = paidPrompt(tc.function.name, quoted.cost, quoted.balance);
+              return { tc, out: { text: `${line}\n[Not run. Waiting for the user's yes.]`, staticReply: line } as ToolCallResult };
+            }
           }
           const out = mcpEntry
             ? await callMcpConnectorTool(mcpEntry, args)
@@ -3878,7 +3912,11 @@ export async function POST(req: NextRequest) {
       // Forced tool → skip Phase 1 entirely: we already decided the tool and it
       // takes no LLM-authored args, so a full detection round-trip would only
       // echo back what we're forcing. Synthesize the tool_call locally instead.
-      const outcome: Phase1Outcome = forceTool
+      // The user's "yes" to a priced tool runs exactly the call it was quoted for.
+      const paidRun = payer && isConfirmWord(lastUserText(openaiMsgs)) ? await takePaidCall(payer) : null;
+      const outcome: Phase1Outcome = paidRun
+        ? { status: "tools", toolCalls: [paidToolCall(paidRun.tool, paidRun.args)] }
+        : forceTool
         ? { status: "tools", toolCalls: [forcedToolCall(forceTool)] }
         : await detectToolCalls(
             // An imperative trade ("swap 1 USDC to ETH") must reach its card
@@ -3991,7 +4029,11 @@ export async function POST(req: NextRequest) {
           : undefined;
     // Forced tool → synthesize the tool_call and skip the Phase 1 LLM round-trip
     // (see the Venice branch above for the full rationale).
-    const outcome: Phase1Outcome = forceTool
+    // The user's "yes" to a priced tool runs exactly the call it was quoted for.
+    const paidRun = payer && isConfirmWord(lastUserText(openaiMsgs)) ? await takePaidCall(payer) : null;
+    const outcome: Phase1Outcome = paidRun
+      ? { status: "tools", toolCalls: [paidToolCall(paidRun.tool, paidRun.args)] }
+      : forceTool
       ? { status: "tools", toolCalls: [forcedToolCall(forceTool)] }
       : await detectToolCalls(
           // Imperative trade → its card tool, model-written args (lib/chat/intents.ts).

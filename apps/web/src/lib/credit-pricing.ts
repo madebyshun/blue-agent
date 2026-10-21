@@ -132,9 +132,33 @@ function roundCredits(n: number): number {
  * — the caller should still respect daily allowance / rate limit, but no
  * credits are deducted.
  */
+/**
+ * Credit prices set apart from the x402 USDC price, for people asking in
+ * chat. The USDC price an agent pays per call is unchanged.
+ *
+ * ShunTr 2026-10-21, option (a): a tool that only READS data (DEX, RPC,
+ * registries) costs nothing on top of the chat message — charging both made
+ * one question cost twice, and at 300 cr the 500 free daily credits bought a
+ * single trending answer. Tools that run a model call of their own keep their
+ * price and ask first (lib/chat/paid-tools.ts).
+ */
+export const CREDIT_PRICE_OVERRIDE: Readonly<Record<string, number>> = {
+  "safe-trending": 0,
+  "token-pick-signal": 0,
+  "blue-registry": 0,
+  "token-price": 0,
+  "rh-stock-movers": 0,
+  "rh-stock-new-listings": 0,
+  "rh-stock-quote": 0,
+  "rh-stock-search": 0,
+  "rh-rwa-index": 0,
+};
+
 export function toolCreditCost(toolId: string, tier: TierInfo): number {
   // Every tier is metered. Max gets the deepest discount (40% off) but still
   // pays — no tier is free/unlimited.
+  const fixed = CREDIT_PRICE_OVERRIDE[toolId];
+  if (typeof fixed === "number") return fixed > 0 ? applyDiscount(fixed, tier) : 0;
   const tool = AGENT_TOOLS.find(t => t.id === toolId);
   const usd  = parseUsd(tool?.price);
   if (usd === null || usd <= 0) return 0;
