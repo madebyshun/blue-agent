@@ -126,11 +126,11 @@ export function ActionStrip({
     const final = s.phase === "done" || s.phase === "error";
     if (s.phase === "done") settleArmed();
     if (s.phase === "error") forgetArmed();
-    sinkRef.current?.(statusText(what, s, verb), final);
+    sinkRef.current?.(statusText(what, s, verb, silent), final);
     if (final) sinkRef.current = null;
     // A failed attempt goes back to pending: "yes" retries from a fresh card.
     if (s.phase === "error") { setArmed(false); setAttempt((n) => n + 1); }
-  }, [what, verb]);
+  }, [what, verb, silent]);
 
   // Armed but the card never started — no quote, not enough balance, wrong
   // network. Say so and open it: now there IS something to look at.
