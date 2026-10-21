@@ -5,6 +5,8 @@
  * wrong weekday. Every one of these must now reach its tool from code.
  */
 import { stockQuoteText, type StockBriefData } from "../src/lib/brief/stocks";
+import { forcedToolFor } from "../src/lib/chat/intents";
+import { cardReply } from "../src/lib/chat/card-replies";
 import { looksLikeMarketData, marketCallsFor, marketHoursText, stockTickerIn } from "../src/lib/chat/market-intents";
 
 let failures = 0;
@@ -57,6 +59,17 @@ ok("Wed 10:00 ET: open", /^Yes, the US stock market is open/.test(marketHoursTex
 ok("Wed 08:00 ET: pre-market", /pre-market/.test(marketHoursText(new Date("2026-10-21T12:00:00Z"))));
 ok("Sat: weekend", /weekend/.test(marketHoursText(new Date("2026-10-24T15:00:00Z"))));
 ok("after DST ends (Mon 2 Nov, 14:45 UTC = 9:45 EST): open", /^Yes/.test(marketHoursText(new Date("2026-11-02T14:45:00Z"))));
+
+// Second test round, 2026-10-21 (share dec1dcf9).
+const forced = (q: string) => forcedToolFor([{ role: "user", content: q }]);
+ok("\"why is the weekend gap different?\" is not forced to the report", forced("why is the weekend gap different?") === null, String(forced("why is the weekend gap different?")));
+ok("\"weekend gap\" alone still gets the report", forced("weekend gap") === "stock_brief");
+ok("an alert request reaches set_price_alert", forced("alert me when ETH on Base goes above $2,500") === "set_price_alert");
+ok("an automation reaches set_price_alert", forced("every day at 9:00, if ETH on Base is below $2,000, buy $1") === "set_price_alert");
+ok("\"what changed in my wallet?\" is still the wallet brief", forced("what changed in my wallet?") === "wallet_brief");
+const pass = cardReply("hub_pretrade", { verdict: "PASS", label: "USD Coin (USDC)", chain: "base", reasons: [{ level: "INFO", code: "TAX_CLEAN", text: "Sell tax measured at 0%." }] }) ?? "";
+ok("a clean check is said plainly, no code word, no invented praise", pass === "Nothing found against USD Coin (USDC) on Base. Sell tax measured at 0%. That is what could be checked, not a guarantee.", pass);
+ok("a block says don't trade it", (cardReply("hub_pretrade", { verdict: "BLOCK", label: "x", chain: "base", reasons: [{ level: "BLOCK", text: "This is a copy of USDC, not the real one." }] }) ?? "").startsWith("Don't trade it. This is a copy of USDC"));
 
 // A stock quote is the desk's own reading.
 const row = (chain: "base" | "robinhood", ticker: string, dex: number, oracle: number, drift: number, nav: number | null = null) =>

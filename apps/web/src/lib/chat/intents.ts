@@ -75,7 +75,7 @@ export function stockChainFromText(text: string): "base" | "robinhood" | null {
 }
 
 export function forcedToolFor(messages: readonly { role: string; content: unknown }[]):
-  "hub_sign_check" | "hub_pretrade" | "explain_tx" | "wallet_brief" | "stock_brief" | "prepare_swap" | "robinhood_swap" | "prepare_send" | "robinhood_send" | null {
+  "hub_sign_check" | "hub_pretrade" | "explain_tx" | "wallet_brief" | "stock_brief" | "set_price_alert" | "prepare_swap" | "robinhood_swap" | "prepare_send" | "robinhood_send" | null {
   const last = messages[messages.length - 1];
   if (last?.role !== "user" || typeof last.content !== "string") return null;
   const raw = last.content;
@@ -84,9 +84,16 @@ export function forcedToolFor(messages: readonly { role: string; content: unknow
   // A pasted transaction hash: 64 hex, never a 40-hex address.
   if (t.length <= 240 && /(^|[^0-9a-fx])0x[a-f0-9]{64}(?![0-9a-f])/.test(t)) return "explain_tx";
   const hasAddr = /0x[a-f0-9]{40}\b/.test(t);
-  if (!hasAddr && t.length <= 160 && BRIEF_RE.test(t)) return "wallet_brief";
-  if (!hasAddr && t.length <= 160 && STOCK_BRIEF_RE.test(t)) return "stock_brief";
+  // "why is the weekend gap different?" is a question about the idea, not a
+  // request for today's report (2026-10-21: it got the full brief).
+  const explaining = /^(why|how does|how do|explain|what does|what is a |what's a )/.test(t.trim());
+  if (!hasAddr && !explaining && t.length <= 160 && BRIEF_RE.test(t)) return "wallet_brief";
+  if (!hasAddr && !explaining && t.length <= 160 && STOCK_BRIEF_RE.test(t)) return "stock_brief";
   if (hasAddr && t.length <= 200 && /\b(safe|scam|rug|honeypot|legit|risky|trust)\b|an toàn|lừa đảo/.test(t)) return "hub_pretrade";
+  // An alert request must reach set_price_alert (2026-10-21: "alert me when
+  // ETH on Base goes above $2,500" ran no tool and told the user to press a
+  // card that did not exist).
+  if (!hasAddr && t.length <= 220 && /\b(alert me|notify me|tell me when|ping me|let me know when|báo tôi|nhắc tôi)\b|^every (day|week|morning)\b.*\bif\b/.test(t)) return "set_price_alert";
   if (t.length <= 160 && /\d/.test(t) && /^(please\s+)?(send|transfer|pay)\b/.test(t.trim()) && /\bto\b/.test(t) && !/\?$/.test(t.trim())) {
     return /\b(robinhood|rh chain|on rh|chain 4663)\b/.test(t) ? "robinhood_send" : "prepare_send";
   }

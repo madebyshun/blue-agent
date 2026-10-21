@@ -1567,6 +1567,8 @@ function resolveSwapToken(token: string): string {
  *  deep-analysis — three LLM calls plus two explorer reads — 504'd at 30 s. */
 const TOOL_TIMEOUT_MS: Readonly<Record<string, number>> = {
   "deep-analysis": 75_000,
+  // Reads every dollar-anchored RH pool; timed out at 30 s in chat 2026-10-21.
+  "rh-stock-movers": 60_000,
 };
 
 function toolFailed(toolName: string, why: string): string {
@@ -2507,12 +2509,17 @@ async function callHubTool(
     // total spend (chat message + tool calls), not just the message cost.
     let credits = 0;
     if (FREE_DIRECT[toolName]) {
-      const res = await fetch(`${BASE_URL}${FREE_DIRECT[toolName]}`, {
+      // In this process, like the catalog tools below: a fetch of BASE_URL ran
+      // PRODUCTION's copy from every preview (measured 2026-10-21: a preview's
+      // token-price fix for VIRTUAL never ran, prod 404'd).
+      const mod = toolName === "hub_token_price" ? await import("@/app/api/token-price/route")
+        : toolName === "hub_crypto_rpc" ? await import("@/app/api/crypto-rpc/route")
+        : await import("@/app/api/builder-score/route");
+      const res = await mod.POST(new NextRequest(`https://app.invalid${FREE_DIRECT[toolName]}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(args),
-        signal: AbortSignal.timeout(30_000),
-      });
+      }));
       status = res.status;
       data = await res.json().catch(() => null);
     } else {
@@ -3102,15 +3109,16 @@ Keep it short, practical, and actionable.`,
 Blue Chat understands natural language — no commands needed.
 
 Try asking:
-"build me a token launchpad on Base"
+"price of ETH" or "NVDA on Base"
+"what's trending on Base?"
+"stock tokens today"
+"what launched on Base in the last hour?"
 "is this token safe: 0x..."
-"best APY on Base right now?"
-"deploy a B20 stablecoin called vUSD"
-"what's the narrative on Base this week?"
-"analyze this B20 contract: 0x..."
-"screen this wallet for AML risks: 0x..."
-"compare Aave vs Morpho yields"
-"write a pitch for my Base project"
+"swap $5 usdc to eth", then reply "yes"
+"send 10 usdc to name.base.eth"
+"alert me when ETH on Base goes above $3,000"
+"what changed in my wallet?"
+"check my approvals"
 
 Type /credits to check balance.
 Type /skill install <url> for custom skills.`,
