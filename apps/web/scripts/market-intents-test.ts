@@ -41,13 +41,14 @@ const CASES: [string, string][] = [
 for (const [q, want] of CASES) ok(`"${q}" → ${want}`, names(q) === want, names(q));
 
 // Not market questions: never routed, never refused.
-for (const q of ["what can you do?", "swap $1 eth to usdc", "is 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 safe?", "explain tx 0x" + "a".repeat(64)]) {
+for (const q of ["what can you do?", "ell my NVDA", "I like NVDA", "swap $1 eth to usdc", "is 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 safe?", "explain tx 0x" + "a".repeat(64)]) {
   ok(`"${q.slice(0, 40)}" is not routed here`, route(q) === null, names(q));
 }
 ok("an explanation is not a data request", !looksLikeMarketData("why is the weekend gap different?"));
 ok("an unmatched price question is a data request", looksLikeMarketData("what was the price of the top gainer last week"));
 ok("tickers: a word is not a ticker", stockTickerIn("can you open the app") === null);
 ok("tickers: NVDA in capitals is", stockTickerIn("NVDA on Base") === "NVDA");
+ok("a bare ticker is a quote", names("NVDA?") === 'stock_quote{"ticker":"NVDA","chain":null}', names("NVDA?"));
 
 // The clock, not a guess (the test answered "Sunday night" on a Wednesday).
 const wed = marketHoursText(new Date("2026-10-21T06:32:00Z"));

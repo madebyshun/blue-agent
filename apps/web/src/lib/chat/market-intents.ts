@@ -115,8 +115,11 @@ export function marketCallsFor(messages: readonly { role: string; content: unkno
     if (find) add({ name: "hub_rh_search", args: { query: find[1].replace(/\b(the|stock|token)\b/gi, "").trim() } });
   }
 
+  // A ticker alone is not a price question ("ell my NVDA" must not get a
+  // quote): it needs a price word, a chain, or to be the whole message.
   const ticker = stockTickerIn(raw);
-  if (ticker && !calls.length && !/\b(cheaper|above|below|gap|premium|discount)\b/.test(t)) {
+  const asksQuote = !!ticker && (/\bprices?\b|\bgiá\b|\bquote\b|\btrading at\b|\bon (base|robinhood|rh)\b/.test(t) || t.replace(/[?!.\s]/g, "") === ticker.toLowerCase());
+  if (ticker && asksQuote && !calls.length && !/\b(cheaper|above|below|gap|premium|discount)\b/.test(t)) {
     add({ name: "stock_quote", args: { ticker, chain: chainFrom(t) } });
   } else if (!calls.some((c) => c.name.startsWith("hub_rh_")) &&
     /\bstock tokens?\b|\bstocks? (on|today|now)\b|\bonchain stocks?\b|\bpriced (above|below)\b|\b(above|below) the (real )?stock\b|\bcheaper on\b|\b(stock )?(gap|premium|discount)s?\b.*\bstock|cổ phiếu onchain/.test(t)) {
