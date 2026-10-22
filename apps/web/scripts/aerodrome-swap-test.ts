@@ -111,7 +111,8 @@ const ROUTER = parseAbi(["function exactInputSingle((address tokenIn,address tok
   ok("/api/swap/quote routes a stock leg to Aerodrome even with no 0x key", j.venue === "aerodrome" && !j.needsKey && !!j.transaction, JSON.stringify(j).slice(0, 120));
   const res2 = await quoteGET(new Request(`https://x/api/swap/quote?sellToken=${USDC_BASE}&buyToken=0x4200000000000000000000000000000000000006&sellAmount=1000000`));
   ok("a non-stock pair still goes the 0x way (needsKey without a key)", ((await res2.json()) as { needsKey?: boolean }).needsKey === true);
-  const mcp = fs.readFileSync(path.resolve(__dirname, "../src/app/api/mcp/route.ts"), "utf8");
+  // The swap builder moved to lib/tx-build.ts (2026-10-22), shared by MCP and ACP.
+  const mcp = fs.readFileSync(path.resolve(__dirname, "../src/lib/tx-build.ts"), "utf8");
   ok("blue_swap_tx labels the venue from the quote", /data\.venue === "aerodrome" \? "Aerodrome Slipstream"/.test(mcp));
 
   console.log("5. pinned addresses (verified on-chain 2026-10-07)");

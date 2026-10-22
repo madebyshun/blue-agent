@@ -407,7 +407,7 @@ async function run(input: Parameters<typeof preTradeCheck>[0]) {
     pre.status === 200 && preBody.verdict === "BLOCK", `${pre.status} ${JSON.stringify(preBody).slice(0, 120)}`);
 
   const mcp = read("src/app/api/mcp/route.ts");
-  for (const [tool, fn] of [["swap", "callSwapTx"], ["send", "callSendTx"], ["bridge", "callBridgeTx"]]) {
+  for (const [tool, fn] of [["swap", "buildSwapTx"], ["send", "callSendTx"], ["bridge", "callBridgeTx"]]) {
     ok(`MCP ${tool} builds only through the check`, new RegExp(`withPreTradeCheck\\("${tool}", args, \\(\\) => ${fn}\\(args\\)\\)`).test(mcp));
   }
   const prep = read("src/app/api/x402/_handlers/rh-stock-swap-prepare.ts");

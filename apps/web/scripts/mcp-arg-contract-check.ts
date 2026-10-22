@@ -245,7 +245,9 @@ check(`5.6 …and that branch is blue_call (${owner ?? "none"})`, owner === "blu
 // and invisible to every other check in this file. CLAUDE.md records the omission
 // as deliberate and as ShunTr's call, not a refactor.
 const paidStart = codeOnly.indexOf("async function callPaidTool");
-const paidEnd = codeOnly.indexOf("async function postPrepare");
+// postPrepare moved to lib/tx-build.ts (2026-10-22); the function that now
+// follows callPaidTool in the route is withActionRecord.
+const paidEnd = codeOnly.indexOf("async function withActionRecord");
 const paidBody = paidStart > 0 && paidEnd > paidStart ? codeOnly.slice(paidStart, paidEnd) : "";
 check(`5.7 callPaidTool body located (${paidBody.length} chars)`, paidBody.length > 200);
 check(
