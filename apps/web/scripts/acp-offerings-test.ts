@@ -19,6 +19,9 @@ const USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 ok("three offerings, unique names", new Set(ACP_OFFERINGS.map((o) => o.name)).size === 3);
 ok("lookup is case- and space-insensitive", findOffering("  Swap_Prepare ")?.name === "swap_prepare");
 ok("Offering #1 is NOT taken over (execution-plan falls through)", findOffering("execution-plan") === undefined);
+ok("…nor under its dashboard spelling", findOffering("executionplan") === undefined);
+ok("the dashboard may drop separators: swapprepare still dispatches", findOffering("swapprepare")?.name === "swap_prepare");
+ok("…and so do stocksignal / trendingsafe", findOffering("stocksignal")?.name === "stock_signal" && findOffering("trendingsafe")?.name === "trending_safe");
 ok("an empty description falls through", findOffering(undefined) === undefined);
 ok("every price is a positive USDC amount", ACP_OFFERINGS.every((o) => o.priceUsdc > 0 && o.priceUsdc < 1));
 

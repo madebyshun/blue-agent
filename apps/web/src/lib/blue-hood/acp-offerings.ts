@@ -204,7 +204,14 @@ const trendingSafe: AcpOffering = {
 
 export const ACP_OFFERINGS: readonly AcpOffering[] = [swapPrepare, stockSignal, trendingSafe];
 
+/**
+ * Match on letters and digits only. MEASURED 2026-10-22: Offering #1 is
+ * registered on the ACP dashboard as "executionplan" while the code calls it
+ * "execution-plan" — the registry evidently keeps no separators, so
+ * "swap_prepare" may arrive as "swapprepare". Either spelling must dispatch.
+ */
+const nameKey = (s: unknown) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
 export function findOffering(name: string | null | undefined): AcpOffering | undefined {
-  const n = String(name ?? "").trim().toLowerCase();
-  return ACP_OFFERINGS.find((o) => o.name === n);
+  const n = nameKey(name);
+  return n ? ACP_OFFERINGS.find((o) => nameKey(o.name) === n) : undefined;
 }
