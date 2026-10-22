@@ -11,6 +11,7 @@
  * assertSafeMcpUrl). No payment path is touched here.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { communityClosedResponse } from "@/lib/hub-closed";
 import { rateLimit, getIdentifier } from "@/lib/rate-limit";
 import { assertSafeMcpUrl } from "@/lib/mcp-client";
 import {
@@ -36,6 +37,9 @@ interface TestBody {
 }
 
 export async function POST(req: NextRequest) {
+  const closed = communityClosedResponse();
+  if (closed) return closed;
+
   const { success } = await rateLimit(getIdentifier(req), "api");
   if (!success) return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
 

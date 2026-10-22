@@ -54,7 +54,12 @@ import registryHandler from "../src/app/api/x402/_handlers/blue-registry";
 // The REAL route, imported as a module: group C asserts a route-level response
 // HEADER, which the library function underneath it cannot tell you anything about.
 import * as hostedRoute from "../src/app/api/hub/hosted/route";
+import * as hostedTestRoute from "../src/app/api/hub/hosted/test/route";
+import * as toolsRoute from "../src/app/api/hub/tools/route";
+import * as toolCallRoute from "../src/app/api/hub/tools/[id]/call/route";
+import { NextRequest } from "next/server";
 import { AGENT_TOOLS } from "../src/lib/agent-tools";
+import { COMMUNITY_LISTINGS_OPEN } from "../src/lib/hub-closed";
 import { HOSTED_MODEL_DEFAULT } from "../src/lib/hosted-models";
 
 let failures = 0;
@@ -427,102 +432,149 @@ async function main() {
     `${pricedCount} priced tools > 60`,
   );
 
-  await reset(); await seedExternal();
-  const res  = await registryHandler(new Request("https://blueagent.dev/api/x402/blue-registry"));
-  const body = await res.json() as {
-    tools: { id: string; source: string }[];
-    totals: { community: number };
-    registry_coverage: string;
-    tools_truncated: boolean;
-  };
+  // Community listings closed 2026-10-22 (lib/hub-closed.ts). The paid
+  // handler must then serve the first-party catalog only, never read KV for the
+  // community half, and stop inviting builders. T / T-B / T-C below are the
+  // OPEN contract and run again the moment the flag flips back.
+  if (!COMMUNITY_LISTINGS_OPEN) {
+    console.log("\nT-X. PAID handler while community listings are CLOSED:");
+    await reset(); await seedExternal();
+    const shut = await (await withReadFailure(() =>
+      registryHandler(new Request("https://blueagent.dev/api/x402/blue-registry")))).json() as {
+      tools: { id: string; source: string }[];
+      totals: { community: number; first_party: number };
+      registry_coverage: string;
+      how_to_call?: Record<string, unknown>;
+      submit_a_tool?: string;
+    };
+    check(
+      "no community tool is served, even with two seeded in KV",
+      shut.tools.every((t) => t.source !== "community") && shut.totals.community === 0,
+      `community entries=${shut.tools.filter((t) => t.source === "community").length}, totals.community=${shut.totals.community}`,
+    );
+    check(
+      "KV is not read for the community half — an outage cannot make it `unavailable`",
+      shut.registry_coverage === "complete",
+      `registry_coverage=${shut.registry_coverage}`,
+    );
+    check(
+      "the first-party catalog is still served in full",
+      shut.totals.first_party === pricedCount,
+      `first_party=${shut.totals.first_party} of ${pricedCount}`,
+    );
+    check(
+      "builders are no longer invited to submit",
+      JSON.stringify(shut).indexOf("hub/submit") === -1,
+      "no hub/submit link in the payload",
+    );
+    const doors: [string, () => Promise<Response>][] = [
+      ["POST /api/hub/tools", () => toolsRoute.POST(new NextRequest("https://blueagent.dev/api/hub/tools", { method: "POST", body: "{}" }))],
+      ["POST /api/hub/hosted", () => hostedRoute.POST(new NextRequest("https://blueagent.dev/api/hub/hosted", { method: "POST", body: "{}" }))],
+      ["POST /api/hub/hosted/test", () => hostedTestRoute.POST(new NextRequest("https://blueagent.dev/api/hub/hosted/test", { method: "POST", body: "{}" }))],
+      ["POST /api/hub/tools/<id>/call", () => toolCallRoute.POST(new NextRequest(`https://blueagent.dev/api/hub/tools/${TOOL_A}/call`, { method: "POST", body: "{}" }), { params: Promise.resolve({ id: TOOL_A }) })],
+    ];
+    for (const [label, call] of doors) {
+      const r = await call();
+      check(`${label} answers 410 while closed`, r.status === 410, `status=${r.status}`);
+    }
+  } else {
+    await reset(); await seedExternal();
+    const res  = await registryHandler(new Request("https://blueagent.dev/api/x402/blue-registry"));
+    const body = await res.json() as {
+      tools: { id: string; source: string }[];
+      totals: { community: number };
+      registry_coverage: string;
+      tools_truncated: boolean;
+    };
 
-  check(
-    "a community tool is actually PRESENT in an unfiltered response",
-    body.tools.some((t) => t.id === TOOL_A),
-    `${body.tools.filter((t) => t.source === "community").length} community entries in the payload`,
-  );
-  check(
-    "totals.community agrees with what the payload can show",
-    body.totals.community === 2,
-    `totals.community=${body.totals.community}`,
-  );
-  check(
-    "the cap is DECLARED rather than silent",
-    body.tools_truncated === true,
-    `tools_truncated=${body.tools_truncated}`,
-  );
-  check(
-    "registry_coverage rides along on the paid response",
-    body.registry_coverage === "complete",
-    `registry_coverage=${body.registry_coverage}`,
-  );
+    check(
+      "a community tool is actually PRESENT in an unfiltered response",
+      body.tools.some((t) => t.id === TOOL_A),
+      `${body.tools.filter((t) => t.source === "community").length} community entries in the payload`,
+    );
+    check(
+      "totals.community agrees with what the payload can show",
+      body.totals.community === 2,
+      `totals.community=${body.totals.community}`,
+    );
+    check(
+      "the cap is DECLARED rather than silent",
+      body.tools_truncated === true,
+      `tools_truncated=${body.tools_truncated}`,
+    );
+    check(
+      "registry_coverage rides along on the paid response",
+      body.registry_coverage === "complete",
+      `registry_coverage=${body.registry_coverage}`,
+    );
 
-  console.log("\nT-B. PAID handler under a KV outage:");
-  await reset(); await seedExternal();
-  const darkRes  = await withReadFailure(() =>
-    registryHandler(new Request("https://blueagent.dev/api/x402/blue-registry")));
-  const darkBody = await darkRes.json() as {
-    totals: { community: number; first_party: number };
-    registry_coverage: string;
-    registry_note?: string;
-  };
-  check(
-    "a paying caller is TOLD the community half is unreadable",
-    darkBody.registry_coverage === "unavailable" && !!darkBody.registry_note,
-    `registry_coverage=${darkBody.registry_coverage}, note=${darkBody.registry_note ? "present" : "MISSING"}`,
-  );
-  check(
-    "the first-party catalog is unaffected — it is compiled in, not read from KV",
-    darkBody.totals.first_party === pricedCount,
-    `first_party=${darkBody.totals.first_party} of ${pricedCount}`,
-  );
+    console.log("\nT-B. PAID handler under a KV outage:");
+    await reset(); await seedExternal();
+    const darkRes  = await withReadFailure(() =>
+      registryHandler(new Request("https://blueagent.dev/api/x402/blue-registry")));
+    const darkBody = await darkRes.json() as {
+      totals: { community: number; first_party: number };
+      registry_coverage: string;
+      registry_note?: string;
+    };
+    check(
+      "a paying caller is TOLD the community half is unreadable",
+      darkBody.registry_coverage === "unavailable" && !!darkBody.registry_note,
+      `registry_coverage=${darkBody.registry_coverage}, note=${darkBody.registry_note ? "present" : "MISSING"}`,
+    );
+    check(
+      "the first-party catalog is unaffected — it is compiled in, not read from KV",
+      darkBody.totals.first_party === pricedCount,
+      `first_party=${darkBody.totals.first_party} of ${pricedCount}`,
+    );
 
-  console.log("\nT-C. PAID handler under a PARTIAL read — the dangerous middle:");
-  //
-  // The outage in T-B is loud: everything is dark, `unavailable`, obvious. THIS
-  // is the one that reads as normal — the index and one item come back fine, so
-  // the response is well-formed, populated, and WRONG BY ONE. A paying caller
-  // whose product IS this census gets `totals.community: 1` when the answer is
-  // 2, and nothing in the shape of the payload says so. The number has to be
-  // labelled a FLOOR at the point of sale, and the missing id has to be named
-  // so the caller can retry exactly it instead of re-buying the whole census.
-  await reset(); await seedExternal();
-  const partRes  = await withReadFailureOn(
-    (key) => key === EXT_ITEM(TOOL_B),
-    () => registryHandler(new Request("https://blueagent.dev/api/x402/blue-registry")),
-  );
-  const partBody = await partRes.json() as {
-    tools: { id: string }[];
-    totals: { community: number };
-    registry_coverage: string;
-    registry_note?: string;
-    registry_unreadable_ids?: string[];
-  };
-  check(
-    "coverage is `partial`, not the `complete` a well-formed payload would imply",
-    partBody.registry_coverage === "partial",
-    `registry_coverage=${partBody.registry_coverage}`,
-  );
-  check(
-    "the note says FLOOR in so many words — a caller must not read the total as a count",
-    /floor/i.test(partBody.registry_note ?? ""),
-    partBody.registry_note ? `"${partBody.registry_note.slice(0, 60)}…"` : "NO NOTE",
-  );
-  check(
-    "the short total is exactly the undercount it claims to be (1 served, 2 exist)",
-    partBody.totals.community === 1,
-    `totals.community=${partBody.totals.community}, truth=2`,
-  );
-  check(
-    "the readable tool is still SERVED — one dark record does not blank the shelf",
-    partBody.tools.some((t) => t.id === TOOL_A),
-    `${partBody.tools.filter((t) => t.id.startsWith("census-")).length} seeded tool(s) in the payload`,
-  );
-  check(
-    "and the unreadable id is NAMED, so the retry is one key not the whole census",
-    (partBody.registry_unreadable_ids ?? []).includes(TOOL_B),
-    `registry_unreadable_ids=${JSON.stringify(partBody.registry_unreadable_ids ?? [])}`,
-  );
+    console.log("\nT-C. PAID handler under a PARTIAL read — the dangerous middle:");
+    //
+    // The outage in T-B is loud: everything is dark, `unavailable`, obvious. THIS
+    // is the one that reads as normal — the index and one item come back fine, so
+    // the response is well-formed, populated, and WRONG BY ONE. A paying caller
+    // whose product IS this census gets `totals.community: 1` when the answer is
+    // 2, and nothing in the shape of the payload says so. The number has to be
+    // labelled a FLOOR at the point of sale, and the missing id has to be named
+    // so the caller can retry exactly it instead of re-buying the whole census.
+    await reset(); await seedExternal();
+    const partRes  = await withReadFailureOn(
+      (key) => key === EXT_ITEM(TOOL_B),
+      () => registryHandler(new Request("https://blueagent.dev/api/x402/blue-registry")),
+    );
+    const partBody = await partRes.json() as {
+      tools: { id: string }[];
+      totals: { community: number };
+      registry_coverage: string;
+      registry_note?: string;
+      registry_unreadable_ids?: string[];
+    };
+    check(
+      "coverage is `partial`, not the `complete` a well-formed payload would imply",
+      partBody.registry_coverage === "partial",
+      `registry_coverage=${partBody.registry_coverage}`,
+    );
+    check(
+      "the note says FLOOR in so many words — a caller must not read the total as a count",
+      /floor/i.test(partBody.registry_note ?? ""),
+      partBody.registry_note ? `"${partBody.registry_note.slice(0, 60)}…"` : "NO NOTE",
+    );
+    check(
+      "the short total is exactly the undercount it claims to be (1 served, 2 exist)",
+      partBody.totals.community === 1,
+      `totals.community=${partBody.totals.community}, truth=2`,
+    );
+    check(
+      "the readable tool is still SERVED — one dark record does not blank the shelf",
+      partBody.tools.some((t) => t.id === TOOL_A),
+      `${partBody.tools.filter((t) => t.id.startsWith("census-")).length} seeded tool(s) in the payload`,
+    );
+    check(
+      "and the unreadable id is NAMED, so the retry is one key not the whole census",
+      (partBody.registry_unreadable_ids ?? []).includes(TOOL_B),
+      `registry_unreadable_ids=${JSON.stringify(partBody.registry_unreadable_ids ?? [])}`,
+    );
+  }
 
   await reset();
 

@@ -15,6 +15,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useAccount } from "wagmi";
 import SpendConsole from "@/components/SpendConsole";
+import { COMMUNITY_LISTINGS_OPEN } from "@/lib/hub-closed";
 // Pure formatters only — the module that PROBES (`hub-liveness.ts`) imports KV
 // and must never reach a client component.
 import {
@@ -205,7 +206,7 @@ function HomeView(props: HubHomeProps) {
               style={{ boxShadow: "0 0 18px rgba(79,195,247,.28)" }}>
               Browse {tools.length} tools →
             </button>
-            {(() => {
+            {COMMUNITY_LISTINGS_OPEN && (() => {
               const cls = "font-mono text-[11px] font-medium px-4 py-2.5 rounded-[9px] border border-[#A78BFA]/35 text-[#A78BFA] hover:bg-[#A78BFA]/10 transition-colors";
               const inner = <>List your tool · keep 100% self-hosted →</>;
               return onListTool
@@ -401,7 +402,7 @@ function BrowseView(props: HubHomeProps) {
                 <span className="text-[#A78BFA] font-semibold">{source === "hosted" ? "90%" : "100%"}</span>{" "}
                 of every call, in USDC on Base.
               </p>
-              {(() => {
+              {COMMUNITY_LISTINGS_OPEN && (() => {
                 const cls = "inline-block font-mono text-xs font-semibold px-4 py-2.5 rounded-xl border border-[#A78BFA]/40 bg-[#A78BFA]/10 text-[#A78BFA] hover:bg-[#A78BFA]/20 transition-colors";
                 const inner = <>List your tool → earn {source === "hosted" ? "90%" : "100%"}</>;
                 return onListTool
