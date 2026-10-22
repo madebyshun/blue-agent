@@ -36,7 +36,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { literalKeys, setLiterals, hiddenMcpEndpoints } from "./hub-receipts-parse";
-import { MCP_TOOLS } from "../src/lib/mcp-tools";
+import { MCP_TOOLS, MCP_LEGACY } from "../src/lib/mcp-tools";
 
 let pass = 0;
 const failures: string[] = [];
@@ -251,9 +251,16 @@ const HUB_MAP: Record<string, unknown> = {
     `5.1 all three maps are still locatable in api/mcp/route.ts${r.ok ? "" : ` — missing: ${r.missing.join(", ")}`}`,
     r.ok === true,
   );
+  // MCP v2 (2026-10-22): the v1 names in MCP_LEGACY answer, unlisted, until
+  // MCP_LEGACY_UNTIL so cached clients are told where their tool went instead of
+  // breaking. That is the ONE allowed hidden set: it must equal MCP_LEGACY
+  // exactly (nothing else may hide behind it), and its end date is bounded so
+  // "temporary" cannot quietly become permanent. After the date the route
+  // refuses every one of them.
+  const undated = r.ok ? r.hidden.filter((n) => !(n in MCP_LEGACY)) : [];
   check(
-    `5.2 advertised set == callable set — 0 hidden endpoints${r.ok && r.hidden.length ? ` (found: ${r.hidden.join(", ")})` : ""}`,
-    r.ok && r.hidden.length === 0,
+    `5.2 advertised set == callable set, except dated v1 aliases — 0 other hidden endpoints${undated.length ? ` (found: ${undated.join(", ")})` : ""}`,
+    r.ok && undated.length === 0,
   );
   // If this ever reads 0, the parse found nothing and 5.2 passed vacuously.
   check("5.3 the difference was taken against a NON-EMPTY callable set",

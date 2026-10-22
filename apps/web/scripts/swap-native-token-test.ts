@@ -476,12 +476,12 @@ async function main() {
     /\bamountOutMinimum\s*[,:]/.test(rhBranch));
   // The schema is the only thing an agent reads before calling. It promised
   // "Default 100" on both chains; on RH that default was 0.
-  const swapTool = MCP_TOOLS.find((t) => t.name === "blue_swap_tx");
+  const swapTool = MCP_TOOLS.find((t) => t.name === "swap_prepare"); // blue_swap_tx until MCP v2, 2026-10-22
   const slipDesc = String(
     ((swapTool?.inputSchema?.properties ?? {}) as Record<string, { description?: string }>)
       .slippageBps?.description ?? "",
   );
-  ok("6.23 blue_swap_tx still declares slippageBps", slipDesc.length > 0);
+  ok("6.23 swap_prepare still declares slippageBps", slipDesc.length > 0);
   ok("6.24 …covering both chains", /Base 8453/.test(slipDesc) && /Robinhood Chain 4663/.test(slipDesc));
   ok("6.25 …and stating the RH floor and its refusal",
     /amountOutMinimum/.test(slipDesc) && /NO_QUOTE/.test(slipDesc) && !/amountOutMinimum = 0/.test(slipDesc));

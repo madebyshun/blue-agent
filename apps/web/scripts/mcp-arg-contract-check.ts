@@ -45,7 +45,7 @@
  */
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { MCP_TOOLS } from "../src/lib/mcp-tools";
+import { MCP_TOOLS, MCP_LEGACY } from "../src/lib/mcp-tools";
 
 let pass = 0;
 const failures: string[] = [];
@@ -86,8 +86,14 @@ check(`1.4 …and parsed at least 1 entry (${[...REMAP.keys()].join(", ") || "no
 // calls the gap a hidden surface: undiscoverable by any client, invocable by any
 // client. Both directions, because either one alone permits it.
 const advertised = new Set(MCP_TOOLS.map((t) => t.name));
+// MCP v2 (2026-10-22): the v1 names in MCP_LEGACY answer, unlisted, until
+// MCP_LEGACY_UNTIL so cached clients are told where their tool went instead of
+// breaking. That is the ONE allowed hidden set: it must equal MCP_LEGACY
+// exactly (nothing else may hide behind it), and its end date is bounded so
+// "temporary" cannot quietly become permanent. After the date the route
+// refuses every one of them.
 for (const name of HUB_MAP.keys()) {
-  check(`2.1 HUB_MAP.${name} is advertised in MCP_TOOLS`, advertised.has(name));
+  check(`2.1 HUB_MAP.${name} is advertised in MCP_TOOLS, or a dated v1 alias`, advertised.has(name) || name in MCP_LEGACY);
 }
 for (const t of MCP_TOOLS) {
   if (!t.name.startsWith("hub_")) continue;
@@ -215,7 +221,7 @@ for (const name of advertised) {
   check(`5.1 advertised ${name} has a dispatch path`, dispatched.has(name));
 }
 for (const name of dispatched) {
-  check(`5.2 dispatched ${name} is advertised in MCP_TOOLS`, advertised.has(name));
+  check(`5.2 dispatched ${name} is advertised in MCP_TOOLS, or a dated v1 alias`, advertised.has(name) || name in MCP_LEGACY);
 }
 
 // The free bypass is now `runInternalTool(` — the function, not a header set.
