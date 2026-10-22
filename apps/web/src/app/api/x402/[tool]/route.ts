@@ -15,6 +15,7 @@ import { wireSchema } from "@/lib/tool-wire-schema";
 import { recordCall } from "@/lib/usage-daily";
 import { kv } from "@/lib/kv";
 import { declareBuilderCodeExtension } from "@x402/extensions/builder-code";
+import { buildBazaarExtension } from "@/lib/x402-bazaar";
 import { haltReason } from "@/lib/tool-halts";
 import { PRICE_UNITS, unavailableAnswer, haltedAnswer, runInternalTool } from "@/lib/x402-internal-run";
 
@@ -27,51 +28,6 @@ const INTERNAL_KEY = process.env.INTERNAL_SERVICE_KEY ?? "";
 
 // tool id → price in USDC micro-units: PRICE_UNITS, from lib/x402-internal-run.ts
 // (shared so the in-process runner refuses exactly the ids this route refuses).
-
-/**
- * Build the Bazaar extension object for a tool.
- * Format confirmed from x402station.io (indexed in discovery/resources):
- *   - NO discoverable, NO routeTemplate, NO schema
- *   - Just info.input + info.output, matches exact CDP resource format
- */
-function buildBazaarExtension(meta: typeof AGENT_TOOLS[number] | undefined) {
-  // Example body: required fields get a placeholder, optionals get the value
-  // the Hub sends (or "" when the caller supplies it).
-  //
-  // This is the WIRE shape, from wireSchema — NOT `meta.inputs`, which is the
-  // /hub FORM. x402Body renames form keys for 17 of the 111 live tools, and
-  // this object is the literal template a Bazaar agent copies into its POST,
-  // so publishing the form here meant handing the caller a body the handler
-  // destructures nothing out of. It would then pay full price for a run with
-  // every field at its default. See lib/tool-wire-schema.ts for the
-  // measurement and the probe that derives this.
-  const bodyExample = meta
-    ? Object.fromEntries(
-        wireSchema(meta).fields.map(f => [
-          f.name,
-          f.required ? `<${f.name}>` : f.default ?? "",
-        ]),
-      )
-    : {};
-
-  return {
-    info: {
-      input: {
-        type: "http",
-        method: "POST",
-        bodyType: "json",
-        body: bodyExample,
-      },
-      output: {
-        example: {
-          tool: meta?.id ?? "tool",
-          result: "AI-generated analysis",
-          _settle: { ok: true, status: 200, tx: "0x..." },
-        },
-      },
-    },
-  };
-}
 
 /** Build the full payment-required payload (used in header + body) */
 function buildPaymentRequired(
