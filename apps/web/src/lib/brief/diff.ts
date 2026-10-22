@@ -90,6 +90,13 @@ export function diffSnapshots(cur: Snapshot, prev: Snapshot | null): BriefDiff {
         if (isUnsolicited(r)) unsolicited.push(r); else balances.push({ kind: "new", row: r });
         continue;
       }
+      // An impostor never appears as a balance move. MEASURED 2026-10-21: a
+      // fake "ՍՏDС" whose balanceOf mirrors the wallet's real USDC printed
+      // "1.64384 → 9.72906 (+491.8%)" right under the real USDC line — the
+      // exact disguise it exists for. Only `new` was guarded. If yesterday's
+      // snapshot did not call it an impostor (it predates the classifier's
+      // look-alike fix, fccb5d87), warn once in the unsolicited section.
+      if (r.trust === "impostor") { if (b.trust !== "impostor") unsolicited.push(r); continue; }
       const d = relDelta(r.amount, b.amount);
       if (d === null || Math.abs(d) >= CHANGE_MIN_REL) balances.push({ kind: "changed", row: r, before: b.amount, deltaPct: d === null ? null : d * 100 });
     }
