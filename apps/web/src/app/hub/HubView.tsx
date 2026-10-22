@@ -23,6 +23,7 @@ import { livenessLabel, ageLabel, type ToolHealth } from "@/lib/hub-liveness-for
 // header before touching the external branch of run(): every refusal in it is
 // there because the alternative is signing away the user's USDC.
 import { selectBaseUsdcAccept, priceToUnits, extractAccepts } from "@/lib/x402-accepts";
+import { COMMUNITY_LISTINGS_OPEN, COMMUNITY_CLOSED_TEXT } from "@/lib/hub-closed";
 
 const USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
 const ERC20_BAL_ABI = [{
@@ -1781,6 +1782,13 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
   // Hub proxy (which forwards to the builder's endpoint + tracks usage). Kept as
   // a useCallback so the "List your tool" modal can refresh the grid on submit.
   const loadCommunityTools = useCallback(() => {
+    // Community listings are closed (lib/hub-closed.ts): the grid shows the
+    // first-party catalog only, and nothing is fetched from the registry.
+    if (!COMMUNITY_LISTINGS_OPEN) {
+      setCommunityTools([]);
+      setCommunityCoverage("complete");
+      return;
+    }
     type Registered = {
       id: string; name: string; description: string; category: string;
       price: string; priceUSDC: number;
@@ -1855,6 +1863,9 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
   // "Not checked". A failed probe fetch is not evidence about anyone's endpoint,
   // and rendering it as one would accuse builders whose tools are fine.
   useEffect(() => {
+    // Nothing to probe while community listings are closed — and the probe
+    // fans out to third-party endpoints, so do not wake them for nothing.
+    if (!COMMUNITY_LISTINGS_OPEN) return;
     let cancelled = false;
     fetch("/api/hub/tools/health", { cache: "no-store" })
       .then(r => (r.ok ? r.json() : null))
@@ -2138,8 +2149,11 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
             )}
           </div>
 
-          {/* Builder actions (v2) */}
+          {/* Builder actions (v2). "List your tool" is hidden while community
+              listings are closed; the dashboard stays so a builder can still
+              remove an existing listing. */}
           <div className="px-4 pb-3 border-t border-[#1A1A2E] pt-3.5">
+            {COMMUNITY_LISTINGS_OPEN && <>
             <button
               type="button"
               onClick={view === "submit" ? backToBrowse : openSubmit}
@@ -2155,10 +2169,11 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
                 100% self-hosted<br />90% hosted on Blue Hub
               </p>
             )}
+            </>}
             <button
               type="button"
               onClick={view === "dashboard" ? backToBrowse : openDashboard}
-              className={`mt-2.5 flex items-center gap-2 w-full px-2 py-1.5 rounded-lg transition-colors group ${view === "dashboard" ? "bg-[#34D399]/10" : "hover:bg-[#34D399]/5"}`}
+              className={`${COMMUNITY_LISTINGS_OPEN ? "mt-2.5 " : ""}flex items-center gap-2 w-full px-2 py-1.5 rounded-lg transition-colors group ${view === "dashboard" ? "bg-[#34D399]/10" : "hover:bg-[#34D399]/5"}`}
             >
               <span className="w-1.5 h-1.5 rounded-full bg-[#34D399] shrink-0" />
               <span className={`font-mono text-[10.5px] font-medium transition-colors ${view === "dashboard" ? "text-[#34D399]" : "text-[#94A3B8] group-hover:text-[#34D399]"}`}>
@@ -2229,7 +2244,12 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
           )}
 
           {view === "submit"
-            ? <SubmitTool variant="shell" onBack={backToBrowse} onSubmitted={() => loadCommunityTools()} />
+            ? COMMUNITY_LISTINGS_OPEN
+              ? <SubmitTool variant="shell" onBack={backToBrowse} onSubmitted={() => loadCommunityTools()} />
+              : <div className="flex-1 overflow-y-auto p-8">
+                  <p className="font-mono text-[12px] text-slate-300 max-w-md leading-[1.7]">{COMMUNITY_CLOSED_TEXT}</p>
+                  <button type="button" onClick={backToBrowse} className="mt-4 font-mono text-[11px] text-[#4FC3F7] hover:underline">← Browse tools</button>
+                </div>
             : view === "dashboard"
             ? <DashboardView inShell onBack={() => { loadCommunityTools(); backToBrowse(); }} />
             : selectedLive
@@ -2256,7 +2276,7 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
                 cat={cat}
                 setCat={setCat}
                 filtered={filtered}
-                onListTool={openSubmit}
+                onListTool={COMMUNITY_LISTINGS_OPEN ? openSubmit : undefined}
                 source={source}
                 price={price}
                 onClearFilters={() => { setSearch(""); setCat("all"); setSource("all"); setPrice("all"); }}

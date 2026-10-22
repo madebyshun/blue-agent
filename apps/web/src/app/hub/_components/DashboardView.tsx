@@ -50,6 +50,7 @@ import { useAccount, useSignMessage } from "wagmi";
 import { ConnectButton } from "@/components/ConnectModal";
 import { useToolDetailHref } from "@/lib/hub-links";
 import { fetchServerNonce } from "@/lib/siwe-nonce";
+import { COMMUNITY_LISTINGS_OPEN } from "@/lib/hub-closed";
 
 type Source = "external" | "hosted";
 
@@ -178,9 +179,9 @@ export default function DashboardView({ inShell = false, onBack }: { inShell?: b
         <p className="text-xs text-[#34D399] tracking-widest">// CREATOR DASHBOARD</p>
         <p className="text-[10px] text-slate-700 hidden sm:block">Your tools, runs, and earnings</p>
         <div className="ml-auto flex items-center gap-3">
-          <Link href="/hub/submit" className="text-[11px] px-3 py-1.5 rounded-lg border border-[#A78BFA]/30 text-[#A78BFA] bg-[#A78BFA]/5 hover:bg-[#A78BFA]/10 transition-all">
+          {COMMUNITY_LISTINGS_OPEN && <Link href="/hub/submit" className="text-[11px] px-3 py-1.5 rounded-lg border border-[#A78BFA]/30 text-[#A78BFA] bg-[#A78BFA]/5 hover:bg-[#A78BFA]/10 transition-all">
             + Submit tool
-          </Link>
+          </Link>}
         </div>
       </div>
 
@@ -276,9 +277,9 @@ export default function DashboardView({ inShell = false, onBack }: { inShell?: b
                   List your first tool and earn USDC on every call. Point Blue Hub at your API,
                   or let us host an AI prompt or API wrapper for you — no server required.
                 </p>
-                <Link href="/hub/submit" className="inline-block text-xs px-4 py-2 rounded-xl border border-[#A78BFA]/30 text-[#A78BFA] bg-[#A78BFA]/5 hover:bg-[#A78BFA]/10 transition-all">
+                {COMMUNITY_LISTINGS_OPEN && <Link href="/hub/submit" className="inline-block text-xs px-4 py-2 rounded-xl border border-[#A78BFA]/30 text-[#A78BFA] bg-[#A78BFA]/5 hover:bg-[#A78BFA]/10 transition-all">
                   Submit your first tool →
-                </Link>
+                </Link>}
               </div>
             )}
 

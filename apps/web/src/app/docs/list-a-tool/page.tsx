@@ -1,4 +1,5 @@
 import { DocHeader, H2, H3, P, Callout, CodeBlock, PrevNext } from "../_ui";
+import { COMMUNITY_CLOSED_TEXT } from "@/lib/hub-closed";
 
 export const metadata = { title: "List a Tool — Blue Agent Docs" };
 
@@ -13,6 +14,12 @@ export default function ListAToolDoc() {
         title="List a Tool"
         lead="Publish your x402 tool to Blue Hub — from the Hub UI or fully programmatically. An agent with a Base wallet can self-onboard: build a spec, fetch a nonce, sign one message, POST it. If the endpoint passes the x402 probe it goes live immediately, no human review."
       />
+
+      <Callout color="#f87171" title="Listings are closed">
+        {COMMUNITY_CLOSED_TEXT} Submissions to <span className="font-mono text-slate-300">POST /api/hub/tools</span>{" "}
+        answer <span className="font-mono text-slate-300">410</span>. The steps below are kept for reference
+        until listings reopen.
+      </Callout>
 
       <P>
         Blue Hub follows an auto-live model: there is no manual moderation gate. Your

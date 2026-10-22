@@ -17,7 +17,8 @@ export const DOC_NAV: DocGroup[] = [
     { title: "Blue Hood", href: "/docs/blue-hood" },
     { title: "Blue Chat", href: "/docs/blue-chat" },
     { title: "Blue Hub",  href: "/docs/blue-hub" },
-    { title: "List a Tool", href: "/docs/list-a-tool" },
+    // "List a Tool" left the nav 2026-10-22: community listings are closed
+    // (lib/hub-closed.ts). The page still resolves and says so.
     // Blue Feed hidden while rebuilding — its docs page is parked (404).
   ]},
   { group: "Knowledge", items: [

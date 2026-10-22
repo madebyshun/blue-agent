@@ -13,6 +13,7 @@
  * to say why.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { communityClosedResponse } from "@/lib/hub-closed";
 import { verifyMessage } from "viem";
 import { rateLimit, getIdentifier } from "@/lib/rate-limit";
 import { spendNonce, NONCE_SOURCE_HINT } from "@/lib/session";
@@ -74,6 +75,9 @@ interface SubmitBody {
 }
 
 export async function POST(req: NextRequest) {
+  const closed = communityClosedResponse();
+  if (closed) return closed;
+
   // Rate limit: 5 submits per identifier per minute
   const { success } = await rateLimit(getIdentifier(req), "api");
   if (!success) return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });

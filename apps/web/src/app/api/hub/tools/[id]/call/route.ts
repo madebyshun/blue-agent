@@ -32,6 +32,7 @@
  * `scripts/external-payee-check.ts`.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { communityClosedResponse } from "@/lib/hub-closed";
 import { rateLimit, getIdentifier } from "@/lib/rate-limit";
 import { getRegisteredTool, incrCallCount, addRevenue } from "@/lib/hub-registry";
 import { kv } from "@/lib/kv";
@@ -79,6 +80,9 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const closed = communityClosedResponse();
+  if (closed) return closed;
+
   const { id } = await params;
   const { success } = await rateLimit(getIdentifier(req), "api");
   if (!success) return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });

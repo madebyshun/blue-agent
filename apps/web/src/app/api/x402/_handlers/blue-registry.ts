@@ -7,6 +7,7 @@
 
 import { AGENT_TOOLS } from "@/lib/agent-tools";
 import { readRegisteredTools, type Coverage } from "@/lib/hub-registry";
+import { COMMUNITY_LISTINGS_OPEN } from "@/lib/hub-closed";
 
 // What a caller who PAID $0.05 for a census is owed when part of it is unreadable.
 const COVERAGE_NOTE: Record<Coverage, string | null> = {
@@ -74,7 +75,11 @@ export default async function handler(req: Request): Promise<Response> {
     // SILENT — the worst of both. A paid caller whose product IS this census got
     // `totals.community: 0` and no way to tell that apart from an empty
     // marketplace. `coverage` is now on the wire.
-    const registry = await readRegisteredTools();
+    // Closed 2026-10-22 (lib/hub-closed.ts): listings stay in KV but are no
+    // longer offered to agents, so this reads nothing while they are closed.
+    const registry = COMMUNITY_LISTINGS_OPEN
+      ? await readRegisteredTools()
+      : { tools: [], coverage: "complete" as Coverage, unreadableIds: [] };
     const community: CatalogEntry[] = registry.tools.map((t) =>
       toEntry(t, "community", t.callCount ?? 0),
     );
@@ -143,7 +148,7 @@ export default async function handler(req: Request): Promise<Response> {
         mcp_install: "claude mcp add --transport http blue-agent https://blueagent.dev/api/mcp",
         docs: "https://blueagent.dev/.well-known/openapi.json",
       },
-      submit_a_tool: "Builders: register your own x402 tool at https://blueagent.dev/hub/submit (80/20 revenue split, USDC on Base).",
+      ...(COMMUNITY_LISTINGS_OPEN ? { submit_a_tool: "Builders: register your own x402 tool at https://blueagent.dev/hub/submit (callers pay your wallet directly, USDC on Base)." } : {}),
     });
   } catch (e) {
     return Response.json(
