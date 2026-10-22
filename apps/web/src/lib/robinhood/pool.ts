@@ -123,6 +123,58 @@ export async function findWethPools(
 }
 
 /**
+ * Spot price of a token in WETH, from a pool's `slot0` — no third-party feed.
+ *
+ * MEASURED 2026-10-22: the swap quote's only price was GeckoTerminal, fetched
+ * from a shared Vercel egress IP, and three back-to-back `blue_swap_tx` builds
+ * for ETH→TSLA on Robinhood Chain came back NO_QUOTE / ok / NO_QUOTE while the
+ * pool (0xA953…dA07, 0.3%) was live the whole time. MCP usage logged 8 errors
+ * in 11 swap builds. The pool's own price cannot be rate-limited.
+ *
+ * It is the MARGINAL price: it ignores price impact, exactly as the
+ * GeckoTerminal estimate did. Used as a slippage floor that is therefore never
+ * looser than reality — a size that moves the pool past the floor reverts on
+ * chain instead of filling badly.
+ *
+ * Pure: `sqrtPriceX96` is token1-per-token0 in raw units, squared and scaled.
+ */
+export function wethPerTokenFromSqrtPrice(
+  sqrtPriceX96: bigint, tokenIsToken0: boolean, tokenDecimals: number, wethDecimals = 18,
+): number | null {
+  if (sqrtPriceX96 <= 0n) return null;
+  const ratio = Number(sqrtPriceX96) / 2 ** 96;
+  const raw1per0 = ratio * ratio; // token1 raw units per token0 raw unit
+  const dec0 = tokenIsToken0 ? tokenDecimals : wethDecimals;
+  const dec1 = tokenIsToken0 ? wethDecimals : tokenDecimals;
+  const human1per0 = raw1per0 * 10 ** (dec0 - dec1);
+  const wethPerToken = tokenIsToken0 ? human1per0 : 1 / human1per0;
+  return Number.isFinite(wethPerToken) && wethPerToken > 0 ? wethPerToken : null;
+}
+
+const SLOT0_ABI = [{
+  type: "function", name: "slot0", stateMutability: "view", inputs: [],
+  outputs: [
+    { type: "uint160" }, { type: "int24" }, { type: "uint16" }, { type: "uint16" },
+    { type: "uint16" }, { type: "uint8" }, { type: "bool" },
+  ],
+}] as const;
+const DECIMALS_ABI = [{ type: "function", name: "decimals", stateMutability: "view", inputs: [], outputs: [{ type: "uint8" }] }] as const;
+
+/** Read the pool's spot WETH-per-token price on chain; null on any read failure. */
+export async function poolSpotWethPerToken(pool: PoolInfo, token: `0x${string}`): Promise<number | null> {
+  try {
+    const [slot0, dec] = await Promise.all([
+      client.readContract({ address: pool.address, abi: SLOT0_ABI, functionName: "slot0" }),
+      client.readContract({ address: token, abi: DECIMALS_ABI, functionName: "decimals" }),
+    ]);
+    const tokenIsToken0 = pool.token0.toLowerCase() === token.toLowerCase();
+    return wethPerTokenFromSqrtPrice(slot0[0] as bigint, tokenIsToken0, Number(dec));
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Pick the pool with the deepest liquidity from a set returned by findWethPools.
  * Undefined if the input is empty.
  */

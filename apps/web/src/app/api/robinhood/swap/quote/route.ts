@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { findWethPools, bestPool } from "@/lib/robinhood/pool";
+import { findWethPools, bestPool, poolSpotWethPerToken } from "@/lib/robinhood/pool";
 
 // GET /api/robinhood/swap/quote?token=0x…&direction=buy|sell&amount=<decimal>
 //
@@ -77,8 +77,19 @@ export async function GET(req: NextRequest) {
     }
 
     // (3) Estimate — honest label: `estimated_out` may be null.
+    // The pool's own on-chain spot price comes first: GeckoTerminal from a
+    // shared Vercel IP answered only some of the time (MEASURED 2026-10-22,
+    // see poolSpotWethPerToken), and every miss was a refused swap. Net of the
+    // pool fee. GeckoTerminal stays as the fallback, and still feeds `price`.
     let estimatedOut: number | null = null;
-    if (priceUsd && ethPriceUsd) {
+    let estimateSource: "pool" | "geckoterminal" | null = null;
+    const spot = await poolSpotWethPerToken(pool, token as `0x${string}`);
+    if (spot) {
+      const net = 1 - pool.fee / 1_000_000;
+      estimatedOut = direction === "buy" ? (amount / spot) * net : amount * spot * net;
+      estimateSource = "pool";
+    } else if (priceUsd && ethPriceUsd) {
+      estimateSource = "geckoterminal";
       if (direction === "buy") {
         // amount is ETH in → USD in → token out at token's price.
         estimatedOut = (amount * ethPriceUsd) / priceUsd;
@@ -109,6 +120,7 @@ export async function GET(req: NextRequest) {
         // Display-only — settled on-chain by the router with the caller's own
         // amountOutMinimum slippage floor, never trusted for value transfer.
         amountOut: estimatedOut,
+        source: estimateSource,
       },
     });
   } catch (e) {
