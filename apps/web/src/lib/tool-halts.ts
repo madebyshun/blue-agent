@@ -37,11 +37,12 @@ const UNDELIVERED =
 // HANDLERS entry withholds the leg again (publishArbResult / publishRhFacts) —
 // re-halt here if that happens, for the same reason as before.
 
-export const HALTED_TOOLS: Readonly<Record<string, string>> = {
-  "token-distribution": MORALIS,
-  "base-activity-score": MORALIS,
-  "rh-rwa-dca": UNDELIVERED,
-};
+// Empty since 2026-10-22: the last three halted ids (token-distribution,
+// base-activity-score, rh-rwa-dca) were RETIRED in x402 cleanup wave 1, which is
+// what this file's header says a tool that will not come back must become.
+// MORALIS / UNDELIVERED stay as the reasons to reuse if a halt is needed again.
+export const HALTED_TOOLS: Readonly<Record<string, string>> = {};
+void MORALIS; void UNDELIVERED;
 
 /** The halt reason for `tool`, or null when it is not halted. */
 export function haltReason(tool: string): string | null {

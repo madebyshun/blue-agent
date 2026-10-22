@@ -15,24 +15,12 @@ import hBlueDoctor from "./blue-doctor";
 import hHoodLive from "./hood-live";
 import hHoodTrackRecord from "./hood-track-record";
 import hWalletHoldings from "./wallet-holdings";
-import hNewPools from "./new-pools";
 import hGasTracker from "./gas-tracker";
-import hQuickSafety from "./quick-safety";
 import hWalletRisk from "./wallet-risk";
-import hB20Check   from "./b20-check";
 import hB20Analyze from "./b20-analyze";
 import hB20Inspect from "./b20-inspect";
 import hLiquidityDepth from "./liquidity-depth";
-import hTokenDistribution from "./token-distribution";
-import hBaseAlpha from "./base-alpha";
-import hProtocolHealth from "./protocol-health";
-import hFounderCheck from "./founder-check";
 import hNarrativePulse from "./narrative-pulse";
-import hBaseActivity from "./base-activity-score";
-import hScamDetector from "./scam-detector";
-import hCrossYield from "./cross-protocol-yield";
-import hAgentReadiness from "./agent-readiness";
-import hBasePulse from "./base-pulse";
 import hBlueIdea      from "./blue-idea";
 import hBlueBuild     from "./blue-build";
 import hBlueAudit     from "./blue-audit";
@@ -70,14 +58,8 @@ import h29 from "./token-launch-readiness";
 import h30 from "./token-momentum-scanner";
 import h31 from "./token-pick-signal";
 import h43 from "./dex-flow";
-import h45 from "./lp-analyzer";
-import h52 from "./grant-evaluator";
 import h53 from "./key-exposure";
-import hBaseTokenScan  from "./base-token-scan";
-import hDefiYieldScan  from "./defi-yield-scan";
-import hNarrativeScan  from "./narrative-scan";
 // RH RWA Phase 1 (L1·L2·L3·L4·M1) — Robinhood Chain tokenized-stock skills
-import hRhStockToken   from "./rh-stock-token";
 import hRhRwaIndex     from "./rh-rwa-index";
 import hRhStockSearch  from "./rh-stock-search";
 import hRhRwaVerify    from "./rh-rwa-verify";
@@ -91,28 +73,13 @@ import hRhStockArb       from "./rh-stock-arb";
 // RH RWA Phase 3 (X1·X2·X3) — trading execution
 import hRhStockSwapQuote   from "./rh-stock-swap-quote";
 import hRhStockSwapPrepare from "./rh-stock-swap-prepare";
-import hRhStockSwapRoute   from "./rh-stock-swap-route";
 // RH RWA Phase 4 (P1·P2·P3·P4) — portfolio
-import hRhStockHoldings      from "./rh-stock-holdings";
-import hRhStockPnl           from "./rh-stock-pnl";
-import hRhPortfolioRebalance from "./rh-portfolio-rebalance";
-import hRhSectorBasket       from "./rh-sector-basket";
 // RH RWA Phase 5 (D1·D2·D3·D4·D5) — discovery & analytics
 import hRhStockHolders       from "./rh-stock-holders";
-import hRhStockFlow          from "./rh-stock-flow";
 import hRhStockNewListings   from "./rh-stock-new-listings";
-import hRhStockBeaconCheck   from "./rh-stock-beacon-check";
-import hRhStockCorrelations  from "./rh-stock-correlations";
 // RH RWA Phase 6 (A1·A2·A3·A4) — agent skills
-import hRhRwaDca             from "./rh-rwa-dca";
-import hRhStockReport        from "./rh-stock-report";
 import hRhStockAgentBrief    from "./rh-stock-agent-brief";
 // RH RWA Phase 7 (B1·B2·E1·E2·E3) — bridge & builder kit (final)
-import hRhBridgeRoute        from "./rh-bridge-route";
-import hRhUsdgRoute          from "./rh-usdg-route";
-import hRhRwaEmbedKit        from "./rh-rwa-embed-kit";
-import hRhRwaReadme          from "./rh-rwa-readme";
-import hRhRwaPricingKit      from "./rh-rwa-pricing-kit";
 
 export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "token-price": hTokenPrice,
@@ -122,24 +89,12 @@ export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "hood-live": hHoodLive,
   "hood-track-record": hHoodTrackRecord,
   "wallet-holdings": hWalletHoldings,
-  "new-pools": hNewPools,
   "gas-tracker": hGasTracker,
-  "quick-safety": hQuickSafety,
   "wallet-risk": hWalletRisk,
-  "b20-check":   hB20Check,
   "b20-analyze": hB20Analyze,
   "b20-inspect": hB20Inspect,
   "liquidity-depth": hLiquidityDepth,
-  "token-distribution": hTokenDistribution,
-  "base-alpha": hBaseAlpha,
-  "protocol-health": hProtocolHealth,
-  "founder-check": hFounderCheck,
   "narrative-pulse": hNarrativePulse,
-  "base-activity-score": hBaseActivity,
-  "scam-detector": hScamDetector,
-  "cross-protocol-yield": hCrossYield,
-  "agent-readiness": hAgentReadiness,
-  "base-pulse": hBasePulse,
   "agent-collab-match": h0,
   "agent-performance": h1,
   "base-grant-finder": h5,
@@ -181,14 +136,8 @@ export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
 
 
   "dex-flow":        h43,
-  "lp-analyzer":     h45,
-  "grant-evaluator": h52,
   "key-exposure":    h53,
-  "base-token-scan":    hBaseTokenScan,
-  "defi-yield-scan":    hDefiYieldScan,
-  "narrative-scan":     hNarrativeScan,
   // ── RH RWA Phase 1 ────────────────────────────────────────────────────
-  "rh-stock-token":     hRhStockToken,
   "rh-rwa-index":       hRhRwaIndex,
   "rh-stock-search":    hRhStockSearch,
   "rh-rwa-verify":      hRhRwaVerify,
@@ -202,26 +151,11 @@ export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   // ── RH RWA Phase 3 — Trading Execution ────────────────────────────────
   "rh-stock-swap-quote":   hRhStockSwapQuote,
   "rh-stock-swap-prepare": hRhStockSwapPrepare,
-  "rh-stock-swap-route":   hRhStockSwapRoute,
   // ── RH RWA Phase 4 — Portfolio ────────────────────────────────────────
-  "rh-stock-holdings":      hRhStockHoldings,
-  "rh-stock-pnl":           hRhStockPnl,
-  "rh-portfolio-rebalance": hRhPortfolioRebalance,
-  "rh-sector-basket":       hRhSectorBasket,
   // ── RH RWA Phase 5 — Discovery & Analytics ────────────────────────────
   "rh-stock-holders":       hRhStockHolders,
-  "rh-stock-flow":          hRhStockFlow,
   "rh-stock-new-listings":  hRhStockNewListings,
-  "rh-stock-beacon-check":  hRhStockBeaconCheck,
-  "rh-stock-correlations":  hRhStockCorrelations,
   // ── RH RWA Phase 6 — Agent Skills ─────────────────────────────────────
-  "rh-rwa-dca":             hRhRwaDca,
-  "rh-stock-report":        hRhStockReport,
   "rh-stock-agent-brief":   hRhStockAgentBrief,
   // ── RH RWA Phase 7 — Bridge & Builder Kit ─────────────────────────────
-  "rh-bridge-route":        hRhBridgeRoute,
-  "rh-usdg-route":          hRhUsdgRoute,
-  "rh-rwa-embed-kit":       hRhRwaEmbedKit,
-  "rh-rwa-readme":          hRhRwaReadme,
-  "rh-rwa-pricing-kit":     hRhRwaPricingKit,
 };

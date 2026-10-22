@@ -56,27 +56,11 @@ type Pair = {
   resolved: (p: Record<string, unknown>) => number | null;
 };
 
-const PAIRS: Pair[] = [
-  {
-    id: "rh-stock-correlations",
-    label: "tickers (required input, so the Hub form ALWAYS sends a string)",
-    hub: { tickers: "AAPL,TSLA,NVDA" },
-    api: { tickers: ["AAPL", "TSLA", "NVDA"] },
-    resolved: (p) => (Array.isArray(p.tickers) ? p.tickers.length : null),
-  },
-  {
-    id: "rh-sector-basket",
-    label: "tickers + total_usd (both strings from the form)",
-    hub: { tickers: "AAPL,TSLA,NVDA", total_usd: "100" },
-    api: { tickers: ["AAPL", "TSLA", "NVDA"], total_usd: 100 },
-    resolved: (p) =>
-      typeof p.requested_constituent_count === "number"
-        ? p.requested_constituent_count
-        : Array.isArray(p.constituents)
-          ? p.constituents.length
-          : null,
-  },
-];
+// Both ticker-list handlers (rh-stock-correlations, rh-sector-basket) were
+// retired in x402 cleanup wave 1 (2026-10-22). The normaliser contract below
+// stays: parseTickerList is the helper any future ticker-list tool must use,
+// and a new one belongs in this list the day it ships.
+const PAIRS: Pair[] = [];
 
 /** Failure signatures that CANNOT be caused by a rate limit or an outage. */
 const WIRING_BUG = [

@@ -380,17 +380,7 @@ const NON_PUBLISHING: Record<string, { why: string; holds: (src: string) => bool
       prompts.length === 1 && prompts[0].includes('\\"dex_price_usd\\": 237.7') && !prompts[0].includes('\\"dex_price_usd\\": 241'),
       `prompts=${prompts.length}`);
 
-    type Report = { provenance?: string; warnings?: string[];
-      facts?: { dex_price_usd?: number | null; dex_change_24h_pct?: number | null; dex_change_1h_pct?: number | null; chainlink_price_usd?: number | null; dex_tvl_usd?: number | null; dex_price_unavailable_reason?: string | null } };
-    prompts.length = 0;
-    const report = await callA<Report>("rh-stock-report");
-    ok("HANDLERS[rh-stock-report]: the pool-rate DEX price is used, no unavailable reason, marked measured",
-      report.facts?.dex_price_usd === 237.7 && report.facts?.dex_price_unavailable_reason === null && report.provenance === "measured" &&
-        !(report.warnings ?? []).some((w) => w.startsWith(RH_DESK_QUARANTINE.code)),
-      JSON.stringify({ x: report.facts?.dex_price_usd, p: report.provenance }));
-    ok("…Chainlink and depth stay", report.facts?.chainlink_price_usd === 230.55 && report.facts?.dex_tvl_usd === 5_000_000);
-    ok("…and the model is handed the pool's price, not GT's",
-      prompts.length === 1 && prompts[0].includes('\\"dex_price_usd\\": 237.7') && !prompts[0].includes('\\"dex_price_usd\\": 241'), `prompts=${prompts.length}`);
+    // The rh-stock-report (A3) leg was retired in x402 cleanup wave 1, 2026-10-22.
 
     await withQuarantineLiftedForTest(async () => {
       const lifted = publishArbResult(unstampedBody) as Arb;
@@ -413,7 +403,9 @@ const NON_PUBLISHING: Record<string, { why: string; holds: (src: string) => bool
     const c = code(fs.readFileSync(f, "utf8"));
     return /\bresolvePrimaryPool\s*\(/.test(c) && /\bchainlinkLatest\s*\(/.test(c);
   });
-  ok(`found the live readers of the DEX leg (${liveLegReaders.length}) — the detector is alive`, liveLegReaders.length >= 6, liveLegReaders.map(rel).join(", "));
+  ok(`found the live readers of the DEX leg (${liveLegReaders.length}) — the detector is alive`, liveLegReaders.length >= 4, liveLegReaders.map(rel).join(", "));
+  // ≥4 since 2026-10-22: rh-sector-basket and rh-stock-report were retired in x402
+  // cleanup wave 1; arb, agent-brief and the two swap tools remain.
   /** Not a direction, a QUOTE: the figure sizes a trade the user signs, and
    *  withholding it removes the quote rather than a claim. Listed with the
    *  property that makes that true, CHECKED. Since the price-source fix they
@@ -422,7 +414,6 @@ const NON_PUBLISHING: Record<string, { why: string; holds: (src: string) => bool
   const EXECUTION_QUOTE: Record<string, string> = {
     "src/app/api/x402/_handlers/rh-stock-swap-quote.ts": "swap quote — the figure is the min_out basis",
     "src/app/api/x402/_handlers/rh-stock-swap-prepare.ts": "swap calldata — the figure is the min_out basis",
-    "src/app/api/x402/_handlers/rh-sector-basket.ts": "buy plan — the figure sizes legs only when the oracle is stale or absent",
   };
   for (const f of liveLegReaders) {
     const r = rel(f);

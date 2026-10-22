@@ -50,7 +50,6 @@ export const TOOL_SCHEMAS: Record<string, ToolSchema> = {
       { name: "website", label: "Website", placeholder: "https://…", type: "url", required: false },
     ],
   },
-  "grant-evaluator": { fields: [{ name: "projectUrl", label: "Project URL or Description", placeholder: "https://… or describe project", type: "text", required: true }] },
   "x402-readiness": { fields: [{ name: "apiUrl", label: "API URL to Audit", placeholder: "https://…", type: "url", required: true }] },
   "base-deploy-check": { fields: [{ name: "contractAddress", label: "Contract Address", placeholder: "0x…", type: "address", required: true }] },
   "tokenomics-score": { fields: [{ name: "token", label: "Token Address or Symbol", placeholder: "0x… or TOKEN", type: "text", required: true }] },
@@ -58,5 +57,4 @@ export const TOOL_SCHEMAS: Record<string, ToolSchema> = {
   "vc-tracker": { fields: [{ name: "sector", label: "Sector or Address", placeholder: "DeFi, AI, 0x…", type: "text", required: true }] },
   "narrative-pulse": { fields: [{ name: "topic", label: "Topic (optional)", placeholder: "DeFi, AI agents…", type: "text", required: false }] },
   "dex-flow": { fields: [{ name: "token", label: "Token Address or Pair", placeholder: "0x… or ETH/USDC", type: "text", required: true }] },
-  "lp-analyzer": { fields: [{ name: "address", label: "Wallet Address", placeholder: "0x…", type: "address", required: true }] },
 };

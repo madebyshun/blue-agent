@@ -83,9 +83,9 @@ JSON Schema per tool) · [`llms.txt`](https://blueagent.dev/llms.txt) (short bri
      Source of truth: apps/web/src/lib/agent-tools.ts (AGENT_TOOLS).
      Body fields are the WIRE shape (post-x402Body), not the Hub form. -->
 
-Blue Hub exposes **98 tools** across 10 categories — 90 paid, 8 free.
+Blue Hub exposes **65 tools** across 7 categories — 57 paid, 8 free.
 
-Categories: on-chain · signal · security · intelligence · builder · trading · base-ecosystem · earn · portfolio · content
+Categories: on-chain · signal · security · intelligence · builder · trading · base-ecosystem
 
 `POST https://blueagent.dev/api/x402/{id}` · x402 v2 · `eip155:8453` ·
 USDC `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`. Fields marked `*` are required;
@@ -97,57 +97,43 @@ The 8 priced $0.00 never answer 402 and never ask for a signature:
 Do not build an authorization for them — there is nothing to sign and no
 transfer to make.
 
-### on-chain (26)
+### on-chain (16)
 
 | id | price | body | what it does |
 |---|---|---|---|
-| `agent-readiness` | $0.10 | `url`* | x402 + MCP readiness probe for an agent endpoint. |
-| `base-activity-score` | $0.05 | `address`* | Onchain activity score + tier for a Base wallet (Moralis). |
-| `base-pulse` | $0.05 | _(no body)_ | Base chain market pulse — TVL, DEX volume, sentiment, pulse score. |
 | `blue-doctor` | $0.00 | _(no body)_ | Upstream health for every data source the tools read from — Base 8453 and Robinhood Chain 4663 RPC, DexScreener, GeckoTerminal, DefiLlama, GitHub. Says down only when a probe actually failed; anything it could not reach is reported unknown with the reason. |
 | `blue-stream` | $0.05 | `feed` `chain` | Live snapshot feed of onchain activity on Base or Robinhood Chain — trending & new pools, TVL, real price/volume/liquidity. Pure real data, poll for a near-real-time feed. |
-| `cross-protocol-yield` | $0.15 | `token`* `risk_tolerance` | Best Base yield for a token across protocols (DefiLlama). |
 | `dex-flow` | $0.15 | `token`* | DEX volume, buy/sell pressure and liquidity flow for any Base token — live DexScreener data. |
 | `gas-tracker` | $0.01 | _(no body)_ | Live Base gas price + USD cost estimates for common actions. |
-| `new-pools` | $0.02 | `hours` | Freshly-created Base pools with thin-liquidity honeypot flags. |
 | `pool-scan` | $0.02 | `limit` | Trending + newly-active Base pools with the chain TVL snapshot. |
 | `protocol-risk-monitor` | $0.35 | `protocol`* `position` | Real-time risk assessment for your DeFi positions — exit signals, risk scores. |
-| `rh-bridge-route` | $0.05 | `from_chain` `to_chain` `asset` | Bridge routes Base ↔ Robinhood Chain: the canonical Orbit bridge plus known third-party aggregators (Across, LI.FI, Squid) with their live-quote endpoints. |
 | `rh-rwa-index` | $0.02 | _(no body)_ | Full canonical Robinhood Chain RWA catalog — every token the RHJ factory has deployed (180+ tokenized stocks, 20+ ETFs), plus Chainlink-only feeds. Zero-input. A listing proves RHJ issued the token; it does not imply the token is tradable. For portfolio dashboards + sector basket builders. |
-| `rh-stock-correlations` | $0.10 | `tickers`* `days` | Pairwise Pearson correlation of daily log returns from GT pool OHLC for 2–10 Robinhood Chain tickers. Null when fewer than 3 returns overlap — honest about nascent history. |
 | `rh-stock-holders` | $0.05 | `ticker` `contract` `limit` | Top holders + concentration score for a RH RWA token. Real Blockscout data. Returns top-N shares + HHI (0 = flat / 10 000 = single holder). |
 | `rh-stock-liquidity` | $0.05 | `ticker`* | Live DEX pool + TVL + slippage estimate for a Robinhood Chain tokenized stock. First-order xy=k slippage on ONE-side USD depth (reserve_usd / 2) — the total-TVL version under-estimates by ~2×. V4 concentrated-liquidity caveat included. All pools sorted by depth. |
 | `rh-stock-new-listings` | $0.05 | `since_days` `limit` | Reads every `Deployed` event from the canonical RHJ token factory and diffs it against our registry. Provenance is structural — an impersonator cannot emit the real factory's events — so anything listed here is a genuine RH stock token, and anything missing from the registry is a real new listing. |
 | `rh-stock-ohlc` | $0.05 | `ticker`* `timeframe` `limit` | OHLC candle history for a Robinhood Chain tokenized stock. Timeframes: minute / hour / day. Backed by GeckoTerminal pool history — deepest-liquidity pool auto-selected. Returns candles + summary (high, low, total volume, % change). |
 | `rh-stock-quote` | $0.03 | `ticker`* | Deterministic live quote for Robinhood Chain tokenized stocks. On-chain Chainlink AggregatorV3 latestRoundData → raw answer + decimals + updatedAt + staleness. Falls back to DEX spot only if no feed exists. The one embed-friendly price tool. |
 | `rh-stock-search` | $0.02 | `query`* `limit` | Fuzzy search across the canonical Robinhood Chain RWA registry. Typo-tolerant (Levenshtein + prefix). Returns top-N ranked matches. Never fabricates a contract address. |
-| `rh-stock-token` | $0.05 | `query`* | Canonical Robinhood Chain (4663) tokenized-stock lookup. Input a ticker (MSTR, AAPL, TSLA) or company name → contract address, decimals, Chainlink oracle price + DEX spot cross-check + Blockscout link. Real data only (docs.robinhood.com + Chainlink AggregatorV3 + GeckoTerminal). |
-| `rh-usdg-route` | $0.05 | `from_asset` `amount` | Cheapest USDG (Global Dollar) acquisition on Robinhood Chain given a starting asset. Returns WETH-swap path, sell-RWA path, and bridge-first path with real GT + on-chain pool data. |
 | `safe-trending` | $0.15 | `min_liquidity_usd` `limit` | Trending Base tokens, each with its buy/sell tax read from the contract and its exit depth. SAFE here = tradeable with verified tax. A clean scan is not a buy signal. |
-| `scam-detector` | $0.10 | `contract`* | Detect honeypot / rug / fake-token patterns on a Base contract. |
 | `token-price` | $0.01 | `token`* | Live price, mcap, volume and liquidity for any Base token (DexScreener). |
 | `wallet-holdings` | $0.02 | `address`* | Live ERC-20 + ETH holdings and USD value for a Base wallet (Moralis). |
 
-### signal (8)
+### signal (5)
 
 | id | price | body | what it does |
 |---|---|---|---|
-| `base-token-scan` | $0.05 | _(no body)_ | Hard-filter token scan on Base — 5 quality gates (vol, liquidity, depth ratio, momentum, scam filter). Returns ≤ 3 grounded signals only. No LLM. |
 | `hood-live` | $0.00 | `chain` | Every tokenized stock Blue Hood is watching right now, on both live venues: Chainlink oracle price, deepest-pool DEX spot, and the drift between them. Each row carries its own chain, chain_id and explorer link, because NVDA/META/GOOGL/AAPL exist on Base 8453 AND Robinhood Chain 4663 as different tokens in different pools. Rows come from the last completed 5-minute poll cycle, not a fresh quote — data_age_seconds and is_stale are part of the answer. Ungraded by construction; for the graded record use Blue Hood Track Record. Free. |
 | `hood-track-record` | $0.00 | `limit` | Blue Hood's own scoreboard — every public arrow with its graded outcome (HIT / MISS / VOID, VOID included), the raw counts, and the hit-rate we are allowed to publish. The headline passes a sample gate: below the published threshold you get ready:false with graded + needed and no percentage at all, plus a Wilson 95% interval once it clears. Receipts are returned freely so you can recompute it yourself — the window block tells you whether you were handed the whole record or the newest N of a longer one. An unreadable feed answers 503, never an empty record. Free. |
-| `narrative-scan` | $0.10 | _(no body)_ | Detects active Base narratives from real trending token data. Tracks Emerging → Rising → Peak → Fading lifecycle in KV. Virtuals LLM grounded by GeckoTerminal. |
 | `rh-stock-agent-brief` | $0.20 | `ticker`* | Agent-consumable JSON brief for a Robinhood Chain RWA. Deterministic market-hours-aware verdict: WATCH / ARB_LONG_DEX / ARB_SHORT_DEX (market OPEN) · FROZEN_ALIGNED / PREMARKET_DRIFT / AFTERHOURS_DRIFT (CLOSED) · THIN_LIQUIDITY / NO_ORACLE / INSUFFICIENT_DATA. Uses shared resolvePrimaryPool for cross-tool consistency. Model-recall context (no web search on this gateway) + risk flags. |
 | `rh-stock-arb` | $0.05 | `ticker`* | Chainlink oracle vs deepest DEX pool spot for a Robinhood Chain tokenized stock. Market-hours-aware verdict: OPEN → ALIGNED / LONG_DEX / SHORT_DEX (real arb); CLOSED → FROZEN_ALIGNED / PREMARKET_DRIFT / AFTERHOURS_DRIFT (Chainlink is frozen, DEX drift ≠ arb). Warnings for feed-abnormally-stale + thin pool. |
-| `rh-stock-flow` | $0.10 | `ticker`* | Buy vs sell pressure over 24h from GeckoTerminal trades feed. Hard-mapped verdict (BUY_HEAVY / SELL_HEAVY / BALANCED) at 10% net-of-total threshold. Never fabricates flow. |
 | `rh-stock-movers` | $0.05 | `limit` `min_tvl_usd` `min_volume_24h_usd` | Top gainers / losers 24h among Robinhood Chain tokenized stocks & ETFs. Dust-pool filter (default min $5k TVL + $500 24h volume) drops noise pools that would otherwise quote AAPL at $868 via a $453-TVL pool. Sign-filtered so a token with -1.56% never lands in gainers. Filtered pools surface as filtered_out for transparency. |
 
-### security (19)
+### security (15)
 
 | id | price | body | what it does |
 |---|---|---|---|
 | `approval-audit` | $0.00 | `wallet`* `chain` | Everything a wallet has granted that is still live: ERC-20 allowances, NFT operator-for-all and Permit2 grants, each re-read from chain state so spent or revoked grants are not reported. For each: the amount exposed (min of allowance and balance), whether the spender is a contract or a plain wallet, GoPlus flags, a level picked in code (BLOCK = flagged spender, revoke now; WARN = unlimited, plain-wallet spender, operator-for-all, Permit2 valid >30 days; INFO = bounded to a contract), and an UNSIGNED revoke transaction the owner signs. An unread source is listed in `unread`, never shown as 'no approvals'. Base 8453 or Robinhood Chain 4663. No LLM. Free — safety checks should never be gated. |
 | `b20-analyze` | $0.05 | `action` `address` `context` | B20 (Base Native Token Standard) guide — variants, roles, policies, integration tips. Powered by Beryl upgrade docs. |
-| `b20-check` | $0.05 | `contract`* | ERC-20 compliance (B20) role + policy detection from verified source. |
 | `b20-inspect` | $0.005 | `address`* `network` | Live on-chain B20 token inspector — reads real state from Base RPC via multicall. Returns isB20 flag, name/symbol/decimals, totalSupply, supplyCap, variant (ASSET/STABLECOIN), pause status per feature, and policy IDs per transfer/mint scope. Zero LLM. |
 | `blue-monitor` | $0.20 | `target`* `focus` | On-demand health + risk snapshot for a Base token/contract — live price, liquidity, verification, risk signals, and a watch plan with alert thresholds. |
 | `contract-trust` | $0.15 | `address`* `context` | Audit any Base contract before swapping or interacting. Basescan verification + security scan + community signal. Verdict: SAFE / CAUTION / RED_FLAG. |
@@ -156,32 +142,26 @@ transfer to make.
 | `key-exposure` | $0.50 | `address`* | Check if a wallet's public key is exposed on-chain (quantum vulnerability). Verdict computed from the real Base RPC nonce — never fabricated. EXPOSED means the key is visible, not that funds are at immediate risk. |
 | `liquidity-depth` | $0.03 | `token`* `trade_size_usd` | Liquidity depth, slippage estimate and exit risk for a Base token. |
 | `pre-trade-check` | $0.00 | `token`* `chain` `kind` `recipient` `sender` | Call before signing. Is this address a real token or a pool, an impostor of a canonical stock token (Base B20 desk, Robinhood registry), a honeypot or a taxed token (tax read by eth_call), and is a stock token's DEX price adrift from its Chainlink oracle? Returns PASS / WARN / BLOCK plus machine-readable reason codes; the verdict is picked in code, no LLM. BLOCK only on evidence; an unread tax is a WARN that says so. For a send, pass recipient (and sender) and the address is checked too: zero address, the token's own contract, flagged for theft or sanctions (GoPlus), a contract, or a look-alike of an address the sender paid before (address poisoning). Base 8453 or Robinhood Chain 4663. The same check Blue Agent's own swap, send and bridge builders gate on. Free — safety checks should never be gated. |
-| `quick-safety` | $0.05 | `contract`* | Fast contract safety check — liquidity, verification, risk verdict. |
 | `rh-rwa-verify` | $0.00 | `contract`* `expected_ticker` | Given a contract address on Robinhood Chain, is it a canonical RHJ-issued stock token or an impersonator? Cross-checks registry + live ERC-20 metadata. Surfaces the real contract when a fake claims a matching ticker. Free — safety checks should never be gated. |
-| `rh-stock-beacon-check` | $0.05 | `ticker` `contract` | EIP-1967 beacon slot + implementation + admin/owner read for a RWA token proxy. Governance-risk snapshot — compare across runs to detect implementation upgrades. Real on-chain storage reads. |
 | `rh-token-scan` | $0.00 | `contract`* | What can the owner still do to this token? Reads a Virtuals AgentToken / AgentTokenV4 on Robinhood Chain 4663 straight off the bytecode: buy/sell tax in basis points, projectTaxRecipient, vault, owner and pendingOwner, the blacklists(address) lever, and the bot-protection window. Selector probes, not contract names — a deployer picks the name, not the bytecode. Every unread field stays null and is listed in `unread`, because on this template a zero owner, a zero pendingOwner and a zero bot window are all the reassuring answer. No LLM. Free — safety checks should never be gated. |
 | `risk-gate` | $0.20 | `to`* `action` `value` | Pre-transaction risk assessment — screen any address or swap for drainer patterns, AML signals, and malicious contracts. |
 | `sign-check` | $0.00 | `chain` `from` `tx` `typed_data` | Call before a wallet signs anything. A transaction is decoded (approve, permit, Permit2, setApprovalForAll, transfer) and simulated with eth_simulateV1, so the answer lists the assets that would leave and arrive. EIP-712 typed data is decoded — ERC-2612 and DAI permits, Permit2 single/batch/transfer-from/witness, Seaport orders — because an off-chain signature moves nothing until the spender uses it. An EIP-7702 authorization names who would run code as the account. Returns PASS / WARN / BLOCK with plain-language summary lines and reason codes, picked in code (no LLM). BLOCK only on evidence: a spender, operator or delegate flagged for theft or sanctions (GoPlus), or a Seaport order that gives items away for nothing. Unlimited or long-lived grants, grants to plain wallets, any 7702 delegation, reverting or out-only simulations, and anything unreadable are WARN. Base 8453 or Robinhood Chain 4663. Free — safety checks should never be gated. |
-| `token-distribution` | $0.05 | `contract`* | Holder concentration + rug-risk distribution score (Moralis holders). |
 | `wallet-risk` | $0.05 | `address`* | Is this address known to be dangerous? GoPlus flags (theft, phishing, sanctions, laundering, mixer) with their sources, the explorer's scam mark, and chain facts (wallet / contract / EIP-7702 account, nonce, balance). Verdict in code: FLAGGED, CAUTION or NO_KNOWN_FLAGS — never CLEAN. Feed unread → 502, not charged. Base 8453 or Robinhood Chain 4663. No LLM. |
 
-### intelligence (11)
+### intelligence (8)
 
 | id | price | body | what it does |
 |---|---|---|---|
-| `base-alpha` | $0.10 | _(no body)_ | Base market alpha — narratives, momentum picks, divergence signals. |
 | `blue-analytics` | $0.25 | `target`* `focus` | Performance/metrics read on a Base token — live price, momentum, liquidity health, volume/liquidity ratio, growth signals. Real DexScreener data. |
 | `blue-research` | $1.00 | `topic`* `target` | Deep DD memo on a Base project, narrative, or token — thesis, bull/bear, risks, contrarian take, verdict. Grounds in live market data when a token address is given. |
 | `ecosystem-digest` | $0.20 | _(no body)_ | Weekly Base ecosystem intelligence: top builders, protocols, and narratives. |
-| `founder-check` | $0.10 | `handle`* | GitHub-based founder trust score — repos, stars, activity. |
 | `market-fit` | $0.25 | `description`* `name` `stage` | Score your product's market fit against live Base market context — verdict, gaps, and what to fix first. |
 | `narrative-position` | $0.15 | `topic` `focus` | Which narratives are building vs peaking on CT — and where to position. |
 | `narrative-pulse` | $0.10 | `focus` | Live Base narrative phases, velocity and entry windows. |
-| `protocol-health` | $0.10 | `protocol`* | Protocol TVL health, trend and risk signals (DefiLlama). |
 | `token-launch-readiness` | $0.30 | `name`* `project`* `description` | Go/no-go signal on whether your project is ready to launch a token. |
 | `token-pick-signal` | $0.20 | `chain` `context` | The top Base token by an on-chain quality score (liquidity, turnover, momentum) — facts from live pools, no buy/sell call. |
 
-### builder (19)
+### builder (16)
 
 | id | price | body | what it does |
 |---|---|---|---|
@@ -200,18 +180,14 @@ transfer to make.
 | `builder-deep-dd` | $0.35 | `target`* `type` | Full due diligence on a Base builder: onchain activity, shipped products, credibility. |
 | `competitor-scan` | $0.20 | `project`* `description`* `competitors` | Identify direct/indirect competitors and surface your defensible edge. |
 | `defi-opportunity` | $0.25 | `strategy` `risk_tolerance` | Scan Base DeFi for emerging yield, liquidity, and protocol opportunities. |
-| `grant-evaluator` | $5.00 | `projectName`* `description`* `teamBackground` `requestedAmount` `milestones` `githubUrl` | Base ecosystem grant scoring — innovation, feasibility, impact, team quality. |
 | `repo-health` | $0.20 | `repo`* `description`* | Audit your GitHub repo health: code quality, docs, CI, contributor signals. |
-| `rh-rwa-embed-kit` | $0.05 | `ticker`* `framework` `theme` | Copy-paste 'Buy $TICKER' button kit: chain config, live-price hook, and wagmi buy button wired to the RH swap prepare endpoint. Non-custodial. The Vlad-Tenev-builder-tweet-answering tool. |
-| `rh-rwa-pricing-kit` | $0.05 | `ticker`* | Standalone read-only React hook for a live Chainlink RH RWA price: ABI + viem client + hook + demo badge component. No wallet required, no cost per read. |
 
-### trading (4)
+### trading (3)
 
 | id | price | body | what it does |
 |---|---|---|---|
 | `rh-stock-swap-prepare` | $0.05 | `ticker`* `side`* `amount`* `recipient`* `denom` `slippage_bps` | Non-custodial: returns the unsigned tx sequence (approve + swap, or 2 approves + 2 swaps for multi-hop) the caller's wallet must sign to swap a Robinhood Chain tokenized stock. Router = verified RobinhoodSwapRouter. Client signs, tool never holds funds. |
 | `rh-stock-swap-quote` | $0.05 | `ticker`* `side`* `amount`* `denom` `slippage_bps` | Quote a buy/sell for a Robinhood Chain tokenized stock. Route + best-pool from on-chain V3 factory, spot from Chainlink (fallback DEX), expected & min out at your slippage, plus a first-order liquidity upper bound. Denom USDG (default) or WETH. |
-| `rh-stock-swap-route` | $0.10 | `token_in`* `token_out`* | Full V3 route map for any Robinhood Chain pair. Probes all 4 fee tiers for a direct pool and both legs of a WETH-hopped route. Returns liquidity per tier so a client can pick / split its own path. Accepts 0x addresses or RWA tickers. |
 | `token-momentum-scanner` | $0.20 | `min_mcap` | Real-time momentum scan for Base tokens — breakouts, volume spikes, narrative alignment. |
 
 ### base-ecosystem (2)
@@ -220,30 +196,6 @@ transfer to make.
 |---|---|---|---|
 | `base-grant-finder` | $0.20 | `project`* `stage` `sector` | Find active grants, hackathons, and funding programs for Base builders. |
 | `base-protocol-comparison` | $0.25 | `protocol_a`* `protocol_b`* `category` `use_case` | Side-by-side comparison of Base protocols for integrations and partnerships. |
-
-### earn (2)
-
-| id | price | body | what it does |
-|---|---|---|---|
-| `defi-yield-scan` | $0.05 | _(no body)_ | Hard-filter DeFi yield scan on Base — deduped by protocol, APY ≥ 4%, TVL ≥ $500K. Returns top 5 live opportunities. No LLM. |
-| `lp-analyzer` | $0.25 | `token0`* `token1` `entryPrice` `investedAmount` | LP position analysis — impermanent loss, fee income, rebalance recommendation. |
-
-### portfolio (5)
-
-| id | price | body | what it does |
-|---|---|---|---|
-| `rh-portfolio-rebalance` | $0.20 | `wallet`* `targets`* `min_swap_usd` | Target-allocation rebalance planner. Given a wallet + target weights map (e.g. {AAPL: 0.5, TSLA: 0.5}), returns an ordered swap plan (sell → buy pairs, USD-denominated) to move from current to target. Real math. Feeds into rh-stock-swap-prepare. |
-| `rh-rwa-dca` | $0.20 | `wallet`* `ticker`* `amount_usd`* `cadence` `total_periods` `denom` `slippage_bps` `persist` | First buy of a recurring plan for a Robinhood Chain RWA: the plan (cadence, periods, next_run) plus the FIRST period's unsigned tx calldata for the caller to sign. Nothing executes later periods — there is no keeper, by design; call again each period. |
-| `rh-sector-basket` | $0.10 | `sector` `tickers` `total_usd`* `weighting` `max_constituents` | Multi-buy plan for a sector or explicit ticker list. Input total USD + weighting (equal / market-cap-tvl proxy). Returns per-ticker allocation, live spot, expected units. Feeds each leg into rh-stock-swap-prepare for atomic-ish execution. |
-| `rh-stock-holdings` | $0.05 | `wallet`* | Full RH RWA portfolio for a wallet: reads balanceOf for every canonical tokenized stock/ETF in the registry, prices non-zero balances via Chainlink (fallback DEX). Real on-chain reads. Never fabricates — value_usd is null when no price source exists, and any balance read that failed is reported in unread_count rather than counted as a zero. |
-| `rh-stock-pnl` | $0.20 | `wallet`* `ticker` | Wallet position + trade activity per RH RWA token from Blockscout Transfer logs: transfer counts, cumulative in/out, first/last activity. Cost-basis PnL requires historical Chainlink reads and is deferred to v2 rather than fabricated. |
-
-### content (2)
-
-| id | price | body | what it does |
-|---|---|---|---|
-| `rh-rwa-readme` | $0.05 | `ticker`* | Markdown README section for embedding a Robinhood RWA in another repo. Includes chain config, live oracle usage, buy-button integration, safety notes. Live numbers embedded. |
-| `rh-stock-report` | $0.20 | `ticker`* `horizon` | Concise Markdown research brief for a Robinhood Chain RWA: verified on-chain facts (Chainlink oracle + DEX depth) + model-recall market context, labelled as such. No web search on this gateway, so no source URLs are claimed. Temperature 0.3, LLM never invents numbers. |
 
 <!-- END GENERATED TOOL CATALOG -->
 
@@ -277,7 +229,7 @@ surface you are actually calling.
 **Cut from 85 to 18 on 2026-09-26, and the cut removed no capability.** The 85-tool manifest
 was 32,160 bytes — roughly 8,000 tokens spent before the agent read a single word of the user's
 question — and published MCP research finds tool-selection accuracy degrades sharply past
-~40 always-loaded entries. All 98 catalog tools remain live at `/api/x402/<id>`; `blue_registry`
+~40 always-loaded entries. All 65 catalog tools remain live at `/api/x402/<id>`; `blue_registry`
 lists them and `blue_call` runs any of them, so the rest moved from "always in context" to
 "one lookup away". A manifest is a context budget, not an inventory.
 

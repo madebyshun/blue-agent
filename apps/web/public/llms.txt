@@ -4,7 +4,7 @@
 > and signals over live reads on Base 8453 and Robinhood Chain 4663. Pay per
 > call in USDC over the x402 protocol. No API key, no signup, no subscription.
 
-Blue Hub exposes 98 tools: 90 paid and 8 free. Any x402-capable agent can call
+Blue Hub exposes 65 tools: 57 paid and 8 free. Any x402-capable agent can call
 a tool's endpoint directly and pay per request in USDC on Base (chain id 8453).
 When a paid request arrives without payment, the endpoint returns HTTP 402 with
 payment requirements; the agent signs an EIP-3009 authorization and retries with
@@ -18,7 +18,7 @@ hood-live, hood-track-record, pre-trade-check, sign-check, approval-audit, rh-rw
 ## Discovery
 - Machine-readable catalog (all tools, endpoints, prices, input schemas): https://blueagent.dev/api/catalog
 - MCP server (remote, no install): https://blueagent.dev/api/mcp
-  Its manifest advertises 13 tools, a curated subset of the 98 tools above. Five
+  Its manifest advertises 13 tools, a curated subset of the 65 tools above. Five
   are paid per call (swap_prepare, token_verdict, stock_signal, trending_safe,
   wallet_risk: $0.01-$0.05 USDC on Base over the x402 MCP transport); the rest
   are free. The catalog is not missing and not gated: call blue_registry to

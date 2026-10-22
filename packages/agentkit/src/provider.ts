@@ -84,16 +84,6 @@ export function createBlueAgentProvider(options: BlueAgentProviderOptions = {}) 
           callTool("deep-analysis", args as Record<string, unknown>, options),
       },
 
-      {
-        name: "grant_evaluator",
-        description:
-          "Evaluate a project's eligibility and fit for Base ecosystem grants — scores criteria and suggests improvements. Price: $5.00 USDC.",
-        schema: z.object({
-          projectUrl: z.string().describe("Project URL or detailed description"),
-        }),
-        invoke: async (args: { projectUrl: string }) =>
-          callTool("grant-evaluator", args as Record<string, unknown>, options),
-      },
 
       {
         name: "narrative_pulse",
@@ -120,16 +110,6 @@ export function createBlueAgentProvider(options: BlueAgentProviderOptions = {}) 
           callTool("dex-flow", args as Record<string, unknown>, options),
       },
 
-      {
-        name: "lp_analyzer",
-        description:
-          "Analyze liquidity pool positions for a wallet — impermanent loss, fees earned, and rebalancing suggestions on Base. Price: $0.25 USDC.",
-        schema: z.object({
-          address: z.string().describe("Wallet address with LP positions (0x…)"),
-        }),
-        invoke: async (args: { address: string }) =>
-          callTool("lp-analyzer", args as Record<string, unknown>, options),
-      },
     ],
   };
 }
