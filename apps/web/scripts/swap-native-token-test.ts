@@ -458,9 +458,11 @@ async function main() {
   // Robinhood Chain 4663. `callSwapTx` is not exported and its Base branch does
   // network I/O, so the RH refusal is asserted against the source — the same
   // reasoning §4 gives for asserting a predicate it cannot cheaply invoke.
-  const mcpSrc = readFileSync(new URL("../src/app/api/mcp/route.ts", import.meta.url), "utf8");
+  // The builder moved to lib/tx-build.ts on 2026-10-22 (shared by MCP and the
+  // ACP swap_prepare offering); the RH branch ends where estimateRhOut begins.
+  const mcpSrc = readFileSync(new URL("../src/lib/tx-build.ts", import.meta.url), "utf8");
   const rhStart = mcpSrc.indexOf("// Robinhood Chain 4663 — Blue Agent's deployed");
-  const rhBranch = mcpSrc.slice(rhStart, mcpSrc.indexOf("async function callSendTx", rhStart));
+  const rhBranch = mcpSrc.slice(rhStart, mcpSrc.indexOf("async function estimateRhOut", rhStart));
   // 2026-09-30 — the day §6.22 said would come: RH gained a real minimum (plan
   // §1 fix 2), so the refusal was reconsidered rather than this check relaxed.
   // The branch now floors every RH swap from the same estimate the app's RH
