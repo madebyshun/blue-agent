@@ -108,8 +108,172 @@
  * budget is the point — a manifest grows back to 85 one defensible tool at a
  * time, and every one of the 85 was defensible on its own.
  */
+/**
+ * ── v2 (2026-10-22): RENAMED, AND FIVE TOOLS NOW COST MONEY ───────────────
+ * ShunTr relaunched the MCP as a product, so the 2026-09-27 rule "no tool gets
+ * renamed to save context" was revisited on purpose, not drifted past: the
+ * reason this time is a new product, not bytes. Names follow the ACP offerings
+ * (`swap_prepare`, `stock_signal`…), underscore only — the Claude API rejects
+ * tool names with dots, so `token.verdict` would break real clients.
+ *
+ * The set is what the market measured as bought (docs/mcp-tools-2026-10-22.md):
+ * swap building, cheap market facts, trending discovery and a token verdict
+ * sold at $0.01–$0.05 over the x402 MCP transport (lib/mcp-paid.ts); safety
+ * and transaction building that nobody pays for stay free as the way in.
+ * `blue_registry` + `blue_call` stay: they are how the Claude plugin's skills
+ * reach the rest of the x402 catalog, which this cut does not remove.
+ *
+ * Old names keep answering, unlisted, until MCP_LEGACY_UNTIL with a note naming
+ * their replacement (route.ts LEGACY) — MCP clients cache tool names, and a
+ * silent break is worse than a month of aliases.
+ */
 export const MCP_TOOLS = [
-  // ══ A · The door: discover, then call ═════════════════════════════════════
+  // ══ A · Paid — what agents measurably buy ═════════════════════════════════
+  {
+    name: "swap_prepare",
+    description:
+      "Build an unsigned swap the user signs in their OWN wallet, with the token checked first (honeypot, tax, impostor of a registered token, liquidity). Base 8453 routes through 0x AllowanceHolder (Aerodrome for stock tokens); Robinhood Chain 4663 through Blue Agent's RobinhoodSwapRouter on Uniswap V3, floored from the pool's own price. Returns { tx: { to, data, value, chainId }, approve, check } — never a broadcast, never a key. A token that fails the check is refused and not charged. Triggers — \"swap X for Y\", \"buy TOKEN\", \"sell my TOKEN\", \"convert USDC to ETH\". If no route exists the response says so — do NOT invent a price. PAID: $0.01 USDC on Base 8453 over the x402 MCP transport — the first call returns PaymentRequired (isError with structuredContent); an x402 MCP client (e.g. @x402/mcp) pays and retries with _meta[\"x402/payment\"]. Bad input is refused before any price, and a failed run is not charged.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        chain:       { type: "string", enum: ["base", "robinhood"], description: "REQUIRED. Base 8453 or Robinhood Chain 4663. No default: the two share no state and the same ticker exists on both. If the user did not say, ASK." },
+        fromAddress: { type: "string", description: "The wallet that will sign and receive — 0x… ." },
+        tokenIn:     { type: "string", description: "Token being sold: 0x… address on `chain`, or \"ETH\". A ticker is refused — impostors copy tickers." },
+        tokenOut:    { type: "string", description: "Token being bought: 0x… address on `chain`, or \"ETH\"." },
+        amountIn:    { type: "string", description: "Amount of tokenIn in WHOLE units, e.g. \"25.5\" — NOT base units." },
+        slippageBps: { type: "number", description: "Max slippage in basis points, whole number 0-10000 (100 = 1%). Base 8453: default 100, enforced by 0x in the quote's minBuyAmount. Robinhood Chain 4663: default 300, applied to the pool's price as the on-chain amountOutMinimum; with no price for the pair the build is refused (NO_QUOTE), never built unbounded." },
+      },
+      required: ["chain", "fromAddress", "tokenIn", "tokenOut", "amountIn"],
+    },
+  },
+  {
+    name: "token_verdict",
+    description:
+      "Should I touch this token? One call: honeypot and tax read from the contract, impostor check against registered tokens, owner powers, and — for tokenized stocks — the DEX vs Chainlink gap, plus the live price and liquidity on Base. Verdict picked in code, never by a model: no_issues_found / caution / avoid, each with its reasons. no_issues_found means nothing was found by the checks listed, not a guarantee. Use UNPROMPTED before naming an unfamiliar token as worth buying. Triggers — \"is TOKEN safe\", \"is this a scam\", \"rug check\", \"can I sell it\". Base 8453 or Robinhood Chain 4663. PAID: $0.01 USDC on Base 8453 over the x402 MCP transport — the first call returns PaymentRequired (isError with structuredContent); an x402 MCP client (e.g. @x402/mcp) pays and retries with _meta[\"x402/payment\"]. Bad input is refused before any price, and a failed run is not charged.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        token: { type: "string", description: "Token contract 0x… on `chain`. Not a ticker — impostors copy tickers exactly." },
+        chain: { type: "string", enum: ["base", "robinhood"], description: "REQUIRED. Base 8453 or Robinhood Chain 4663." },
+      },
+      required: ["token", "chain"],
+    },
+  },
+  {
+    name: "stock_signal",
+    description:
+      "Is a tokenized stock priced above or below the real stock right now? For one chain: the DEX price against the stock's Chainlink feed (drift_pct), whether the US market is open, and pool depth. With chain \"both\" (default): the gap between the same stock on Base 8453 and Robinhood Chain 4663 (spread_pct). Read from Blue Agent's live desk, never recomputed; a stale or missing reading is refused, not sold. Facts, not a buy or sell signal. Triggers — \"is NVDA cheaper on Base\", \"AAPL token vs the stock\", \"premium on TSLA\", \"weekend gap\". PAID: $0.01 USDC on Base 8453 over the x402 MCP transport — the first call returns PaymentRequired (isError with structuredContent); an x402 MCP client (e.g. @x402/mcp) pays and retries with _meta[\"x402/payment\"]. Bad input is refused before any price, and a failed run is not charged.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ticker: { type: "string", description: "Stock ticker, e.g. \"NVDA\" (the Base B20 symbol \"NVDAc\" works too)." },
+        chain:  { type: "string", enum: ["base", "robinhood", "both"], description: "One venue, or \"both\" (default) for the cross-chain spread." },
+      },
+      required: ["ticker"],
+    },
+  },
+  {
+    name: "trending_safe",
+    description:
+      "Trending tokens on Base 8453, each with its buy/sell tax read from the contract and its exit liquidity depth — what is moving that you could also get out of. SAFE here = tradeable with a verified tax; it is not a buy signal. Triggers — \"what's trending on Base\", \"hot tokens\", \"where's the volume\", \"anything new worth a look\". PAID: $0.05 USDC on Base 8453 over the x402 MCP transport — the first call returns PaymentRequired (isError with structuredContent); an x402 MCP client (e.g. @x402/mcp) pays and retries with _meta[\"x402/payment\"]. Bad input is refused before any price, and a failed run is not charged.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        limit:             { type: "number", description: "1–20. Default 10." },
+        min_liquidity_usd: { type: "number", description: "Minimum pool liquidity. Default 500000." },
+      },
+    },
+  },
+  {
+    name: "wallet_risk",
+    description:
+      "Is this ADDRESS known to be dangerous? Named flags from GoPlus (theft, phishing, sanctions, laundering, mixer) and the explorer's scam mark, plus chain facts (wallet, contract or EIP-7702 account; nonce). Verdict in code: FLAGGED / CAUTION / NO_KNOWN_FLAGS — never \"clean\". Use before sending funds TO an unknown address. Triggers — \"is this wallet safe\", \"check this address\", \"who is 0x…\", \"AML check\". Base 8453 or Robinhood Chain 4663. PAID: $0.01 USDC on Base 8453 over the x402 MCP transport — the first call returns PaymentRequired (isError with structuredContent); an x402 MCP client (e.g. @x402/mcp) pays and retries with _meta[\"x402/payment\"]. Bad input is refused before any price, and a failed run is not charged.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        address: { type: "string", description: "Wallet address 0x…." },
+        chain:   { type: "string", enum: ["base", "robinhood"], description: "Default base." },
+      },
+      required: ["address"],
+    },
+  },
+
+  // ══ B · Free — the way in, and what nobody pays for ═══════════════════════
+  {
+    name: "token_price",
+    description:
+      "Live price, market cap, 24h volume, price change and pool liquidity for a token on Base 8453, read from DexScreener — never from model memory. Use whenever a price is about to appear in your answer. Triggers — \"price of TOKEN\", \"what's X trading at\", \"market cap\", \"is it up today\". Takes a 0x address (exact) or a ticker (verify the returned address — tickers are not unique). Free.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        token: { type: "string", description: "Token contract 0x… on Base 8453 (preferred) or a ticker." },
+      },
+      required: ["token"],
+    },
+  },
+  {
+    name: "send_prepare",
+    description:
+      "Build an unsigned ERC-20 or native-ETH transfer the user signs in their OWN wallet, on Base 8453 or Robinhood Chain 4663, with the resolved symbol, decimals and exact base-unit amount to verify before signing. The recipient is checked too: look-alike of a past payee, flagged, a contract, or the token itself. Triggers — \"send 50 USDC to 0x…\", \"transfer TOKEN to\", \"pay this address\". Free.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        chain:       { type: "string", enum: ["base", "robinhood"], description: "REQUIRED. No default — sending on the wrong chain of a dual-listed token loses the funds. If the user did not say, ASK." },
+        fromAddress: { type: "string", description: "Sender wallet 0x… — the address that will sign." },
+        toAddress:   { type: "string", description: "Recipient 0x… on the SAME chain. Confirm it with the user." },
+        token:       { type: "string", description: "Token contract 0x… on `chain`, or \"ETH\" for the native coin." },
+        amount:      { type: "string", description: "Amount in WHOLE units, e.g. \"25.5\" — NOT base units." },
+      },
+      required: ["chain", "fromAddress", "toAddress", "token", "amount"],
+    },
+  },
+  {
+    name: "bridge_prepare",
+    description:
+      "Build an unsigned bridge between Base 8453 and Robinhood Chain 4663 (either direction), backed by Relay, plus a separate approve tx when needed — the user signs both. Refused when the bridge would cost more than the limit. Triggers — \"bridge USDC to Robinhood\", \"move my ETH to Base\", \"I'm on the wrong network\". fromChain and toChain must differ; the response carries a Relay tracker URL. Free.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        fromChain:   { type: "string", enum: ["base", "robinhood"], description: "REQUIRED. Where the funds are now." },
+        toChain:     { type: "string", enum: ["base", "robinhood"], description: "REQUIRED. Destination; must differ from fromChain." },
+        fromAddress: { type: "string", description: "Wallet 0x… holding the funds on fromChain — the signer." },
+        recipient:   { type: "string", description: "Destination wallet 0x… on toChain. Defaults to fromAddress." },
+        token:       { type: "string", description: "Token 0x… as it exists ON fromChain, or \"ETH\"." },
+        amount:      { type: "string", description: "Amount in WHOLE units, e.g. \"100\"." },
+      },
+      required: ["fromChain", "toChain", "fromAddress", "token", "amount"],
+    },
+  },
+  {
+    name: "sign_check",
+    description:
+      "What will signing this do? Call UNPROMPTED before a wallet signs anything it did not build itself: a transaction (decoded and simulated), an EIP-712 signature (permits, Permit2, Seaport orders — decoded, since an off-chain signature moves nothing until used), or an EIP-7702 authorization. Returns PASS / WARN / BLOCK with plain summary lines, picked in code. BLOCK: do not sign. WARN: show the summary and get an explicit yes. Triggers — \"sign this\", \"what does this approve\", a dapp asking for a permit. Base 8453 or Robinhood Chain 4663. Free.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        chain:         { type: "string", enum: ["base", "robinhood"], description: "Chain the signature is for. Default base." },
+        from:          { type: "string", description: "The signing wallet 0x… — needed to simulate a transaction." },
+        tx:            { type: "object", description: "A transaction: { to, data?, value? } (value in wei)." },
+        typed_data:    { type: "object", description: "The EIP-712 payload exactly as passed to eth_signTypedData_v4." },
+        authorization: { type: "object", description: "An EIP-7702 authorization: { address, chainId }." },
+      },
+    },
+  },
+  {
+    name: "approvals_audit",
+    description:
+      "Every token approval a wallet has open — who can spend what, unlimited or not — with the risky ones marked so the user can revoke them. Triggers — \"check my approvals\", \"who can spend my tokens\", \"revoke\", \"am I exposed\". Base 8453 or Robinhood Chain 4663. Free.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        wallet: { type: "string", description: "Wallet 0x…." },
+        chain:  { type: "string", enum: ["base", "robinhood"], description: "Default base." },
+      },
+      required: ["wallet"],
+    },
+  },
+
+  // ══ D · The rest of the catalog — discover, then call ═══════════════════
   {
     name: "blue_registry",
     description:
@@ -137,247 +301,44 @@ export const MCP_TOOLS = [
     },
   },
 
-  // ══ B · Execution — non-custodial calldata the USER signs ═════════════════
-  {
-    name: "blue_swap_tx",
-    description:
-      "Build an unsigned swap transaction the user signs in their OWN wallet. Base 8453 routes through 0x AllowanceHolder across Base liquidity; Robinhood Chain 4663 routes through Blue Agent's deployed RobinhoodSwapRouter against Uniswap V3 pools. Returns { to, data, value, chainId } plus any ERC-20 approval needed first — never a broadcast, never a private key. Use when the user wants to trade a token and you have both token addresses. Triggers — \"swap X for Y\", \"buy TOKEN\", \"sell my TOKEN\", \"convert USDC to ETH\". Check hub_honeypot and hub_liquidity_depth before swapping an unfamiliar token. If no route exists the response says so — do NOT invent a price.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        chain:       { type: "string", enum: ["base", "robinhood"], description: "REQUIRED. Which chain this swap executes on — Base 8453 or Robinhood Chain 4663. There is no default: the two chains share no state and the same ticker exists on both, so a swap built for the wrong one is unroutable at best. If the user did not say, ASK rather than guessing." },
-        fromAddress: { type: "string", description: "The wallet that will sign and receive — 0x… . Also the swap recipient unless the chain's router says otherwise." },
-        tokenIn:     { type: "string", description: "Token being sold: 0x… contract address on `chain`, or \"ETH\" for native. Never invent an address — resolve it first." },
-        tokenOut:    { type: "string", description: "Token being bought: 0x… contract address on `chain`, or \"ETH\" for native." },
-        amountIn:    { type: "string", description: "Amount of tokenIn in WHOLE units as a decimal string, e.g. \"25.5\" — NOT base units. Decimals are read from the token contract on its own chain; do not do the exponent math yourself." },
-        slippageBps: { type: "number", description: "Max slippage in basis points, whole number 0-10000 (100 = 1%). Base 8453: default 100, enforced by 0x in the quote's minBuyAmount. Robinhood Chain 4663: default 300, applied to a price estimate as the on-chain amountOutMinimum; with no price for the pair the build is refused (NO_QUOTE), never built unbounded." },
-      },
-      required: ["chain", "fromAddress", "tokenIn", "tokenOut", "amountIn"],
-    },
-  },
-  {
-    name: "blue_send_tx",
-    description:
-      "Build an unsigned ERC-20 or native-ETH transfer the user signs in their OWN wallet, on Base 8453 or Robinhood Chain 4663. Returns { to, data, value, chainId } with the resolved symbol, decimals and exact base-unit amount so the user can verify before signing. Non-custodial — the server encodes calldata and nothing else. Use when the user wants to move tokens to an address. Triggers — \"send 50 USDC to 0x…\", \"transfer TOKEN to\", \"pay this address\". The recipient is checked too: look-alike of a past payee, flagged, a contract, or the token itself.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        chain:       { type: "string", enum: ["base", "robinhood"], description: "REQUIRED. Which chain the transfer executes on — Base 8453 or Robinhood Chain 4663. No default: sending on the wrong chain of a dual-listed token loses the funds. If the user did not say, ASK." },
-        fromAddress: { type: "string", description: "Sender wallet 0x… — the address that will sign." },
-        toAddress:   { type: "string", description: "Recipient wallet 0x… on the SAME chain. Confirm it with the user before returning the tx." },
-        token:       { type: "string", description: "Token contract 0x… on `chain`, or \"ETH\"/\"NATIVE\" for the native coin." },
-        amount:      { type: "string", description: "Amount in WHOLE units as a decimal string, e.g. \"25.5\" — NOT base units. Token decimals are read on-chain; do not convert yourself." },
-      },
-      required: ["chain", "fromAddress", "toAddress", "token", "amount"],
-    },
-  },
-  {
-    name: "blue_bridge_tx",
-    description:
-      "Build an unsigned BIDIRECTIONAL bridge transaction between Base 8453 and Robinhood Chain 4663, backed by the Relay Protocol. Returns { to, data, value, chainId } plus a separate `approve` tx when the source token needs one — the user signs both in their own wallet. Use when a token or the user is on the wrong chain for what they want to do next, which is common because tokenized stocks list on both. Triggers — \"bridge USDC to Robinhood\", \"move my ETH to Base\", \"get funds onto chain 4663\", \"I'm on the wrong network\". fromChain and toChain must differ; the response carries a Relay tracker URL for the user to follow settlement.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        fromChain:   { type: "string", enum: ["base", "robinhood"], description: "REQUIRED. Source chain — where the funds are now." },
-        toChain:     { type: "string", enum: ["base", "robinhood"], description: "REQUIRED. Destination chain. Must differ from fromChain." },
-        fromAddress: { type: "string", description: "Wallet 0x… holding the funds on fromChain — the signer." },
-        recipient:   { type: "string", description: "Destination wallet 0x… on toChain. Defaults to fromAddress when omitted." },
-        token:       { type: "string", description: "Token to bridge: 0x… address as it exists ON fromChain, or \"ETH\" for native. The destination address is resolved by Relay — do not supply it." },
-        amount:      { type: "string", description: "Amount in WHOLE units as a decimal string, e.g. \"100\" — NOT base units." },
-      },
-      required: ["fromChain", "toChain", "fromAddress", "token", "amount"],
-    },
-  },
-  {
-    name: "b20_encode_payment",
-    description:
-      "Encode a B20 `transferWithMemo` call on Base 8453 — send a B20 token with an on-chain memo (order id, invoice ref) so the payment reconciles against off-chain books. Returns { to, data, value } for the sender to sign; pure calldata builder, no keys, no payment, no broadcast. Use when an agent or merchant needs a payment that carries its own reference. Triggers — \"pay invoice 1234 in USDC\", \"send payment with order id\", \"settle this with a memo\", \"reconcilable transfer\". Memo is capped at 32 UTF-8 bytes on-chain. B20 is Base-only — there is no B20 registry on Robinhood Chain 4663.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        tokenAddress: { type: "string", description: "B20 token contract 0x… on Base 8453." },
-        to:           { type: "string", description: "Recipient 0x… on Base 8453." },
-        amount:       { type: "string", description: "Amount in WHOLE tokens as a decimal string (\"25.5\"). Never base units / wei — the scaling happens server-side." },
-        // Advertising a default is how the caller was invited to guess in the
-        // first place. Decimals are now read from the token, so the honest
-        // schema says "omit this" and states what happens if you do not.
-        decimals:     { type: "number", description: "OMIT THIS. Decimals are read from the token contract on-chain. If you pass a value it is treated as a claim and checked against the chain — a mismatch is rejected, never silently applied." },
-        memo:         { type: "string", description: "On-chain memo / order id. Max 32 BYTES when UTF-8 encoded — not characters; an emoji costs 4. It fills one bytes32 slot." },
-      },
-      required: ["tokenAddress", "to", "amount", "memo"],
-    },
-  },
-
-  // ══ C · Chain reads — live state, never model recall ══════════════════════
-  {
-    name: "hub_hood_arrow",
-    description:
-      "Open a Blue Hood signal (\"arrow\") — the desk's fired tokenized-stock signals with serial, ticker, direction, verdict note and the exact numbers captured at fire time. Use when the user asks WHY the desk took a view, or about a specific arrow. Triggers — \"why is Blue Hood shorting NVDA\", \"what was arrow #0007\", \"show me the AAPL arrow\", \"latest Hood signal\", \"explain the last drift on TSLA\".\n\n⚠️ CHAIN IS PART OF THE QUESTION. Blue Hood runs TWO desks — Robinhood Chain 4663 and Base 8453 — and NVDA / META / GOOGL / AAPL exist on BOTH. A bare ticker does NOT identify an arrow. If the user names a chain, you MUST pass `chain`; omitting it searches either desk and you will answer about the wrong one. If they named none, omit it and REPORT whichever chain the returned arrow says it is. On not_found, say so plainly — never substitute the other chain's arrow, and never invent numbers. Answer only from the returned verdict_note and facts_at_fire. Blue Hood stopped publishing new arrows on 2026-09-30, so every arrow is history: give its date and use the past tense.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        arrow_id: { type: "string", description: "Exact arrow UUID. Most precise — use when the user pastes one." },
-        serial:   { type: "string", description: "Aesthetic serial like \"#0007\"; resolved to an id server-side." },
-        ticker:   { type: "string", description: "Ticker such as AAPL or NVDA. Returns the NEWEST engine arrow for it. Pair with `chain` whenever the user named one — a ticker alone spans both desks." },
-        chain:    { type: "string", enum: ["robinhood", "base"], description: "Which desk to search — Robinhood Chain 4663 or Base 8453. Pass it whenever the user named a chain. Omit ONLY when they did not; omitting means \"either desk\", never \"Robinhood\". Ignored for arrow_id/serial, which already identify one arrow." },
-      },
-    },
-  },
-  {
-    name: "hub_token_price",
-    description:
-      "Live price, market cap, 24h volume, price change and pool liquidity for any token on Base 8453, read from DexScreener — never from model memory. Use whenever a price or market-cap number is about to appear in your answer; quoting one from training data is always wrong by now. Triggers — \"price of TOKEN\", \"what's X trading at\", \"market cap\", \"is it up today\", \"how much volume\". Takes a 0x address (exact) or a ticker (resolved against Base pools, so verify the returned address is the one the user meant — tickers are not unique).",
-    inputSchema: {
-      type: "object",
-      properties: {
-        token: { type: "string", description: "Token contract address 0x… on Base 8453 (preferred, unambiguous) or a ticker symbol." },
-      },
-      required: ["token"],
-    },
-  },
-  {
-    name: "hub_wallet_holdings",
-    description:
-      "Every ERC-20 and native ETH balance held by a wallet on Base 8453, with live USD values, read via Moralis. Use before any portfolio answer, and before building a swap or send — it tells you what the wallet can actually spend, so you size a transaction against a real balance instead of an assumed one. Triggers — \"what's in my wallet\", \"show my portfolio\", \"do I have enough USDC\", \"what tokens does 0x… hold\", \"my balance\". Base 8453 only — for Robinhood Chain 4663 holdings, use blue_registry to find the rh- tools.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        address: { type: "string", description: "Wallet address 0x… on Base 8453." },
-      },
-      required: ["address"],
-    },
-  },
-  {
-    name: "hub_pool_scan",
-    description:
-      "Trending and newly-active liquidity pools on Base 8453 with the chain-wide TVL snapshot — where volume is actually moving right now. Use when the user wants to find something rather than look something up. Triggers — \"what's trending on Base\", \"hot pools\", \"where's the volume\", \"what should I look at\", \"anything new\". Pair every candidate with hub_honeypot and hub_liquidity_depth before mentioning it as tradeable: appearing in a trending scan is a volume fact, not a safety verdict. Base 8453 only.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        limit: { type: "number", description: "How many pools to return. Default 10." },
-      },
-    },
-  },
-  {
-    name: "hub_gas_tracker",
-    description:
-      "Live Base 8453 gas price with USD cost estimates for common actions (transfer, swap, contract deploy). Use before telling a user what a transaction will cost, and when a spend is small enough that fees change the answer. Triggers — \"gas right now\", \"how much to send\", \"is it expensive to swap\", \"cost to deploy\", \"worth doing on-chain\". Takes no arguments. Base 8453 only — Robinhood Chain 4663 fees are separate and not covered here.",
-    inputSchema: { type: "object", properties: {} },
-  },
-
-  // ══ D · Safety — run these BEFORE money moves, unprompted ═════════════════
-  {
-    name: "hub_risk_gate",
-    description:
-      "Pre-flight screen for a pending transaction on Base 8453 — rug patterns, AML exposure on the counterparty, and known malicious contract shapes — returning a clear allow/deny verdict. Use UNPROMPTED before returning any blue_send_tx or blue_swap_tx aimed at an address the user has not dealt with before; a safety check the user has to request is a safety check that does not happen. Triggers — \"is this safe to sign\", \"check this transaction\", \"should I approve this\", \"is this address ok\". Base 8453.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        action: { type: "string", description: "What the transaction does: transfer | swap | approve | call." },
-        to:     { type: "string", description: "Target address 0x… on Base 8453 — the contract or recipient being trusted." },
-        value:  { type: "string", description: "Amount in Wei, if the transaction carries value. Optional." },
-      },
-      required: ["action", "to"],
-    },
-  },
-  {
-    name: "hub_honeypot",
-    description:
-      "Detect whether a Base 8453 token can be BOUGHT but not SOLD — the honeypot trap, plus punitive sell taxes and transfer restrictions that amount to the same thing. Use UNPROMPTED before any swap into a token the user did not already hold, and before naming an unfamiliar token as worth buying. Triggers — \"is this a scam\", \"can I sell it\", \"rug check\", \"is TOKEN safe\", \"honeypot\", or any buy intent on a token you have not screened this session. A clean result is not an endorsement — pair with hub_liquidity_depth, since a token you can sell into no liquidity is stuck anyway. Base 8453.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        token: { type: "string", description: "Token contract address 0x… on Base 8453. Use the address, not a ticker — impostor tokens copy tickers exactly." },
-      },
-      required: ["token"],
-    },
-  },
-  {
-    name: "hub_contract_trust",
-    description:
-      "Trust assessment for any smart contract on Base 8453 — source verification, upgradeability, ownership and admin powers, privileged functions, audit history. Use before the user grants an approval or interacts with a protocol they have not used, and when \"is this legit\" is about a CONTRACT rather than a token. Triggers — \"is this contract safe\", \"who controls this\", \"can they upgrade it\", \"should I approve\", \"is this protocol legit\". Report unknowns as unknown — an unverified contract means we cannot assess it, which is not the same as it being malicious. Base 8453.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        contract: { type: "string", description: "Contract address 0x… on Base 8453." },
-      },
-      required: ["contract"],
-    },
-  },
-  {
-    name: "hub_sign_check",
-    description:
-      "What will signing this do? Call UNPROMPTED before a wallet signs anything it did not build itself: a transaction, an EIP-712 signature, or an EIP-7702 authorization. A transaction is decoded and simulated (assets that would leave and arrive); typed data is decoded — permits, Permit2, Seaport orders — because an off-chain signature moves nothing until the spender uses it, so no simulation shows it. Returns PASS / WARN / BLOCK and plain summary lines, picked in code. BLOCK = a flagged spender or a Seaport order that pays you nothing: do not sign. WARN = show the summary and get an explicit yes. Triggers — \"sign this\", \"what does this approve\", \"is this signature safe\", a dapp asking for a permit. Base 8453 or Robinhood Chain 4663.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        chain:         { type: "string", enum: ["base", "robinhood"], description: "Chain the signature is for. Default base." },
-        from:          { type: "string", description: "The signing wallet 0x… — needed to simulate a transaction." },
-        tx:            { type: "object", description: "A transaction: { to, data?, value? } (value in wei)." },
-        typed_data:    { type: "object", description: "The EIP-712 payload exactly as the dapp passed it to eth_signTypedData_v4: { domain, types, primaryType, message }." },
-        authorization: { type: "object", description: "An EIP-7702 authorization: { address (the delegate), chainId }." },
-      },
-    },
-  },
-  {
-    name: "hub_wallet_risk",
-    description:
-      "Is this ADDRESS known to be dangerous? Named flags from GoPlus (theft, phishing, sanctions, laundering, mixer) and the explorer's scam mark, plus chain facts (wallet, contract or EIP-7702 account; nonce). Verdict in code: FLAGGED / CAUTION / NO_KNOWN_FLAGS — never \"clean\"; an unread feed is a 502, not a pass. Use before sending funds TO an unknown address, and when a user asks whether a counterparty is safe to deal with. Triggers — \"is this wallet safe\", \"check this address\", \"who is 0x…\", \"is this counterparty clean\", \"AML check\". Distinct from hub_risk_gate, which screens a specific pending transaction; this screens the ADDRESS itself. Base 8453 or Robinhood Chain 4663.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        address: { type: "string", description: "Wallet address 0x…." },
-        chain:   { type: "string", enum: ["base", "robinhood"], description: "Default base." },
-      },
-      required: ["address"],
-    },
-  },
-  {
-    name: "hub_liquidity_depth",
-    description:
-      "Real liquidity depth, expected slippage at size, and exit risk for a token on Base 8453 — whether a position can actually be closed, and at what cost. Use before recommending a token and before sizing any swap above pocket change; hub_honeypot answers \"can I sell at all\", this answers \"can I sell THIS MUCH without destroying the price\". Triggers — \"can I exit\", \"how much slippage\", \"is there liquidity\", \"what if I buy $10k of this\", \"can I get out\". A thin pool is a real finding — report the numbers, never soften them. Base 8453.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        token: { type: "string", description: "Token contract address 0x… on Base 8453 (preferred) or a ticker." },
-      },
-      required: ["token"],
-    },
-  },
-
-  // ══ E · Build — the two console commands worth preloading ═════════════════
-  {
-    name: "blue_build",
-    description:
-      "Produce a concrete implementation plan for a project on Base 8453 — architecture, stack choice, folder structure, the integrations it needs, and a test plan. Use when the user has decided WHAT to build and needs the shape of it before writing code. Triggers — \"how should I build this\", \"architecture for\", \"what stack\", \"structure this project\", \"plan the implementation\". Advisory output: this is a framework for a builder to judge, not a set of measured facts. blue_idea / blue_ship / blue_raise are deliberately NOT loaded here — they ship as Claude Skills in the blue-agent plugin, where progressive disclosure costs no context.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        prompt: { type: "string", description: "What to build — the brief, requirements, or concept, in the user's own words." },
-      },
-      required: ["prompt"],
-    },
-  },
-  {
-    name: "blue_audit",
-    description:
-      "Security and product-risk review of code, a smart contract, or a system design — 500+ checks across 13 categories, returning critical issues, suggested fixes, and a go/no-go. Use before a user deploys or ships anything that holds funds or user data, and when they ask for a second opinion on safety. Triggers — \"audit this\", \"review my contract\", \"is this secure\", \"what could go wrong\", \"ready to deploy\". For an already-deployed address on Base 8453 use hub_contract_trust instead — that reads the chain; this reads what you give it.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        prompt: { type: "string", description: "The code, contract source, or system description to audit." },
-      },
-      required: ["prompt"],
-    },
-  },
-
-  // ══ F · Ops — the one tool you reach for after something else broke ═══════
+  // ══ C · Ops — the one tool you reach for after something else broke ═══════
   {
     name: "blue_doctor",
     description:
-      "Check whether the data sources behind these tools are reachable — Base 8453 and Robinhood Chain 4663 RPC, DexScreener, GeckoTerminal, DefiLlama, GitHub — and get a one-line verdict on whether a failure you just hit is an outage or your own input. Use IMMEDIATELY after any tool here returns an error or empty data, BEFORE retrying and before telling the user the answer is unavailable: a dead upstream and a malformed address produce the same failure, and only one of them is worth retrying. Triggers — any 5xx, any timeout, any \"no data\" you did not expect, \"is it down\", \"why did that fail\", \"is this broken or is it me\". Reports `down` ONLY where a request was sent and failed; upstreams it cannot reach without a credential are reported `unknown` with the reason, never as an outage. Free, no input, no payment.",
+      "Check whether the data sources behind these tools are reachable — Base 8453 and Robinhood Chain 4663 RPC, DexScreener, GeckoTerminal, DefiLlama, GitHub — and get a one-line verdict on whether a failure you just hit is an outage or your own input. Use IMMEDIATELY after any tool here returns an error or empty data, BEFORE retrying. Triggers — any 5xx, any timeout, any unexpected \"no data\", \"is it down\", \"is this broken or is it me\". Reports `down` ONLY where a request was sent and failed; unreachable-without-credential upstreams are `unknown`. Free, no input.",
     inputSchema: { type: "object", properties: {} },
   },
 ];
 
 export const MCP_TOOL_COUNT = MCP_TOOLS.length;
+
+/** Old names answer, unlisted, until this instant (route.ts LEGACY), then refuse with their replacement. */
+export const MCP_LEGACY_UNTIL = "2026-11-22T00:00:00Z";
+
+/**
+ * v1 names → their v2 replacement (null = retired, nothing replaces it). They
+ * still answer until MCP_LEGACY_UNTIL, unlisted, with a note naming the new
+ * tool: MCP clients cache tool names, so a rename that breaks silently strands
+ * whoever wired the old one in. After the date they refuse with the same note.
+ * `hub_hood_arrow` answers with the note alone — its desk stopped firing on
+ * 2026-09-30, and usage-daily shows a caller hitting it daily and getting errors.
+ */
+export const MCP_LEGACY: Readonly<Record<string, string | null>> = {
+  blue_swap_tx: "swap_prepare",
+  blue_send_tx: "send_prepare",
+  blue_bridge_tx: "bridge_prepare",
+  hub_token_price: "token_price",
+  hub_sign_check: "sign_check",
+  hub_wallet_risk: "wallet_risk",
+  hub_honeypot: "token_verdict",
+  hub_risk_gate: "token_verdict",
+  hub_contract_trust: "token_verdict",
+  hub_liquidity_depth: "token_verdict",
+  hub_hood_arrow: "stock_signal",
+  hub_pool_scan: "trending_safe",
+  hub_wallet_holdings: null,
+  hub_gas_tracker: null,
+  b20_encode_payment: null,
+  blue_build: null,
+  blue_audit: null,
+};

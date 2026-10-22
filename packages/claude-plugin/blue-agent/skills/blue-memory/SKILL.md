@@ -42,16 +42,17 @@ last_run:     2026-05-23T10:30:00Z
 
 ## Update rules
 
-These triggers are **lifecycle stages, not tool names.** Since the 2026-09-26 MCP
-cut only `blue_build` and `blue_audit` remain as MCP tools; idea / ship / raise run
-through `blue_call` with their catalog ids (`blue-idea`, `blue-ship`, `blue-raise`).
+These triggers are **lifecycle stages, not tool names.** Since Blue Agent MCP v2
+(2026-10-22) none of the five console steps is an MCP tool: each runs through
+`blue_call` with its catalog id (`blue-idea`, `blue-build`, `blue-audit`, `blue-ship`,
+`blue-raise`), or as the matching Skill.
 Update memory after the *step* happens, whichever surface ran it.
 
 | Trigger | Fields to update |
 |---------|-----------------|
 | After an **idea** step (`blue_call` → `blue-idea`) | name, description, stage → idea |
-| After a **build** step (`blue_build`) | stack, stage → build |
-| After an **audit** step (`blue_audit`) | stage → audit (if issues found, add note) |
+| After a **build** step (`blue_call` → `blue-build`) | stack, stage → build |
+| After an **audit** step (`blue_call` → `blue-audit`) | stage → audit (if issues found, add note) |
 | After a **ship** step (`blue_call` → `blue-ship`) | stage → ship or live |
 | After a **raise** step (`blue_call` → `blue-raise`) | add note about raise amount/stage |
 | User says "remember X" | append to Notes |

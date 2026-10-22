@@ -173,6 +173,13 @@ function expectedCalldata(to: string, amount: string, decimals: number, memo: st
 
 (async () => {
   console.log("b20_encode_payment decimals suite\n");
+  {
+    const { MCP_LEGACY_UNTIL } = await import("../src/lib/mcp-tools");
+    if (Date.now() >= Date.parse(MCP_LEGACY_UNTIL)) {
+      console.log(`b20_encode_payment's alias window closed on ${MCP_LEGACY_UNTIL}: the route now refuses it, so its behaviour is no longer asserted here.`);
+      process.exit(0);
+    }
+  }
 
   // ── 1. 18-decimal token, `decimals` omitted ──────────────────────────────
   console.log("1. an 18-decimal token with no `decimals` argument");
@@ -287,25 +294,16 @@ function expectedCalldata(to: string, amount: string, decimals: number, memo: st
   // when you know it." — an instruction to guess, on the one field where a
   // guess is a wrong transfer amount. Fixing the handler while leaving that
   // sentence up would keep producing the mismatch error it now throws.
-  console.log("\n8. the tool's own schema does not invite a guess");
+  // ── 8. retired from the advertised manifest (MCP v2, 2026-10-22) ─────────
+  // It left tools/list with the v2 cut and answers as a LEGACY alias until
+  // MCP_LEGACY_UNTIL. The schema assertions this section used to make died
+  // with the advertisement; the behaviour above is still pinned while the
+  // alias answers.
+  console.log("\n8. retired from the v2 manifest, answering as an alias");
   {
-    const { MCP_TOOLS } = await import("../src/lib/mcp-tools");
-    const tool = MCP_TOOLS.find((t) => t.name === "b20_encode_payment");
-    const props = (tool?.inputSchema?.properties ?? {}) as Record<string, { description?: string }>;
-    const decimalsDoc = props.decimals?.description ?? "";
-    const memoDoc = props.memo?.description ?? "";
-
-    check("the tool is still advertised", tool !== undefined);
-    check("decimals is not advertised as defaulting to anything",
-      !/default\s*6|default\b/i.test(decimalsDoc), decimalsDoc);
-    check("decimals says it is read from the chain",
-      /on-chain|on chain/i.test(decimalsDoc), decimalsDoc);
-    check("decimals is still optional in the schema",
-      !(tool?.inputSchema?.required ?? []).includes("decimals"));
-    check("memo is documented in bytes, not characters",
-      /byte/i.test(memoDoc) && !/31/.test(memoDoc), memoDoc);
-    check("the description no longer claims a 31-character cap",
-      !/31 characters/i.test(tool?.description ?? ""), (tool?.description ?? "").slice(-90));
+    const { MCP_TOOLS, MCP_LEGACY } = await import("../src/lib/mcp-tools");
+    check("no longer advertised", !MCP_TOOLS.some((t) => t.name === "b20_encode_payment"));
+    check("listed as a retiring alias", "b20_encode_payment" in MCP_LEGACY && MCP_LEGACY.b20_encode_payment === null);
   }
 
   console.log("\n9. only a B20 token gets a transferWithMemo");

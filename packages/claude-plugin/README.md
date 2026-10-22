@@ -15,52 +15,39 @@ claude plugin install blue-agent
 
 ## What you get
 
-> Rewritten 2026-09-26. These tables listed 21 tools, **17 of which no longer
-> resolve**, each with a price — and the prices were wrong twice over: they were
-> the x402 catalog prices, while an MCP tool here runs **free**. (`hub_builder_score`
-> was listed at $0.001 and has never had a price, because it has never been a
-> tool.) The manifest was cut from 85 to 18 that day for context, not scope: all
-> 110 catalog tools stay live and are reached through `blue_registry` → `blue_call`.
+> Rewritten 2026-10-22 for **Blue Agent MCP v2**: 13 tools, five of them paid
+> per call in USDC on Base over the x402 MCP transport. The v1 names still
+> answer until 2026-11-22 with a note naming their replacement. The rest of the x402 catalog is still reached
+> through `blue_registry` → `blue_call`.
 
-### Discovery and execution
-| Tool | What it does | Cost |
-|------|-------------|------|
-| `blue_registry` | Search the 110-tool catalog — id, price, input shape | Free |
-| `blue_call` | Run any catalog tool by id | **x402** — you sign, from your own wallet |
-| `blue_swap_tx` | Unsigned swap calldata, `chain` required | Free |
-| `blue_send_tx` | Unsigned ERC-20 / native transfer | Free |
-| `blue_bridge_tx` | Unsigned bridge, Base ⇄ Robinhood Chain | Free |
-| `b20_encode_payment` | B20 `transferWithMemo` calldata, Base only | Free |
+### Paid — x402, you sign from your own wallet
+| Tool | What it does | Price |
+|------|-------------|-------|
+| `swap_prepare` | Unsigned swap on Base or Robinhood Chain, token checked first | $0.01 |
+| `token_verdict` | no_issues_found / caution / avoid, with reasons, price and liquidity | $0.01 |
+| `stock_signal` | Tokenized stock vs the real stock, or Base vs Robinhood Chain | $0.01 |
+| `trending_safe` | Trending Base tokens with contract tax and exit depth | $0.05 |
+| `wallet_risk` | Is this address flagged (theft, phishing, sanctions) | $0.01 |
 
-Execution tools return **unsigned calldata**. Blue Agent never holds a key,
+Bad input is refused before any price is quoted, and a call that fails is not charged.
+
+### Free
+| Tool | What it does |
+|------|-------------|
+| `token_price` | Live price, mcap, volume on Base |
+| `send_prepare` | Unsigned ERC-20 / native transfer, recipient checked |
+| `bridge_prepare` | Unsigned bridge, Base ⇄ Robinhood Chain |
+| `sign_check` | What signing this transaction or signature will do |
+| `approvals_audit` | Open approvals and which to revoke |
+| `blue_registry` | Search the rest of the x402 catalog |
+| `blue_call` | Run any catalog id (x402 — you sign) |
+| `blue_doctor` | Is a failure an outage or your input |
+
+Every builder returns **unsigned calldata**. Blue Agent never holds a key,
 never broadcasts, and cannot pull funds — you sign in your own wallet.
 
-### Live reads — Base 8453
-| Tool | What it does |
-|------|-------------|
-| `hub_hood_arrow` | Open a Blue Hood signal (pass `chain` when the user named one) |
-| `hub_token_price` | Live price, mcap, volume |
-| `hub_wallet_holdings` | Balances with USD values |
-| `hub_pool_scan` | Trending pools |
-| `hub_gas_tracker` | Live gas, USD cost per action |
-
-### Safety — run before money moves
-| Tool | What it does |
-|------|-------------|
-| `hub_risk_gate` | Screen a pending transaction |
-| `hub_honeypot` | Can the token be sold at all |
-| `hub_contract_trust` | Source, upgradeability, admin powers |
-| `hub_wallet_risk` | AML / sanctions exposure of an address |
-| `hub_liquidity_depth` | Can the position be closed, at what cost |
-
-### Console
-| Tool | What it does |
-|------|-------------|
-| `blue_build` | Architecture + stack |
-| `blue_audit` | Security review, 500+ checks |
-
-`blue_idea`, `blue_ship` and `blue_raise` are Skills in this plugin rather than
-MCP tools — progressive disclosure costs no context until they load.
+`blue_idea`, `blue_ship` and `blue_raise` are Skills in this plugin; build and
+audit run as the catalog ids `blue-build` / `blue-audit` through `blue_call`.
 
 ## Usage examples
 

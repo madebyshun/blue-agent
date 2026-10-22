@@ -38,7 +38,7 @@
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { MCP_TOOLS } from "../src/lib/mcp-tools";
+import { MCP_TOOLS, MCP_LEGACY, MCP_LEGACY_UNTIL } from "../src/lib/mcp-tools";
 import { AGENT_TOOLS } from "../src/lib/agent-tools";
 import { HANDLERS } from "../src/app/api/x402/_handlers/index";
 import { CONSOLE_SYSTEMS } from "../src/lib/console-systems";
@@ -88,10 +88,22 @@ check(
   advertised.filter((n) => !callable.includes(n)),
   "advertised but no dispatch branch — returns -32601 to a client that can see it"
 );
+// MCP v2 (2026-10-22): the v1 names in MCP_LEGACY answer, unlisted, until
+// MCP_LEGACY_UNTIL so cached clients are told where their tool went instead of
+// breaking. That is the ONE allowed hidden set: it must equal MCP_LEGACY
+// exactly (nothing else may hide behind it), and its end date is bounded so
+// "temporary" cannot quietly become permanent. After the date the route
+// refuses every one of them.
+const legacyNames = new Set(Object.keys(MCP_LEGACY));
 check(
-  "A2 every callable MCP name is advertised (no hidden surface)",
-  callable.filter((n) => !advertised.includes(n)),
-  "callable via tools/call but absent from tools/list — undiscoverable, still invokable"
+  "A2 every callable MCP name is advertised, or a dated v1 alias (no hidden surface)",
+  callable.filter((n) => !advertised.includes(n) && !legacyNames.has(n)),
+  "callable via tools/call but absent from tools/list and from MCP_LEGACY — undiscoverable, still invokable"
+);
+check(
+  "A3 the v1 alias window is bounded (MCP_LEGACY_UNTIL on or before 2026-12-31)",
+  Date.parse(MCP_LEGACY_UNTIL) <= Date.parse("2026-12-31T23:59:59Z") ? [] : [MCP_LEGACY_UNTIL],
+  "an alias window with no end is a permanent hidden surface"
 );
 
 // ── B. HUB_MAP targets are real catalog ids ──────────────────────────────────

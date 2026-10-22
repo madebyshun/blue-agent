@@ -154,7 +154,8 @@ const transferLog = (token: string, from: string, to: string, amt: bigint) =>
   const read = (p: string) => fs.readFileSync(path.resolve(__dirname, "..", p), "utf8");
   ok("catalog: sign-check is a $0.00 id", /id: "sign-check",[\s\S]{0,2500}?price: "\$0\.00"/.test(read("src/lib/agent-tools.ts")));
   ok("HANDLERS has it", /"sign-check":\s+hSignCheck/.test(read("src/app/api/x402/_handlers/index.ts")));
-  ok("MCP: hub_sign_check in the manifest and the map", /name: "hub_sign_check"/.test(read("src/lib/mcp-tools.ts")) && /hub_sign_check:\s+"sign-check"/.test(read("src/app/api/mcp/route.ts")));
+  // Renamed sign_check in MCP v2 (2026-10-22); hub_sign_check answers as an alias until MCP_LEGACY_UNTIL.
+  ok("MCP: sign_check in the manifest and the map", /name: "sign_check"/.test(read("src/lib/mcp-tools.ts")) && /sign_check:\s+"sign-check"/.test(read("src/app/api/mcp/route.ts")));
   ok("chat: defined, dispatched, and routed to by the prompt", /name: "hub_sign_check"/.test(read("src/app/api/chat/route.ts")) && /hub_sign_check:\s+"sign-check"/.test(read("src/app/api/chat/route.ts")) && /hub_sign_check/.test(read("src/app/api/chat/system-prompt.ts")));
 
   console.log(failures === 0 ? "\nsign-check-test: PASS" : `\nsign-check-test: FAIL — ${failures}`);

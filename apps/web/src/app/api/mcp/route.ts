@@ -11,7 +11,9 @@
  *   }
  *
  * Protocol: JSON-RPC 2.0 over HTTP POST
- * Tools: 20 — 8 blue_* + 11 hub_* + 1 b20_*
+ * Tools: 13 — 5 paid + 8 free
+ *        MCP v2 (2026-10-22): renamed, five paid over the x402 MCP transport
+ *        (lib/mcp-paid.ts); the v1 names answer until MCP_LEGACY_UNTIL.
  *        CUT FROM 85 ON 2026-09-26. The reasoning, the measurements, and the rule
  *        for adding a 19th all live in the header of lib/mcp-tools.ts — read that
  *        before touching this number. One-line version: 85 always-loaded tools cost
@@ -69,7 +71,10 @@ import { kv } from "@/lib/kv";
 import { recordCall, recordMcpHandshake } from "@/lib/usage-daily";
 import { runInternalTool } from "@/lib/x402-internal-run";
 import { encodeTransferWithMemo, isValidMemo } from "@/lib/b20/encode";
-import { MCP_TOOLS } from "@/lib/mcp-tools";
+import { MCP_TOOLS, MCP_LEGACY, MCP_LEGACY_UNTIL } from "@/lib/mcp-tools";
+import { runPaidMcpTool, type McpCallResult } from "@/lib/mcp-paid";
+import { findOffering } from "@/lib/blue-hood/acp-offerings";
+import { tokenVerdict } from "@/lib/token-verdict";
 import {
   briefHasNumberDrift,
   withholdDriftedBriefRecord,
@@ -142,7 +147,23 @@ const HUB_MAP: Record<string, string> = {
   // to discover a diagnostic will retry or give up instead, and both are wrong
   // half the time. Free either way, so it costs description bytes and nothing else.
   blue_doctor:          "blue-doctor",
+  // v2 names (2026-10-22). The hub_* keys above stay only as LEGACY aliases.
+  token_price:          "token-price",
+  sign_check:           "sign-check",
+  approvals_audit:      "approval-audit",
 };
+
+const legacyNote = (name: string) => {
+  const to = MCP_LEGACY[name];
+  return to
+    ? `[RENAMED] "${name}" is now "${to}" — call that instead. The old name stops answering on ${MCP_LEGACY_UNTIL.slice(0, 10)}.`
+    : `[RETIRED] "${name}" is leaving Blue Agent MCP v2 and stops answering on ${MCP_LEGACY_UNTIL.slice(0, 10)}.`;
+};
+
+/** A tool's input schema, from the one manifest (for x402 Bazaar discovery). */
+const schemaOf = (name: string) =>
+  ((TOOLS.find((t) => t.name === name)?.inputSchema ?? { type: "object", properties: {} }) as Record<string, unknown>);
+const descOf = (name: string) => TOOLS.find((t) => t.name === name)?.description ?? name;
 
 // Only the two console commands that survived the cut. blue_idea / blue_ship /
 // blue_raise ship as Claude Skills in packages/claude-plugin instead: a skill is
@@ -747,6 +768,56 @@ function err(id: unknown, code: number, message: string, useSse = false) {
 
 // ─── Route ────────────────────────────────────────────────────────────────────
 
+/**
+ * A legacy name's answer, with where it moved as a SECOND content item —
+ * content[0] stays byte-identical to the v1 answer, so a caller that parses
+ * it as JSON keeps working through the alias window.
+ */
+function legacyContent(name: string, text: string): { type: "text"; text: string }[] {
+  return name in MCP_LEGACY ? [{ type: "text", text }, { type: "text", text: legacyNote(name) }] : [{ type: "text", text }];
+}
+
+/**
+ * The five paid v2 tools. Each refuses bad input before quoting a price, then
+ * goes through runPaidMcpTool: PaymentRequired → verify → run → settle only on
+ * success. Returns null for any other name.
+ */
+async function callPaidV2(name: string, args: Record<string, unknown>, meta: unknown): Promise<McpCallResult | null> {
+  const paidRun = (refuse: () => string | null, run: () => Promise<{ text: string; isError?: boolean }>) =>
+    runPaidMcpTool({ tool: name, description: descOf(name), inputSchema: schemaOf(name), meta, refuse, run });
+  const asJson = (o: unknown) => JSON.stringify(o, null, 2);
+
+  if (name === "swap_prepare") {
+    return paidRun(() => findOffering("swap_prepare")!.check(args), async () => {
+      const text = await withActionRecord("swap", args, await withPreTradeCheck("swap", args, () => buildSwapTx(args)));
+      let okFlag = true;
+      try { okFlag = (JSON.parse(text) as { ok?: boolean }).ok !== false; } catch { /* text answer */ }
+      return { text, isError: !okFlag };
+    });
+  }
+  if (name === "stock_signal" || name === "trending_safe") {
+    const offering = findOffering(name)!;
+    return paidRun(() => offering.check(args), async () => {
+      const out = await offering.run(args);
+      return out.kind === "deliver"
+        ? { text: asJson(out.deliverable) }
+        : { text: `[${out.kind === "reject" ? "NO_RESULT" : "UNAVAILABLE"}] ${out.reason}`, isError: true };
+    });
+  }
+  if (name === "token_verdict") {
+    return paidRun(() => {
+      if (!parseTxChain(args.chain)) return `chain is required: "base" (8453) or "robinhood" (4663).`;
+      if (!/^0x[a-fA-F0-9]{40}$/.test(String(args.token ?? "").trim())) return "token must be a 0x contract address — a ticker does not identify a token.";
+      return null;
+    }, async () => ({ text: asJson(await tokenVerdict(parseTxChain(args.chain)!, String(args.token).trim())) }));
+  }
+  if (name === "wallet_risk") {
+    return paidRun(() => (/^0x[a-fA-F0-9]{40}$/.test(String(args.address ?? "").trim()) ? null : "address must be a 0x wallet address."),
+      async () => ({ text: await callHubTool("wallet-risk", args) }));
+  }
+  return null;
+}
+
 export async function POST(req: NextRequest) {
   const { success } = await rateLimit(getIdentifier(req), "api");
   if (!success) return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
@@ -804,6 +875,27 @@ export async function POST(req: NextRequest) {
     const meterId = HUB_MAP[name] ?? (CONSOLE_MAP[name] ? `blue_${CONSOLE_MAP[name]}` : name);
 
     try {
+      // ── v1 names: answer with a note until the date, then refuse ───────────
+      if (name in MCP_LEGACY) {
+        if (Date.now() >= Date.parse(MCP_LEGACY_UNTIL) || name === "hub_hood_arrow") {
+          await recordCall(meterId, "mcp", "err");
+          return ok(id, { content: [{ type: "text", text: legacyNote(name) }], isError: name !== "hub_hood_arrow" }, useSse);
+        }
+      }
+
+      // ── v2 paid tools — x402 over the MCP transport (lib/mcp-paid.ts) ──────
+      const paid = await callPaidV2(name, args, p._meta);
+      if (paid) {
+        await recordCall(meterId, "mcp", paid.isError ? "err" : "ok");
+        return ok(id, paid, useSse);
+      }
+      if (name === "send_prepare" || name === "bridge_prepare") {
+        const kind = name === "send_prepare" ? "send" : "bridge";
+        const text = await withActionRecord(kind, args, await withPreTradeCheck(kind, args, () => (kind === "send" ? callSendTx(args) : callBridgeTx(args))));
+        await recordCall(meterId, "mcp", "ok");
+        return ok(id, { content: legacyContent(name, text) }, useSse);
+      }
+
       // Console tools
       const consoleCmd = CONSOLE_MAP[name];
       if (consoleCmd) {
@@ -811,7 +903,7 @@ export async function POST(req: NextRequest) {
         if (!prompt) return err(id, -32602, "prompt is required", useSse);
         const text = await callConsole(consoleCmd, prompt);
         await recordCall(meterId, "mcp", "ok");
-        return ok(id, { content: [{ type: "text", text }] }, useSse);
+        return ok(id, { content: legacyContent(name, text) }, useSse);
       }
 
       // Hub tools
@@ -819,7 +911,7 @@ export async function POST(req: NextRequest) {
       if (hubId) {
         const text = await callHubTool(hubId, args);
         await recordCall(meterId, "mcp", "ok");
-        return ok(id, { content: [{ type: "text", text }] }, useSse);
+        return ok(id, { content: legacyContent(name, text) }, useSse);
       }
 
       // blue_call — the paid door to every catalog id HUB_MAP does not preload.
@@ -837,7 +929,7 @@ export async function POST(req: NextRequest) {
         // reached this way aggregates into one meaningless row and the per-tool
         // demand signal (the thing that decides what gets retired) disappears.
         await recordCall(toolId, "mcp", r.isError ? "err" : "ok");
-        return ok(id, { content: [{ type: "text", text: r.text }], ...(r.isError ? { isError: true } : {}) }, useSse);
+        return ok(id, { content: legacyContent(name, r.text), ...(r.isError ? { isError: true } : {}) }, useSse);
       }
 
       // Execution primitives — unsigned calldata, user signs. See the block above
@@ -845,31 +937,31 @@ export async function POST(req: NextRequest) {
       if (name === "blue_swap_tx") {
         const text = await withActionRecord("swap", args, await withPreTradeCheck("swap", args, () => buildSwapTx(args)));
         await recordCall(meterId, "mcp", "ok");
-        return ok(id, { content: [{ type: "text", text }] }, useSse);
+        return ok(id, { content: legacyContent(name, text) }, useSse);
       }
       if (name === "blue_send_tx") {
         const text = await withActionRecord("send", args, await withPreTradeCheck("send", args, () => callSendTx(args)));
         await recordCall(meterId, "mcp", "ok");
-        return ok(id, { content: [{ type: "text", text }] }, useSse);
+        return ok(id, { content: legacyContent(name, text) }, useSse);
       }
       if (name === "blue_bridge_tx") {
         const text = await withActionRecord("bridge", args, await withPreTradeCheck("bridge", args, () => callBridgeTx(args)));
         await recordCall(meterId, "mcp", "ok");
-        return ok(id, { content: [{ type: "text", text }] }, useSse);
+        return ok(id, { content: legacyContent(name, text) }, useSse);
       }
 
       // hub_hood_arrow — reads the live arrow feed directly (not a catalog tool).
       if (name === "hub_hood_arrow") {
         const text = await callHoodArrow(args);
         await recordCall(meterId, "mcp", "ok");
-        return ok(id, { content: [{ type: "text", text }] }, useSse);
+        return ok(id, { content: legacyContent(name, text) }, useSse);
       }
 
       // B20 MCP-native calldata builders (free — no x402, no bypass key)
       if (B20_ENCODE_TOOLS.has(name)) {
         const text = await callB20Native(name, args);
         await recordCall(meterId, "mcp", "ok");
-        return ok(id, { content: [{ type: "text", text }] }, useSse);
+        return ok(id, { content: legacyContent(name, text) }, useSse);
       }
 
       return err(id, -32601, `Unknown tool: ${name}`, useSse);
