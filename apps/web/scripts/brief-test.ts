@@ -62,6 +62,24 @@ const DAY = 86_400_000;
   ok("3. an unsolicited token that LEAVES is not news", !diffSnapshots(prev, cur).balances.some((c) => c.kind === "gone"));
 }
 
+// 3b. A held impostor whose balance MIRRORS the real USDC (measured 2026-10-21:
+//     "ՍՏDС (Base): 1.64384 → 9.72906" printed right under the real USDC line).
+{
+  const FAKE = "0xeeee000000000000000000000000000000000005";
+  const prev = snap({ holdings: [h({ token: USDC, symbol: "USDC", amount: "1.64384", usd: 1.64 }), h({ token: FAKE, symbol: "ՍՏDС", amount: "1.64384", usd: null, trust: "unverified" })] });
+  const cur = snap({ at: prev.at + DAY, holdings: [h({ token: USDC, symbol: "USDC", amount: "9.72906", usd: 9.73 }), h({ token: FAKE, symbol: "ՍՏDС", amount: "9.72906", usd: null, trust: "impostor" })] });
+  const d = diffSnapshots(cur, prev);
+  ok("3b. the real USDC move is still reported", d.balances.some((c) => c.kind === "changed" && c.row.token === USDC));
+  ok("3b. the impostor is NOT a balance move", !d.balances.some((c) => c.row.token === FAKE));
+  ok("3b. first time flagged → warned once as unsolicited", d.unsolicited.length === 1 && d.unsolicited[0].token === FAKE);
+  const t = renderBrief(d, "md", { now: cur.at });
+  ok("3b. the Balances section never prints the fake", !/ՍՏDС \(Base\): 1\.64384 → 9\.72906/.test(t));
+  ok("3b. the warning names it as not the real one", /not the real ՍՏDС/.test(t));
+  const again = snap({ at: cur.at + DAY, holdings: [h({ token: USDC, symbol: "USDC", amount: "20", usd: 20 }), h({ token: FAKE, symbol: "ՍՏDС", amount: "20", usd: null, trust: "impostor" })] });
+  const d2 = diffSnapshots(again, cur);
+  ok("3b. next day, already flagged → neither a move nor a repeat warning", !d2.balances.some((c) => c.row.token === FAKE) && d2.unsolicited.length === 0);
+}
+
 // 4. Unread legs are never diffed, and the baseline keeps yesterday's reading.
 {
   const prev = snap({ holdings: [h({}), h({ chain: "robinhood", token: "0xeeee000000000000000000000000000000000005", symbol: "TSLA", amount: "2", usd: 500 })], grants: [g({})] });
