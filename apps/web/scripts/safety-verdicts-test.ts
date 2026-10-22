@@ -20,7 +20,6 @@ import { join } from "node:path";
 import { measuredHoneypotVerdict } from "../src/app/api/x402/_handlers/honeypot-check";
 import { measuredRiskVerdict, decodeApproval, isKnownTokenCall, isBoundedApproval, type RiskFacts } from "../src/app/api/x402/_handlers/risk-gate";
 import { measuredTrustVerdict } from "../src/app/api/x402/_handlers/contract-trust";
-import { quickVerdict } from "../src/app/api/x402/_handlers/quick-safety";
 import { parseEtherscanSource } from "../src/lib/moralis";
 import { contractAnswered } from "../src/lib/onchain";
 import { createPublicClient, custom, encodeFunctionResult, parseAbi } from "viem";
@@ -128,17 +127,7 @@ const taxUnread = measuredTrustVerdict({ basescanAvailable: true, verified: true
 ok("verified token whose tax was NOT read → UNKNOWN, not SAFE", taxUnread.verdict === "UNKNOWN", taxUnread.reasons.join(" | "));
 ok("verified NON-token contract (no tax to read) → SAFE", measuredTrustVerdict({ basescanAvailable: true, verified: true, isProxy: false, honeypot: null }).verdict === "SAFE");
 
-console.log("\n4. quick-safety — quickVerdict");
-ok("measured honeypot → DANGER", quickVerdict({ liquidityUsd: 1e6, basePairs: 3, verified: true, honeypot: "HONEYPOT" }).verdict === "DANGER");
-ok("no Base pair → CAUTION", quickVerdict({ liquidityUsd: 0, basePairs: 0, verified: true, honeypot: "UNKNOWN" }).verdict === "CAUTION");
-ok("thin liquidity → CAUTION", quickVerdict({ liquidityUsd: 2_000, basePairs: 1, verified: true, honeypot: "SAFE" }).verdict === "CAUTION");
-ok("verified + real liquidity → SAFE", quickVerdict({ liquidityUsd: 500_000, basePairs: 4, verified: true, honeypot: "SAFE" }).verdict === "SAFE");
-const qUnread = quickVerdict({ liquidityUsd: 500_000, basePairs: 4, verified: true, honeypot: "UNKNOWN" });
-ok("verified + real liquidity but tax NOT read → UNKNOWN, not SAFE (2026-10-01)", qUnread.verdict === "UNKNOWN", qUnread.flags.join(" | "));
-ok("DexScreener + Basescan silent → UNKNOWN (absence is not risk)",
-  quickVerdict({ liquidityUsd: null, basePairs: null, verified: null, honeypot: "UNKNOWN" }).verdict === "UNKNOWN");
-const silent = quickVerdict({ liquidityUsd: null, basePairs: null, verified: null, honeypot: "UNKNOWN" });
-ok("…and no flag claims thin liquidity or no market from a null", !silent.flags.some((f) => /liquidity|no Base DEX/.test(f)), silent.flags.join(" | "));
+// §4 (quick-safety) left with the tool: retired in x402 cleanup wave 1, 2026-10-22.
 
 const H = (f: string) => readFileSync(join(process.cwd(), "src/app/api/x402/_handlers", f), "utf8");
 const H0 = H;
@@ -213,7 +202,6 @@ ok("risk-gate: verdict = measured.verdict, no model risk_score in it",
   /const verdict = measured\.verdict;/.test(H("risk-gate.ts")) && !/riskScore > 70/.test(H("risk-gate.ts")));
 ok("contract-trust: no 'final arbiter' model call left",
   !/final arbiter/i.test(H("contract-trust.ts").replace(/\/\/.*$/gm, "")) && /verdict: measured\.verdict/.test(H("contract-trust.ts")));
-ok("quick-safety: no model call at all", !/callLLM/.test(H("quick-safety.ts").replace(/\/\/.*$/gm, "")));
 
 console.log("\n6. contractAnswered — real viem multicall results, no network");
 multicallCases().catch((e) => { ok("multicall cases ran", false, String(e)); }).finally(() => {

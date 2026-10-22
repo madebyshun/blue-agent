@@ -169,10 +169,8 @@ const TOOL_EXAMPLES: Record<string, Record<string, string>> = {
   // ── On-chain Data ─────────────────────────────────────────────────────────────
   "dex-flow":        { token: "0xf895783b2931c919955e18b5e3343e7c7c456ba3" },
   // ── Earn ──────────────────────────────────────────────────────────────────────
-  "lp-analyzer":     { pool: "WETH/USDC 0.05%", position: "$5000 deployed" },
   // ── Alerts ────────────────────────────────────────────────────────────────────
   // ── Launch (extended) ─────────────────────────────────────────────────────────
-  "grant-evaluator":    { project: "ExampleDAO (sample)", description: "Sample project (not real) — pay-per-use AI tools for Base builders via x402 micropayments, pre-revenue.", ask: "$50k" },
 };
 
 // Derive TOOLS from AGENT_TOOLS — single source of truth
@@ -1392,21 +1390,21 @@ const TOOL_GROUPS: { id: string; label: string; desc: string; color: string; ids
     label: "For Traders",
     desc: "Signals, market intel, portfolio tools",
     color: "#4FC3F7",
-    ids: ["token-pick-signal", "narrative-position", "defi-opportunity", "token-momentum-scanner", "ecosystem-digest", "protocol-risk-monitor", "base-alpha", "narrative-pulse", "protocol-health"],
+    ids: ["token-pick-signal", "narrative-position", "defi-opportunity", "token-momentum-scanner", "ecosystem-digest", "protocol-risk-monitor", "narrative-pulse"],
   },
   {
     id: "founders",
     label: "For Founders",
     desc: "Launch, market fit, growth, fundraising",
     color: "#A78BFA",
-    ids: ["market-fit", "token-launch-readiness", "competitor-scan", "base-grant-finder", "grant-evaluator"],
+    ids: ["market-fit", "token-launch-readiness", "competitor-scan", "base-grant-finder"],
   },
   {
     id: "investors",
     label: "For Investors",
     desc: "Due diligence, memos, pitch intel",
     color: "#34D399",
-    ids: ["builder-deep-dd", "base-protocol-comparison", "agent-score", "founder-check"],
+    ids: ["builder-deep-dd", "base-protocol-comparison", "agent-score"],
   },
   {
     id: "blue",
@@ -1420,21 +1418,14 @@ const TOOL_GROUPS: { id: string; label: string; desc: string; color: string; ids
     label: "Security & Safety",
     desc: "Honeypot, risk gate, contract trust, wallet & token safety",
     color: "#F87171",
-    ids: ["honeypot-check", "risk-gate", "deep-analysis", "contract-trust", "key-exposure", "quick-safety", "wallet-risk", "b20-check", "liquidity-depth", "token-distribution"],
+    ids: ["honeypot-check", "risk-gate", "deep-analysis", "contract-trust", "key-exposure", "wallet-risk", "liquidity-depth"],
   },
   {
     id: "onchain",
     label: "On-chain Data",
     desc: "Wallet PnL, AML, airdrops, whale tracking, DEX flow",
     color: "#FACC15",
-    ids: ["dex-flow", "token-price", "pool-scan", "wallet-holdings", "new-pools", "gas-tracker", "base-activity-score", "scam-detector", "cross-protocol-yield", "agent-readiness", "base-pulse"],
-  },
-  {
-    id: "earn",
-    label: "Earn & DeFi",
-    desc: "Yield optimization, LP analysis, tax reporting",
-    color: "#34D399",
-    ids: ["lp-analyzer"],
+    ids: ["dex-flow", "token-price", "pool-scan", "wallet-holdings", "gas-tracker"],
   },
   {
     id: "automation",

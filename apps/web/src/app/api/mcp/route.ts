@@ -25,7 +25,7 @@
  *        This line is pinned by apps/web/scripts/docs-truth-check.ts and fails CI if
  *        it drifts. Do not hand-edit it — change the manifest, then update both.
  *
- *        This is NOT the catalog total. `AGENT_TOOLS` holds 98; all 98 stay live at
+ *        This is NOT the catalog total. `AGENT_TOOLS` holds 65; all 65 stay live at
  *        /api/x402/<id> and are now reached through blue_registry → blue_call rather
  *        than by preloading. The hub_* names listed here each map to a real catalog
  *        id (also checked by docs-truth-check.ts, because an MCP tool pointing at a
@@ -313,7 +313,7 @@ async function callConsole(command: string, prompt: string): Promise<string> {
 // whole point. The encoders themselves live on in lib/b20/encode.ts with six other
 // importers (the /app/b20 console, /api/b20/prepare, the pay page, chat ToolCards),
 // so nothing was lost from the product; what was removed is MCP's copy of the door.
-// Read-side B20 survives as catalog tools `b20-check` / `b20-analyze` / `b20-inspect`,
+// Read-side B20 survives as catalog tools `b20-analyze` / `b20-inspect` (`b20-check` retired 2026-10-22),
 // reachable through blue_registry → blue_call.
 
 const B20_ENCODE_TOOLS = new Set([
