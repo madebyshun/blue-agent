@@ -52,6 +52,9 @@ async function rpc(method: string, params: Record<string, unknown> = {}): Promis
   ok("x402 v2, one Base USDC requirement at the table price", pr?.x402Version === 2 && pr?.accepts?.length === 1 && pr.accepts[0].amount === String(MCP_PRICES.stock_signal) && pr.accepts[0].network === "eip155:8453");
   ok("payTo is the one treasury every path pays", pr?.accepts?.[0]?.payTo === X402_PAY_TO);
   ok("resource names the tool", pr?.resource?.url === "mcp://tool/stock_signal");
+  // CDP rejects the whole payload as schema-invalid past some length between
+  // 500 and 823 characters (measured 2026-10-23 on stock_signal's description).
+  ok("resource.description stays short enough for CDP (<= 300)", String((pr?.resource as { description?: string } | undefined)?.description ?? "").length <= 300);
   const disc = extractDiscoveryInfo(
     { x402Version: 2, resource: pr?.resource, extensions: pr?.extensions, accepted: pr?.accepts?.[0], payload: {} } as never,
     pr?.accepts?.[0] as never, true,
