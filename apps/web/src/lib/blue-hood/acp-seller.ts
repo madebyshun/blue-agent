@@ -63,6 +63,7 @@ import { readJobOnChain, type OnChainJob } from "@/lib/blue-hood/acp-chain";
 import { readRequirement } from "@/lib/blue-hood/acp-requirement";
 import { computeExecutionPlan, type ExecPlan } from "@/lib/blue-hood/execution-plan";
 import { findByTicker } from "@/lib/robinhood/rwa-registry";
+import { findOffering, type AcpOffering } from "@/lib/blue-hood/acp-offerings";
 // Type-only import — fully erased at compile time, so it never pulls the heavy
 // SDK into the webpack bundle. Runtime values come from the dynamic import below.
 import type { JobSession } from "@virtuals-protocol/acp-node-v2";
@@ -114,6 +115,8 @@ export interface AcpPollResult extends Partial<AcpPollTally> {
 
 /** Compute must return well within the ACP SLA — force a decision by here. */
 const INTERNAL_DEADLINE_MS = 12_000;
+/** Offerings #2–#4 get more: a swap build runs the pre-trade check first. */
+const OFFERING_DEADLINE_MS = 25_000;
 /** Bound the connect+hydrate so a slow stream can't eat the whole cron budget. */
 const START_DEADLINE_MS = 30_000;
 /**
@@ -303,6 +306,101 @@ function buildDeliverable(cfg: AcpSellerConfig, plan: ExecPlan): string {
     generated_at: new Date().toISOString(),
     plan,
   });
+}
+
+/** The latest requirement-shaped message of a session, as a JSON object. */
+function requirementObject(session: JobSession): Record<string, unknown> | null {
+  for (let k = session.entries.length - 1; k >= 0; k--) {
+    const e = session.entries[k];
+    if (e.kind === "message" && (e.contentType === "requirement" || e.contentType === "structured" || e.contentType === "text")) {
+      const obj = lenientJson(e.content);
+      if (obj) return obj;
+    }
+  }
+  return null;
+}
+
+/**
+ * Offerings #2–#4 (lib/blue-hood/acp-offerings.ts). Same lifecycle and the same
+ * never-hang rules as Offering #1 below: bad input is rejected at `open` before
+ * a budget is ever proposed, the check is REPEATED at `funded` (a job created
+ * and funded inside one cron gap is first seen there), exactly one tick may
+ * submit, and anything we cannot answer in time is declined — refunded, no
+ * charge — rather than left to expire.
+ */
+async function handleOfferingSession(
+  session: JobSession,
+  offering: AcpOffering,
+  AssetToken: AcpModule["AssetToken"],
+  tally: AcpPollTally,
+  deadlineAt: number,
+): Promise<void> {
+  const write = <T>(label: string, p: Promise<T>) => boundedWrite(label, p, deadlineAt);
+  const jobId = session.jobId;
+  const req = requirementObject(session);
+  await recordJobSeen({
+    job_id: jobId,
+    chain_id: session.chainId,
+    offering: offering.name,
+    buyer: session.job?.clientAddress ?? undefined,
+    price_usdc: offering.priceUsdc,
+  });
+  const refuse = async (reason: string, error: string, kind: "rejected_input" | "declined") => {
+    await write("reject", session.reject(reason));
+    await updateJobStatus(jobId, "rejected", { error });
+    tally[kind]++;
+  };
+
+  switch (session.status) {
+    case "open": {
+      const why = req ? offering.check(req) : "invalid requirement: expected a JSON object";
+      if (why) return refuse(why, "bad_requirement", "rejected_input");
+      await write("setBudget", session.setBudget(AssetToken.usdc(offering.priceUsdc, session.chainId)));
+      await updateJobStatus(jobId, "budget_set");
+      tally.budget_proposed++;
+      return;
+    }
+    case "funded": {
+      const why = req ? offering.check(req) : "invalid requirement at funding: expected a JSON object";
+      if (why) return refuse(why, "bad_requirement", "rejected_input");
+      if (!(await acquireSubmitLock(jobId))) { tally.lock_skipped++; return; }
+      await updateJobStatus(jobId, "funded");
+      // Whatever time the cycle has left after one write, never past the SLA guard.
+      const budget = Math.max(5_000, Math.min(OFFERING_DEADLINE_MS, deadlineAt - Date.now() - WRITE_DEADLINE_MS));
+      const out = await withDeadline(offering.run(req!), budget);
+      if (!out) return refuse(`temporarily unavailable — ${offering.name} timed out, job declined (no charge)`, "deadline", "declined");
+      if (out.kind === "reject") return refuse(out.reason, out.error, "rejected_input");
+      if (out.kind === "decline") return refuse(`temporarily unavailable — ${out.reason} (declined, no charge)`, out.error, "declined");
+      await write("submit", session.submit(JSON.stringify({
+        offering: offering.name,
+        version: "1.0",
+        generated_at: new Date().toISOString(),
+        result: out.deliverable,
+      })));
+      await updateJobStatus(jobId, "submitted");
+      tally.delivered++;
+      return;
+    }
+    case "completed": {
+      const usdc = grossUsdcFromJob(session);
+      await updateJobStatus(jobId, "completed", usdc != null ? { usdc_gross: usdc } : {});
+      tally.completed++;
+      return;
+    }
+    case "expired": {
+      await updateJobStatus(jobId, "expired");
+      tally.expired++;
+      return;
+    }
+    case "rejected": {
+      await updateJobStatus(jobId, "rejected");
+      tally.noop++;
+      return;
+    }
+    default:
+      // budget_set (awaiting funding) or submitted (awaiting evaluation).
+      tally.noop++;
+  }
 }
 
 /**
@@ -719,7 +817,12 @@ export async function runAcpPollCycle(): Promise<AcpPollResult> {
 
     for (const session of providerSessions) {
       try {
-        await handleSession(session, cfg, AssetToken, tally, started + CYCLE_WRITE_BUDGET_MS);
+        // The buyer's chosen offering arrives as the job description
+        // (createJobFromOffering sets `description: offering.name`). Anything
+        // that is not one of Offerings #2–#4 keeps Offering #1's path unchanged.
+        const offering = findOffering(session.job?.description);
+        if (offering) await handleOfferingSession(session, offering, AssetToken, tally, started + CYCLE_WRITE_BUDGET_MS);
+        else await handleSession(session, cfg, AssetToken, tally, started + CYCLE_WRITE_BUDGET_MS);
       } catch (e) {
         // Per-session backstop — a single job's failure must not stop the batch.
         const message = (e as Error).message;
