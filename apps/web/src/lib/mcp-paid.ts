@@ -22,6 +22,7 @@
 import { declareDiscoveryExtension } from "@x402/extensions/bazaar";
 import { declareBuilderCodeExtension } from "@x402/extensions/builder-code";
 import { buildRequirements, cdpVerify, cdpSettle } from "@/app/api/_lib/x402-cdp";
+import { recordMcpReceipt } from "@/lib/mcp-receipts";
 
 export const MCP_PAYMENT_META_KEY = "x402/payment";
 export const MCP_PAYMENT_RESPONSE_META_KEY = "x402/payment-response";
@@ -127,18 +128,27 @@ export async function runPaidMcpTool(opts: {
     return paymentRequiredResult(tool, description, inputSchema, `Payment verification failed${detail ? `: ${detail}` : ""}`);
   }
 
+  const payer = payerFromPayloadSync(payment);
+  const notCharged = () => recordMcpReceipt({ tool, outcome: "not_charged", units: 0, payer, tx: null });
   let out: McpToolOutcome;
   try {
     out = await opts.run();
   } catch (e) {
     const err = e as Error & { code?: string };
+    await notCharged();
     return { isError: true, content: [{ type: "text", text: `${err.code ? `[${err.code}] ` : "Error: "}${err.message} You were not charged.` }] };
   }
   if (out.isError) {
+    await notCharged();
     return { isError: true, content: [{ type: "text", text: `${out.text}\n\nYou were not charged.` }] };
   }
 
   const settle = await cdpSettle(payment, requirements, resource, extensions);
+  // A failed settle still returns the result (parity with /api/x402/[tool]), so
+  // the caller was not charged — and the receipt says exactly that.
+  await recordMcpReceipt(settle.ok
+    ? { tool, outcome: "settled", units, payer, tx: settle.tx ?? null }
+    : { tool, outcome: "not_charged", units: 0, payer, tx: null });
   if (settle.ok) {
     const { recordSettlement } = await import("@/lib/x402-settlements");
     await recordSettlement(units, settle.tx).catch(() => {});
@@ -153,7 +163,7 @@ export async function runPaidMcpTool(opts: {
         success: settle.ok,
         transaction: settle.tx ?? null,
         network: requirements.network,
-        payer: (() => { try { return payerFromPayloadSync(payment); } catch { return null; } })(),
+        payer,
       },
     },
   };

@@ -58,6 +58,7 @@ const APP_SEGMENTS = new Set([
   // Both rewrite branches below must skip paths containing a dot, or every
   // mark 404s. See the guard in the off-prod branch.
   "models",       // model catalog (ModelsPanel)
+  "services",     // Blue Agent services — the MCP v2 tools, priced (2026-10-22)
   "connectors",   // MCP servers / integrations gallery (ConnectorsPanel)
   "cron",         // the wallet's scheduled tasks (CronPanel)
   "usage",        // credit balance + ledger activity (getBalance)
