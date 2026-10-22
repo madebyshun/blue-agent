@@ -46,9 +46,24 @@ export interface McpCallResult {
   _meta?: Record<string, unknown>;
 }
 
+/**
+ * The PaymentRequired / PaymentPayload `resource.description`, kept short.
+ * MEASURED 2026-10-23: CDP's /verify rejects the whole payload as schema-
+ * invalid ("must match one of [x402V2PaymentPayload, x402V1PaymentPayload]")
+ * when this field carries stock_signal's 823-character manifest description;
+ * 300 and 500 characters pass. So the first sentence, capped at 300 — the full
+ * text stays in the MCP manifest, where agents read it.
+ */
+export const RESOURCE_DESCRIPTION_MAX = 300;
+export function resourceDescription(description: string): string {
+  const first = description.split(/(?<=[.?!])\s/)[0] ?? description;
+  const s = first.length <= RESOURCE_DESCRIPTION_MAX ? first : description;
+  return s.length <= RESOURCE_DESCRIPTION_MAX ? s : `${s.slice(0, RESOURCE_DESCRIPTION_MAX - 1).trimEnd()}…`;
+}
+
 const resourceFor = (tool: string, description: string) => ({
   url: `mcp://tool/${tool}`,
-  description,
+  description: resourceDescription(description),
   mimeType: "application/json",
   serviceName: "Blue Agent",
   tags: ["base", "robinhood", "agents", "tokenized-stocks"],
@@ -57,7 +72,7 @@ const resourceFor = (tool: string, description: string) => ({
 
 function extensionsFor(tool: string, description: string, inputSchema: Record<string, unknown>) {
   return {
-    ...declareDiscoveryExtension({ toolName: tool, description, transport: "streamable-http", inputSchema }),
+    ...declareDiscoveryExtension({ toolName: tool, description: resourceDescription(description), transport: "streamable-http", inputSchema }),
     "builder-code": BUILDER_CODE_EXT,
   };
 }
