@@ -265,11 +265,12 @@ them.
 
 The MCP surface is deliberately a **subset**, not a mirror.
 
-MCP serves 20 tools — 8 `blue_` + 11 `hub_` + 1 `b20_`.
+MCP serves 13 tools — 5 paid + 8 free.
 
-Only the 10 `hub_` tools and `blue_doctor` are drawn from the 115-tool catalog; `blue_` are the door
-(`blue_registry`, `blue_call`), the execution primitives and two console commands, and `b20_`
-is an MCP-only calldata builder. So **none of these numbers is interchangeable with another** —
+Since MCP v2 (2026-10-22) five tools are paid per call over the x402 MCP transport
+(`swap_prepare`, `token_verdict`, `stock_signal`, `trending_safe`, `wallet_risk`);
+the free ones are the transaction builders, the safety checks nobody pays for, the
+door to the catalog (`blue_registry`, `blue_call`) and `blue_doctor`. So **none of these numbers is interchangeable with another** —
 a count always belongs to the one surface it was measured on. If you need a total, measure the
 surface you are actually calling.
 

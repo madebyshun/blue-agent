@@ -18,9 +18,11 @@ hood-live, hood-track-record, pre-trade-check, sign-check, approval-audit, rh-rw
 ## Discovery
 - Machine-readable catalog (all tools, endpoints, prices, input schemas): https://blueagent.dev/api/catalog
 - MCP server (remote, no install): https://blueagent.dev/api/mcp
-  Its manifest advertises 20 tools, a curated subset of the 98 tools above. The
-  rest are not missing and not gated: call blue_registry to list the whole
-  catalog, then blue_call to invoke any entry in it. The manifest is small on
+  Its manifest advertises 13 tools, a curated subset of the 98 tools above. Five
+  are paid per call (swap_prepare, token_verdict, stock_signal, trending_safe,
+  wallet_risk: $0.01-$0.05 USDC on Base over the x402 MCP transport); the rest
+  are free. The catalog is not missing and not gated: call blue_registry to
+  list it, then blue_call to invoke any entry in it. The manifest is small on
   purpose, because an always-loaded tool list is context spent before the agent
   has read the question.
 - Human UI: https://blueagent.dev/hub

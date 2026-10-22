@@ -80,6 +80,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { AGENT_TOOLS, TOOL_COUNT } from "../src/lib/agent-tools";
 import { MCP_TOOLS } from "../src/lib/mcp-tools";
+import { MCP_PRICES } from "../src/lib/mcp-paid";
 
 const WEB = join(__dirname, "..");
 const REPO = join(__dirname, "..", "..", ".."); // scripts → web → apps → repo root
@@ -166,7 +167,11 @@ const OG_HUB_RESULT = read("src/app/api/og/hub-result/route.tsx");
 // compile, which is the loud failure a silent 0 was not.
 const mcpNames = [...new Set(MCP_TOOLS.map((t) => t.name))];
 const MCP_COUNT = mcpNames.length;
-const mcpPrefix = (p: string) => mcpNames.filter((n) => n.startsWith(`${p}_`)).length;
+// MCP v2 (2026-10-22): names no longer carry a surface prefix, so the pinned
+// breakdown is paid vs free — derived from MCP_PRICES, the table the paid
+// transport charges from, so a doc cannot claim a split the route does not bill.
+const MCP_PAID = mcpNames.filter((n) => n in MCP_PRICES).length;
+const MCP_FREE = MCP_COUNT - MCP_PAID;
 /** A tool's own description string — prompt text, and pinnable like any file. */
 const mcpDesc = (name: string) =>
   MCP_TOOLS.find((t) => t.name === name)?.description ??
@@ -223,14 +228,14 @@ const pinned: [string, string, string][] = [
   [
     "SKILL.md MCP line",
     SKILL,
-    `MCP serves ${MCP_COUNT} tools — ${mcpPrefix("blue")} \`blue_\` + ${mcpPrefix("hub")} \`hub_\` + ${mcpPrefix("b20")} \`b20_\`.`,
+    `MCP serves ${MCP_COUNT} tools — ${MCP_PAID} paid + ${MCP_FREE} free.`,
   ],
   ["SKILL.md grounding-file count", SKILL, `${SKILL_FILES.length} grounding files live in \`skills/\``],
   // The MCP route's own header. Pinned because it drifted by one, unnoticed.
   [
     "mcp/route.ts header",
     MCP_ROUTE,
-    `Tools: ${MCP_COUNT} — ${mcpPrefix("blue")} blue_* + ${mcpPrefix("hub")} hub_* + ${mcpPrefix("b20")} b20_*`,
+    `Tools: ${MCP_COUNT} — ${MCP_PAID} paid + ${MCP_FREE} free`,
   ],
   // ...and the CATALOG total the same header quotes, eight lines below it.
   // MEASURED 2026-09-26: that sentence said 111 while AGENT_TOOLS held 110.
@@ -251,7 +256,7 @@ const pinned: [string, string, string][] = [
   [
     "CLAUDE.md MCP line",
     CLAUDE_MD,
-    `\`/api/mcp\` serves **${MCP_COUNT}** (${mcpPrefix("blue")} \`blue_\` + ${mcpPrefix("hub")} \`hub_\` + ${mcpPrefix("b20")} \`b20_\`)`,
+    `\`/api/mcp\` serves **${MCP_COUNT}** (${MCP_PAID} paid + ${MCP_FREE} free)`,
   ],
   // The same paragraph states the CATALOG size twice, and both were 110 while
   // AGENT_TOOLS held 115. They escaped the group-2 scanner because COUNT_RE
@@ -1094,11 +1099,9 @@ check(
   `expected "const MCP_TOOL_COUNT = ${MCP_COUNT};"`,
 );
 check(
-  "/about's prefix breakdown equals the real manifest",
-  aboutCode.includes(
-    `(${mcpPrefix("blue")} blue_ + ${mcpPrefix("hub")} hub_ + ${mcpPrefix("b20")} b20_)`,
-  ),
-  `expected "(${mcpPrefix("blue")} blue_ + ${mcpPrefix("hub")} hub_ + ${mcpPrefix("b20")} b20_)" — a correct total can still hide three wrong parts`,
+  "/about's paid/free breakdown equals the real manifest",
+  aboutCode.includes(`(${MCP_PAID} paid + ${MCP_FREE} free)`),
+  `expected "(${MCP_PAID} paid + ${MCP_FREE} free)" — a correct total can still hide two wrong parts`,
 );
 check(
   "/about does not pull the MCP manifest into its client bundle",

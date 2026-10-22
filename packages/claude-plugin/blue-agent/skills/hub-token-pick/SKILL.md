@@ -52,7 +52,7 @@ One structured token pick, or `NO_PICK` with explanation.
 
 ## Important
 
-This is not financial advice. Always verify addresses on Basescan before any transaction. Run `hub_honeypot` on any unfamiliar token.
+This is not financial advice. Always verify addresses on Basescan before any transaction. Run `token_verdict` on any unfamiliar token.
 
 ## Price
 
