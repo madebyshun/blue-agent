@@ -1,4 +1,6 @@
 export { X402Client }                    from "./client";
+export { PaidMcpClient, paymentReceipt } from "./mcp";
+export type { PaidMcpConfig, PaidMcpResult } from "./mcp";
 export type {
   X402ClientConfig,
   CallOptions,

@@ -1,36 +1,62 @@
 # @blueagent/x402
 
-x402 client SDK for [Blue Hub](https://blueagent.dev/hub) — call 40 AI tools on Base, pay per call in USDC. No API key, no account, no human in the loop.
+x402 client SDK for [Blue Hub](https://blueagent.dev/hub) — call Blue Agent tools on Base and pay per call in USDC. No API key is sent to Blue Agent.
 
-## Install
+## Claude Code paid MCP demo
+
+The production MCP endpoint is `https://blueagent.dev/api/mcp`. Generic MCP clients can discover the tools, but they do not all know how to handle an x402 `PaymentRequired` tool result. This package includes an x402-aware local stdio bridge that signs the exact EIP-3009 authorization locally and retries the same call.
+
+Use a dedicated demo wallet with only the USDC you intend to spend. The bridge is not on npm yet, so build it locally and point your MCP client at the built file:
 
 ```bash
-npm install @blueagent/x402
+cd packages/x402-client && npm run build
+export BUYER_PRIVATE_KEY=0x...
+node dist/mcp-stdio.js
 ```
 
-## Quick start
+Configure Claude Code with the absolute path to that build:
+
+```json
+{
+  "mcpServers": {
+    "blue-agent-paid": {
+      "command": "node",
+      "args": ["/absolute/path/to/blue-agent/packages/x402-client/dist/mcp-stdio.js"],
+      "env": { "BUYER_PRIVATE_KEY": "0x..." }
+    }
+  }
+}
+```
+
+Once a release carrying the `blueagent-x402-mcp` bin is published, this becomes `npx --yes --package @blueagent/x402 blueagent-x402-mcp`.
+
+Then ask:
+
+```text
+Compare NVDA on Base 8453 and Robinhood Chain 4663.
+Which venue is cheaper versus the Chainlink reference price?
+Do not give me a buy or sell recommendation.
+```
+
+The bridge performs: unpaid MCP call → exact `PaymentRequired` parsing → local EIP-3009 signature → retry with `_meta["x402/payment"]` → result and settlement receipt. The private key never leaves the local process. The terminal prints a Basescan URL after successful settlement.
+
+For a direct local test without Claude Code:
+
+```bash
+BUYER_PRIVATE_KEY=0x... npx tsx apps/web/scripts/mcp-paid-e2e.ts https://blueagent.dev/api/mcp stock_signal
+```
+
+## SDK quick start
 
 ```typescript
 import { createX402Client } from "@blueagent/x402";
 
-const client = createX402Client({
-  privateKey: process.env.PRIVATE_KEY as `0x${string}`,
-});
-
-// Call any Blue Hub tool by ID
+const client = createX402Client({ privateKey: process.env.PRIVATE_KEY as `0x${string}` });
 const signal = await client.tokenPick();
-console.log(signal.data);       // AI result
-console.log(signal.pricePaid);  // "$0.25"
-
-// Or use the 5 core founder commands
-const brief = await client.idea("a gasless USDC tipping app on Base");
-const arch  = await client.build("gasless USDC tipping app, Solidity + Next.js");
-const audit = await client.audit("0x<contract-address>");
-const ship  = await client.ship("tipping app, deployed on Base Sepolia");
-const raise = await client.raise("gasless USDC tipping app, 500 DAU, pre-seed");
+console.log(signal.data, signal.pricePaid);
 ```
 
-## Call any tool
+The existing HTTP client handles the normal x402 header flow. `PaidMcpClient` handles the MCP-specific tool-result flow:
 
 ```typescript
 // Call by tool ID + inputs
@@ -44,57 +70,11 @@ const result = await client.call("https://blueagent.dev/api/x402/token-pick-sign
 });
 ```
 
-## Discover pricing
+For the MCP-specific tool-result flow:
 
 ```typescript
-// Get all tool prices from /.well-known/pricing
-const manifest = await client.pricing();
-manifest.routes.forEach(r => {
-  console.log(r.name, r.priceUSD);
-});
-
-// Get price for a specific tool
-const price = await client.priceOf("blue-audit");
-// { priceUSD: "$1.00", amountRequired: "1000000" }
+import { PaidMcpClient } from "@blueagent/x402";
+const mcp = new PaidMcpClient({ privateKey: process.env.PRIVATE_KEY as `0x${string}` });
+await mcp.initialize();
+const result = await mcp.callTool("stock_signal", { ticker: "NVDA" });
 ```
-
-## Result shape
-
-```typescript
-{
-  data:       T,          // parsed JSON response from tool
-  toolId:     string,     // e.g. "token-pick-signal"
-  pricePaid:  string,     // human-readable e.g. "$0.25"
-  amountPaid: string,     // raw USDC units e.g. "250000"
-  txSettled?: string,     // settlement tx hash (if returned)
-}
-```
-
-## Payment flow
-
-The SDK handles the full x402 v2 flow automatically:
-
-```
-1. POST /api/x402/{tool}           → 402 + X-Payment-Requirements header
-2. decode base64 requirements      → get payTo, amount, network
-3. sign EIP-3009 USDC auth         → TransferWithAuthorization on Base
-4. POST /api/x402/{tool}           → X-Payment header with signature
-5. 200 OK                          → tool result + optional settlement tx
-```
-
-## Config
-
-```typescript
-createX402Client({
-  privateKey: "0x...",                   // required: EVM private key
-  rpcUrl:     "https://mainnet.base.org", // optional: Base RPC (default)
-  ttl:        300,                        // optional: signature TTL seconds (default: 300)
-})
-```
-
-## Links
-
-- Blue Hub: https://blueagent.dev/hub
-- Catalog API: https://blueagent.dev/api/catalog
-- Pricing: https://blueagent.dev/.well-known/pricing
-- GitHub: https://github.com/madebyshun/blue-agent
