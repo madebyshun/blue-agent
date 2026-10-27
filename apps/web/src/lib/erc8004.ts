@@ -27,7 +27,10 @@ export const ERC8004_REPUTATION = "0x8004BAa17C55a88189AE136b182e5fdA19dE9b63" a
 export const ERC8004_CHAIN_ID = 8453;
 
 /** Set after the registration tx lands (read the agentId from its Transfer log). */
-export const BLUE_AGENT_ID: bigint | null = null;
+// Registered 2026-10-27: tx 0x63772f863a35364880f85bf8af68cb9cb591294288671bbffd9abc4d7e0fb7c1
+// (Base block 53,164,193). ownerOf = getAgentWallet = 0x00fd29b7…746f (ShunTr's
+// test-buyer wallet); tokenURI = REGISTRATION_URL. Read back on-chain the same day.
+export const BLUE_AGENT_ID: bigint | null = 1137821n;
 
 export const REGISTRATION_URL = "https://blueagent.dev/.well-known/agent-registration.json";
 

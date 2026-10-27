@@ -14,7 +14,7 @@ Here is what we shipped.
 
 ## 1. An onchain identity for Blue Agent
 
-Blue Agent is registering in the ERC-8004 Identity Registry on Base 8453, the emerging standard for agent identity.
+Blue Agent is now registered as agent #1137821 in the ERC-8004 Identity Registry on Base 8453, the emerging standard for agent identity.
 
 The identity points to a public registration file at blueagent.dev/.well-known/agent-registration.json. It lists every way to reach us: the MCP server, the x402 endpoints, the job board, and the wallet that receives payment. Any agent or explorer that reads ERC-8004 can now find Blue Agent and know exactly how to call and pay it.
 
@@ -73,6 +73,6 @@ Every receipt, score and rating is public.
 
 ## Notes before posting (not part of the article)
 
-- Section 1 says "is registering". Change it to "is registered as agent #<id>" once ShunTr signs the register tx (`npx tsx scripts/erc8004-register.ts` prints it) and BLUE_AGENT_ID is set. Until then section 3's feedback template is not returned, so do not post section 3 as live before that.
+- Registered: agent #1137821, tx 0x63772f86…b7c1 on Base 8453. Section 3 is live once the BLUE_AGENT_ID commit is deployed.
 - Do not quote paid-call counts in the article. They are low today. The profile pages show them honestly.
 - Media: a 1:1 clip of the stock_signal profile page (trust tile, receipts with Basescan links), then the scores JSON. Prepare it after the text is approved.
