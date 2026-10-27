@@ -17,6 +17,8 @@ export interface ServiceRow {
   schema: Record<string, unknown>;
   description: string;
   tryPrompt: string | null;
+  /** Trust score 0-100 (lib/service-score); null = insufficient data. */
+  score: number | null;
 }
 
 const MCP_URL = "https://blueagent.dev/api/mcp";
@@ -115,6 +117,7 @@ export default function ServicesDashboard({ rows, stats, receipts }: { rows: Ser
           <div className="ml-auto flex flex-wrap gap-2">
             <span className="rounded-full border border-[#1A1A2E] px-3 py-1 text-[12px] text-[#94A3B8]"><span className="text-[#34D399]">●</span> MCP live</span>
             <span className="rounded-full border border-[#1A1A2E] px-3 py-1 text-[12px] text-[#94A3B8]">{rows.length} tools · {paidCount} paid</span>
+            <Link href="/app/jobs" className="rounded-full border border-[#1A1A2E] px-3 py-1 text-[12px] text-[#94A3B8] hover:text-[#4FC3F7]">Hire via ACP →</Link>
           </div>
         </div>
 
@@ -151,6 +154,7 @@ export default function ServicesDashboard({ rows, stats, receipts }: { rows: Ser
                     <th className="px-4 py-2.5 font-medium">Price</th>
                     <th className="px-4 py-2.5 font-medium">Calls · 30d</th>
                     <th className="px-4 py-2.5 font-medium">Success</th>
+                    <th className="px-4 py-2.5 font-medium">Trust</th>
                     <th className="px-4 py-2.5 font-medium text-right">Run</th>
                   </tr>
                 </thead>
@@ -158,7 +162,7 @@ export default function ServicesDashboard({ rows, stats, receipts }: { rows: Ser
                   {shown.map((r) => (
                     <tr key={r.name} className="border-t border-[#1A1A2E] align-middle">
                       <td className="px-4 py-3">
-                        <p className="font-mono text-[13px] text-[#E2E8F0]">{r.name}</p>
+                        <Link href={`/app/services/${r.name}`} className="font-mono text-[13px] text-[#E2E8F0] hover:text-[#4FC3F7]">{r.name}</Link>
                         <p className="mt-0.5 text-[12px] text-[#94A3B8]">{r.short}</p>
                       </td>
                       <td className="px-4 py-3">
@@ -171,6 +175,7 @@ export default function ServicesDashboard({ rows, stats, receipts }: { rows: Ser
                       </td>
                       <td className="px-4 py-3 text-[13px] text-[#E2E8F0] tabular-nums">{r.priceUsd > 0 ? (r.calls ?? "—") : "—"}</td>
                       <td className="px-4 py-3 text-[13px] text-[#E2E8F0] tabular-nums">{r.priceUsd > 0 && r.successPct !== null ? `${r.successPct}%` : "—"}</td>
+                      <td className="px-4 py-3 text-[13px] tabular-nums" title="Wilson lower bound of paid runs that returned; needs 5+ runs">{r.score !== null ? <span className="text-[#E2E8F0]">{r.score}</span> : <span className="text-[11px] text-[#64748B]">{r.priceUsd > 0 ? "n<5" : "—"}</span>}</td>
                       <td className="px-4 py-3">
                         <div className="flex justify-end gap-1.5">
                           <button type="button" onClick={() => setOpen(r)} className="rounded-md border border-[#1A1A2E] bg-[#0F121A] px-2.5 py-1 text-[12px] text-[#E2E8F0] hover:border-[#2a3350]">Schema</button>

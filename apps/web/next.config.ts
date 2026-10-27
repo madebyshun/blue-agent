@@ -53,6 +53,10 @@ const nextConfig: NextConfig = {
   // from node_modules at runtime, and an unconfigured deploy never loads it at all.
   serverExternalPackages: ["@virtuals-protocol/acp-node-v2"],
 
+  // ERC-8004 registration file (lib/erc8004.ts) at the spec's well-known path.
+  async rewrites() {
+    return [{ source: "/.well-known/agent-registration.json", destination: "/api/agent-registration" }];
+  },
   async redirects() {
     return [
       // BlueBank's production gate (/app/bank + /pay) now lives in

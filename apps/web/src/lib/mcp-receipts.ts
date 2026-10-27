@@ -32,12 +32,16 @@ export interface McpReceipt {
   tx: string | null;     // Base settlement tx
   team: boolean;
   at: string;            // ISO
+  ms?: number;           // handler run time, ms (absent on receipts before 2026-10-27)
 }
 
 const K_LIST = "mcp:receipts";
 const LIST_MAX = 500;
 const dayKey = (d: Date) => `mcp:stats:${d.toISOString().slice(0, 10).replace(/-/g, "")}`;
 const DAY_TTL = 120 * 24 * 3600;
+/** Per-tx copy so a feedback file outlives the capped list. */
+const txKey = (tx: string) => `mcp:receipt:${tx.toLowerCase()}`;
+const TX_TTL = 400 * 24 * 3600;
 
 export async function recordMcpReceipt(r: Omit<McpReceipt, "team" | "at">): Promise<void> {
   const payer = r.payer ? r.payer.toLowerCase() : null;
@@ -51,12 +55,15 @@ export async function recordMcpReceipt(r: Omit<McpReceipt, "team" | "at">): Prom
       kv.hincrby(day, `${who}|${r.outcome}|${r.tool}`, 1),
       r.units > 0 ? kv.hincrby(day, `${who}|units|${r.tool}`, r.units) : Promise.resolve(0),
       payer && !team && r.outcome === "settled" ? kv.sadd(`${day}:payers`, payer) : Promise.resolve(),
+      typeof r.ms === "number" ? kv.hincrby(day, `all|ms|${r.tool}`, Math.round(r.ms)) : Promise.resolve(0),
+      typeof r.ms === "number" ? kv.hincrby(day, `all|timed|${r.tool}`, 1) : Promise.resolve(0),
+      r.tx && r.outcome === "settled" ? kv.set(txKey(r.tx), rec, { ex: TX_TTL }) : Promise.resolve(),
     ]);
     await Promise.all([kv.expire(day, DAY_TTL), kv.expire(`${day}:payers`, DAY_TTL)]);
   } catch { /* bookkeeping is best-effort */ }
 }
 
-export interface ToolStats { settled: number; notCharged: number; units: number }
+export interface ToolStats { settled: number; notCharged: number; units: number; ms: number; timed: number }
 export interface McpStats {
   /** null = KV could not be read; the page then says "—", never 0. */
   readable: boolean;
@@ -90,8 +97,11 @@ export async function readMcpStats(days = 30): Promise<McpStats> {
         const n = Number(raw) || 0;
         const [who, kind, tool] = field.split("|");
         if (!tool) continue;
-        const ts = (out.byTool[tool] ??= { settled: 0, notCharged: 0, units: 0 });
-        if (who === "outside") {
+        const ts = (out.byTool[tool] ??= { settled: 0, notCharged: 0, units: 0, ms: 0, timed: 0 });
+        if (who === "all") {
+          if (kind === "ms") ts.ms += n;
+          else if (kind === "timed") ts.timed += n;
+        } else if (who === "outside") {
           if (kind === "settled") { out.outside.settled += n; ts.settled += n; o += n; }
           else if (kind === "not_charged") { out.outside.notCharged += n; ts.notCharged += n; }
           else if (kind === "units") { out.outside.units += n; ts.units += n; }
@@ -118,4 +128,21 @@ export async function readMcpReceipts(limit = 12): Promise<McpReceipt[] | null> 
   const p = await kvGetProbe<McpReceipt[]>(K_LIST);
   if (p.status === "error") return null;
   return p.status === "hit" ? p.value.slice(0, limit) : [];
+}
+
+/**
+ * One settled receipt by its Base tx. undefined = KV unreadable, null = no
+ * such settled call.
+ */
+export async function findMcpReceipt(tx: string): Promise<McpReceipt | null | undefined> {
+  try {
+    const hit = await kv.get<McpReceipt>(txKey(tx));
+    if (hit) return hit;
+    const p = await kvGetProbe<McpReceipt[]>(K_LIST);
+    if (p.status === "error") return undefined;
+    const want = tx.toLowerCase();
+    return (p.status === "hit" ? p.value : []).find((r) => r.tx?.toLowerCase() === want) ?? null;
+  } catch {
+    return undefined;
+  }
 }
