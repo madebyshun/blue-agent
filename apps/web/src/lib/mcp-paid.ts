@@ -23,9 +23,11 @@ import { declareDiscoveryExtension } from "@x402/extensions/bazaar";
 import { declareBuilderCodeExtension } from "@x402/extensions/builder-code";
 import { buildRequirements, cdpVerify, cdpSettle } from "@/app/api/_lib/x402-cdp";
 import { recordMcpReceipt } from "@/lib/mcp-receipts";
+import { feedbackTemplate } from "@/lib/erc8004";
 
 export const MCP_PAYMENT_META_KEY = "x402/payment";
 export const MCP_PAYMENT_RESPONSE_META_KEY = "x402/payment-response";
+export const MCP_FEEDBACK_META_KEY = "erc8004/feedback";
 
 /** USDC micro-units (6 decimals). ShunTr, 2026-10-22: "thu phí giống bảng". */
 export const MCP_PRICES: Readonly<Record<string, number>> = {
@@ -144,10 +146,13 @@ export async function runPaidMcpTool(opts: {
   }
 
   const payer = payerFromPayloadSync(payment);
-  const notCharged = () => recordMcpReceipt({ tool, outcome: "not_charged", units: 0, payer, tx: null });
+  const t0 = Date.now();
+  let ms: number | undefined;
+  const notCharged = () => recordMcpReceipt({ tool, outcome: "not_charged", units: 0, payer, tx: null, ms: ms ?? Date.now() - t0 });
   let out: McpToolOutcome;
   try {
     out = await opts.run();
+    ms = Date.now() - t0;
   } catch (e) {
     const err = e as Error & { code?: string };
     await notCharged();
@@ -162,8 +167,8 @@ export async function runPaidMcpTool(opts: {
   // A failed settle still returns the result (parity with /api/x402/[tool]), so
   // the caller was not charged — and the receipt says exactly that.
   await recordMcpReceipt(settle.ok
-    ? { tool, outcome: "settled", units, payer, tx: settle.tx ?? null }
-    : { tool, outcome: "not_charged", units: 0, payer, tx: null });
+    ? { tool, outcome: "settled", units, payer, tx: settle.tx ?? null, ms }
+    : { tool, outcome: "not_charged", units: 0, payer, tx: null, ms });
   if (settle.ok) {
     const { recordSettlement } = await import("@/lib/x402-settlements");
     await recordSettlement(units, settle.tx).catch(() => {});
@@ -180,6 +185,11 @@ export async function runPaidMcpTool(opts: {
         network: requirements.network,
         payer,
       },
+      // ERC-8004: optional, buyer-signed rating with the tx as proof of payment.
+      ...(settle.ok && settle.tx ? (() => {
+        const fb = feedbackTemplate(tool, settle.tx);
+        return fb ? { [MCP_FEEDBACK_META_KEY]: fb } : {};
+      })() : {}),
     },
   };
 }

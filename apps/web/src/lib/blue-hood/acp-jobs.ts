@@ -454,3 +454,19 @@ function stripUndefined<T extends object>(obj: T): Partial<T> {
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
+
+/**
+ * Newest jobs across the lifetime index, for the public /app/jobs board.
+ * Same `1 + N` read as computeAcpRevenue; null when KV could not be read.
+ */
+export async function listRecentJobs(limit = 20): Promise<AcpJobRecord[] | null> {
+  try {
+    const ids = (await kvSMembers(KV_ACP_JOB_INDEX)).slice(0, ACP_JOB_INDEX_MAX);
+    const records = (await Promise.all(ids.map((id) => kvGet<AcpJobRecord>(kvAcpJob(id))))).filter(
+      (r): r is AcpJobRecord => r !== null,
+    );
+    return records.sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, limit);
+  } catch {
+    return null;
+  }
+}
