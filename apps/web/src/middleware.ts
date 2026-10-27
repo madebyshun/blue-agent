@@ -59,6 +59,7 @@ const APP_SEGMENTS = new Set([
   // mark 404s. See the guard in the off-prod branch.
   "models",       // model catalog (ModelsPanel)
   "services",     // Blue Agent services — the MCP v2 tools, priced (2026-10-22)
+  "jobs",         // hire Blue Agent via Virtuals ACP (2026-10-27)
   "connectors",   // MCP servers / integrations gallery (ConnectorsPanel)
   "cron",         // the wallet's scheduled tasks (CronPanel)
   "usage",        // credit balance + ledger activity (getBalance)
