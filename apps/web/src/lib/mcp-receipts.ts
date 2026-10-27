@@ -62,7 +62,7 @@ export interface McpStats {
   readable: boolean;
   days: number;
   outside: { settled: number; notCharged: number; units: number; payers: number };
-  team: { settled: number; notCharged: number };
+  team: { settled: number; notCharged: number; units: number };
   byTool: Record<string, ToolStats>;
   /** Outside settled calls per day, oldest first. */
   series: { day: string; outside: number; team: number }[];
@@ -72,7 +72,7 @@ export async function readMcpStats(days = 30): Promise<McpStats> {
   const out: McpStats = {
     readable: true, days,
     outside: { settled: 0, notCharged: 0, units: 0, payers: 0 },
-    team: { settled: 0, notCharged: 0 },
+    team: { settled: 0, notCharged: 0, units: 0 },
     byTool: {}, series: [],
   };
   const payers = new Set<string>();
@@ -96,8 +96,11 @@ export async function readMcpStats(days = 30): Promise<McpStats> {
           else if (kind === "not_charged") { out.outside.notCharged += n; ts.notCharged += n; }
           else if (kind === "units") { out.outside.units += n; ts.units += n; }
         } else if (who === "team") {
-          if (kind === "settled") { out.team.settled += n; t += n; }
-          else if (kind === "not_charged") out.team.notCharged += n;
+          // Counted in byTool too: the page shows every paid call (ShunTr,
+          // 2026-10-27); the outside/team split stays in the data.
+          if (kind === "settled") { out.team.settled += n; ts.settled += n; t += n; }
+          else if (kind === "not_charged") { out.team.notCharged += n; ts.notCharged += n; }
+          else if (kind === "units") { out.team.units += n; ts.units += n; }
         }
       }
       for (const p of payerSets[i] ?? []) payers.add(p);
