@@ -24,6 +24,23 @@ const QUICKSTART: Record<string, string> = {
   "Claude Code": `claude mcp add --transport http blue-agent ${MCP_URL}`,
   Cursor: JSON.stringify({ mcpServers: { "blue-agent": { url: MCP_URL } } }, null, 2),
   HTTP: `curl -s ${MCP_URL} -H 'content-type: application/json' \\\n  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'`,
+  // Paid tools from Claude Code: most MCP clients stop at the PaymentRequired
+  // result, so the x402-aware stdio bridge (packages/x402-client, 2205baa7)
+  // signs the quoted EIP-3009 authorization locally and retries. Not on npm
+  // yet, so it is built from the public repo — verified from a clean clone
+  // 2026-10-27 (install + build, then initialize and tools/list → 13 tools).
+  "Pay from Claude Code": [
+    "git clone --depth 1 https://github.com/madebyshun/blue-agent",
+    "cd blue-agent/packages/x402-client && npm install && npm run build",
+    `claude mcp add blue-agent-paid -e BUYER_PRIVATE_KEY=0xYOUR_DEMO_WALLET_KEY -- node "$PWD/dist/mcp-stdio.js"`,
+  ].join("\n"),
+};
+const PAID_NOTES: Partial<Record<keyof typeof QUICKSTART, string[]>> = {
+  "Pay from Claude Code": [
+    "Use a separate wallet holding only a little USDC on Base. The key stays on your machine: the bridge signs each payment locally, for exactly the price the tool quoted.",
+    "Then ask Claude: \"Is NVDA cheaper on Base or on Robinhood Chain right now?\" It calls stock_signal, pays $0.01, and the bridge prints the Basescan link of the payment.",
+    "A call that fails is not charged.",
+  ],
 };
 const FILTERS = [
   { id: "all", label: "All" },
@@ -58,7 +75,7 @@ function Stat({ label, value, sub }: { label: string; value: string; sub: string
   return (
     <div className="rounded-xl border border-[#1A1A2E] bg-[#0B0D12] px-4 py-3.5">
       <p className="text-[12px] text-[#94A3B8]">{label}</p>
-      <p className="mt-1.5 text-[24px] font-semibold text-[#E2E8F0] tabular-nums">{value}</p>
+      <p className="mt-1.5 text-[20px] font-semibold text-[#E2E8F0] tabular-nums">{value}</p>
       <p className="mt-1 text-[11px] text-[#64748B]">{sub}</p>
     </div>
   );
@@ -72,18 +89,25 @@ export default function ServicesDashboard({ rows, stats, receipts }: { rows: Ser
   const shown = useMemo(() => rows.filter((r) =>
     filter === "all" ? true : filter === "paid" ? r.priceUsd > 0 : filter === "free" ? r.priceUsd === 0 : r.group === filter), [rows, filter]);
   const R = stats.readable;
-  const runs = stats.outside.settled + stats.outside.notCharged;
-  const peak = Math.max(1, ...stats.series.map((d) => d.outside + d.team));
+  // Every paid call counts here (ShunTr, 2026-10-27): no outside/team split on the page.
+  const settled = stats.outside.settled + stats.team.settled;
+  const notCharged = stats.outside.notCharged + stats.team.notCharged;
+  const units = stats.outside.units + stats.team.units;
+  const runs = settled + notCharged;
+  const since = Date.now() - 30 * 86_400_000;
+  const payers = new Set((receipts ?? []).filter((r) => r.outcome === "settled" && r.payer && Date.parse(r.at) >= since).map((r) => r.payer)).size;
+  const series = stats.series.map((d) => ({ day: d.day, n: d.outside + d.team }));
+  const peak = Math.max(1, ...series.map((d) => d.n));
 
   return (
-    <div className="h-full overflow-y-auto">
+    <div className="h-full overflow-y-auto font-mono [&_button]:font-mono [&_a]:font-mono [&_pre]:font-mono">
       <div className="mx-auto max-w-[1680px] px-6 py-6 lg:px-8 grid gap-5">
         {/* Hero */}
         <div className="flex flex-wrap items-end gap-6">
           <div className="min-w-0">
             <p className="font-mono text-[11px] tracking-[.14em] text-[#64748B]">// SERVICES</p>
-            <h1 className="mt-1 text-[26px] font-semibold text-[#E2E8F0]">Blue Agent services</h1>
-            <p className="mt-1.5 max-w-[760px] text-[14px] text-[#94A3B8]">
+            <h1 className="mt-1 text-[20px] font-semibold text-[#E2E8F0]">Blue Agent services</h1>
+            <p className="mt-1.5 max-w-[760px] text-[12px] leading-[1.7] text-[#94A3B8]">
               Tokenized-stock data, token checks and unsigned transactions on Base 8453 and Robinhood Chain 4663.
               Paid per call in USDC over x402. No account, no API key.
             </p>
@@ -95,20 +119,19 @@ export default function ServicesDashboard({ rows, stats, receipts }: { rows: Ser
         </div>
 
         {/* Stats — outside buyers only */}
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-          <Stat label="Paid calls · 30d" value={R ? String(stats.outside.settled) : "—"} sub="outside buyers only" />
-          <Stat label="Paying wallets · 30d" value={R ? String(stats.outside.payers) : "—"} sub="distinct payers" />
-          <Stat label="Revenue · 30d" value={R ? usd(stats.outside.units / 1e6) : "—"} sub="USDC settled on Base" />
-          <Stat label="Success rate" value={R && runs > 0 ? `${Math.round((stats.outside.settled / runs) * 1000) / 10}%` : "—"} sub="paid calls that returned" />
-          <Stat label="Not charged on failure" value={R ? String(stats.outside.notCharged) : "—"} sub="failed runs, $0 taken" />
-          <Stat label="Team test calls" value={R ? String(stats.team.settled + stats.team.notCharged) : "—"} sub="shown apart, not counted" />
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+          <Stat label="Paid calls · 30d" value={R ? String(settled) : "—"} sub="settled on Base" />
+          <Stat label="Paying wallets · 30d" value={receipts ? String(payers) : "—"} sub="distinct payers" />
+          <Stat label="Revenue · 30d" value={R ? usd(units / 1e6) : "—"} sub="USDC settled on Base" />
+          <Stat label="Success rate" value={R && runs > 0 ? `${Math.round((settled / runs) * 1000) / 10}%` : "—"} sub="paid calls that returned" />
+          <Stat label="Not charged on failure" value={R ? String(notCharged) : "—"} sub="failed runs, $0 taken" />
         </div>
 
         <div className="grid gap-5 xl:grid-cols-[minmax(0,2.1fr)_minmax(0,1fr)] items-start">
           {/* Services table */}
           <section className="rounded-xl border border-[#1A1A2E] bg-[#0B0D12] overflow-hidden">
             <div className="flex flex-wrap items-center gap-3 border-b border-[#1A1A2E] px-4 py-3">
-              <h2 className="text-[14px] font-semibold text-[#E2E8F0]">Services</h2>
+              <h2 className="text-[13px] font-semibold text-[#E2E8F0]">Services</h2>
               <span className="text-[11px] text-[#64748B]">{rows.length} tools · {paidCount} paid · {rows.length - paidCount} free</span>
               <div className="ml-auto flex flex-wrap gap-1">
                 {FILTERS.map((f) => (
@@ -167,7 +190,7 @@ export default function ServicesDashboard({ rows, stats, receipts }: { rows: Ser
             {/* Quickstart */}
             <section className="rounded-xl border border-[#1A1A2E] bg-[#0B0D12]">
               <div className="flex items-center gap-2 border-b border-[#1A1A2E] px-4 py-3">
-                <h2 className="text-[14px] font-semibold text-[#E2E8F0]">Quickstart</h2>
+                <h2 className="text-[13px] font-semibold text-[#E2E8F0]">Quickstart</h2>
                 <div className="ml-auto flex gap-1">
                   {(Object.keys(QUICKSTART) as (keyof typeof QUICKSTART)[]).map((k) => (
                     <button key={k} type="button" onClick={() => setQs(k)}
@@ -178,15 +201,17 @@ export default function ServicesDashboard({ rows, stats, receipts }: { rows: Ser
               <div className="grid gap-2.5 px-4 py-3.5">
                 <div className="flex justify-end"><Copy text={QUICKSTART[qs]} /></div>
                 <pre className="whitespace-pre-wrap break-all rounded-lg border border-[#1A1A2E] bg-[#07080C] px-3 py-2.5 font-mono text-[12px] text-[#cbd5e1]">{QUICKSTART[qs]}</pre>
-                <p className="text-[12px] leading-[1.6] text-[#64748B]">
-                  Paid tools answer with a price first. Any x402 MCP client pays from your own wallet and retries.
-                  Set a cap in your client, for example 0.05 USDC per call and 1 USDC a day.
-                </p>
+                {PAID_NOTES[qs]
+                  ? <ol className="grid list-decimal gap-1.5 pl-4 text-[12px] leading-[1.6] text-[#94A3B8]">{PAID_NOTES[qs]!.map((n) => <li key={n}>{n}</li>)}</ol>
+                  : <p className="text-[12px] leading-[1.6] text-[#64748B]">
+                      Free tools work as soon as you connect. Paid tools answer with a price first: pay with an x402 MCP client,
+                      or use the Pay from Claude Code tab. Set a cap in your client, for example 0.05 USDC per call and 1 USDC a day.
+                    </p>}
               </div>
             </section>
             {/* Guarantees */}
             <section className="rounded-xl border border-[#1A1A2E] bg-[#0B0D12] px-4 py-3.5">
-              <h2 className="mb-2.5 text-[14px] font-semibold text-[#E2E8F0]">Guarantees</h2>
+              <h2 className="mb-2.5 text-[13px] font-semibold text-[#E2E8F0]">Guarantees</h2>
               <ul className="grid gap-2 text-[13px] text-[#94A3B8]">
                 {["Bad input is refused before any price", "Charged only after the tool returns", "Every payment settles on Base with a receipt", "Blue Agent never holds a key or your funds"].map((g) => (
                   <li key={g} className="flex gap-2"><span className="text-[#34D399]">✓</span>{g}</li>
@@ -200,23 +225,21 @@ export default function ServicesDashboard({ rows, stats, receipts }: { rows: Ser
           {/* Chart */}
           <section className="rounded-xl border border-[#1A1A2E] bg-[#0B0D12]">
             <div className="flex items-center gap-2 border-b border-[#1A1A2E] px-4 py-3">
-              <h2 className="text-[14px] font-semibold text-[#E2E8F0]">Paid calls</h2>
-              <span className="text-[11px] text-[#64748B]">last 30 days · outside buyers vs team tests</span>
+              <h2 className="text-[13px] font-semibold text-[#E2E8F0]">Paid calls</h2>
+              <span className="text-[11px] text-[#64748B]">last 30 days · settled on Base</span>
             </div>
             {R ? (
               <>
                 <div className="flex h-[180px] items-end gap-1.5 px-4 pt-4">
-                  {stats.series.map((d) => (
-                    <div key={d.day} className="flex h-full flex-1 flex-col justify-end" title={`${d.day}: ${d.outside} outside · ${d.team} team`}>
-                      <span className="block rounded-t-sm bg-[#2a2f3c]" style={{ height: `${(d.team / peak) * 100}%` }} />
-                      <span className="block bg-[#1f6f93]" style={{ height: `${(d.outside / peak) * 100}%` }} />
+                  {series.map((d) => (
+                    <div key={d.day} className="flex h-full flex-1 flex-col justify-end" title={`${d.day}: ${d.n} paid`}>
+                      <span className="block rounded-t-sm bg-[#1f6f93]" style={{ height: `${(d.n / peak) * 100}%` }} />
                     </div>
                   ))}
                 </div>
                 <div className="flex gap-4 px-4 pb-3.5 pt-2 text-[11px] text-[#64748B]">
-                  <span><i className="mr-1.5 inline-block h-2.5 w-2.5 rounded-sm bg-[#1f6f93] align-[-1px]" />Outside buyers</span>
-                  <span><i className="mr-1.5 inline-block h-2.5 w-2.5 rounded-sm bg-[#2a2f3c] align-[-1px]" />Team tests</span>
-                  {stats.outside.settled + stats.team.settled === 0 && <span className="ml-auto">No paid calls yet</span>}
+                  <span>{settled} paid call{settled === 1 ? "" : "s"} · {usd(units / 1e6)}</span>
+                  {settled === 0 && <span className="ml-auto">No paid calls yet</span>}
                 </div>
               </>
             ) : <p className="px-4 py-6 text-[13px] text-[#64748B]">Usage could not be read right now.</p>}
@@ -225,7 +248,7 @@ export default function ServicesDashboard({ rows, stats, receipts }: { rows: Ser
           {/* Receipts */}
           <section className="rounded-xl border border-[#1A1A2E] bg-[#0B0D12]">
             <div className="flex items-center gap-2 border-b border-[#1A1A2E] px-4 py-3">
-              <h2 className="text-[14px] font-semibold text-[#E2E8F0]">Receipts</h2>
+              <h2 className="text-[13px] font-semibold text-[#E2E8F0]">Receipts</h2>
               <span className="text-[11px] text-[#64748B]">latest paid calls</span>
             </div>
             {receipts === null && <p className="px-4 py-6 text-[13px] text-[#64748B]">Receipts could not be read right now.</p>}
@@ -236,7 +259,6 @@ export default function ServicesDashboard({ rows, stats, receipts }: { rows: Ser
                 <span className="truncate text-[#E2E8F0]">
                   <span className="font-mono">{r.tool}</span>
                   {r.outcome === "not_charged" && <span className="text-[#94A3B8]"> · not charged</span>}
-                  {r.team && <span className="text-[#64748B]"> · team</span>}
                   <span className="text-[#64748B]"> · {short(r.payer)} · {ago(r.at)}</span>
                 </span>
                 {r.tx
