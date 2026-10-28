@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useAccount } from "wagmi";
 import { ConnectButton } from "@/components/ConnectModal";
 import { useEnsureSession } from "@/hooks/useEnsureSession";
+import { sessionFetch } from "@/lib/session-client";
 
 interface PubJob { id: string; title: string; brief: string; budgetUnits: number; poster: string; status: string; createdAt: string; deliveries: { id: string }[] }
 
@@ -27,7 +28,7 @@ export default function JobBoardClient() {
   const [st, setSt] = useState<{ s: "idle" | "busy" | "error" | "done"; msg?: string }>({ s: "idle" });
 
   const load = useCallback(() => {
-    fetch("/api/jobs", { cache: "no-store" }).then((r) => (r.ok ? r.json() : Promise.reject())).then((d) => setJobs(d.jobs)).catch(() => setJobs("error"));
+    sessionFetch("/api/jobs", { cache: "no-store" }).then((r) => (r.ok ? r.json() : Promise.reject())).then((d) => setJobs(d.jobs)).catch(() => setJobs("error"));
   }, []);
   useEffect(load, [load]);
 

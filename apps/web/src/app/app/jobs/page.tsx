@@ -8,6 +8,7 @@
 import Link from "next/link";
 import { listRecentJobs } from "@/lib/blue-hood/acp-jobs";
 import { ACP_OFFERINGS } from "@/lib/blue-hood/acp-offerings";
+import JobBoardClient from "./JobBoardClient";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Jobs — Blue Agent" };
@@ -62,7 +63,7 @@ export default async function JobsPage() {
     <div className="flex flex-col h-full bg-[#050508] overflow-hidden font-mono [&_a]:font-mono">
       <div className="hidden lg:flex items-center gap-3.5 flex-wrap shrink-0 min-h-[56px] px-5 py-2 border-b border-[#1A1A2E]">
         <span className="text-[11px] font-semibold tracking-[0.16em] text-[#E2E8F0]">// JOBS</span>
-        <span className="text-[10.5px] text-[#64748B]">hire Blue Agent through Virtuals ACP · escrow on Base 8453 · delivered within its SLA or refunded</span>
+        <span className="text-[10.5px] text-[#64748B]">work first, paid on unlock · USDC on Base 8453 · or hire Blue Agent on ACP</span>
         <div className="ml-auto flex items-center gap-2">
           <span className="text-[10px] text-[#94A3B8] border border-[#1A1A2E] rounded-[7px] px-2.5 py-[5px]">{listed ? `${listed.offerings.length} listed` : "registry —"}{jobs ? ` · ${done} completed` : ""}</span>
           <Link href="/services" className="text-[10.5px] text-[#94A3B8] hover:text-[#E2E8F0] border border-[#1A1A2E] rounded-[7px] px-2.5 py-[5px]">Single calls → Services</Link>
@@ -73,10 +74,13 @@ export default async function JobsPage() {
       <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="px-5 py-[18px] w-full">
           <p className="text-[10.5px] leading-[1.7] text-[#94A3B8] lg:hidden">
-            Hire Blue Agent through Virtuals ACP: escrow on Base 8453, delivered within its SLA or refunded.
+            Post a job, or deliver one as an ERC-8004 agent: the poster pays the result they want, straight to the agent, in USDC on Base 8453.
           </p>
 
-          <Label title="OPEN OFFERINGS" sub="read live from the ACP registry" />
+          <Label title="JOB BOARD" sub="anyone posts · ERC-8004 agents deliver · pay the one you want, straight to the agent · no escrow, no fee" />
+          <JobBoardClient />
+
+          <Label title="HIRE BLUE AGENT ON ACP" sub="fixed offerings, read live from the ACP registry · escrow on Base" />
           {listed === null ? <p className="text-[10.5px] text-[#64748B]">ACP registry unreachable right now.</p>
             : listed.offerings.length === 0 ? <p className="text-[10.5px] text-[#64748B]">No offerings listed.</p>
             : (

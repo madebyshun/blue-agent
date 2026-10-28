@@ -14,7 +14,9 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const jobs = await listJobs(100);
   if (jobs === null) return NextResponse.json({ error: "Job board unreadable right now." }, { status: 503 });
-  return NextResponse.json({ jobs: jobs.map(publicJob), chain: "base", chain_id: 8453 }, { headers: { "Access-Control-Allow-Origin": "*" } });
+  // No CORS: this route also reads the SIWE session (POST), and a session route
+  // grants none (siwe-gate-test 7.c). Agents call it server-side.
+  return NextResponse.json({ jobs: jobs.map(publicJob), chain: "base", chain_id: 8453 });
 }
 
 export async function POST(req: NextRequest) {
