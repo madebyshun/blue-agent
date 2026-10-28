@@ -15,3 +15,10 @@ assert.ok(!("erc8004" in JSON.parse(Buffer.from(M.coinContractUri({ ...d, agentI
 assert.equal(M.QUADRA_V3_EXPECTS.creatorShareBps + M.QUADRA_V3_EXPECTS.referrerShareBps, 8_500);
 assert.equal(M.newSalt().length, 66);
 console.log("agent-coin-test: ok");
+
+// RevenueShare wording never promises a return.
+const w = M.stakerWording("AGENT", "ETH");
+for (const banned of [/yield/i, /\bAPY\b/i, /\bAPR\b/i, /dividend/i, /passive income/i, /profit/i]) assert.ok(!banned.test(w), `banned word ${banned}`);
+assert.match(w, /may be zero/);
+assert.equal(M.MAX_AGENT_BPS, 9_000);
+console.log("agent-coin-test: revenue share ok");
