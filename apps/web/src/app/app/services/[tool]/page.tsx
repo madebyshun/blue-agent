@@ -93,7 +93,8 @@ export default async function ToolProfile({ params }: { params: Promise<{ tool: 
                       <span className="text-[#94A3B8]">{short(r.payer)}</span>
                       {typeof r.ms === "number" && <span className="text-[#64748B]">{(r.ms / 1000).toFixed(1)}s</span>}
                       <span className="text-[#64748B]">{r.at.slice(0, 16).replace("T", " ")}Z</span>
-                      {r.tx && <a className="ml-auto text-[#4FC3F7]" href={`https://basescan.org/tx/${r.tx}`} target="_blank" rel="noreferrer">{short(r.tx)} ↗</a>}
+                      {r.tx && r.outcome === "settled" && <Link className="ml-auto text-[#94A3B8] hover:text-[#4FC3F7]" href={`/services/rate/${r.tx}`}>rate</Link>}
+                      {r.tx && <a className={r.outcome === "settled" ? "text-[#4FC3F7]" : "ml-auto text-[#4FC3F7]"} href={`https://basescan.org/tx/${r.tx}`} target="_blank" rel="noreferrer">{short(r.tx)} ↗</a>}
                     </li>))}</ul>}
             </section>
           </>

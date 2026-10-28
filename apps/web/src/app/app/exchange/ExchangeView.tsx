@@ -44,8 +44,10 @@ function Spark({ s }: { s: number[] }) {
   );
 }
 
-export default function ExchangeView({ ex, totalPaid, ours, oursPayTo, agentId }: {
+export default function ExchangeView({ ex, totalPaid, ours, oursPayTo, agentId, agents, identitiesChecked }: {
   ex: Exchange; totalPaid: number; ours: ProviderRow | null; oursPayTo: string; agentId: number | null;
+  /** payTo → ERC-8004 agent id it currently owns (lib/hub/exchange refreshSellerIdentities). */
+  agents: Record<string, string>; identitiesChecked: number;
 }) {
   const [q, setQ] = useState("");
   const [single, setSingle] = useState(false);
@@ -137,7 +139,10 @@ export default function ExchangeView({ ex, totalPaid, ours, oursPayTo, agentId }
                   style={{ borderColor: BORDER, background: SURFACE }}>
                   <span className="w-6 shrink-0 font-mono text-[9.5px] text-[#475569] tabular-nums">{i + 1}</span>
                   <div className="flex-1 min-w-0">
-                    <span className="block truncate font-mono text-[12px] font-semibold text-[#E2E8F0]">{r.hosts[0] ?? short(r.payTo)}</span>
+                    <span className="flex items-center gap-2 min-w-0">
+                      <span className="truncate font-mono text-[12px] font-semibold text-[#E2E8F0]">{r.hosts[0] ?? short(r.payTo)}</span>
+                      {agents[r.payTo] && <span className="shrink-0 font-mono text-[8.5px] font-medium text-[#A78BFA] border border-[#A78BFA]/30 rounded-full px-[7px] py-[2px]">ERC-8004 #{agents[r.payTo]}</span>}
+                    </span>
                     <p className="truncate font-prose text-[10.5px] text-[#94A3B8]">{r.title || "—"}</p>
                     <p className="font-mono text-[9px] text-[#475569]">x402 · {r.resources} endpoint{r.resources === 1 ? "" : "s"} · {short(r.payTo)}</p>
                   </div>
@@ -158,6 +163,7 @@ export default function ExchangeView({ ex, totalPaid, ours, oursPayTo, agentId }
             <p className="font-mono text-[9.5px] text-[#475569] mt-4 leading-relaxed">
               Measured: USDC paid to a seller&apos;s payTo in a transaction that also used the payer&apos;s EIP-3009 authorization, the way x402 settles.
               Plain transfers are not counted. Gross inflow: a seller&apos;s own test wallets cannot be told apart, so nothing is subtracted on a guess.
+              ERC-8004: {Object.keys(agents).length} seller{Object.keys(agents).length === 1 ? "" : "s"} hold an agent identity on Base, of {identitiesChecked} checked so far (the check walks the list a slice a day).
               Showing {shown.length} of {totalPaid} paid sellers. Machine-readable: <Link className="text-[#4FC3F7]" href="/api/hub/providers" prefetch={false}>/api/hub/providers</Link>
             </p>
           )}

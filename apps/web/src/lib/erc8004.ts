@@ -111,6 +111,20 @@ export interface Reputation {
   average: number | null;
 }
 
+/** Reputation summary for ANY agent id on Base (all clients, all tags). */
+export async function readAgentReputation(agentId: bigint): Promise<Reputation> {
+  try {
+    const c = createPublicClient({ chain: base, transport: http(process.env.BASE_RPC_URL || "https://mainnet.base.org") });
+    const clients = await c.readContract({ address: ERC8004_REPUTATION, abi: ERC8004_ABI, functionName: "getClients", args: [agentId] });
+    if (!clients.length) return { registered: true, readable: true, count: 0, average: null };
+    const [count, value, decimals] = await c.readContract({ address: ERC8004_REPUTATION, abi: ERC8004_ABI, functionName: "getSummary", args: [agentId, [...clients], "", ""] });
+    const n = Number(count);
+    return { registered: true, readable: true, count: n, average: n ? Number(value) / 10 ** decimals : null };
+  } catch {
+    return { registered: true, readable: false, count: 0, average: null };
+  }
+}
+
 /** Reputation summary for Blue Agent (optionally one tool, via tag2). */
 export async function readReputation(tool?: string): Promise<Reputation> {
   if (BLUE_AGENT_ID === null) return { registered: false, readable: true, count: 0, average: null };

@@ -161,6 +161,21 @@ export default function CreateAgentClient() {
               <Status s={manage} />
             </section>
 
+            <section className="rounded-[14px] border px-4 py-3.5" style={{ borderColor: "rgba(79,195,247,.22)", background: "rgba(79,195,247,.035)" }}>
+              <h2 className="mb-2 text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">CORE SKILLS</h2>
+              <p className="text-[10.5px] leading-[1.6] text-[#94A3B8]">
+                Give your agent Blue Agent&apos;s onchain skills from its first run: token verdicts, stock token signals, wallet risk, safe trending,
+                and unsigned swap, send and bridge transactions on Base 8453 and Robinhood Chain 4663. 8 are free; 5 cost $0.01 to $0.05 a call, paid by your agent&apos;s own wallet over x402.
+              </p>
+              <p className="mt-2.5 text-[9.5px] tracking-[0.12em] text-[#64748B]">FREE TOOLS · ANY MCP CLIENT</p>
+              <pre className="mt-1 whitespace-pre-wrap break-all rounded-lg border border-[#1A1A2E] bg-[#050508] px-3 py-2 text-[10.5px] text-[#cbd5e1]">claude mcp add --transport http blue-agent https://blueagent.dev/api/mcp</pre>
+              <p className="mt-2.5 text-[9.5px] tracking-[0.12em] text-[#64748B]">PAID TOOLS · THE AGENT PAYS ITS OWN CALLS</p>
+              <p className="mt-1 text-[10px] leading-[1.6] text-[#64748B]">
+                Run the x402 bridge with the agent&apos;s wallet key (a wallet holding only a little USDC). Every paid call settles on Base with a receipt,
+                and can be rated from that wallet. <Link className="text-[#4FC3F7]" href="/services#connect">Setup on Services →</Link>
+              </p>
+            </section>
+
             <section className="rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] px-4 py-3.5">
               <h2 className="mb-2 text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">FILE PREVIEW</h2>
               <pre className="max-h-[220px] overflow-auto whitespace-pre-wrap break-all text-[10.5px] text-[#cbd5e1]">{JSON.stringify(draftRegistration(clean), null, 2)}</pre>

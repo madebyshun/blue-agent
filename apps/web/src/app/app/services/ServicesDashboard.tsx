@@ -278,7 +278,10 @@ export default function ServicesDashboard({ rows, stats, receipts }: { rows: Ser
                     <span className="text-[#64748B]"> · {short(r.payer)} · {ago(r.at)}</span>
                   </span>
                   {r.tx
-                    ? <a href={`https://basescan.org/tx/${r.tx}`} target="_blank" rel="noreferrer" className="text-[#4FC3F7] hover:underline">{usd(r.units / 1e6)} ↗</a>
+                    ? <span className="flex items-center gap-2.5">
+                        {r.outcome === "settled" && <Link href={`/services/rate/${r.tx}`} className="text-[#94A3B8] hover:text-[#4FC3F7]">rate</Link>}
+                        <a href={`https://basescan.org/tx/${r.tx}`} target="_blank" rel="noreferrer" className="text-[#4FC3F7] hover:underline">{usd(r.units / 1e6)} ↗</a>
+                      </span>
                     : <span className="text-[#64748B]">$0.00</span>}
                 </div>
               ))}

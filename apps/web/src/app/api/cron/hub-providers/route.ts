@@ -3,7 +3,7 @@
  * Auth: `Authorization: Bearer $CRON_SECRET` (what Vercel Cron sends).
  */
 import { NextRequest, NextResponse } from "next/server";
-import { refreshProviders } from "@/lib/hub/exchange";
+import { refreshProviders, refreshSellerIdentities } from "@/lib/hub/exchange";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,8 +19,11 @@ export async function GET(req: NextRequest) {
   if (!isAuthorized(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const started = Date.now();
   try {
-    const result = await refreshProviders(started + (300 - 5) * 1000);
-    return NextResponse.json({ status: "ok", ms: Date.now() - started, ...result });
+    // The Bazaar pull takes ~45 s (measured 2026-10-28); the rest of the run walks
+    // a slice of sellers for ERC-8004 identities.
+    const result = await refreshProviders(started + 150_000);
+    const identities = await refreshSellerIdentities(started + (300 - 5) * 1000).catch((e) => ({ error: (e as Error).message.slice(0, 200) }));
+    return NextResponse.json({ status: "ok", ms: Date.now() - started, ...result, identities });
   } catch (e) {
     const msg = (e as Error).message.slice(0, 300);
     console.error(`[cron:hub-providers] ${msg}`);

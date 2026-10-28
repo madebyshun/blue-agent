@@ -4,7 +4,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { readExchange, readProviderDetail } from "@/lib/hub/exchange";
+import { readExchange, readProviderDetail, readSellerIdentities } from "@/lib/hub/exchange";
+import { readAgentReputation } from "@/lib/erc8004";
 import { X402_PAY_TO } from "@/lib/x402-payee";
 import ExchangeHeader from "../ExchangeHeader";
 
@@ -36,7 +37,10 @@ export default async function SellerPage({ params }: { params: Promise<{ payTo: 
   const { payTo: raw } = await params;
   if (!/^0x[0-9a-fA-F]{40}$/.test(raw)) notFound();
   const payTo = raw.toLowerCase();
-  const [ex, detail, acp] = await Promise.all([readExchange(30), readProviderDetail(payTo), readAcp(payTo)]);
+  const [ex, detail, acp, ids] = await Promise.all([readExchange(30), readProviderDetail(payTo), readAcp(payTo), readSellerIdentities()]);
+  const ident = ids[payTo] ?? null;
+  const agentId = ident?.agentIds[0] ?? null;
+  const rep = agentId ? await readAgentReputation(BigInt(agentId)) : null;
   const row = ex.rows.find((r) => r.payTo === payTo) ?? null;
   if (!row && !detail && payTo !== X402_PAY_TO.toLowerCase()) notFound();
   const R = ex.readable && ex.daysCovered > 0;
@@ -94,6 +98,18 @@ export default async function SellerPage({ params }: { params: Promise<{ payTo: 
                   {r.description && <p className="mt-0.5 text-[10.5px] text-[#94A3B8]">{r.description}</p>}
                 </li>))}</ul>}
           {detail && detail.total > detail.resources.length && <p className="border-t border-[#1A1A2E] px-4 py-2.5 text-[10.5px] text-[#64748B]">Showing {detail.resources.length} of {detail.total}.</p>}
+        </section>
+
+        <section className="rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] px-4 py-3.5">
+          <h2 className="text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">ERC-8004 IDENTITY</h2>
+          {agentId ? (
+            <div className="mt-2 text-[11px] text-[#94A3B8]">
+              <p>This payTo owns agent <a className="text-[#4FC3F7]" href={`https://erc-8004.quicknode.com/agents/base-mainnet/${agentId}`} target="_blank" rel="noreferrer">#{agentId}</a> in the Identity Registry on Base 8453.</p>
+              <p className="mt-1">Reputation: {!rep?.readable ? "—" : rep.average === null ? "no ratings yet" : `${Math.round(rep.average)}/100 from ${rep.count} rating${rep.count === 1 ? "" : "s"}`} <span className="text-[#475569]">(all raters; not filtered to payers)</span></p>
+            </div>
+          ) : (
+            <p className="mt-2 text-[11px] text-[#64748B]">{ident ? `No agent identity owned by this payTo (checked ${ident.checkedAt.slice(0, 10)}).` : "Not checked yet: the identity walk covers a slice of sellers a day."}</p>
+          )}
         </section>
 
         <section className="rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] px-4 py-3.5">
