@@ -6,6 +6,7 @@ import { useAccount, useSendTransaction, useSwitchChain } from "wagmi";
 import { base } from "wagmi/chains";
 import { createPublicClient, encodeFunctionData, http, parseEventLogs, isAddress } from "viem";
 import { ConnectButton } from "@/components/ConnectModal";
+import ExchangeHeader from "../ExchangeHeader";
 import {
   ERC8004_IDENTITY_ADDRESS as REGISTRY, ERC8004_MANAGE_ABI as ABI,
   draftProblem, draftDataUri, draftRegistration, type AgentDraft,
@@ -13,7 +14,7 @@ import {
 
 const pub = createPublicClient({ chain: base, transport: http() });
 const EXPLORER = (id: string) => `https://erc-8004.quicknode.com/agents/base-mainnet/${id}`;
-const input = "w-full rounded-lg border border-[#1A1A2E] bg-[#07080C] px-3 py-2 text-[12px] text-[#E2E8F0] outline-none focus:border-[#2a3350]";
+const input = "w-full rounded-lg border border-[#1A1A2E] bg-[#07080C] px-3 py-2 text-[11px] text-[#E2E8F0] outline-none focus:border-[#2a3350]";
 const label = "text-[11px] text-[#94A3B8]";
 
 type Step = { state: "idle" | "busy" | "done" | "error"; msg?: string; tx?: string };
@@ -90,20 +91,21 @@ export default function CreateAgentClient() {
   );
 
   return (
-    <div className="h-full overflow-y-auto font-mono [&_button]:font-mono [&_a]:font-mono [&_input]:font-mono [&_textarea]:font-mono">
-      <div className="mx-auto max-w-[1100px] px-6 py-6 lg:px-8 grid gap-5">
+    <div className="flex flex-col h-full bg-[#050508] overflow-hidden font-mono [&_button]:font-mono [&_a]:font-mono [&_input]:font-mono [&_textarea]:font-mono">
+      <ExchangeHeader active="create" chip="ERC-8004 · Base 8453" />
+      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="px-5 py-[18px] grid gap-5 mx-auto w-full max-w-6xl">
         <div>
-          <Link href="/app/hub/agents" className="text-[11px] tracking-[.14em] text-[#64748B] hover:text-[#4FC3F7]">// AGENT EXCHANGE</Link>
-          <h1 className="mt-1 text-[20px] font-semibold text-[#E2E8F0]">Create an agent</h1>
-          <p className="mt-1.5 max-w-[860px] text-[12px] leading-[1.7] text-[#94A3B8]">
+          <h1 className="text-[15px] font-semibold text-[#E2E8F0]">Create an agent</h1>
+          <p className="mt-1.5 max-w-[860px] text-[11px] leading-[1.7] text-[#94A3B8]">
             Your agent as an ERC-8004 identity on Base 8453: an NFT that 8004scan, QuickNode&apos;s explorer and any agent directory can read.
             The file describing it lives inside the NFT, so nobody hosts it, us included. Free: you only pay a few cents of gas, from your own wallet.
           </p>
         </div>
 
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] items-start">
-          <section className="rounded-xl border border-[#1A1A2E] bg-[#0B0D12] px-4 py-4 grid gap-3">
-            <h2 className="text-[13px] font-semibold text-[#E2E8F0]">Your agent</h2>
+          <section className="rounded-[10px] border border-[#1A1A2E] bg-[#0B0D12] px-4 py-4 grid gap-3">
+            <h2 className="text-[9.5px] uppercase tracking-[0.14em] text-[#64748B]">// Your agent</h2>
             <label className="grid gap-1"><span className={label}>Name *</span><input className={input} value={d.name} onChange={set("name")} maxLength={60} /></label>
             <label className="grid gap-1"><span className={label}>What it does</span><textarea className={`${input} min-h-[90px]`} value={d.description} onChange={set("description")} maxLength={600} /></label>
             <label className="grid gap-1"><span className={label}>Image URL (https)</span><input className={input} value={d.image} onChange={set("image")} placeholder="https://…/logo.png" /></label>
@@ -117,8 +119,8 @@ export default function CreateAgentClient() {
           </section>
 
           <div className="grid gap-5">
-            <section className="rounded-xl border border-[#1A1A2E] bg-[#0B0D12] px-4 py-4 grid gap-3">
-              <h2 className="text-[13px] font-semibold text-[#E2E8F0]">Create</h2>
+            <section className="rounded-[10px] border border-[#1A1A2E] bg-[#0B0D12] px-4 py-4 grid gap-3">
+              <h2 className="text-[9.5px] uppercase tracking-[0.14em] text-[#64748B]">// Create</h2>
               <ol className="grid list-decimal gap-1 pl-4 text-[11px] text-[#94A3B8]">
                 <li>Connect a wallet on Base.</li>
                 <li>Mint: one transaction, <code>register()</code> on the ERC-8004 registry <a className="text-[#4FC3F7]" href={`https://basescan.org/address/${REGISTRY}`} target="_blank" rel="noreferrer">0x8004…a432</a>.</li>
@@ -126,7 +128,7 @@ export default function CreateAgentClient() {
               </ol>
               {!isConnected ? <ConnectButton label="Connect wallet" /> : (
                 <button type="button" disabled={!!problem || mint.state === "busy"} onClick={onMint}
-                  className="rounded-md bg-[#4FC3F7] px-3 py-2 text-[12px] font-semibold text-[#03131c] disabled:opacity-40">
+                  className="rounded-md bg-[#4FC3F7] px-3 py-2 text-[10.5px] font-semibold text-[#03131c] disabled:opacity-40">
                   {mint.state === "busy" ? "Minting…" : "Create agent"}
                 </button>
               )}
@@ -134,8 +136,8 @@ export default function CreateAgentClient() {
               {mint.agentId && <a className="text-[11px] text-[#4FC3F7]" href={EXPLORER(mint.agentId)} target="_blank" rel="noreferrer">View agent #{mint.agentId} in an explorer ↗</a>}
             </section>
 
-            <section className="rounded-xl border border-[#1A1A2E] bg-[#0B0D12] px-4 py-4 grid gap-3">
-              <h2 className="text-[13px] font-semibold text-[#E2E8F0]">Manage an agent you own</h2>
+            <section className="rounded-[10px] border border-[#1A1A2E] bg-[#0B0D12] px-4 py-4 grid gap-3">
+              <h2 className="text-[9.5px] uppercase tracking-[0.14em] text-[#64748B]">// Manage an agent you own</h2>
               <div className="flex gap-2">
                 <input className={input} value={mid} onChange={(e) => setMid(e.target.value.trim())} placeholder="Agent id, e.g. 1137821" />
                 <button type="button" onClick={lookup} className="rounded-md border border-[#1A1A2E] bg-[#0F121A] px-3 text-[12px] text-[#E2E8F0]">Look up</button>
@@ -159,12 +161,13 @@ export default function CreateAgentClient() {
               <Status s={manage} />
             </section>
 
-            <section className="rounded-xl border border-[#1A1A2E] bg-[#0B0D12] px-4 py-3.5">
-              <h2 className="mb-2 text-[13px] font-semibold text-[#E2E8F0]">File preview</h2>
+            <section className="rounded-[10px] border border-[#1A1A2E] bg-[#0B0D12] px-4 py-3.5">
+              <h2 className="mb-2 text-[9.5px] uppercase tracking-[0.14em] text-[#64748B]">// File preview</h2>
               <pre className="max-h-[220px] overflow-auto whitespace-pre-wrap break-all text-[10.5px] text-[#cbd5e1]">{JSON.stringify(draftRegistration(clean), null, 2)}</pre>
             </section>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

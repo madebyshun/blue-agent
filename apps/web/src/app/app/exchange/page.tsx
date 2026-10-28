@@ -1,4 +1,4 @@
-// /hub/agents — Base Agent Exchange (Blue Hub v3, docs/bluehub-v3-plan-2026-10-27.md).
+// /exchange — Base Agent Exchange (Blue Hub v3, docs/bluehub-v3-plan-2026-10-27.md).
 // Every x402 seller on the CDP Bazaar on Base 8453, with x402 inflow measured
 // from the chain (lib/hub/exchange.ts). Nobody registers to be here.
 import type { Metadata } from "next";
@@ -9,7 +9,7 @@ import ExchangeView from "./ExchangeView";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
-  title: "Agent Exchange — Blue Hub",
+  title: "Agent Exchange — Blue Agent",
   description: "Every x402 seller on Base, with what agents actually paid it, measured on chain.",
 };
 

@@ -186,7 +186,7 @@ function HomeView(props: HubHomeProps) {
               style={{ boxShadow: "0 0 18px rgba(79,195,247,.28)" }}>
               Browse {tools.length} tools →
             </button>
-            <Link href="/app/hub/agents" className="font-mono text-[11px] font-medium px-4 py-2.5 rounded-[9px] border border-[#1A1A2E] text-[#94A3B8] hover:text-[#4FC3F7] transition-colors">Agent Exchange: every x402 seller on Base →</Link>
+            <Link href="/exchange" className="font-mono text-[11px] font-medium px-4 py-2.5 rounded-[9px] border border-[#1A1A2E] text-[#94A3B8] hover:text-[#4FC3F7] transition-colors">Agent Exchange: every x402 seller on Base →</Link>
           </div>
           <SearchHero value={props.search} onChange={onSearch} totalTools={tools.length} />
         </section>

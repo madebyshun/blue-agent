@@ -25,7 +25,7 @@ type Agent = "blue";
 type Category = "all" | "intelligence" | "builder" | "trading" | "content" | "agent-economy" | "base-ecosystem" | "on-chain";
 
 // Community listings (External / Hosted) were retired 2026-10-28 with the
-// builder registry; the Agent Exchange (/hub/agents) indexes outside sellers
+// builder registry; the Agent Exchange (/exchange) indexes outside sellers
 // from the chain instead. The grid is the first-party catalog only.
 type SourceFilter = "all";
 type PriceFilter  = "all" | "free" | "under" | "over";
@@ -1585,7 +1585,7 @@ export default function HubPage({ inShell = false, initialToolId }: { inShell?: 
             <span className="font-mono text-[10.5px]" style={{ color: "#64748B" }}>
               AI tools · multi-agent · x402 · Base
             </span>
-            <Link href="/app/hub/agents" className="font-mono text-[10.5px] text-[#4FC3F7] hover:underline">
+            <Link href="/exchange" className="font-mono text-[10.5px] text-[#4FC3F7] hover:underline">
               Agent Exchange →
             </Link>
             <span className="ml-auto font-mono text-[10.5px]" style={{ color: "#94A3B8" }}>
