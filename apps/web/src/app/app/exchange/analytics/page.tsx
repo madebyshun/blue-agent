@@ -3,6 +3,7 @@
 // marked partial, and the first indexed day began mid-backfill.
 import type { Metadata } from "next";
 import { readExchange } from "@/lib/hub/exchange";
+import Link from "next/link";
 import ExchangeHeader from "../ExchangeHeader";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +20,22 @@ export default async function AnalyticsPage() {
   const peakCalls = Math.max(1, ...days.map((d) => d.calls));
   const top = ex.rows.slice(0, 10);
   const share = (u: number) => (tot.usd ? Math.round((u / tot.usd) * 1000) / 10 : 0);
+  // Growth compares whole days only: the first indexed day began mid-backfill and
+  // today is partial, so both are dropped. Window = up to 7 days, less while the
+  // index is younger than 15 days (said on the board, never padded).
+  const full = (r: (typeof ex.rows)[number]) => r.series.slice(ex.firstIndex + 1, -1);
+  const fullDays = Math.max(0, days.length - 2);
+  const gw = Math.min(7, Math.floor(fullDays / 2));
+  const growth = gw < 1 ? [] : ex.rows
+    .map((r) => { const f = full(r); const now = f.slice(-gw).reduce((a, b) => a + b, 0); const before = f.slice(-2 * gw, -gw).reduce((a, b) => a + b, 0); return { r, now, before }; })
+    .filter((g) => g.before >= 5 && g.now > g.before)
+    .sort((a, b) => b.now / b.before - a.now / a.before).slice(0, 10);
+  const boards: { t: string; s: string; rows: { r: (typeof ex.rows)[number]; v: string }[] }[] = [
+    { t: "REVENUE", s: `${ex.daysCovered}d · USDC`, rows: ex.rows.slice(0, 10).map((r) => ({ r, v: usd(r.usd) })) },
+    { t: "PAYING WALLETS", s: "distinct payers", rows: [...ex.rows].sort((a, b) => b.payers - a.payers).slice(0, 10).map((r) => ({ r, v: r.payers >= 2000 ? "2,000+" : r.payers.toLocaleString("en-US") })) },
+    { t: "PAID CALLS", s: "settlements", rows: [...ex.rows].sort((a, b) => b.paidCalls - a.paidCalls).slice(0, 10).map((r) => ({ r, v: r.paidCalls.toLocaleString("en-US") })) },
+    { t: "GROWTH", s: gw < 1 ? "needs 2 whole days" : `last ${gw}d vs the ${gw}d before · min $5 before`, rows: growth.map((g) => ({ r: g.r, v: `+${Math.round((g.now / g.before - 1) * 100)}%` })) },
+  ];
   const card = "rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] p-[14px]";
   const L = ({ t, s }: { t: string; s?: string }) => (
     <div className="flex items-baseline gap-2.5 mt-[24px] mb-3 flex-wrap">
@@ -80,6 +97,27 @@ export default async function AnalyticsPage() {
                     ))}
                   </div>
                 </div>
+              </div>
+              <L t="LEADERBOARDS" s="Base 8453 · measured from x402 settlements" />
+              <div className="grid gap-2.5 md:grid-cols-2 2xl:grid-cols-4">
+                {boards.map((b) => (
+                  <div key={b.t} className={card}>
+                    <p className="text-[9.5px] tracking-[0.12em] text-[#64748B]">{b.t} <span className="tracking-normal text-[#475569]">· {b.s}</span></p>
+                    {b.rows.length === 0 ? <p className="mt-2 text-[10.5px] text-[#64748B]">Not enough whole days indexed yet.</p> : (
+                      <ol className="mt-2 grid gap-1">
+                        {b.rows.map(({ r, v }, i) => (
+                          <li key={r.payTo}>
+                            <Link href={`/exchange/${r.payTo}`} className="flex items-center gap-2 text-[10.5px] hover:text-[#4FC3F7]">
+                              <span className="w-4 text-[#475569] tabular-nums">{i + 1}</span>
+                              <span className="flex-1 truncate text-[#E2E8F0]">{r.hosts[0] ?? `${r.payTo.slice(0, 6)}…${r.payTo.slice(-4)}`}</span>
+                              <span className="text-[#94A3B8] tabular-nums">{v}</span>
+                            </Link>
+                          </li>
+                        ))}
+                      </ol>
+                    )}
+                  </div>
+                ))}
               </div>
             </>
           )}

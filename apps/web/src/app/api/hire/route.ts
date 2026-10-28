@@ -14,11 +14,13 @@
  * most sellers directly (CORS).
  *
  * The only URLs this route will call are the seller's own resources from our
- * Bazaar index (readProviderDetail) — https, listed under that exact payTo — so
- * it is not an open proxy. Answers are capped at 200 KB.
+ * Bazaar index (readProviderDetail) or the services a listed seller proved on
+ * /exchange/sell (readListing) — https, under that exact payTo — so it is not
+ * an open proxy. Answers are capped at 200 KB.
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { readProviderDetail } from "@/lib/hub/exchange";
+import { readListing, recordHire } from "@/lib/hub/listings";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -46,8 +48,11 @@ export async function POST(req: NextRequest) {
   const payTo = String(b.payTo ?? "").toLowerCase();
   const url = String(b.url ?? "");
   if (!/^0x[0-9a-f]{40}$/.test(payTo)) return NextResponse.json({ error: "payTo must be a 0x address." }, { status: 400 });
-  const detail = await readProviderDetail(payTo);
-  const res = detail?.resources.find((r) => r.url === url);
+  const [detail, listing] = await Promise.all([readProviderDetail(payTo), readListing(payTo)]);
+  // A seller listed on /exchange/sell adds the services it proved (unpaid 402
+  // to this payTo on Base) — same allowlist rule, a different source.
+  const res = detail?.resources.find((r) => r.url === url)
+    ?? listing?.services.filter((s) => s.probe === "live").map((s) => ({ url: s.url, priceUsd: s.priceUsd, description: s.description, method: undefined as string | undefined })).find((r) => r.url === url);
   if (!res || !/^https:\/\//.test(url)) return NextResponse.json({ error: "That service is not in this seller's listing." }, { status: 404 });
 
   const method = res.method === "GET" ? "GET" : "POST";
@@ -75,6 +80,16 @@ export async function POST(req: NextRequest) {
   try { body = JSON.parse(text); } catch { /* not JSON: keep text */ }
   const quoteHeader = decodeHeader(r.headers.get("payment-required"));
   const receipt = decodeHeader(r.headers.get("payment-response") ?? r.headers.get("x-payment-response"));
+  // My Usage: keep the buyer's own record of a paid call (payer from THEIR signed
+  // authorization; the seller's receipt as it answered). We settled nothing.
+  if (typeof b.payment === "string" && b.payment) {
+    const p = decodeHeader(b.payment) as { payload?: { authorization?: { from?: string; value?: string } } } | null;
+    const from = p?.payload?.authorization?.from;
+    if (typeof from === "string" && /^0x[0-9a-fA-F]{40}$/.test(from)) {
+      const rc = receipt as { transaction?: string; txHash?: string } | null;
+      await recordHire(from.toLowerCase(), { at: new Date().toISOString(), payTo, url, status: r.status, tx: rc?.transaction ?? rc?.txHash ?? null, units: p?.payload?.authorization?.value ?? null });
+    }
+  }
   return NextResponse.json({
     status: r.status,
     quote: r.status === 402 ? (body && typeof body === "object" && "accepts" in (body as object) ? body : quoteHeader) : null,

@@ -10,6 +10,7 @@ import { listJobs } from "@/lib/jobs";
 import { X402_PAY_TO } from "@/lib/x402-payee";
 import ExchangeHeader from "../../ExchangeHeader";
 import HireAgent from "../../_components/HireAgent";
+import { FollowButton } from "../../_components/AccountViews";
 
 export const dynamic = "force-dynamic";
 
@@ -71,7 +72,10 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
                 {image ? <img src={image} alt="" className="h-full w-full object-cover" /> : <span className="text-[18px] text-[#4FC3F7]">#{p.id.slice(-3)}</span>}
               </div>
               <div className="min-w-0">
-                <h1 className="text-[18px] font-semibold text-[#E2E8F0]">{name}</h1>
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <h1 className="text-[18px] font-semibold text-[#E2E8F0]">{name}</h1>
+                  {!isBlue && <FollowButton payTo={p.payTo} />}
+                </div>
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
                   {checks.map(([ok, l]) => (
                     <span key={l} className={`text-[9px] rounded-full border px-[7px] py-[2px] ${ok ? "text-[#34D399] border-[#34D399]/30" : "text-[#475569] border-[#1A1A2E]"}`}>{ok ? "✓" : "·"} {l}</span>

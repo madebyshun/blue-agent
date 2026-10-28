@@ -396,7 +396,7 @@ export function classifyQuote(payTo: string, status: number, accepts: { network?
   return base.some((a) => String(a.payTo ?? "").toLowerCase() === payTo.toLowerCase()) ? "live" : "other_payto";
 }
 
-async function probeOne(payTo: string, url: string): Promise<SellerProbe> {
+export async function probeOne(payTo: string, url: string): Promise<SellerProbe> {
   const at = new Date().toISOString();
   for (const method of ["POST", "GET"] as const) {
     const r = await fetch(url, {

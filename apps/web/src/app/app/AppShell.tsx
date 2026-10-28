@@ -211,6 +211,7 @@ const MODES: Mode[] = [
         // Every x402 seller on Base, measured on chain (Blue Hub v3, 2026-10-28).
         items: [
           { id: "agents", href: "/exchange", icon: IconAgents },
+          { id: "discovered", href: "/exchange/discovered", icon: IconExchange },
           { id: "jobs", href: "/jobs", icon: IconJobs },
           { id: "analytics", href: "/exchange/analytics", icon: IconAnalytics },
         ],
@@ -219,11 +220,19 @@ const MODES: Mode[] = [
         id: "group_build",
         items: [
           { id: "create_agent", href: "/exchange/create", icon: IconCreate },
+          { id: "sell_services", href: "/exchange/sell", icon: IconConnectors },
           // What agents can pay Blue Agent for (MCP v2, 2026-10-22).
           { id: "services", href: "/services", icon: IconServices },
         ],
       },
-      { id: "group_account", items: [{ id: "docs", href: "/docs/blue-chat", icon: IconDocs }] },
+      {
+        id: "group_account",
+        items: [
+          { id: "my_usage", href: "/exchange/usage", icon: IconUsage },
+          { id: "following", href: "/exchange/following", icon: IconSkills },
+          { id: "docs", href: "/exchange/docs", icon: IconDocs },
+        ],
+      },
     ],
   },
   {
