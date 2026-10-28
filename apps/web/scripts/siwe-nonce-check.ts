@@ -77,17 +77,11 @@ function check(name: string, cond: boolean, detail = "") {
  */
 const SERVER_VERIFIERS: Record<string, string> = {
   "src/app/api/auth/session/route.ts":        "sign-in (the original correct implementation)",
-  "src/app/api/hub/tools/route.ts":           "submit external tool",
-  "src/app/api/hub/hosted/route.ts":          "submit hosted tool",
-  "src/app/api/hub/tools/[id]/route.ts":      "remove external tool (destructive)",
-  "src/app/api/hub/hosted/[slug]/route.ts":   "remove hosted tool (destructive)",
 };
 
 /** Browser files that prompt a wallet signature and MUST fetch a server nonce. */
 const CLIENT_SIGNERS: Record<string, string> = {
   "src/app/chat/use-siwe-signin.ts":               "Blue Chat sign-in",
-  "src/app/hub/_components/SubmitTool.tsx":        "Hub submit (external + hosted)",
-  "src/app/hub/_components/DashboardView.tsx":     "Hub remove (external + hosted)",
 };
 
 /**
@@ -301,16 +295,8 @@ function contract() {
     check(`${path} returns the hint on failure`, read(path).includes("NONCE_SOURCE_HINT"));
   }
 
-  // The docs page IS the contract for external agents. It taught
-  // `crypto.randomUUID()` for as long as the bug existed; shipping the server
-  // change without it would leave the product documenting a flow that 401s.
-  const docs = read("src/app/docs/list-a-tool/page.tsx");
-  check("docs point builders at GET /api/auth/nonce", /\/api\/auth\/nonce/.test(docs));
-  check(
-    "docs no longer teach a self-minted nonce",
-    !/const nonce\s*=\s*crypto\.randomUUID/.test(docs),
-  );
-  check("docs say the nonce is single-use", /single-use/i.test(docs));
+  // The /docs/list-a-tool page that taught external builders this flow was
+  // retired 2026-10-28 with the builder registry; it 301s to /hub/create.
 
   // THE EXCEPTION, now asserted by its ABSENCE. Both halves were deleted with
   // the profile surface (#29, PR #405); this suite kept reading them and took

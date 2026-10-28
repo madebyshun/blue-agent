@@ -1,25 +1,13 @@
 // x402/blue-registry
 // Blue Registry — discovery for the Blue Hub tool catalog.
-// Lists every callable tool (first-party + community-submitted), filterable by
+// Lists every callable first-party tool, filterable by
 // query/category, with prices and how-to-call instructions. Pure data, no LLM —
 // deterministic and always available (the registry IS the product surface here).
 // Price: $0.05
 
 import { AGENT_TOOLS } from "@/lib/agent-tools";
-import { readRegisteredTools, type Coverage } from "@/lib/hub-registry";
-import { COMMUNITY_LISTINGS_OPEN } from "@/lib/hub-closed";
-
-// What a caller who PAID $0.05 for a census is owed when part of it is unreadable.
-const COVERAGE_NOTE: Record<Coverage, string | null> = {
-  complete: null,
-  partial:
-    "Some community tool records could not be read from the registry. " +
-    "`totals.community` and `totals.all` are FLOORS, not counts.",
-  unavailable:
-    "The community registry was unreachable. `totals.community: 0` means we could " +
-    "not read it, NOT that no community tools exist. Only the first-party catalog " +
-    "below is authoritative in this response.",
-};
+// Community listings retired 2026-10-28 with the builder registry; outside
+// x402 sellers are indexed from the chain at /api/hub/providers instead.
 
 type CatalogEntry = {
   id:          string;
@@ -27,7 +15,7 @@ type CatalogEntry = {
   description: string;
   category:    string;
   price:       string;
-  source:      "first-party" | "community";
+  source:      "first-party";
   endpoint:    string;
   mcp_name?:   string;
   call_count?: number;
@@ -66,32 +54,7 @@ export default async function handler(req: Request): Promise<Response> {
       .filter((t) => !!t.price) // only callable/paid tools
       .map((t) => toEntry(t, "first-party"));
 
-    // Community registry (KV-backed).
-    //
-    // #149: this used to be a try/catch that set `community = []` "to degrade
-    // gracefully". It was dead code twice over — the old `listRegisteredTools`
-    // (now deleted) swallowed its own KV errors and returned a SHORT list rather
-    // than throwing, so the catch was unreachable and the degradation was
-    // SILENT — the worst of both. A paid caller whose product IS this census got
-    // `totals.community: 0` and no way to tell that apart from an empty
-    // marketplace. `coverage` is now on the wire.
-    // Closed 2026-10-22 (lib/hub-closed.ts): listings stay in KV but are no
-    // longer offered to agents, so this reads nothing while they are closed.
-    const registry = COMMUNITY_LISTINGS_OPEN
-      ? await readRegisteredTools()
-      : { tools: [], coverage: "complete" as Coverage, unreadableIds: [] };
-    const community: CatalogEntry[] = registry.tools.map((t) =>
-      toEntry(t, "community", t.callCount ?? 0),
-    );
-
-    // Community FIRST. The cap below is 60 and the first-party catalog alone is
-    // ~111 priced tools, so under the old `[...firstParty, ...community]` order
-    // every community tool fell off the end of an unfiltered response — forever,
-    // deterministically. The response advertised `totals.community: N` with zero
-    // of them present and closed by inviting builders to register onto a shelf
-    // nothing could reach. The old comment claimed this "discovery boost"
-    // already existed; the order never implemented it.
-    const all = [...community, ...firstParty];
+    const all = firstParty;
 
     // Category breakdown (over the full catalog, pre-filter).
     const categories = all.reduce<Record<string, number>>((acc, t) => {
@@ -111,27 +74,18 @@ export default async function handler(req: Request): Promise<Response> {
       );
     }
 
-    // Cap payload. Community tools genuinely surface first — see the order above.
+    // Cap payload.
     const limited = matches.slice(0, 60);
 
     return Response.json({
       tool: "blue-registry",
       timestamp: new Date().toISOString(),
-      data_source: "Blue Hub registry (first-party catalog + KV builder registry)",
+      data_source: "Blue Hub first-party catalog",
       query: query || null,
       category: category || null,
-      // How much of the community half we could actually see. `first_party` is
-      // compiled into the bundle and is therefore always complete; only the
-      // KV-backed half can be short.
-      registry_coverage: registry.coverage,
-      ...(COVERAGE_NOTE[registry.coverage] ? { registry_note: COVERAGE_NOTE[registry.coverage] } : {}),
-      ...(registry.unreadableIds.length ? { registry_unreadable_ids: registry.unreadableIds } : {}),
       totals: {
-        // ⚠ `all`, `community` and `matched` are FLOORS unless
-        // registry_coverage === "complete".
         all:          all.length,
         first_party:  firstParty.length,
-        community:    community.length,
         matched:      matches.length,
       },
       categories,
@@ -148,7 +102,7 @@ export default async function handler(req: Request): Promise<Response> {
         mcp_install: "claude mcp add --transport http blue-agent https://blueagent.dev/api/mcp",
         docs: "https://blueagent.dev/.well-known/openapi.json",
       },
-      ...(COMMUNITY_LISTINGS_OPEN ? { submit_a_tool: "Builders: register your own x402 tool at https://blueagent.dev/hub/submit (callers pay your wallet directly, USDC on Base)." } : {}),
+      other_sellers: "Every other x402 seller on Base, with measured volume: https://blueagent.dev/api/hub/providers",
     });
   } catch (e) {
     return Response.json(

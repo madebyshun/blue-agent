@@ -1041,7 +1041,7 @@ const PUBLIC_PAGES: [string, string][] = [
 ];
 check(
   "the public-page list was discovered, not typed",
-  docsPages.length >= 15,
+  docsPages.length >= 14,   // 15 until 2026-10-28: /docs/list-a-tool retired with the builder registry
   `${PUBLIC_PAGES.length} pages scanned, ${docsPages.length} of them enumerated from src/app/docs/`,
 );
 

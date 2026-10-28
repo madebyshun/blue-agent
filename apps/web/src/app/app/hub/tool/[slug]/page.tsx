@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import HubView from "@/app/hub/HubView";
 import { AGENT_TOOLS } from "@/lib/agent-tools";
-import { getPublicHostedTool } from "@/lib/hub-hosted";
-import { getRegisteredTool } from "@/lib/hub-registry";
 
 /**
  * /app/hub/tool/[slug] — app-subdomain twin of the public /hub/tool/[slug]
@@ -26,18 +24,10 @@ export function generateStaticParams() {
   return AGENT_TOOLS.map(t => ({ slug: t.id }));
 }
 
-// Resolve a tool's public display fields from whichever registry owns it.
-// Order: native catalog → hosted registry → external registry. Secrets are
-// never touched — getPublicHostedTool() already strips config/signature.
+// Resolve a tool's public display fields from the first-party catalog.
 async function resolveMeta(slug: string): Promise<{ name: string; description: string; price?: string; logoUrl?: string } | null> {
   const native = AGENT_TOOLS.find(x => x.id === slug);
   if (native) return { name: native.name, description: native.description, price: native.price };
-
-  const hosted = await getPublicHostedTool(slug).catch(() => null);
-  if (hosted) return { name: hosted.name, description: hosted.description, price: hosted.price, logoUrl: hosted.logoUrl };
-
-  const external = await getRegisteredTool(slug).catch(() => null);
-  if (external) return { name: external.name, description: external.description, price: external.price, logoUrl: external.logoUrl };
 
   return null;
 }

@@ -86,7 +86,7 @@ async function main() {
   await recordCall("token-price", "x402", "ok");
   await recordCall("token-price", "mcp",  "ok");
   await recordCall("token-price", "mcp",  "err");
-  await recordCall("gas-tracker", "hub",  "err");
+  await recordCall("gas-tracker", "x402", "err");
   await recordCall("blue_idea",   "console", "ok");
   await recordCall("token-price", "chat", "ok");
 
@@ -109,7 +109,7 @@ async function main() {
     );
     check(
       "a failure-only tool is recorded, not invisible",
-      rows["hub|gas-tracker"]?.err === 1 && rows["hub|gas-tracker"]?.ok === 0,
+      rows["x402|gas-tracker"]?.err === 1 && rows["x402|gas-tracker"]?.ok === 0,
       "this is the shape that would otherwise read as 'nobody calls it'",
     );
     check("console commands land in the meter", rows["console|blue_idea"]?.ok === 1);
@@ -145,7 +145,6 @@ async function main() {
   const WIRED: Record<string, string> = {
     x402:    "app/api/x402/[tool]/route.ts",
     mcp:     "app/api/mcp/route.ts",
-    hub:     "app/api/hub/tools/[id]/call/route.ts",
     console: "app/api/console/route.ts",
     chat:    "app/api/chat/route.ts",
   };

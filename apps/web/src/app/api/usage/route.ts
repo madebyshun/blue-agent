@@ -6,7 +6,6 @@
  * actually executes something:
  *   - /api/x402/[tool]        → paid hub-tool runs
  *   - /api/mcp                → hub tools called over MCP (internal bypass)
- *   - /api/hub/tools/[id]/call→ community-registered hosted tools
  *   - /api/console            → the 5 blue_* commands (idea/build/audit/ship/raise)
  *
  * The id space is closed on purpose: we only ever read keys derived from our
