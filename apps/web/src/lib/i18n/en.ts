@@ -170,6 +170,8 @@ export const en = {
     sell_services: "Sell services",
     my_usage: "My usage",
     following: "Following",
+    markets: "Markets",
+    portfolio: "Portfolio",
     create_agent: "Create agent",
     stocks: "Stocks",
     group_exchange: "Exchange",

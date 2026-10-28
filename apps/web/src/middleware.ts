@@ -61,6 +61,8 @@ const APP_SEGMENTS = new Set([
   "services",     // Blue Agent services — the MCP v2 tools, priced (2026-10-22)
   "exchange",     // Agent Exchange — every x402 seller on Base, measured (2026-10-28)
   "jobs",         // hire Blue Agent via Virtuals ACP (2026-10-27)
+  "markets",      // Markets mode — stock + crypto tokens on Base and RH Chain (2026-10-28)
+  "portfolio",    // Markets mode — a wallet's holdings on both chains (2026-10-28)
   "connectors",   // MCP servers / integrations gallery (ConnectorsPanel)
   "cron",         // the wallet's scheduled tasks (CronPanel)
   "usage",        // credit balance + ledger activity (getBalance)
