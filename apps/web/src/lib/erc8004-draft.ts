@@ -68,3 +68,10 @@ export const ERC8004_MANAGE_ABI = parseAbi([
   "function tokenURI(uint256 tokenId) view returns (string)",
   "event Registered(uint256 indexed agentId, string agentURI, address indexed owner)",
 ]);
+
+// ── Buyer feedback (/services/rate/<tx>) ─────────────────────────────────────
+
+export const ERC8004_REPUTATION_ADDRESS = "0x8004BAa17C55a88189AE136b182e5fdA19dE9b63" as const;
+export const ERC8004_FEEDBACK_ABI = parseAbi([
+  "function giveFeedback(uint256 agentId, int128 value, uint8 valueDecimals, string tag1, string tag2, string endpoint, string feedbackURI, bytes32 feedbackHash)",
+]);

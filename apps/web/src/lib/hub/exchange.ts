@@ -267,3 +267,69 @@ export async function readExchange(days = 30): Promise<Exchange> {
   }
   return out;
 }
+
+// ── ERC-8004 identities of listed sellers ────────────────────────────────────
+//
+// Which sellers also hold an agent NFT in the ERC-8004 Identity Registry on
+// Base. Read from the registry's Transfer logs TO the seller's payTo (a mint or
+// a later transfer), through Blockscout PRO (`BLOCKSCOUT_API_KEY`): public RPCs
+// refuse history ("Archive requests require a personal token", publicnode,
+// measured 2026-10-28). One query per seller, so the walk rotates — a slice of
+// the list per daily run — and a seller with no NFT is remembered as none.
+// Only CURRENT ownership counts: each hit is re-checked with ownerOf.
+
+const REGISTRY_8004: Address = "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432";
+const REGISTRY_8004_FROM = 41_663_783;   // deploy block on Base (QuickNode registry page)
+const TOPIC_TRANSFER = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
+const K_8004 = "hub:x:8004";
+const K_8004_CURSOR = "hub:x:8004:cursor";
+
+export interface SellerIdentity { agentIds: string[]; checkedAt: string }
+type IdentityMap = Record<string, SellerIdentity>;
+
+export async function readSellerIdentities(): Promise<IdentityMap> {
+  const p = await kvGetProbe<IdentityMap>(K_8004);
+  return p.status === "hit" ? p.value : {};
+}
+
+/** Walk the next slice of sellers. Needs BLOCKSCOUT_API_KEY; without it, does nothing and says so. */
+export async function refreshSellerIdentities(deadline: number): Promise<{ checked: number; withAgent: number; skipped?: string }> {
+  const key = process.env.BLOCKSCOUT_API_KEY;
+  if (!key) return { checked: 0, withAgent: 0, skipped: "BLOCKSCOUT_API_KEY not set" };
+  const idx = await readProviderIndex();
+  if (!idx) return { checked: 0, withAgent: 0, skipped: "no provider list yet" };
+  const all = Object.keys(idx.providers).sort();
+  let at = Number((await kv.get<number>(K_8004_CURSOR)) ?? 0) || 0;
+  const c = rpc();
+  const found: IdentityMap = {};
+  let checked = 0;
+  while (Date.now() < deadline - 10_000 && checked < all.length) {
+    const payTo = all[at % all.length];
+    at++;
+    checked++;
+    const topic2 = `0x${payTo.slice(2).padStart(64, "0")}`;
+    const url = `https://api.blockscout.com/v2/api?chain_id=8453&apikey=${encodeURIComponent(key)}&module=logs&action=getLogs` +
+      `&address=${REGISTRY_8004}&fromBlock=${REGISTRY_8004_FROM}&toBlock=latest&topic0=${TOPIC_TRANSFER}&topic2=${topic2}&topic0_2_opr=and`;
+    const r = await fetch(url, { signal: AbortSignal.timeout(15_000), cache: "no-store" }).catch(() => null);
+    if (!r?.ok) { at--; break; }                              // rate limit or outage: resume here next run
+    const j = (await r.json().catch(() => null)) as { status?: string; message?: string; result?: unknown } | null;
+    if (!j || (j.status !== "1" && !/no records/i.test(String(j.message ?? "")))) { at--; break; }
+    const ids = Array.isArray(j.result) ? [...new Set((j.result as { topics: string[] }[]).map((l) => BigInt(l.topics[3]).toString()))] : [];
+    const owned: string[] = [];
+    for (const id of ids.slice(0, 20)) {
+      const owner = await c.readContract({ address: REGISTRY_8004, abi: ERC8004_OWNER_ABI, functionName: "ownerOf", args: [BigInt(id)] }).catch(() => null);
+      if (owner && owner.toLowerCase() === payTo) owned.push(id);
+    }
+    found[payTo] = { agentIds: owned, checkedAt: new Date().toISOString() };
+    await new Promise((ok) => setTimeout(ok, 250));          // PRO free tier: 5 rps
+  }
+  if (checked) {
+    const res = await kvMutate<IdentityMap>(K_8004, {}, (cur) => ({ ...cur, ...found }));
+    if (res === "ok" || res === "unchanged") await kv.set(K_8004_CURSOR, at % Math.max(1, all.length));
+  }
+  return { checked, withAgent: Object.values(found).filter((v) => v.agentIds.length).length };
+}
+
+const ERC8004_OWNER_ABI = [
+  { type: "function", name: "ownerOf", stateMutability: "view", inputs: [{ name: "tokenId", type: "uint256" }], outputs: [{ type: "address" }] },
+] as const;
