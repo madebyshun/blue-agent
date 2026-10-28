@@ -14,7 +14,7 @@ import {
 
 const pub = createPublicClient({ chain: base, transport: http() });
 const EXPLORER = (id: string) => `https://erc-8004.quicknode.com/agents/base-mainnet/${id}`;
-const input = "w-full rounded-lg border border-[#1A1A2E] bg-[#07080C] px-3 py-2 text-[11px] text-[#E2E8F0] outline-none focus:border-[#2a3350]";
+const input = "w-full rounded-lg border border-[#1A1A2E] bg-[#050508] px-3 py-2 text-[11px] text-[#E2E8F0] outline-none focus:border-[#2a3350]";
 const label = "text-[11px] text-[#94A3B8]";
 
 type Step = { state: "idle" | "busy" | "done" | "error"; msg?: string; tx?: string };
@@ -104,8 +104,8 @@ export default function CreateAgentClient() {
         </div>
 
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] items-start">
-          <section className="rounded-[10px] border border-[#1A1A2E] bg-[#0B0D12] px-4 py-4 grid gap-3">
-            <h2 className="text-[9.5px] uppercase tracking-[0.14em] text-[#64748B]">// Your agent</h2>
+          <section className="rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] px-4 py-4 grid gap-3">
+            <h2 className="text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">YOUR AGENT</h2>
             <label className="grid gap-1"><span className={label}>Name *</span><input className={input} value={d.name} onChange={set("name")} maxLength={60} /></label>
             <label className="grid gap-1"><span className={label}>What it does</span><textarea className={`${input} min-h-[90px]`} value={d.description} onChange={set("description")} maxLength={600} /></label>
             <label className="grid gap-1"><span className={label}>Image URL (https)</span><input className={input} value={d.image} onChange={set("image")} placeholder="https://…/logo.png" /></label>
@@ -119,8 +119,8 @@ export default function CreateAgentClient() {
           </section>
 
           <div className="grid gap-5">
-            <section className="rounded-[10px] border border-[#1A1A2E] bg-[#0B0D12] px-4 py-4 grid gap-3">
-              <h2 className="text-[9.5px] uppercase tracking-[0.14em] text-[#64748B]">// Create</h2>
+            <section className="rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] px-4 py-4 grid gap-3">
+              <h2 className="text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">CREATE</h2>
               <ol className="grid list-decimal gap-1 pl-4 text-[11px] text-[#94A3B8]">
                 <li>Connect a wallet on Base.</li>
                 <li>Mint: one transaction, <code>register()</code> on the ERC-8004 registry <a className="text-[#4FC3F7]" href={`https://basescan.org/address/${REGISTRY}`} target="_blank" rel="noreferrer">0x8004…a432</a>.</li>
@@ -136,8 +136,8 @@ export default function CreateAgentClient() {
               {mint.agentId && <a className="text-[11px] text-[#4FC3F7]" href={EXPLORER(mint.agentId)} target="_blank" rel="noreferrer">View agent #{mint.agentId} in an explorer ↗</a>}
             </section>
 
-            <section className="rounded-[10px] border border-[#1A1A2E] bg-[#0B0D12] px-4 py-4 grid gap-3">
-              <h2 className="text-[9.5px] uppercase tracking-[0.14em] text-[#64748B]">// Manage an agent you own</h2>
+            <section className="rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] px-4 py-4 grid gap-3">
+              <h2 className="text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">MANAGE AN AGENT YOU OWN</h2>
               <div className="flex gap-2">
                 <input className={input} value={mid} onChange={(e) => setMid(e.target.value.trim())} placeholder="Agent id, e.g. 1137821" />
                 <button type="button" onClick={lookup} className="rounded-md border border-[#1A1A2E] bg-[#0F121A] px-3 text-[12px] text-[#E2E8F0]">Look up</button>
@@ -161,8 +161,8 @@ export default function CreateAgentClient() {
               <Status s={manage} />
             </section>
 
-            <section className="rounded-[10px] border border-[#1A1A2E] bg-[#0B0D12] px-4 py-3.5">
-              <h2 className="mb-2 text-[9.5px] uppercase tracking-[0.14em] text-[#64748B]">// File preview</h2>
+            <section className="rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] px-4 py-3.5">
+              <h2 className="mb-2 text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">FILE PREVIEW</h2>
               <pre className="max-h-[220px] overflow-auto whitespace-pre-wrap break-all text-[10.5px] text-[#cbd5e1]">{JSON.stringify(draftRegistration(clean), null, 2)}</pre>
             </section>
           </div>

@@ -65,7 +65,7 @@ export default async function SellerPage({ params }: { params: Promise<{ payTo: 
             ["Paying wallets", R ? String(row?.payers ?? 0) : "—", "distinct payers"],
             ["Endpoints listed", detail ? String(detail.total) : "—", detail ? `Bazaar · ${detail.updatedAt.slice(0, 10)}` : "not on the Bazaar list"],
           ].map(([l, v, s]) => (
-            <div key={l} className="rounded-[10px] border border-[#1A1A2E] bg-[#0B0D12] px-3.5 py-3">
+            <div key={l} className="rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] px-3.5 py-3">
               <p className="text-[9.5px] uppercase tracking-[0.12em] text-[#64748B]">{l}</p>
               <p className="mt-1.5 text-[18px] font-semibold text-[#E2E8F0] tabular-nums">{v}</p>
               <p className="mt-1 text-[10.5px] text-[#64748B]">{s}</p>
@@ -73,8 +73,8 @@ export default async function SellerPage({ params }: { params: Promise<{ payTo: 
           ))}
         </div>
 
-        <section className="rounded-[10px] border border-[#1A1A2E] bg-[#0B0D12] px-4 py-3.5">
-          <h2 className="text-[9.5px] uppercase tracking-[0.14em] text-[#64748B]">// x402 inflow by day</h2>
+        <section className="rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] px-4 py-3.5">
+          <h2 className="text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">X402 INFLOW BY DAY</h2>
           {R && series.some((v) => v > 0) ? (
             <div className="mt-3 flex h-24 items-end gap-1">
               {series.map((v, i) => <div key={i} title={usd(v)} className="flex-1 bg-[#1f6f93]" style={{ height: `${Math.max(2, (v / peak) * 100)}%` }} />)}
@@ -82,8 +82,8 @@ export default async function SellerPage({ params }: { params: Promise<{ payTo: 
           ) : <p className="mt-2 text-[11px] text-[#64748B]">No x402 settlements measured in the indexed window ({ex.daysCovered} days).</p>}
         </section>
 
-        <section className="rounded-[10px] border border-[#1A1A2E] bg-[#0B0D12] overflow-hidden">
-          <h2 className="border-b border-[#1A1A2E] px-4 py-3 text-[9.5px] uppercase tracking-[0.14em] text-[#64748B]">// Endpoints (CDP Bazaar)</h2>
+        <section className="rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] overflow-hidden">
+          <h2 className="border-b border-[#1A1A2E] px-4 py-3 text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">ENDPOINTS (CDP BAZAAR)</h2>
           {!detail ? <p className="px-4 py-3 text-[11px] text-[#64748B]">Not listed on the Bazaar.</p>
             : <ul>{detail.resources.map((r, i) => (
                 <li key={i} className="border-t border-[#1A1A2E] px-4 py-2.5 first:border-t-0">
@@ -96,8 +96,8 @@ export default async function SellerPage({ params }: { params: Promise<{ payTo: 
           {detail && detail.total > detail.resources.length && <p className="border-t border-[#1A1A2E] px-4 py-2.5 text-[10.5px] text-[#64748B]">Showing {detail.resources.length} of {detail.total}.</p>}
         </section>
 
-        <section className="rounded-[10px] border border-[#1A1A2E] bg-[#0B0D12] px-4 py-3.5">
-          <h2 className="text-[9.5px] uppercase tracking-[0.14em] text-[#64748B]">// Virtuals ACP</h2>
+        <section className="rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] px-4 py-3.5">
+          <h2 className="text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">VIRTUALS ACP</h2>
           {acp ? (
             <div className="mt-2 text-[11px] text-[#94A3B8]">
               <p>Same wallet is ACP agent <span className="text-[#E2E8F0]">{acp.name}</span> ({acp.id})</p>

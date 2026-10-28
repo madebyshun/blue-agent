@@ -11,12 +11,24 @@ const usd = (n: number) => (n >= 1000 ? `$${(n / 1000).toFixed(1)}k` : n >= 1 ? 
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 const ymd = (d: string | null) => (d ? `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6)}` : "—");
 
+const BORDER = "#1A1A2E";
+const SURFACE = "#0D0D14";
+
+function Label({ title, sub }: { title: string; sub?: string }) {
+  return (
+    <div className="flex items-baseline gap-2.5 mt-[24px] mb-3 flex-wrap">
+      <span className="font-mono text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">{title}</span>
+      {sub && <span className="font-mono text-[10px] text-[#475569]">{sub}</span>}
+    </div>
+  );
+}
+
 function Stat({ label, value, sub }: { label: string; value: string; sub: string }) {
   return (
-    <div className="rounded-[10px] border border-[#1A1A2E] bg-[#0B0D12] px-3.5 py-3">
-      <p className="font-mono text-[9.5px] uppercase tracking-[0.12em] text-[#64748B]">{label}</p>
+    <div className="rounded-[14px] p-[14px] border" style={{ borderColor: BORDER, background: SURFACE }}>
+      <p className="font-mono text-[9.5px] tracking-[0.12em] text-[#64748B]">{label}</p>
       <p className="mt-1.5 font-mono text-[18px] font-semibold text-[#E2E8F0] tabular-nums">{value}</p>
-      <p className="mt-0.5 font-mono text-[10px] text-[#64748B]">{sub}</p>
+      <p className="mt-0.5 font-mono text-[9.5px] text-[#475569]">{sub}</p>
     </div>
   );
 }
@@ -58,94 +70,97 @@ export default function ExchangeView({ ex, totalPaid, ours, oursPayTo, agentId }
       <ExchangeHeader active="sellers" chip={ex.providersListed ? `${ex.providersListed.toLocaleString("en-US")} listed · ${totalPaid} paid · ${window}` : undefined} />
 
       <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="px-5 py-[18px] space-y-6 mx-auto w-full max-w-6xl">
+        <div className="px-5 py-[18px] mx-auto w-full max-w-6xl">
 
-          <section className="space-y-3">
-            <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4">
-              <Stat label={`x402 volume · ${window}`} value={R ? usd(volume) : "—"} sub="USDC settled on Base 8453, gross" />
-              <Stat label={`Sellers paid · ${window}`} value={R ? String(totalPaid) : "—"} sub={R ? `${multi} with 2+ paying wallets` : "indexing"} />
-              <Stat label={`Paid calls · ${window}`} value={R ? calls.toLocaleString("en-US") : "—"} sub="EIP-3009 settlements" />
-              <Stat label="Sellers listed" value={ex.providersListed ? ex.providersListed.toLocaleString("en-US") : "—"} sub={`CDP Bazaar · ${ex.listUpdatedAt ? ex.listUpdatedAt.slice(0, 10) : "—"}`} />
+          {/* Search + sort */}
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <div className="relative flex-1 min-w-[200px] max-w-[440px]">
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#64748B]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
+              </svg>
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search host, description or 0x payTo…"
+                className="w-full bg-[#0D0D14] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg pl-9 pr-3 py-2 font-mono text-[11.5px] text-[#E2E8F0] placeholder:text-[#64748B] outline-none transition-colors" />
             </div>
-            <p className="font-mono text-[10px] leading-[1.7] text-[#64748B]">
-              <span className="text-[#94A3B8]">Measured:</span> USDC paid to a seller&apos;s payTo in a transaction that also used the payer&apos;s EIP-3009 authorization, the way x402 settles.
+            {([["usd", "Most volume"], ["calls", "Most calls"], ["payers", "Most wallets"]] as const).map(([id, label]) => {
+              const on = sort === id;
+              return (
+                <button key={id} type="button" onClick={() => setSort(id)}
+                  className="font-mono text-[9.5px] rounded-full px-[11px] py-1 border transition-colors"
+                  style={on ? { color: "#050508", background: "#4FC3F7", borderColor: "#4FC3F7", fontWeight: 600 } : { color: "#94A3B8", borderColor: BORDER, background: "transparent" }}>
+                  {label}
+                </button>
+              );
+            })}
+            <button type="button" onClick={() => setSingle(!single)}
+              className="font-mono text-[9.5px] rounded-full px-[11px] py-1 border transition-colors"
+              style={single ? { color: "#E2E8F0", borderColor: "#2a3350", background: "#0F121A" } : { color: "#64748B", borderColor: BORDER, background: "transparent" }}>
+              {single ? "✓ " : ""}single-payer sellers
+            </button>
+          </div>
+
+          <Label title={`MEASURED · ${window.toUpperCase()}`} sub={`USDC settled on Base 8453 · ${ex.daysCovered} day${ex.daysCovered === 1 ? "" : "s"} indexed since ${ymd(ex.firstDay)}${ex.lagBlocks !== null ? ` · ${ex.lagBlocks.toLocaleString("en-US")} blocks behind head` : ""}`} />
+          <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill,minmax(140px,1fr))" }}>
+            <Stat label="X402 VOLUME" value={R ? usd(volume) : "—"} sub="gross, every listed seller" />
+            <Stat label="SELLERS PAID" value={R ? String(totalPaid) : "—"} sub={R ? `${multi} with 2+ paying wallets` : "indexing"} />
+            <Stat label="PAID CALLS" value={R ? calls.toLocaleString("en-US") : "—"} sub="EIP-3009 settlements" />
+            <Stat label="SELLERS LISTED" value={ex.providersListed ? ex.providersListed.toLocaleString("en-US") : "—"} sub={`CDP Bazaar · ${ex.listUpdatedAt ? ex.listUpdatedAt.slice(0, 10) : "—"}`} />
+          </div>
+
+          <Label title="LISTED ON BLUE AGENT" sub="our own tools · receipts and trust scores on Services" />
+          <Link href="/services" className="flex flex-wrap items-center gap-4 rounded-[14px] px-4 py-[13px] border transition-colors hover:border-[#4FC3F7]/45"
+            style={{ borderColor: "rgba(79,195,247,.22)", background: "rgba(79,195,247,.035)" }}>
+            <div className="min-w-0">
+              <p className="font-mono text-[12px] font-semibold text-[#E2E8F0]">Blue Agent</p>
+              <p className="mt-0.5 font-prose text-[10.5px] text-[#94A3B8]">Stock tokens, token checks and unsigned transactions on Base 8453 and Robinhood Chain 4663. MCP + x402.</p>
+              <p className="mt-1 font-mono text-[9px] text-[#475569]">{agentId !== null && <>ERC-8004 #{agentId} · </>}payTo {short(oursPayTo)}</p>
+            </div>
+            <div className="ml-auto text-right font-mono">
+              <p className="text-[12px] font-semibold text-[#E2E8F0]">{R ? usd(ours?.usd ?? 0) : "—"}</p>
+              <p className="text-[9.5px] text-[#64748B]">{R ? `${ours?.paidCalls ?? 0} paid calls from outside wallets` : ""}</p>
+              <p className="text-[9px] text-[#475569]">{R ? `team tests: ${ours?.teamCalls ?? 0} calls, ${usd(ours?.teamUsd ?? 0)}, not counted` : ""}</p>
+            </div>
+          </Link>
+
+          <Label title={`SELLERS · ${shown.length}`} sub={single ? "every paid seller" : "with 2+ paying wallets"} />
+          {!R ? (
+            <p className="font-mono text-[10.5px] text-[#64748B]">{ex.readable ? "Indexing the first day of Base blocks. Check back shortly." : "Index unreadable right now."}</p>
+          ) : shown.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="font-mono text-[13px] text-[#94A3B8]">No sellers found</p>
+              <p className="font-mono text-[10px] text-[#475569] mt-1">Try a different search, or include single-payer sellers</p>
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              {shown.map((r, i) => (
+                <Link key={r.payTo} href={`/exchange/${r.payTo}`}
+                  className="flex items-center gap-3 px-4 py-2.5 rounded-[14px] border transition-colors hover:border-[#4FC3F7]/45"
+                  style={{ borderColor: BORDER, background: SURFACE }}>
+                  <span className="w-6 shrink-0 font-mono text-[9.5px] text-[#475569] tabular-nums">{i + 1}</span>
+                  <div className="flex-1 min-w-0">
+                    <span className="block truncate font-mono text-[12px] font-semibold text-[#E2E8F0]">{r.hosts[0] ?? short(r.payTo)}</span>
+                    <p className="truncate font-prose text-[10.5px] text-[#94A3B8]">{r.title || "—"}</p>
+                    <p className="font-mono text-[9px] text-[#475569]">x402 · {r.resources} endpoint{r.resources === 1 ? "" : "s"} · {short(r.payTo)}</p>
+                  </div>
+                  <div className="hidden sm:block shrink-0"><Spark s={r.series.slice(ex.firstIndex)} /></div>
+                  <div className="w-[92px] shrink-0 text-right font-mono">
+                    <p className="text-[12px] font-semibold text-[#E2E8F0] tabular-nums">{usd(r.usd)}</p>
+                    <p className="text-[9px] text-[#475569]">measured</p>
+                  </div>
+                  <div className="hidden md:block w-[110px] shrink-0 text-right font-mono text-[9.5px] text-[#94A3B8] tabular-nums">
+                    <p>{r.paidCalls.toLocaleString("en-US")} calls</p>
+                    <p>{r.payers >= 2000 ? "2,000+" : r.payers} wallets</p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+          {R && (
+            <p className="font-mono text-[9.5px] text-[#475569] mt-4 leading-relaxed">
+              Measured: USDC paid to a seller&apos;s payTo in a transaction that also used the payer&apos;s EIP-3009 authorization, the way x402 settles.
               Plain transfers are not counted. Gross inflow: a seller&apos;s own test wallets cannot be told apart, so nothing is subtracted on a guess.
-              Window: {ex.daysCovered} day{ex.daysCovered === 1 ? "" : "s"} indexed since {ymd(ex.firstDay)}{ex.lagBlocks !== null ? ` · ${ex.lagBlocks.toLocaleString("en-US")} blocks behind head` : ""}.
+              Showing {shown.length} of {totalPaid} paid sellers. Machine-readable: <Link className="text-[#4FC3F7]" href="/api/hub/providers" prefetch={false}>/api/hub/providers</Link>
             </p>
-          </section>
-
-          <section>
-            <p className="mb-2.5 font-mono text-[9.5px] uppercase tracking-[0.14em] text-[#64748B]">// Listed on Blue Agent</p>
-            <div className="flex flex-wrap items-center gap-4 rounded-[10px] border border-[#1A1A2E] bg-[#0B0D12] px-4 py-3">
-              <div className="min-w-0">
-                <Link href="/services" className="font-mono text-[13px] font-semibold text-[#E2E8F0] hover:text-[#4FC3F7]">Blue Agent</Link>
-                <p className="font-mono text-[10.5px] text-[#94A3B8]">Stock tokens, token checks and unsigned transactions on Base 8453 and Robinhood Chain 4663. MCP + x402.</p>
-                <p className="mt-0.5 font-mono text-[10px] text-[#64748B]">{agentId !== null && <>ERC-8004 #{agentId} · </>}payTo {short(oursPayTo)}</p>
-              </div>
-              <div className="ml-auto text-right font-mono text-[10.5px]">
-                <p className="text-[#E2E8F0]">{R ? `${usd(ours?.usd ?? 0)} · ${ours?.paidCalls ?? 0} paid calls from outside wallets` : "—"}</p>
-                <p className="text-[#64748B]">{R ? `team tests: ${ours?.teamCalls ?? 0} calls, ${usd(ours?.teamUsd ?? 0)}, not counted` : ""}</p>
-              </div>
-            </div>
-          </section>
-
-          <section>
-            <div className="mb-2.5 flex flex-wrap items-center gap-2">
-              <p className="font-mono text-[9.5px] uppercase tracking-[0.14em] text-[#64748B]">// Sellers</p>
-              <div className="ml-auto flex flex-wrap items-center gap-2">
-                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search host, description or 0x payTo…"
-                  className="w-[260px] rounded-[7px] border border-[#1A1A2E] bg-[#07080C] px-2.5 py-[5px] font-mono text-[10.5px] text-[#E2E8F0] outline-none focus:border-[#2a3350]" />
-                <select value={sort} onChange={(e) => setSort(e.target.value as typeof sort)}
-                  className="rounded-[7px] border border-[#1A1A2E] bg-[#07080C] px-2 py-[5px] font-mono text-[10.5px] text-[#E2E8F0]">
-                  <option value="usd">Most volume</option>
-                  <option value="calls">Most calls</option>
-                  <option value="payers">Most paying wallets</option>
-                </select>
-                <label className="flex items-center gap-1.5 font-mono text-[10px] text-[#94A3B8]">
-                  <input type="checkbox" checked={single} onChange={(e) => setSingle(e.target.checked)} /> single-payer sellers
-                </label>
-              </div>
-            </div>
-            <div className="overflow-hidden rounded-[10px] border border-[#1A1A2E] bg-[#0B0D12]">
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[760px] border-collapse font-mono">
-                  <thead>
-                    <tr className="text-left text-[9.5px] uppercase tracking-[0.1em] text-[#64748B]">
-                      <th className="px-4 py-2.5 font-medium w-[46%]">Seller</th>
-                      <th className="px-4 py-2.5 font-medium">Volume · {window}</th>
-                      <th className="px-4 py-2.5 font-medium">Paid calls</th>
-                      <th className="px-4 py-2.5 font-medium">Paying wallets</th>
-                      <th className="px-4 py-2.5 font-medium">Trend</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {!R ? (
-                      <tr><td colSpan={5} className="px-4 py-4 text-[10.5px] text-[#64748B]">{ex.readable ? "Indexing the first day of Base blocks. Check back shortly." : "Index unreadable right now."}</td></tr>
-                    ) : shown.length === 0 ? (
-                      <tr><td colSpan={5} className="px-4 py-4 text-[10.5px] text-[#64748B]">No seller matches.</td></tr>
-                    ) : shown.map((r) => (
-                      <tr key={r.payTo} className="border-t border-[#1A1A2E] align-middle hover:bg-[#0F121A]">
-                        <td className="px-4 py-2.5">
-                          <Link href={`/exchange/${r.payTo}`} className="text-[12px] font-semibold text-[#E2E8F0] hover:text-[#4FC3F7]">{r.hosts[0] ?? short(r.payTo)}</Link>
-                          <p className="mt-0.5 line-clamp-1 text-[10.5px] text-[#94A3B8]">{r.title || "—"}</p>
-                          <p className="text-[9.5px] text-[#64748B]">x402 · {r.resources} endpoint{r.resources === 1 ? "" : "s"} · {short(r.payTo)}</p>
-                        </td>
-                        <td className="px-4 py-2.5 text-[12px] font-semibold text-[#E2E8F0] tabular-nums">{usd(r.usd)} <span className="text-[9.5px] font-normal text-[#64748B]">measured</span></td>
-                        <td className="px-4 py-2.5 text-[11.5px] text-[#E2E8F0] tabular-nums">{r.paidCalls.toLocaleString("en-US")}</td>
-                        <td className="px-4 py-2.5 text-[11.5px] text-[#E2E8F0] tabular-nums">{r.payers >= 2000 ? "2,000+" : r.payers}</td>
-                        <td className="px-4 py-2.5"><Spark s={r.series.slice(ex.firstIndex)} /></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {R && (
-                <p className="border-t border-[#1A1A2E] px-4 py-2.5 font-mono text-[10px] text-[#64748B]">
-                  Showing {shown.length} of {totalPaid} paid sellers. Machine-readable: <Link className="text-[#4FC3F7]" href="/api/hub/providers" prefetch={false}>/api/hub/providers</Link>
-                </p>
-              )}
-            </div>
-          </section>
+          )}
         </div>
       </div>
     </div>
