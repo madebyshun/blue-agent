@@ -43,8 +43,14 @@ export default async function MarketsPage() {
   const uses = new Map<string, number>();
   for (const r of rows) if (r.logo) uses.set(r.logo, (uses.get(r.logo) ?? 0) + 1);
   for (const r of rows) if (r.logo && (uses.get(r.logo) ?? 0) >= 3) r.logo = null;
+  // Robinhood stock tokens: GeckoTerminal serves each its own URL, but every one
+  // is Robinhood's feather (measured 2026-10-29: PLTR, SKHY, NVDA). Use the
+  // company mark on file (StockMark) or a monogram instead.
+  for (const r of rows) if (r.chain === "robinhood" && (r.kind === "stock" || r.kind === "etf")) r.logo = null;
   const count = (c: MarketChain) => stocks.rows.filter((r) => r.chain === c).length;
   const vol = (c: MarketChain) => stocks.rows.filter((r) => r.chain === c).reduce((a, r) => a + (r.volume24hUsd ?? 0), 0);
+  // A chain whose GeckoTerminal read was refused shows "—", never a summed $0.
+  const volRead = (c: MarketChain) => stocks.rows.some((r) => r.chain === c) && stocks.rows.filter((r) => r.chain === c).every((r) => r.read);
 
   return (
     <div className="flex flex-col h-full bg-[#050508] overflow-hidden font-mono [&_a]:font-mono [&_button]:font-mono">
@@ -55,8 +61,8 @@ export default async function MarketsPage() {
             {[
               ["STOCK TOKENS · BASE", String(count("base")), "Coinbase B20, verified on chain"],
               ["STOCK TOKENS · ROBINHOOD", String(count("robinhood")), "Robinhood stock tokens + ETFs"],
-              ["24H VOLUME · BASE", stocks.readAt ? usd(vol("base")) : "—", "stock tokens, DEX pools"],
-              ["24H VOLUME · ROBINHOOD", stocks.readAt ? usd(vol("robinhood")) : "—", "stock tokens, DEX pools"],
+              ["24H VOLUME · BASE", volRead("base") ? usd(vol("base")) : "—", "stock tokens, DEX pools"],
+              ["24H VOLUME · ROBINHOOD", volRead("robinhood") ? usd(vol("robinhood")) : "—", "stock tokens, DEX pools"],
             ].map(([l, v, s]) => (
               <div key={l} className={`${card} p-[14px]`}>
                 <p className="text-[9.5px] tracking-[0.12em] text-[#64748B]">{l}</p>
