@@ -24,6 +24,14 @@ const APP_PUBLIC = new Set(["share", "badge", "waitlist"]);
 // app subdomain these are served from the internal /app/* tree while the URL
 // stays clean (app.blueagent.dev/chat → renders src/app/app/chat). Everything
 // else (/pay, /docs, public assets) is a real root route and is served as-is.
+// URLs people TYPE for the mode pages: any case, and the singular slips. Each
+// maps to the canonical app segment (2026-10-29: "/Markets" and "/market" 404'd,
+// and blueagent.dev/markets did too, the day the article linked Markets).
+const MODE_ALIASES: Record<string, string> = {
+  markets: "markets", market: "markets", portfolio: "portfolio", portfolios: "portfolio",
+  exchange: "exchange", agents: "exchange", jobs: "jobs", job: "jobs", services: "services",
+};
+
 const APP_SEGMENTS = new Set([
   "alerts",
   "b20",
@@ -422,6 +430,14 @@ export function middleware(request: NextRequest) {
       return NextResponse.rewrite(url);
     }
 
+    // /Markets, /market, /Portfolio… → the canonical lowercase segment.
+    const alias = MODE_ALIASES[firstSeg.toLowerCase()];
+    if (alias && alias !== firstSeg) {
+      const url = request.nextUrl.clone();
+      url.pathname = `/${alias}${pathname.slice(firstSeg.length + 1)}`;
+      return NextResponse.redirect(url, { status: 301 });
+    }
+
     // Known app segment → render from the internal /app/* tree (URL stays clean).
     if (APP_SEGMENTS.has(firstSeg)) {
       const url = request.nextUrl.clone();
@@ -467,6 +483,19 @@ export function middleware(request: NextRequest) {
       `https://${APP_HOST}${clean}${request.nextUrl.search}`,
       { status: 301 }
     );
+  }
+
+  // The Agents and Markets mode pages live only on the app host; a main-host
+  // link (blueagent.dev/markets, /Markets, /exchange…) hops there, canonicalised.
+  {
+    const seg = pathname.split("/")[1] ?? "";
+    const alias = MODE_ALIASES[seg.toLowerCase()];
+    if (alias) {
+      return NextResponse.redirect(
+        `https://${APP_HOST}/${alias}${pathname.slice(seg.length + 1)}${request.nextUrl.search}`,
+        { status: 301 },
+      );
+    }
   }
 
   // Public /hub[/…] → app Hub on the subdomain. Whole sub-tree (mirrors /hood
