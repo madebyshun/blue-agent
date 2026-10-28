@@ -103,7 +103,8 @@ async function readMarket(chain: LaunchChain, token: Address): Promise<TokenOver
   } catch { return { priceUsd: null, pools: [], status: "unread" }; }
 }
 
-export async function tokenOverview(chain: LaunchChain, raw: string): Promise<TokenOverview> {
+/** `market: false` skips the GeckoTerminal read, for callers that read the pools themselves (Markets token page). */
+export async function tokenOverview(chain: LaunchChain, raw: string, opts: { market?: boolean } = {}): Promise<TokenOverview> {
   if (!isAddress(raw)) throw new Error("not an address");
   const token = getAddress(raw);
   const onchain = await readOnchain(chain, token);
@@ -122,7 +123,8 @@ export async function tokenOverview(chain: LaunchChain, raw: string): Promise<To
   const [launchpad, market] = await Promise.all([
     // A registered stock token was not launched on a launchpad; skip the probes.
     stockToken || onchain.isContract === false ? Promise.resolve(null) : resolveLaunchpad(chain, token).catch(() => null),
-    onchain.isContract === false ? Promise.resolve({ priceUsd: null, pools: [], status: "none_listed" as const }) : readMarket(chain, token),
+    onchain.isContract === false ? Promise.resolve({ priceUsd: null, pools: [], status: "none_listed" as const })
+      : opts.market === false ? Promise.resolve({ priceUsd: null, pools: [], status: "unread" as const }) : readMarket(chain, token),
   ]);
   return { chain, token, onchain, stockToken, launchpad, market };
 }

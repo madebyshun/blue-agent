@@ -237,18 +237,24 @@ const MODES: Mode[] = [
   },
   {
     id: "markets",
-    home: "/hood",
+    home: "/markets",
     prefixes: ["/hood", "/wallet", "/markets", "/portfolio"],
     groups: [
       {
         id: "group_markets",
-        // Stock tokens on Base 8453 and Robinhood Chain 4663.
-        items: [{ id: "stocks", href: "/hood", icon: IconHood, badge: "hood" }],
+        // Stock tokens + crypto on Base 8453 and Robinhood Chain 4663 (R3).
+        items: [
+          { id: "markets", href: "/markets", icon: IconUsage },
+          { id: "stocks", href: "/hood", icon: IconHood, badge: "hood" },
+        ],
       },
       {
         id: "group_trade",
-        // Swap / send / bridge, signed by the user.
-        items: [{ id: "wallet", href: "/wallet", icon: IconWallet }],
+        // Holdings, and swap / send / bridge signed by the user.
+        items: [
+          { id: "portfolio", href: "/portfolio", icon: IconAnalytics },
+          { id: "wallet", href: "/wallet", icon: IconWallet },
+        ],
       },
       { id: "group_account", items: [{ id: "docs", href: "/docs/blue-chat", icon: IconDocs }] },
     ],
