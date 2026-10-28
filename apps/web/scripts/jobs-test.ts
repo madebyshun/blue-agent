@@ -38,3 +38,20 @@ assert.equal(req.network, "eip155:8453");
 assert.equal(S.quoteProblem({ ...req, amount: "500000" } as S0.Quote), null);
 assert.match(S.quoteProblem({ ...req, network: "eip155:1" } as S0.Quote)!, /Base/);
 console.log("jobs-test: ok");
+
+// Signed delivery: the message binds every field, and viem verifies it.
+import { privateKeyToAccount } from "viem/accounts";
+import { verifyMessage } from "viem";
+(async () => {
+  const acct = privateKeyToAccount("0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"); // well-known test key (Anvil #1), not a real wallet
+  const f = { jobId: "aaaaaaaaaaaa", agentId: "7", payTo: acct.address, priceUnits: 500_000, preview: "a preview", result: "the result", issuedAt: "2026-10-28T00:00:00.000Z" };
+  const msg = await J.deliveryMessage(f);
+  const sig = await acct.signMessage({ message: msg });
+  assert.ok(await verifyMessage({ address: acct.address, message: msg, signature: sig }));
+  const tampered = await J.deliveryMessage({ ...f, priceUnits: 900_000 });
+  assert.ok(!(await verifyMessage({ address: acct.address, message: tampered, signature: sig })), "a changed price breaks the signature");
+  const tampered2 = await J.deliveryMessage({ ...f, result: "another result" });
+  assert.ok(!(await verifyMessage({ address: acct.address, message: tampered2, signature: sig })), "a changed result breaks the signature");
+  assert.equal(J.jobsForAgents([{ ...job, status: "closed" }]).length, 0);
+  console.log("jobs-test: signed delivery ok");
+})();

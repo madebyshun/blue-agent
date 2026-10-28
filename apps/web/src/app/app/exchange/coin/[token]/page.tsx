@@ -17,7 +17,12 @@ async function sharesOf(token: `0x${string}`): Promise<{ share: string; agent: s
   try {
     const c = createPublicClient({ chain: base, transport: http(process.env.HUB_RPC_URL || "https://base-rpc.publicnode.com") });
     const ev = REVENUE_SHARE_DEPLOYER_ABI.find((x) => x.type === "event" && x.name === "Created")!;
-    const logs = await c.getLogs({ address: REVENUE_SHARE_DEPLOYER, event: ev as never, args: { token } as never, fromBlock: REVENUE_SHARE_DEPLOY_BLOCK, toBlock: "latest" });
+    // Chunked: publicnode refuses more than 50,000 blocks per getLogs.
+    const head = await c.getBlockNumber();
+    const logs: unknown[] = [];
+    for (let a = REVENUE_SHARE_DEPLOY_BLOCK; a <= head; a += 49_000n) {
+      logs.push(...(await c.getLogs({ address: REVENUE_SHARE_DEPLOYER, event: ev as never, args: { token } as never, fromBlock: a, toBlock: a + 48_999n < head ? a + 48_999n : head })));
+    }
     return logs.map((l) => {
       const a = (l as unknown as { args: { share: string; agent: string; agentBps: number } }).args;
       return { share: a.share, agent: a.agent, agentBps: Number(a.agentBps) };
