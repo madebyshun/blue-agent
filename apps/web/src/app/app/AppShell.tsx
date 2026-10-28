@@ -10,6 +10,7 @@ import { AppChromeProvider, useAppChrome } from "./AppChrome";
 import LanguageToggle from "@/components/LanguageToggle";
 import AccountMenu from "@/components/AccountMenu";
 import { useLang } from "@/lib/i18n/context";
+import AgentsRail from "./AgentsRail";
 
 // T-D D1 — small self-contained client component. Polls
 // `/api/hood/inbox/unread-count` every 30s and shows a red dot with the count
@@ -127,6 +128,11 @@ const IconCron = svg(<path strokeLinecap="round" strokeLinejoin="round" d="M12 6
 const IconUsage = svg(<path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" />);
 // Plans — credit-card.
 // Docs — document.
+// Agents — user-group. Jobs — briefcase. Analytics — chart. Create — plus-circle.
+const IconAgents = svg(<path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />);
+const IconJobs = svg(<path strokeLinecap="round" strokeLinejoin="round" d="M20.25 14.15v4.25c0 1.094-.787 2.036-1.872 2.18-2.087.277-4.216.42-6.378.42s-4.291-.143-6.378-.42c-1.085-.144-1.872-1.086-1.872-2.18v-4.25m16.5 0a2.18 2.18 0 0 0 .75-1.661V8.706c0-1.081-.768-2.015-1.837-2.175a48.114 48.114 0 0 0-3.413-.387m4.5 8.006c-.194.165-.42.295-.673.38A23.978 23.978 0 0 1 12 15.75c-2.648 0-5.195-.429-7.577-1.22a2.016 2.016 0 0 1-.673-.38m0 0A2.18 2.18 0 0 1 3 12.489V8.706c0-1.081.768-2.015 1.837-2.175a48.111 48.111 0 0 1 3.413-.387m7.5 0V5.25A2.25 2.25 0 0 0 13.5 3h-3a2.25 2.25 0 0 0-2.25 2.25v.894m7.5 0a48.667 48.667 0 0 0-7.5 0" />);
+const IconAnalytics = svg(<path strokeLinecap="round" strokeLinejoin="round" d="M3 3v18h18M7.5 15l3-3 3 3 5.25-6" />);
+const IconCreate = svg(<path strokeLinecap="round" strokeLinejoin="round" d="M12 9v6m3-3H9m12 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />);
 const IconDocs = svg(<path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />);
 // Home / Models used to be hand-rolled at 16px with strokeWidth 1.5 while every
 // other icon came from `svg()` — a 2px and half-a-stroke difference sitting in
@@ -161,52 +167,119 @@ const IconHome = svg(<path strokeLinecap="round" strokeLinejoin="round" d="m2.25
 type NavItem = { id: string; href: string; icon: ReactNode; badge?: "hood" | "alerts"; meta?: "hubCount" };
 type NavGroup = { id: string; items: NavItem[] };
 
-const NAV_GROUPS: NavGroup[] = [
+// Three modes (ShunTr, 2026-10-28, after TOLLY's Trade | Agents): Chat stays
+// first — it is Blue Agent's primary surface — then Agents (the Exchange, jobs,
+// creating an agent, our own services) and Markets (stock tokens, wallet). The
+// mode is derived from the URL, never stored, so a deep link opens in the right
+// one and the back button never disagrees with the rail.
+type ModeId = "chat" | "agents" | "markets";
+type Mode = { id: ModeId; home: string; prefixes: string[]; groups: NavGroup[] };
+
+const MODES: Mode[] = [
   {
-    id: "group_agent",
-    // Rebuild nav (ShunTr, 2026-09-30, revised 2026-10-01): Chat is the
-    // primary surface; Models picks what runs it; Wallet holds
-    // swap/send/bridge; Scheduled (/cron) and Usage follow. Still HIDDEN, not
-    // deleted (every route resolves): dashboard, hub (Hub tools stay live
-    // inside Chat and over x402) and plans.
-    items: [
-      { id: "chat", href: "/chat", icon: IconChat },
-      { id: "models", href: "/models", icon: IconModels },
-      { id: "wallet", href: "/wallet", icon: IconWallet },
-      { id: "cron", href: "/cron", icon: IconCron, badge: "alerts" },
-      { id: "usage", href: "/usage", icon: IconUsage },
+    id: "chat",
+    home: "/chat",
+    prefixes: [],
+    groups: [
+      {
+        id: "group_agent",
+        // Still HIDDEN, not deleted (every route resolves): dashboard, hub and plans.
+        items: [
+          { id: "chat", href: "/chat", icon: IconChat },
+          { id: "models", href: "/models", icon: IconModels },
+          { id: "cron", href: "/cron", icon: IconCron, badge: "alerts" },
+          { id: "usage", href: "/usage", icon: IconUsage },
+        ],
+      },
+      {
+        id: "group_extend",
+        items: [
+          { id: "skills", href: "/skills", icon: IconSkills },
+          { id: "connectors", href: "/connectors", icon: IconConnectors },
+        ],
+      },
+      { id: "group_account", items: [{ id: "docs", href: "/docs/blue-chat", icon: IconDocs }] },
     ],
   },
   {
-    // What Chat can do, and what it is plugged into (restored 2026-10-01).
-    id: "group_extend",
-    items: [
-      { id: "skills", href: "/skills", icon: IconSkills },
-      { id: "connectors", href: "/connectors", icon: IconConnectors },
-      // What agents can pay Blue Agent for (MCP v2, 2026-10-22).
-      { id: "services", href: "/services", icon: IconServices },
+    id: "agents",
+    home: "/exchange",
+    prefixes: ["/exchange", "/jobs", "/services"],
+    groups: [
+      {
+        id: "group_exchange",
+        // Every x402 seller on Base, measured on chain (Blue Hub v3, 2026-10-28).
+        items: [
+          { id: "agents", href: "/exchange", icon: IconAgents },
+          { id: "jobs", href: "/jobs", icon: IconJobs },
+          { id: "analytics", href: "/exchange/analytics", icon: IconAnalytics },
+        ],
+      },
+      {
+        id: "group_build",
+        items: [
+          { id: "create_agent", href: "/exchange/create", icon: IconCreate },
+          // What agents can pay Blue Agent for (MCP v2, 2026-10-22).
+          { id: "services", href: "/services", icon: IconServices },
+        ],
+      },
+      { id: "group_account", items: [{ id: "docs", href: "/docs/blue-chat", icon: IconDocs }] },
     ],
   },
   {
-    id: "group_explore",
-    // Hood is an add-on feature next to Chat, not a second primary surface.
-    items: [
-      { id: "hood", href: "/hood", icon: IconHood, badge: "hood" },
-      // Every x402 seller on Base, measured on chain (Blue Hub v3, 2026-10-28).
-      { id: "exchange", href: "/exchange", icon: IconExchange },
-    ],
-  },
-  {
-    id: "group_account",
-    // Docs STAYS as the last entry: /docs/blue-chat is live and this is its
-    // only entrance from inside the app.
-    items: [
-      { id: "docs", href: "/docs/blue-chat", icon: IconDocs },
+    id: "markets",
+    home: "/hood",
+    prefixes: ["/hood", "/wallet", "/markets", "/portfolio"],
+    groups: [
+      {
+        id: "group_markets",
+        // Stock tokens on Base 8453 and Robinhood Chain 4663.
+        items: [{ id: "stocks", href: "/hood", icon: IconHood, badge: "hood" }],
+      },
+      {
+        id: "group_trade",
+        // Swap / send / bridge, signed by the user.
+        items: [{ id: "wallet", href: "/wallet", icon: IconWallet }],
+      },
+      { id: "group_account", items: [{ id: "docs", href: "/docs/blue-chat", icon: IconDocs }] },
     ],
   },
 ];
 
-const ALL_ITEMS = NAV_GROUPS.flatMap((g) => g.items);
+const ALL_ITEMS = MODES.flatMap((m) => m.groups.flatMap((g) => g.items));
+
+function modeForPath(clean: string): Mode {
+  return MODES.find((m) => m.prefixes.some((p) => clean === p || clean.startsWith(p + "/"))) ?? MODES[0];
+}
+
+/** The ONE active item: the longest href that prefixes the path (so /exchange/analytics
+ *  lights Analytics, not Agents, while /exchange/agent/7 still lights Agents). */
+function activeHref(clean: string, items: NavItem[]): string | null {
+  let best: string | null = null;
+  for (const i of items) {
+    if ((clean === i.href || clean.startsWith(i.href + "/")) && (!best || i.href.length > best.length)) best = i.href;
+  }
+  return best;
+}
+
+/** Chat | Agents | Markets — a segmented control at the top of the rail. */
+function ModeSwitch({ mode, collapsed, onPick }: { mode: ModeId; collapsed?: boolean; onPick?: () => void }) {
+  const { t } = useLang();
+  return (
+    <div className={`grid gap-1 ${collapsed ? "grid-cols-1" : "grid-cols-3"} rounded-[10px] border border-[#1A1A2E] bg-[#050508] p-1`}>
+      {MODES.map((m) => {
+        const on = m.id === mode;
+        return (
+          <Link key={m.id} href={m.home} onClick={onPick} title={t(`nav.mode_${m.id}`)}
+            className="rounded-[7px] py-[5px] text-center font-mono text-[10px] font-semibold transition-colors"
+            style={on ? { background: "#4FC3F7", color: "#050508" } : { color: "#94A3B8" }}>
+            {collapsed ? t(`nav.mode_${m.id}`).slice(0, 1) : t(`nav.mode_${m.id}`)}
+          </Link>
+        );
+      })}
+    </div>
+  );
+}
 
 // The app surface is served on app.blueagent.dev under clean, /app-less URLs
 // (middleware rewrites /chat → /app/chat), so on prod usePathname() already
@@ -255,7 +328,9 @@ function AppSideNav({ toolCount }: { toolCount: number }) {
   const { t } = useLang();
   const { contextual } = useAppChrome();
   const clean = cleanPath(pathname);
-  const isActive = (href: string) => clean === href || clean.startsWith(href + "/");
+  const mode = modeForPath(clean);
+  const active = activeHref(clean, mode.groups.flatMap((g) => g.items));
+  const isActive = (href: string) => href === active;
 
   // Collapse state persists across sessions. Default expanded; hydrate from
   // localStorage after mount (avoids an SSR/client mismatch).
@@ -375,6 +450,10 @@ function AppSideNav({ toolCount }: { toolCount: number }) {
           white on #4FC3F7 is ~1.9:1 and fails at 11.5px, dark-on-cyan is ~9:1.
           This is the one glow in the rail (`shadow-cta`); the handoff rations
           it to primary CTAs, and a second glowing thing would spend it. */}
+      <div className="shrink-0 px-2 pt-2">
+        <ModeSwitch mode={mode.id} collapsed={collapsed} />
+      </div>
+
       {contextual?.newChat && (
         <div className="shrink-0 px-2 pt-2 pb-1">
           <button
@@ -409,7 +488,7 @@ function AppSideNav({ toolCount }: { toolCount: number }) {
           let a long translation push the meta column out of view instead of
           eliding — the label would look complete while the count vanished. */}
       <nav className={`flex-1 min-h-0 overflow-y-auto overflow-x-hidden pb-2 ${contextual?.newChat ? "" : "pt-2"}`}>
-        {NAV_GROUPS.map((group, gi) => (
+        {mode.groups.map((group, gi) => (
           <div key={group.id} className={gi > 0 ? "mt-1" : ""}>
             {collapsed
               ? gi > 0 && <div className="mx-auto my-2 w-6 h-px bg-[#1A1A2E]" />
@@ -624,6 +703,8 @@ function MobileDrawer({ toolCount }: { toolCount: number }) {
   const pathname = usePathname();
   const { t } = useLang();
   const clean = cleanPath(pathname);
+  const mode = modeForPath(clean);
+  const active = activeHref(clean, mode.groups.flatMap((g) => g.items));
 
   // Close the drawer whenever the route changes (e.g. after tapping a product).
   useEffect(() => { setDrawerOpen(false); }, [pathname, setDrawerOpen]);
@@ -724,14 +805,15 @@ function MobileDrawer({ toolCount }: { toolCount: number }) {
             </div>
           )}
 
-          {/* Product groups — same three groups as desktop. */}
-          {NAV_GROUPS.map((group) => (
+          {/* Mode switch + that mode's groups — same as desktop. */}
+          <div className="px-3 pt-2 pb-1"><ModeSwitch mode={mode.id} /></div>
+          {mode.groups.map((group) => (
             <div key={group.id} className="px-2 pt-1 border-t border-[#13131f] mt-1">
               <p className="px-3 pt-3 pb-1 font-mono text-[9px] uppercase" style={{ color: META, letterSpacing: LABEL_TRACK }}>
                 {t(`nav.${group.id}`)}
               </p>
               {group.items.map((item) => {
-                const active = clean === item.href || clean.startsWith(item.href + "/");
+                const on = item.href === active;
                 return (
                   <Link
                     key={item.id}
@@ -740,14 +822,14 @@ function MobileDrawer({ toolCount }: { toolCount: number }) {
                     className="w-full flex items-center gap-3 px-3 py-2 transition-colors hover:bg-[#ffffff06]"
                     style={{
                       borderRadius: ITEM_RADIUS,
-                      ...(active ? { background: ACTIVE_BG, boxShadow: ACTIVE_RING } : null),
+                      ...(on ? { background: ACTIVE_BG, boxShadow: ACTIVE_RING } : null),
                     }}
                   >
-                    <span className="relative shrink-0" style={{ color: active ? "#4FC3F7" : "#64748B" }}>
+                    <span className="relative shrink-0" style={{ color: on ? "#4FC3F7" : "#64748B" }}>
                       {item.icon}
                       {item.badge === "hood" && <HoodNavBadge />}{item.badge === "alerts" && <AlertsNavBadge />}
                     </span>
-                    <span className="font-mono text-[13px] flex-1 min-w-0 truncate" style={{ color: active ? "#4FC3F7" : "#E2E8F0" }}>
+                    <span className="font-mono text-[13px] flex-1 min-w-0 truncate" style={{ color: on ? "#4FC3F7" : "#E2E8F0" }}>
                       {t(`nav.${item.id}`)}
                     </span>
                     {item.meta === "hubCount" && (
@@ -807,6 +889,12 @@ function MobileDrawer({ toolCount }: { toolCount: number }) {
 // `@/lib/agent-tools` — 1958 lines, the whole Hub catalog — out of the client
 // bundle of every /app page, while still letting the nav print a count that is
 // derived rather than typed.
+/** The right rail, only in the Agents mode (and only on wide screens). */
+function ModeRail() {
+  const pathname = usePathname();
+  return modeForPath(cleanPath(pathname)).id === "agents" ? <AgentsRail /> : null;
+}
+
 export default function AppShell({
   children,
   toolCount,
@@ -820,9 +908,12 @@ export default function AppShell({
         <AppSideNav toolCount={toolCount} />
         <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
           <MobileTopBar />
-          <main className="flex-1 min-h-0 overflow-hidden flex flex-col">
-            {children}
-          </main>
+          <div className="flex-1 min-h-0 flex overflow-hidden">
+            <main className="flex-1 min-w-0 min-h-0 overflow-hidden flex flex-col">
+              {children}
+            </main>
+            <ModeRail />
+          </div>
         </div>
         <MobileDrawer toolCount={toolCount} />
       </div>
