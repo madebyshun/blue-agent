@@ -141,7 +141,7 @@ export default function ServicesDashboard({ rows, stats, receipts }: { rows: Ser
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="px-5 py-[18px] mx-auto w-full max-w-6xl">
+        <div className="px-5 py-[18px] w-full">
 
           {/* Search + filters */}
           <div className="flex items-center gap-2.5 flex-wrap">
@@ -166,7 +166,7 @@ export default function ServicesDashboard({ rows, stats, receipts }: { rows: Ser
 
           {/* Stats */}
           <Label title="LAST 30 DAYS" sub="every paid call, settled on Base 8453" />
-          <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill,minmax(128px,1fr))" }}>
+          <div className="grid gap-2.5 grid-cols-2 md:grid-cols-5">
             <Stat label="PAID CALLS" value={R ? String(settled) : "—"} sub="settled on Base" />
             <Stat label="PAYING WALLETS" value={receipts ? String(payers) : "—"} sub="distinct payers" />
             <Stat label="REVENUE" value={R ? usd(units / 1e6) : "—"} sub="USDC settled on Base" />

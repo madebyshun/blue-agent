@@ -208,7 +208,7 @@ export default function CronPanel() {
         <span className="ml-auto flex gap-2">{actions}</span>
       </div>
 
-      <div className="px-5 py-5 mx-auto w-full max-w-6xl">
+      <div className="px-5 py-5 w-full">
         <div className="flex lg:hidden gap-2 mb-4">{actions}</div>
 
         {/* ── Stat strip ─── */}

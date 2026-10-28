@@ -102,7 +102,7 @@ export default function PlansPage() {
 
       {/* Body */}
       <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="mx-auto w-full max-w-[980px] px-6 pt-[34px] pb-10">
+        <div className="w-full px-5 pt-[34px] pb-10">
 
           {/* Hero */}
           <div className="text-center">

@@ -254,7 +254,7 @@ export default function OverviewView() {
             style={{ background: `radial-gradient(ellipse 80% 60% at 50% -10%, ${ACCENT}0f 0%, transparent 70%)` }} />
         </div>
 
-        <div className="relative px-3 sm:px-5 py-5 max-w-6xl mx-auto">
+        <div className="relative px-3 sm:px-5 py-5 w-full">
           {!isConnected ? (
             <AppConnectPrompt
               accent={ACCENT}
