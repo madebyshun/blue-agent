@@ -192,7 +192,7 @@ export default function ConnectorsPanel({ onPick }: { onPick?: () => void }) {
 
       {/* Content */}
       <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="px-5 py-[18px] space-y-6 mx-auto w-full max-w-6xl">
+        <div className="px-5 py-[18px] space-y-6 w-full">
 
           <BuiltInOnchain />
           <OnchainPolicy />

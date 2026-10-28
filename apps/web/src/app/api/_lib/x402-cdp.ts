@@ -43,6 +43,18 @@ export function buildRequirements(amountUnits: string): PaymentRequirements {
   };
 }
 
+/**
+ * Requirements for a payment that goes to SOMEONE ELSE: the job board's unlock
+ * (api/jobs/[id]/deliveries/[did]/unlock), where the poster pays the agent that
+ * did the work, directly. Blue Agent is never the payee there and holds nothing:
+ * the facilitator moves USDC from the poster to `payTo` in one authorization.
+ * Same network, asset and settlement path as every other door, which is why it
+ * lives here and not in the route (x402-payee-check group 6).
+ */
+export function buildRequirementsTo(amountUnits: string, payTo: string): PaymentRequirements {
+  return { ...buildRequirements(amountUnits), payTo, maxTimeoutSeconds: 300 };
+}
+
 /** Reshape the hub's X-Payment into a v2 PaymentPayload (adds `accepted`, `resource`, `extensions`).
  *
  * IMPORTANT: Preserve scheme/network/payload from the client's X-Payment so CDP can parse the

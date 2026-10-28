@@ -122,7 +122,7 @@ export default function SkillsPanel({ onPick, onUse, costs }: {
 
       {/* Content */}
       <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="px-5 py-[18px] mx-auto w-full max-w-6xl">
+        <div className="px-5 py-[18px] w-full">
 
           {/* Search + group filter */}
           <div className="flex items-center gap-2.5 flex-wrap">

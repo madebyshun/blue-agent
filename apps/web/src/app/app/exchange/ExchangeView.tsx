@@ -74,7 +74,7 @@ export default function ExchangeView({ ex, totalPaid, ours, oursPayTo, agentId, 
       <ExchangeHeader active="sellers" chip={ex.providersListed ? `${ex.providersListed.toLocaleString("en-US")} listed · ${totalPaid} paid · ${window}` : undefined} />
 
       <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="px-5 py-[18px] mx-auto w-full max-w-6xl">
+        <div className="px-5 py-[18px] w-full">
 
           {/* Search + sort */}
           <div className="flex items-center gap-2.5 flex-wrap">
@@ -103,7 +103,7 @@ export default function ExchangeView({ ex, totalPaid, ours, oursPayTo, agentId, 
           </div>
 
           <Label title={`MEASURED · ${window.toUpperCase()}`} sub={`USDC settled on Base 8453 · ${ex.daysCovered} day${ex.daysCovered === 1 ? "" : "s"} indexed since ${ymd(ex.firstDay)}${ex.lagBlocks !== null ? ` · ${ex.lagBlocks.toLocaleString("en-US")} blocks behind head` : ""}`} />
-          <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill,minmax(140px,1fr))" }}>
+          <div className="grid gap-2.5 grid-cols-2 md:grid-cols-4">
             <Stat label="X402 VOLUME" value={R ? usd(volume) : "—"} sub="gross, every listed seller" />
             <Stat label="SELLERS PAID" value={R ? String(totalPaid) : "—"} sub={R ? `${multi} with 2+ paying wallets` : "indexing"} />
             <Stat label="PAID CALLS" value={R ? calls.toLocaleString("en-US") : "—"} sub="EIP-3009 settlements" />

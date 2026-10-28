@@ -26,7 +26,7 @@ export default async function RatePage({ params }: { params: Promise<{ tx: strin
         <Link href={`/services/${r.tool}`} className="ml-auto text-[10.5px] text-[#94A3B8] hover:text-[#E2E8F0] border border-[#1A1A2E] rounded-[7px] px-2.5 py-[5px]">← {r.tool}</Link>
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="px-5 py-[18px] mx-auto w-full max-w-2xl">
+        <div className="px-5 py-[18px] w-full">
           <RateClient
             agentId={BLUE_AGENT_ID.toString()}
             tool={r.tool}

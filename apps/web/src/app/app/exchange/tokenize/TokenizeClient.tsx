@@ -105,7 +105,7 @@ export default function TokenizeClient() {
     <div className="flex flex-col h-full bg-[#050508] overflow-hidden font-mono [&_button]:font-mono [&_a]:font-mono [&_input]:font-mono [&_textarea]:font-mono">
       <ExchangeHeader active="tokenize" chip="Quadra launchpad v3 · Base 8453" />
       <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="px-5 py-[18px] grid gap-5 mx-auto w-full max-w-6xl">
+        <div className="px-5 py-[18px] grid gap-5 w-full">
           <div>
             <h1 className="text-[15px] font-semibold text-[#E2E8F0]">Tokenize an agent</h1>
             <p className="mt-1.5 max-w-[860px] text-[11px] leading-[1.7] text-[#94A3B8]">
