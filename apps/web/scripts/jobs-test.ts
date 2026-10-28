@@ -55,3 +55,14 @@ import { verifyMessage } from "viem";
   assert.equal(J.jobsForAgents([{ ...job, status: "closed" }]).length, 0);
   console.log("jobs-test: signed delivery ok");
 })();
+
+// Hire Agent quotes: v1 and v2 normalise to USDC on Base; other chains are refused.
+{
+  const usdc = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+  const v2 = S.toQuote({ network: "eip155:8453", asset: usdc, amount: "10000", payTo: agent, maxTimeoutSeconds: 60 }, 2)!;
+  assert.equal(v2.x402Version, 2); assert.equal(v2.amount, "10000"); assert.equal(S.quoteProblem(v2), null);
+  const v1 = S.toQuote({ network: "base", asset: usdc, maxAmountRequired: "20000", payTo: agent }, 1)!;
+  assert.equal(v1.x402Version, 1); assert.equal(v1.network, "eip155:8453"); assert.equal(v1.amount, "20000");
+  assert.equal(S.toQuote({ network: "solana", asset: usdc, amount: "1", payTo: agent }, 2), null);
+  console.log("jobs-test: hire quotes ok");
+}

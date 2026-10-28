@@ -46,7 +46,11 @@ const detailKey = (a: string) => `hub:x:p:${a.slice(2, 3)}`;
 
 export interface ProviderIndexEntry { hosts: string[]; resources: number; title: string }
 export interface ProviderIndex { updatedAt: string; providers: Record<string, ProviderIndexEntry> }
-export interface ResourceSample { url: string; priceUsd: number | null; description: string }
+export interface ResourceSample {
+  url: string; priceUsd: number | null; description: string;
+  /** From the Bazaar's own discovery info — the call a buyer copies (Hire Agent). */
+  method?: string; bodyType?: string; example?: Record<string, unknown>; exampleIn?: "body" | "query";
+}
 export interface ProviderDetail { payTo: string; hosts: string[]; resources: ResourceSample[]; total: number; updatedAt: string }
 
 interface DayCell { n: number; u: number; pay: string[]; tn?: number; tu?: number }
@@ -57,7 +61,7 @@ const ymd = (ms: number) => new Date(ms).toISOString().slice(0, 10).replace(/-/g
 
 // ── Provider list (Bazaar) ───────────────────────────────────────────────────
 
-interface BazaarItem { resource?: string; description?: string; accepts?: { network?: string; payTo?: string; maxAmountRequired?: string; amount?: string; description?: string }[] }
+interface BazaarItem { resource?: string; description?: string; accepts?: { network?: string; payTo?: string; maxAmountRequired?: string; amount?: string; description?: string }[]; extensions?: { bazaar?: { info?: { input?: { method?: string; bodyType?: string; body?: Record<string, unknown>; queryParams?: Record<string, unknown> } } } } }
 
 /** Pull every Bazaar resource and keep the Base payTos. Writes the index and one detail blob per provider. */
 export async function refreshProviders(deadline: number): Promise<{ resources: number; providers: number; complete: boolean }> {
@@ -86,7 +90,17 @@ export async function refreshProviders(deadline: number): Promise<{ resources: n
         if (host) e.hosts.add(host);
         e.total++;
         const raw = Number(a.maxAmountRequired ?? a.amount);
-        if (e.res.length < 8) e.res.push({ url, priceUsd: Number.isFinite(raw) ? raw / 1e6 : null, description: String(it.description ?? a.description ?? "").slice(0, 160) });
+        if (e.res.length < 8) {
+          const inp = it.extensions?.bazaar?.info?.input;
+          const ex = inp?.body ?? inp?.queryParams;
+          const exStr = ex ? JSON.stringify(ex) : "";
+          e.res.push({
+            url, priceUsd: Number.isFinite(raw) ? raw / 1e6 : null, description: String(it.description ?? a.description ?? "").slice(0, 160),
+            ...(inp?.method ? { method: String(inp.method).toUpperCase().slice(0, 8) } : {}),
+            ...(inp?.bodyType ? { bodyType: String(inp.bodyType).slice(0, 16) } : {}),
+            ...(ex && exStr.length <= 600 ? { example: ex, exampleIn: inp?.body ? "body" as const : "query" as const } : {}),
+          });
+        }
         by.set(p, e);
       }
     }
@@ -382,7 +396,7 @@ export function classifyQuote(payTo: string, status: number, accepts: { network?
   return base.some((a) => String(a.payTo ?? "").toLowerCase() === payTo.toLowerCase()) ? "live" : "other_payto";
 }
 
-async function probeOne(payTo: string, url: string): Promise<SellerProbe> {
+export async function probeOne(payTo: string, url: string): Promise<SellerProbe> {
   const at = new Date().toISOString();
   for (const method of ["POST", "GET"] as const) {
     const r = await fetch(url, {

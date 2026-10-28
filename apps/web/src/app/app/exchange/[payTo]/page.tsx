@@ -8,6 +8,9 @@ import { readExchange, readProviderDetail, readSellerIdentities, readSellerProbe
 import { readAgentReputation } from "@/lib/erc8004";
 import { X402_PAY_TO } from "@/lib/x402-payee";
 import ExchangeHeader from "../ExchangeHeader";
+import HireAgent from "../_components/HireAgent";
+import { FollowButton } from "../_components/AccountViews";
+import { readListing } from "@/lib/hub/listings";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +40,7 @@ export default async function SellerPage({ params }: { params: Promise<{ payTo: 
   const { payTo: raw } = await params;
   if (!/^0x[0-9a-fA-F]{40}$/.test(raw)) notFound();
   const payTo = raw.toLowerCase();
-  const [ex, detail, acp, ids, probes, recent] = await Promise.all([readExchange(30), readProviderDetail(payTo), readAcp(payTo), readSellerIdentities(), readSellerProbes(), recentPayments(payTo)]);
+  const [ex, detail, acp, ids, probes, recent, listing] = await Promise.all([readExchange(30), readProviderDetail(payTo), readAcp(payTo), readSellerIdentities(), readSellerProbes(), recentPayments(payTo), readListing(payTo)]);
   const probe = probes[payTo] ?? null;
   const ident = ids[payTo] ?? null;
   const agentId = ident?.agentIds[0] ?? null;
@@ -53,7 +56,9 @@ export default async function SellerPage({ params }: { params: Promise<{ payTo: 
   const d0 = full.length >= 2 ? full[full.length - 2] : null;
   const delta = d1 !== null && d0 ? Math.round(((d1 - d0) / d0) * 1000) / 10 : null;
   const peak = Math.max(0.0001, ...series);
-  const name = detail?.hosts[0] ?? row?.hosts[0] ?? short(payTo);
+  const name = detail?.hosts[0] ?? row?.hosts[0] ?? listing?.domain ?? short(payTo);
+  const hireable = detail?.resources.length ? detail.resources
+    : (listing?.services ?? []).filter((s) => s.probe === "live").map((s) => ({ url: s.url, priceUsd: s.priceUsd, description: s.description }));
 
   return (
     <div className="flex flex-col h-full bg-[#050508] overflow-hidden font-mono [&_a]:font-mono">
@@ -61,12 +66,20 @@ export default async function SellerPage({ params }: { params: Promise<{ payTo: 
       <div className="flex-1 min-h-0 overflow-y-auto">
       <div className="px-5 py-[18px] grid gap-5 w-full">
         <div>
-          <Link href="/exchange" className="text-[10px] tracking-[.14em] text-[#64748B] hover:text-[#4FC3F7]">← SELLERS</Link>
-          <h1 className="mt-1 text-[15px] font-semibold text-[#E2E8F0]">{name}</h1>
+          <Link href="/exchange" className="text-[10px] tracking-[.14em] text-[#64748B] hover:text-[#4FC3F7]">← AGENTS</Link>
+          <div className="mt-1 flex flex-wrap items-center gap-2.5">
+            <h1 className="text-[15px] font-semibold text-[#E2E8F0]">{listing?.name ?? name}</h1>
+            {listing && <span className="text-[8.5px] rounded-full border border-[#34D399]/30 px-[7px] py-[2px] text-[#34D399]" title={`Proved it runs ${listing.domain} and its 402 pays this wallet`}>✓ listed · operator verified</span>}
+            <FollowButton payTo={payTo} />
+          </div>
+          {listing?.description && <p className="mt-1 max-w-[900px] font-prose text-[11px] text-[#94A3B8]">{listing.description}</p>}
           <p className="mt-1 text-[11px] text-[#94A3B8]">
             payTo <a className="text-[#4FC3F7]" href={`https://basescan.org/address/${payTo}`} target="_blank" rel="noreferrer">{payTo}</a> · Base 8453
             {payTo === X402_PAY_TO.toLowerCase() && <> · this is Blue Agent, see <Link className="text-[#4FC3F7]" href="/services">services</Link></>}
           </p>
+          {payTo !== X402_PAY_TO.toLowerCase() && hireable.length > 0 && (
+            <div className="mt-3"><HireAgent payTo={payTo} name={listing?.name ?? name} services={hireable} /></div>
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
