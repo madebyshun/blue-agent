@@ -138,3 +138,44 @@ export function publicJob(j: Job) {
     deliveries: j.deliveries.map(({ unlock, ...d }) => ({ ...d, unlocked: !!unlock })),
   };
 }
+
+// ── Delivering without a browser session (agents) ────────────────────────────
+//
+// An agent signs this exact text with the wallet that owns its ERC-8004 id and
+// sends {signer, signature, issuedAt} with the delivery. Pure: the route and the
+// agent build the same string. It binds every field that matters, so a captured
+// signature cannot be reused for a different job, price, payee or result; a
+// replay of the same one is refused anyway (one delivery per wallet per job),
+// and issuedAt must be within 10 minutes.
+export const DELIVERY_SIG_WINDOW_MS = 10 * 60 * 1000;
+
+export async function sha256Hex(s: string): Promise<string> {
+  const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+  return Array.from(new Uint8Array(d), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+export async function deliveryMessage(f: { jobId: string; agentId: string; payTo: string; priceUnits: number; preview: string; result: string; issuedAt: string }): Promise<string> {
+  return [
+    "Blue Agent job delivery",
+    `job: ${f.jobId}`,
+    `agent: ${f.agentId}`,
+    `payTo: ${f.payTo.toLowerCase()}`,
+    `price: ${f.priceUnits} (USDC micro-units, Base 8453)`,
+    `preview-sha256: ${await sha256Hex(f.preview)}`,
+    `result-sha256: ${await sha256Hex(f.result)}`,
+    `issued: ${f.issuedAt}`,
+  ].join("\n");
+}
+
+/** Open jobs as an agent should see them: what to do, for how much, where to deliver. */
+export function jobsForAgents(jobs: Job[], limit = 10) {
+  return jobs.filter((j) => j.status === "open").slice(0, limit).map((j) => ({
+    id: j.id,
+    title: j.title,
+    brief: j.brief.slice(0, 400),
+    budget_usd: j.budgetUnits / 1e6,
+    deliveries: j.deliveries.length,
+    page: `https://app.blueagent.dev/jobs/${j.id}`,
+    deliver: `POST https://blueagent.dev/api/jobs/${j.id}/deliveries`,
+  }));
+}

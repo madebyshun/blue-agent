@@ -57,6 +57,7 @@ export function registrationFile() {
       { name: "MCP", endpoint: "https://blueagent.dev/api/mcp", version: "2025-06-18", tools: MCP_TOOLS.map((t) => t.name) },
       { name: "x402", endpoint: "https://blueagent.dev/api/x402/{tool}", paidTools: paid },
       { name: "ACP", endpoint: "https://blueagent.dev/app/jobs" },
+      { name: "jobs", endpoint: "https://blueagent.dev/api/jobs" },
     ],
     x402Support: true,
     active: true,

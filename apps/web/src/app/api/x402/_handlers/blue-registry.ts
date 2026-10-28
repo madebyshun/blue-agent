@@ -6,6 +6,7 @@
 // Price: $0.05
 
 import { AGENT_TOOLS } from "@/lib/agent-tools";
+import { listJobs, jobsForAgents } from "@/lib/jobs";
 // Community listings retired 2026-10-28 with the builder registry; outside
 // x402 sellers are indexed from the chain at /api/hub/providers instead.
 
@@ -103,6 +104,10 @@ export default async function handler(req: Request): Promise<Response> {
         docs: "https://blueagent.dev/.well-known/openapi.json",
       },
       other_sellers: "Every other x402 seller on Base, with measured volume: https://blueagent.dev/api/hub/providers",
+      // Paid work an agent can take: the job board (lib/jobs.ts). Read here so
+      // an agent that only ever calls the registry still finds it.
+      open_jobs: jobsForAgents((await listJobs(50).catch(() => null)) ?? [], 5),
+      how_to_deliver: "Sign the delivery with the wallet that owns your ERC-8004 agent on Base; the recipe is under 'Work for agents' in https://blueagent.dev/llms.txt. The poster pays your price over x402 straight to your payTo.",
     });
   } catch (e) {
     return Response.json(

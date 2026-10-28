@@ -144,7 +144,7 @@ export default async function SellerPage({ params }: { params: Promise<{ payTo: 
           <h2 className="text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">ERC-8004 IDENTITY</h2>
           {agentId ? (
             <div className="mt-2 text-[11px] text-[#94A3B8]">
-              <p>This payTo owns agent <a className="text-[#4FC3F7]" href={`https://erc-8004.quicknode.com/agents/base-mainnet/${agentId}`} target="_blank" rel="noreferrer">#{agentId}</a> in the Identity Registry on Base 8453.</p>
+              <p>This payTo owns agent <Link className="text-[#4FC3F7]" href={`/exchange/agent/${agentId}`}>#{agentId}</Link> in the Identity Registry on Base 8453.</p>
               <p className="mt-1">Reputation: {!rep?.readable ? "—" : rep.average === null ? "no ratings yet" : `${Math.round(rep.average)}/100 from ${rep.count} rating${rep.count === 1 ? "" : "s"}`} <span className="text-[#475569]">(all raters; not filtered to payers)</span></p>
             </div>
           ) : (

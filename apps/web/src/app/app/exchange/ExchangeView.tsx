@@ -111,7 +111,7 @@ export default function ExchangeView({ ex, totalPaid, ours, oursPayTo, agentId, 
           </div>
 
           <Label title="LISTED ON BLUE AGENT" sub="our own tools · receipts and trust scores on Services" />
-          <Link href="/services" className="flex flex-wrap items-center gap-4 rounded-[14px] px-4 py-[13px] border transition-colors hover:border-[#4FC3F7]/45"
+          <Link href={agentId !== null ? `/exchange/agent/${agentId}` : "/services"} className="flex flex-wrap items-center gap-4 rounded-[14px] px-4 py-[13px] border transition-colors hover:border-[#4FC3F7]/45"
             style={{ borderColor: "rgba(79,195,247,.22)", background: "rgba(79,195,247,.035)" }}>
             <div className="min-w-0">
               <p className="font-mono text-[12px] font-semibold text-[#E2E8F0]">Blue Agent</p>

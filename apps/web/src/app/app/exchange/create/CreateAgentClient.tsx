@@ -13,7 +13,6 @@ import {
 } from "@/lib/erc8004-draft";
 
 const pub = createPublicClient({ chain: base, transport: http() });
-const EXPLORER = (id: string) => `https://erc-8004.quicknode.com/agents/base-mainnet/${id}`;
 const input = "w-full rounded-lg border border-[#1A1A2E] bg-[#050508] px-3 py-2 text-[11px] text-[#E2E8F0] outline-none focus:border-[#2a3350]";
 const label = "text-[11px] text-[#94A3B8]";
 
@@ -133,7 +132,7 @@ export default function CreateAgentClient() {
                 </button>
               )}
               <Status s={mint} />
-              {mint.agentId && <a className="text-[11px] text-[#4FC3F7]" href={EXPLORER(mint.agentId)} target="_blank" rel="noreferrer">View agent #{mint.agentId} in an explorer ↗</a>}
+              {mint.agentId && <Link className="text-[11px] text-[#4FC3F7]" href={`/exchange/agent/${mint.agentId}`}>Open agent #{mint.agentId}&apos;s profile →</Link>}
             </section>
 
             <section className="rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] px-4 py-4 grid gap-3">
