@@ -9,6 +9,7 @@ import { ConnectButton } from "@/components/ConnectModal";
 import ExchangeHeader from "../ExchangeHeader";
 import {
   QUADRA_FACTORY_V3 as FACTORY, QUADRA_V3_ABI as ABI, QUADRA_V3_EXPECTS as EXPECT, BLUE_REFERRER, ETH_QUOTE,
+  REVENUE_SHARE_DEPLOYER as RSD, REVENUE_SHARE_DEPLOYER_ABI as RSD_ABI, MAX_AGENT_BPS, stakerWording,
   coinProblem, coinContractUri, newSalt, type CoinDraft,
 } from "@/lib/agent-coin";
 
@@ -51,6 +52,12 @@ export default function TokenizeClient() {
   const [launch, setLaunch] = useState<Step & { token?: string }>({ s: "idle" });
   const [recip, setRecip] = useState("");
   const [route, setRoute] = useState<Step>({ s: "idle" });
+  const [mode, setMode] = useState<"agent" | "stakers">("agent");
+  const [coin, setCoin] = useState("");                  // an existing coin, or the one just launched
+  const [agentPct, setAgentPct] = useState("20");
+  const [ack, setAck] = useState(false);
+  const [holder, setHolder] = useState<string | null>(null);   // the coin's creator recipient right now
+  const token = (launch.token ?? coin).trim();
   const [agentOwner, setAgentOwner] = useState<string | null>(null);
 
   useEffect(() => { preflight().then(setCheck).catch(() => setCheck({ ok: false, why: ["could not read the factory on Base"], referrerOk: false })); }, []);
@@ -84,14 +91,48 @@ export default function TokenizeClient() {
     }
   }
 
+  useEffect(() => {
+    setHolder(null);
+    if (!isAddress(token)) return;
+    pub.readContract({ address: FACTORY, abi: ABI, functionName: "launches", args: [token as `0x${string}`] })
+      .then((l) => setHolder(l.creator === "0x0000000000000000000000000000000000000000" ? "none" : l.creatorRecipient.toLowerCase()))
+      .catch(() => setHolder("none"));
+  }, [token]);
+  const canRoute = !!holder && holder !== "none" && !!address && holder === address.toLowerCase();
+
+  async function send(to: `0x${string}`, data: `0x${string}`) {
+    if (chainId !== base.id) await switchChainAsync({ chainId: base.id });
+    const hash = await sendTransactionAsync({ to, data, chainId: base.id });
+    const rc = await pub.waitForTransactionReceipt({ hash });
+    if (rc.status !== "success") throw new Error(`reverted (${hash})`);
+    return hash;
+  }
+
   async function onRoute() {
-    if (!launch.token || !isAddress(recip)) return setRoute({ s: "error", msg: "Not an address." });
-    setRoute({ s: "busy", msg: "Confirm in your wallet…" });
+    if (!isAddress(token)) return setRoute({ s: "error", msg: "Enter the coin's address." });
     try {
-      const hash = await sendTransactionAsync({ to: FACTORY, data: encodeFunctionData({ abi: ABI, functionName: "setCreatorRecipient", args: [launch.token as `0x${string}`, recip] }), chainId: base.id });
-      const rc = await pub.waitForTransactionReceipt({ hash });
-      if (rc.status !== "success") throw new Error("reverted");
-      setRoute({ s: "done", hash, msg: `The coin's 80% now goes to ${short(recip)}.` });
+      if (mode === "agent") {
+        if (!isAddress(recip)) return setRoute({ s: "error", msg: "Not an address." });
+        setRoute({ s: "busy", msg: "Confirm in your wallet…" });
+        const hash = await send(FACTORY, encodeFunctionData({ abi: ABI, functionName: "setCreatorRecipient", args: [token as `0x${string}`, recip] }));
+        return setRoute({ s: "done", hash, msg: `The coin's 80% now goes to ${short(recip)}.` });
+      }
+      // Stakers: create the share contract (or reuse it), then hand the 80% to it — for good.
+      const bps = Math.round(Number(agentPct) * 100);
+      const withAgent = bps > 0;
+      if (withAgent && !isAddress(recip)) return setRoute({ s: "error", msg: "Enter the agent's wallet, or set its share to 0." });
+      if (!Number.isFinite(bps) || bps < 0 || bps > MAX_AGENT_BPS) return setRoute({ s: "error", msg: "Agent share: 0 to 90%." });
+      const agent = (withAgent ? recip : "0x0000000000000000000000000000000000000000") as `0x${string}`;
+      const args = [token as `0x${string}`, agent, withAgent ? bps : 0] as const;
+      const share = await pub.readContract({ address: RSD, abi: RSD_ABI, functionName: "predict", args });
+      const exists = (await pub.getCode({ address: share }))?.length ? true : false;
+      if (!exists) {
+        setRoute({ s: "busy", msg: "1 of 2 · create the share contract. Confirm in your wallet…" });
+        await send(RSD, encodeFunctionData({ abi: RSD_ABI, functionName: "create", args }));
+      }
+      setRoute({ s: "busy", msg: "2 of 2 · hand the launcher's share to it, for good. Confirm in your wallet…" });
+      const hash = await send(FACTORY, encodeFunctionData({ abi: ABI, functionName: "setCreatorRecipient", args: [token as `0x${string}`, share] }));
+      setRoute({ s: "done", hash, msg: `Done. Stakers now share the launcher's fees: ${share.slice(0, 6)}…${share.slice(-4)}.`, share } as Step);
     } catch (e) { setRoute({ s: "error", msg: (e as Error).message.split("\n")[0].slice(0, 200) }); }
   }
 
@@ -172,14 +213,46 @@ export default function TokenizeClient() {
               </section>
 
               <section className={`${card} grid gap-2.5`}>
-                <H>2 · SEND THE 80% TO THE AGENT</H>
-                <p className="text-[10px] leading-[1.6] text-[#64748B]">Point the launcher&apos;s share at the agent&apos;s own wallet, so its coin funds its work. Only the current recipient can change it.</p>
-                <input className={input} value={recip} onChange={(e) => setRecip(e.target.value.trim())} placeholder="Agent wallet 0x…" disabled={!launch.token} />
-                <button type="button" onClick={onRoute} disabled={!launch.token || !recip || route.s === "busy" || route.s === "done"}
+                <H>2 · WHERE THE 80% GOES</H>
+                <input className={input} value={launch.token ?? coin} onChange={(e) => setCoin(e.target.value.trim())} disabled={!!launch.token} placeholder="Coin address 0x… (or launch one above)" />
+                {holder === "none" && isAddress(token) && <p className="text-[10px] text-[#F87171]">Not a coin from this launchpad.</p>}
+                {holder && holder !== "none" && !canRoute && <p className="text-[10px] text-[#FBBF24]">Its fees go to {short(holder)} now; only that wallet can change it.</p>}
+                <div className="flex gap-1.5">
+                  {([["agent", "The agent's wallet"], ["stakers", "Share with stakers"]] as const).map(([v, l]) => (
+                    <button key={v} type="button" onClick={() => setMode(v)} className="rounded-full border px-[11px] py-1 text-[9.5px]"
+                      style={mode === v ? { color: "#050508", background: "#4FC3F7", borderColor: "#4FC3F7", fontWeight: 600 } : { color: "#94A3B8", borderColor: "#1A1A2E" }}>{l}</button>
+                  ))}
+                </div>
+                {mode === "agent" ? (
+                  <>
+                    <p className="text-[10px] leading-[1.6] text-[#64748B]">Point the launcher&apos;s share at the agent&apos;s own wallet, so its coin funds its work. The current recipient can change it again later.</p>
+                    <input className={input} value={recip} onChange={(e) => setRecip(e.target.value.trim())} placeholder="Agent wallet 0x…" />
+                  </>
+                ) : (
+                  <>
+                    <p className="text-[10px] leading-[1.6] text-[#94A3B8]">{stakerWording(d.symbol.trim() || "COIN", "ETH")}</p>
+                    <p className="text-[10px] leading-[1.6] text-[#64748B]">
+                      Holders who do not stake receive nothing. The agent receives the share you set of the launcher&apos;s 80%; stakers share the rest, released over 7 days.
+                      Quadra&apos;s and the referrer&apos;s shares are not affected. The contract has no owner and is not audited.
+                    </p>
+                    <div className="grid grid-cols-[1fr_110px] gap-2">
+                      <input className={input} value={recip} onChange={(e) => setRecip(e.target.value.trim())} placeholder="Agent wallet 0x… (empty if 0%)" />
+                      <input className={input} value={agentPct} onChange={(e) => setAgentPct(e.target.value.trim())} placeholder="Agent %" />
+                    </div>
+                    <label className="flex items-start gap-2 text-[10px] leading-[1.5] text-[#FBBF24]">
+                      <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} className="mt-0.5" />
+                      This cannot be undone. The launcher&apos;s fee share will go to this contract for good: not to me, not to the agent&apos;s wallet, not back.
+                    </label>
+                  </>
+                )}
+                <button type="button" onClick={onRoute} disabled={!canRoute || route.s === "busy" || route.s === "done" || (mode === "stakers" && !ack)}
                   className="rounded-[8px] border border-[#1A1A2E] bg-[#0F121A] px-[13px] py-2 text-[10.5px] text-[#E2E8F0] disabled:opacity-40">
-                  Route fees to this wallet
+                  {mode === "agent" ? "Route fees to this wallet" : "Create the share contract and hand fees to it"}
                 </button>
                 <Status s={route} />
+                {route.s === "done" && mode === "stakers" && isAddress(token) && (
+                  <Link className="text-[10.5px] text-[#4FC3F7]" href={`/exchange/coin/${token}`}>Open the staking page →</Link>
+                )}
               </section>
             </div>
           </div>

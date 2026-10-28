@@ -88,3 +88,59 @@ export function coinContractUri(d: CoinDraft): string {
 export function newSalt(): `0x${string}` {
   return toHex(crypto.getRandomValues(new Uint8Array(32)));
 }
+
+// ── Sharing the launcher's fees with stakers (Quadra RevenueShare) ───────────
+//
+// Deployed by ShunTr 2026-10-28 at the address below (tx 0x7a533a21…0d49,
+// Base block 53,193,024), Sourcify
+// exact_match, read back the same day: launchpad() == QUADRA_FACTORY_V3.
+// One RevenueShare per (coin, agent, agentBps): the agent gets agentBps of what
+// arrives, the rest streams over 7 days to whoever STAKES the coin. No owner,
+// no upgrade. Pointing a coin's creator recipient at it CANNOT be undone.
+// Wording below is Quadra's integration note, verbatim in substance: never
+// yield, APY, dividends or a projected figure. Not audited.
+
+export const REVENUE_SHARE_DEPLOYER = "0xfBd49864EaE71C3Db22265C46A98e0768EA08141" as const;
+export const REVENUE_SHARE_DEPLOY_BLOCK = 53_193_024n;   // the deploy tx; Created logs start here
+
+export const REVENUE_SHARE_DEPLOYER_ABI = parseAbi([
+  "function launchpad() view returns (address)",
+  "function create(address token, address agent, uint16 agentBps) returns (address share)",
+  "function predict(address token, address agent, uint16 agentBps) view returns (address)",
+  "event Created(address indexed token, address indexed share, address indexed agent, uint16 agentBps)",
+]);
+
+export const REVENUE_SHARE_ABI = parseAbi([
+  "function launchpad() view returns (address)",
+  "function token() view returns (address)",
+  "function currency0() view returns (address)",
+  "function currency1() view returns (address)",
+  "function agent() view returns (address)",
+  "function agentBps() view returns (uint16)",
+  "function isActive() view returns (bool)",
+  "function totalStaked() view returns (uint256)",
+  "function stakedOf(address staker) view returns (uint256)",
+  "function claimable(address staker) view returns (uint256 amount0, uint256 amount1)",
+  "function stake(uint256 amount)",
+  "function unstake(uint256 amount)",
+  "function claim(address to) returns (uint256 paid0, uint256 paid1)",
+  "function payAgent()",
+  "function harvest()",
+]);
+
+export const ERC20_MIN_ABI = parseAbi([
+  "function balanceOf(address) view returns (uint256)",
+  "function allowance(address owner, address spender) view returns (uint256)",
+  "function approve(address spender, uint256 amount) returns (bool)",
+  "function decimals() view returns (uint8)",
+  "function symbol() view returns (string)",
+]);
+
+export const MAX_AGENT_BPS = 9_000;
+
+/** The approved user-facing sentence (Quadra REVENUE_SHARE_INTEGRATION.md, "Wording"). */
+export function stakerWording(symbol: string, quote: string): string {
+  return `Stakers of $${symbol} receive a share of the trading fees this coin's pool collects, while staked. ` +
+    `Fees depend on trading and may be zero. They are paid in $${symbol} and ${quote}, whose prices change. ` +
+    `Not an investment product; no return is promised. Unstake at any time.`;
+}
