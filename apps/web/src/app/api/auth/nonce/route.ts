@@ -6,10 +6,8 @@
  * can never notice it being replayed. Here the nonce is minted, stored, and
  * spent exactly once by `spendNonce`.
  *
- * Callers (all of them, as of #172): Blue Chat sign-in, Hub submit external,
- * Hub submit hosted, Hub remove external, Hub remove hosted. The browser half
- * is `lib/siwe-nonce.ts`; external agents call this endpoint directly, which is
- * documented at /docs/list-a-tool.
+ * Callers: Blue Chat sign-in. (The four Hub submit/remove callers retired
+ * 2026-10-28 with the builder registry.) The browser half is `lib/siwe-nonce.ts`.
  *
  * Rate-limited by IP: each call writes a KV key, so an unlimited endpoint is a
  * free way to burn this project's Upstash request budget — which has already

@@ -59,6 +59,7 @@ const APP_SEGMENTS = new Set([
   // mark 404s. See the guard in the off-prod branch.
   "models",       // model catalog (ModelsPanel)
   "services",     // Blue Agent services — the MCP v2 tools, priced (2026-10-22)
+  "exchange",     // Agent Exchange — every x402 seller on Base, measured (2026-10-28)
   "jobs",         // hire Blue Agent via Virtuals ACP (2026-10-27)
   "connectors",   // MCP servers / integrations gallery (ConnectorsPanel)
   "cron",         // the wallet's scheduled tasks (CronPanel)
@@ -186,6 +187,26 @@ function archivedRedirect(pathname: string, search: string): NextResponse | null
  * at the app host would redirect the app host to itself, forever.
  */
 function culledRedirect(pathname: string): NextResponse | null {
+  // Builder registry + Agent Registry retired 2026-10-28 (one commit, KV kept):
+  // the Agent Exchange indexes outside x402 sellers from the chain instead, and
+  // /exchange/create mints an ERC-8004 identity. Every published URL lands on its
+  // successor. Both hosts: /hub/* on the main host first hops to the app host.
+  if (pathname === "/hub/submit" || pathname === "/docs/list-a-tool" || pathname === "/hub/create") {
+    return NextResponse.redirect(`https://${APP_HOST}/exchange/create`, { status: 301 });
+  }
+  if (
+    pathname === "/hub/dashboard" ||
+    pathname === "/hub/registry" || pathname.startsWith("/hub/registry/") ||
+    pathname === "/hub/builders" || pathname.startsWith("/hub/builders/") ||
+    pathname === "/hub/agents"
+  ) {
+    return NextResponse.redirect(`https://${APP_HOST}/exchange`, { status: 301 });
+  }
+  // The Agent Exchange moved out of the Hub into its own /app section the day
+  // it shipped (2026-10-28); its seller permalinks keep their address.
+  if (pathname.startsWith("/hub/agents/")) {
+    return NextResponse.redirect(`https://${APP_HOST}/exchange/${pathname.slice("/hub/agents/".length)}`, { status: 301 });
+  }
   if (pathname === "/code" || pathname.startsWith("/code/")) {
     return NextResponse.redirect(`https://${MAIN_HOST}/docs`, { status: 301 });
   }
@@ -451,8 +472,7 @@ export function middleware(request: NextRequest) {
   // every marketing /hub path 301s over (preserves query, e.g. ?tool=blue-idea).
   // The APP_SEGMENTS rewrite on the app host finishes the job into /app/hub/*.
   // Same-path hop keeps share permalinks intact — /hub/tool/<slug>,
-  // /hub/builders/<addr>, /hub/registry/<handle> each have an /app/hub/* twin,
-  // so no 404s.
+  // each has an /app/hub/* twin, so no 404s.
   if (pathname === "/hub" || pathname.startsWith("/hub/")) {
     return NextResponse.redirect(
       `https://${APP_HOST}${pathname}${request.nextUrl.search}`,

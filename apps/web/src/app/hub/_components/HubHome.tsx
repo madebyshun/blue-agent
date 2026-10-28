@@ -15,15 +15,6 @@ import Link from "next/link";
 import { useState } from "react";
 import { useAccount } from "wagmi";
 import SpendConsole from "@/components/SpendConsole";
-import { COMMUNITY_LISTINGS_OPEN } from "@/lib/hub-closed";
-// Pure formatters only — the module that PROBES (`hub-liveness.ts`) imports KV
-// and must never reach a client component.
-import {
-  livenessLabel,
-  livenessTitle,
-  LIVENESS_META,
-  type ToolHealth,
-} from "@/lib/hub-liveness-format";
 
 // ─── Types (shape mirrors the local Tool/Category from /hub/page.tsx) ─────────
 // Kept loose on purpose — HubHome doesn't import from page.tsx to avoid a
@@ -49,15 +40,6 @@ export interface HubTool {
   creatorHandle?: string;
   logoUrl?:       string;   // creator-supplied logo (public); falls back to the source badge
   callCount?:     number;
-  /**
-   * Live re-probe of the BUILDER's endpoint (external tools only).
-   *
-   * `undefined` = still loading, `null` = asked and could not find out. Both
-   * render as "Not checked" and NEITHER may render as up or down — the whole
-   * bug this field exists for was 5 dead tunnels wearing a `status: "live"`
-   * nobody had re-verified. See `lib/hub-liveness-format.ts`.
-   */
-  health?:        ToolHealth | null;
 }
 
 // Source badge — provenance of a tool in the unified grid.
@@ -120,7 +102,6 @@ export interface HubHomeProps {
   onSearch:    (s: string) => void;
   onPickCat:   (id: string) => void;
   onSelect:    (t: HubTool) => void;
-  onListTool?: () => void;                 // opens the "List your tool" modal (Hub only)
   onClearFilters?: () => void;             // resets search + cat + source + price
 }
 
@@ -136,7 +117,7 @@ export default function HubHome(props: HubHomeProps) {
 // ─── HOME view — clean, opinionated ───────────────────────────────────────────
 
 function HomeView(props: HubHomeProps) {
-  const { tools, usage, featuredIds, recentIds, onSearch, onPickCat, onSelect, onListTool } = props;
+  const { tools, usage, featuredIds, recentIds, onSearch, onPickCat, onSelect } = props;
   // Read here rather than threaded down from HubView: the parent has no other
   // use for it, and a prop chained through two components for one panel is a
   // thing that silently goes stale. Providers wrap the root layout, so this is
@@ -146,7 +127,6 @@ function HomeView(props: HubHomeProps) {
   const runsOf = (id: string) => { const t = byId.get(id); return t ? toolRuns(t, usage) : (usage[id] ?? 0); };
 
   // How many community (external + hosted) tools are live — surfaced as a badge.
-  const communityCount = tools.filter(t => t.source === "external" || t.source === "hosted").length;
 
   // Featured — ONE section merging the old "Editor's Picks" + "Trending" (which
   // overlapped, showing the same top tools twice). Real usage ranks first, then
@@ -206,13 +186,7 @@ function HomeView(props: HubHomeProps) {
               style={{ boxShadow: "0 0 18px rgba(79,195,247,.28)" }}>
               Browse {tools.length} tools →
             </button>
-            {COMMUNITY_LISTINGS_OPEN && (() => {
-              const cls = "font-mono text-[11px] font-medium px-4 py-2.5 rounded-[9px] border border-[#A78BFA]/35 text-[#A78BFA] hover:bg-[#A78BFA]/10 transition-colors";
-              const inner = <>List your tool · keep 100% self-hosted →</>;
-              return onListTool
-                ? <button type="button" onClick={onListTool} className={cls}>{inner}</button>
-                : <Link href="/hub/submit" className={cls}>{inner}</Link>;
-            })()}
+            <Link href="/exchange" className="font-mono text-[11px] font-medium px-4 py-2.5 rounded-[9px] border border-[#1A1A2E] text-[#94A3B8] hover:text-[#4FC3F7] transition-colors">Agent Exchange: every x402 seller on Base →</Link>
           </div>
           <SearchHero value={props.search} onChange={onSearch} totalTools={tools.length} />
         </section>
@@ -286,18 +260,11 @@ function HomeView(props: HubHomeProps) {
             so both are dropped here to cut the page's vertical length. ── */}
         <section className="mb-9">
           <SectionHeader emoji="🤖" label="Providers" accent="#FFFFFF"
-            sub={communityCount > 0 ? `${communityCount} community tool${communityCount !== 1 ? "s" : ""} live` : "Blue Agent + partners integrating"} />
+            sub="Blue Agent · every other x402 seller is on the Agent Exchange" />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <ProviderCard p={blueProvider} />
             <PartnerComingSoonCard />
           </div>
-          {/* Dashboard entry — the desktop sidebar has this link but it's hidden on
-              mobile (lg:flex), so surface it here too for builders on small screens. */}
-          <Link href="/hub/dashboard"
-            className="mt-3 flex items-center justify-center gap-1.5 font-mono text-[11px] text-slate-600 hover:text-[#34D399] transition-colors">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#34D399]" />
-            Already listed a tool? Creator dashboard →
-          </Link>
         </section>
 
         {/* Footer — minimal */}
@@ -314,7 +281,7 @@ function HomeView(props: HubHomeProps) {
 type SortMode = "popular" | "newest" | "price-asc" | "price-desc";
 
 function BrowseView(props: HubHomeProps) {
-  const { filtered, search, cat, groups, usage, onSelect, onSearch, onPickCat, onListTool, onClearFilters, source } = props;
+  const { filtered, search, cat, groups, usage, onSelect, onSearch, onPickCat, onClearFilters, source } = props;
   const [sortMode, setSortMode] = useState<SortMode>("popular");
   const [verifiedOnly, setVerifiedOnly] = useState(false);
   const byId = new Map(filtered.map(t => [t.id, t] as const));
@@ -402,13 +369,7 @@ function BrowseView(props: HubHomeProps) {
                 <span className="text-[#A78BFA] font-semibold">{source === "hosted" ? "90%" : "100%"}</span>{" "}
                 of every call, in USDC on Base.
               </p>
-              {COMMUNITY_LISTINGS_OPEN && (() => {
-                const cls = "inline-block font-mono text-xs font-semibold px-4 py-2.5 rounded-xl border border-[#A78BFA]/40 bg-[#A78BFA]/10 text-[#A78BFA] hover:bg-[#A78BFA]/20 transition-colors";
-                const inner = <>List your tool → earn {source === "hosted" ? "90%" : "100%"}</>;
-                return onListTool
-                  ? <button type="button" onClick={onListTool} className={cls}>{inner}</button>
-                  : <Link href="/hub/submit" className={cls}>{inner}</Link>;
-              })()}
+              
               <div className="mt-4">
                 <button onClick={clearAll} className="font-mono text-[11px] text-slate-600 hover:text-white transition-colors">
                   ← Back to all tools
@@ -463,36 +424,6 @@ function SearchHero({ value, onChange, totalTools }: { value: string; onChange: 
   );
 }
 
-/**
- * Endpoint pulse for a community tool.
- *
- * Shown ONLY for `source: "external"` — those are the ones whose endpoint lives
- * on the builder's own infrastructure and can disappear without telling us.
- * Native tools run in this app; hosted tools run on our runner. Badging those
- * would imply a check we do not perform.
- *
- * This is presentation, not moderation: a red badge does not hide, filter or
- * delist anything. `✓ Verified` above is a claim about review; this is a claim
- * about one HTTP request, and the two are deliberately not merged.
- */
-function EndpointBadge({ tool }: { tool: HubTool }) {
-  if (tool.source !== "external") return null;
-  const state = livenessLabel(tool.health);
-  const meta = LIVENESS_META[state];
-  return (
-    <span
-      title={livenessTitle(tool.health)}
-      className="font-mono text-[8px] px-1 py-0.5 rounded border inline-flex items-center gap-1"
-      style={{ color: `${meta.color}e6`, borderColor: `${meta.color}4d`, background: `${meta.color}0d` }}
-    >
-      <span
-        className="w-1 h-1 rounded-full inline-block"
-        style={{ background: meta.color }}
-      />
-      {meta.label}
-    </span>
-  );
-}
 
 function VerifiedAiBadges({ tool }: { tool: HubTool }) {
   return (
@@ -503,7 +434,6 @@ function VerifiedAiBadges({ tool }: { tool: HubTool }) {
       {tool.aiReady && (
         <span className="font-mono text-[8px] px-1 py-0.5 rounded border border-[#A78BFA]/30 text-[#A78BFA]/90 bg-[#A78BFA]/5">🤖 AI Ready</span>
       )}
-      <EndpointBadge tool={tool} />
     </div>
   );
 }

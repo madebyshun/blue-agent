@@ -47,8 +47,7 @@ export interface AgentSkill {
    *
    *  ⚠️ THESE ARE CATALOG IDS (`honeypot-check`), NEVER MCP TOOL NAMES
    *  (`hub_honeypot`). Every writer of `usage:<id>` keys by catalog id —
-   *  `api/x402/[tool]` writes `recordCall(tool)`, `api/hub/tools/[id]/call`
-   *  writes `recordCall(id)`, and `api/mcp` resolves through HUB_MAP to the
+   *  `api/x402/[tool]` writes `recordCall(tool)`, and `api/mcp` resolves through HUB_MAP to the
    *  catalog id first, precisely so one tool does not split into two rows.
    *  The only non-catalog ids that are correct here are the five `blue_<cmd>`
    *  counters `/api/console` writes.

@@ -149,6 +149,7 @@ export const en = {
     skills: "Skills",
     connectors: "Connectors",
     services: "Services",
+    exchange: "Exchange",
     cron: "Scheduled",
     usage: "Usage",
     plans: "Plans",

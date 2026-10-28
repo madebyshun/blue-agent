@@ -44,9 +44,8 @@
  *                                  Cannot import llm.ts (KV + secrets would
  *                                  reach the browser bundle), so it is a real
  *                                  second copy. Group A pins it in lockstep.
- *   src/lib/hosted-models.ts       HOSTED_MODELS — creator-selectable set for
- *                                  hosted ai_tools. Zero imports for the same
- *                                  browser-bundle reason.
+ *   (src/lib/hosted-models.ts, the hosted-tool picker, was the third site until
+ *    2026-10-28, when hosted tools retired with the builder registry.)
  *
  * Adding a 4th site is a deliberate act: add it to DECL_FILES below, in the same
  * commit, with a line saying why it cannot import an existing one.
@@ -71,7 +70,6 @@ import { join, dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { VIRTUALS_PRESETS, VIRTUALS_DEFAULT_MODEL } from "../src/app/api/_lib/llm";
 import { VIRTUALS_PRESETS_V1 } from "../src/app/chat/components/presets";
-import { HOSTED_MODELS } from "../src/lib/hosted-models";
 
 const WEB = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SRC = join(WEB, "src");
@@ -93,14 +91,12 @@ function check(label: string, bad: string[], detail = "") {
 const DECL_FILES = new Set([
   "app/api/_lib/llm.ts",
   "app/chat/components/presets.ts",
-  "lib/hosted-models.ts",
 ]);
 
 const DECLARED = new Set<string>([
   VIRTUALS_DEFAULT_MODEL,
   ...VIRTUALS_PRESETS.map((p) => p.model),
   ...VIRTUALS_PRESETS_V1.map((p) => p.model),
-  ...HOSTED_MODELS.map((m) => m.id),
 ]);
 
 console.log(`\nDeclared model ids: ${DECLARED.size} across ${DECL_FILES.size} declaration sites`);
@@ -253,14 +249,6 @@ for (const id of DECLARED) {
 }
 if (!DECLARED.has(VIRTUALS_DEFAULT_MODEL)) {
   badD.push(`VIRTUALS_DEFAULT_MODEL "${VIRTUALS_DEFAULT_MODEL}" is not in any preset — nothing validates it`);
-}
-// Every hosted-selectable model must be one the server can actually dispatch,
-// otherwise a creator picks an id that dies at invoke time on a PAID tool.
-const serverModels = new Set([VIRTUALS_DEFAULT_MODEL, ...VIRTUALS_PRESETS.map((p) => p.model)]);
-for (const m of HOSTED_MODELS) {
-  if (!serverModels.has(m.id)) {
-    badD.push(`HOSTED_MODELS "${m.id}" is offered to creators but is in no server preset`);
-  }
 }
 check("D  declared registry is self-consistent", badD);
 

@@ -10,7 +10,7 @@
  * been unanswerable:
  *
  *   SURFACE — `usage:<id>` is incremented by the paid x402 route, by the free MCP
- *             bypass, and by /api/hub/tools/<id>/call, into the SAME integer. So a
+ *             bypass, and (until 2026-10-28) the community-tool proxy, into the SAME integer. So a
  *             tool with 40 runs might be 40 paid calls or 40 free MCP calls, and
  *             those imply opposite decisions. MEASURED 2026-09-24: /api/mcp is
  *             public, unauthenticated and CORS-open, and calls the x402 route with
@@ -72,8 +72,6 @@ export type UsageSurface =
   | "x402"
   /** /api/mcp — free internal bypass, no payment, no wallet. */
   | "mcp"
-  /** /api/hub/tools/<id>/call — the Hub's own in-page runner. */
-  | "hub"
   /** /api/console — the 5 `blue_*` commands. */
   | "console"
   /**
@@ -147,7 +145,7 @@ export interface DayUsage {
   rows: Record<string, { surface: UsageSurface; tool: string; ok: number; err: number }> | null;
 }
 
-const SURFACES = new Set<string>(["x402", "mcp", "hub", "console", "chat"]);
+const SURFACES = new Set<string>(["x402", "mcp", "console", "chat"]);
 
 /**
  * Read the last `days` UTC days, newest first.

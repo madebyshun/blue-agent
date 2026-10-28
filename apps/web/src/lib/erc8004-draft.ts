@@ -1,5 +1,5 @@
 /**
- * ERC-8004 drafts for anyone's agent (/hub/create) — client-safe: no server
+ * ERC-8004 drafts for anyone's agent (/exchange/create) — client-safe: no server
  * imports, so the create page can build and encode the file in the browser.
  * The wallet signs; nothing here sends a transaction.
  */

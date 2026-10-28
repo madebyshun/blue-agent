@@ -22,7 +22,7 @@ export async function GET(req: Request) {
     .filter((r) => r.payers >= minPayers)
     .filter((r) => !text || r.hosts.some((h) => h.includes(text)) || r.title.toLowerCase().includes(text) || r.payTo === text)
     .slice(0, limit)
-    .map(({ series, ...r }) => ({ ...r, usd: Math.round(r.usd * 100) / 100, profile: `https://blueagent.dev/hub/agents/${r.payTo}` }));
+    .map(({ series, ...r }) => ({ ...r, usd: Math.round(r.usd * 100) / 100, profile: `https://blueagent.dev/exchange/${r.payTo}` }));
   return NextResponse.json({
     chain: "base", chain_id: 8453,
     readable: ex.readable,

@@ -146,6 +146,7 @@ export const zh: Dict = {
     skills: "技能",
     connectors: "连接器",
     services: "服务",
+    exchange: "交易所",
     cron: "定时任务",
     usage: "用量",
     plans: "套餐",

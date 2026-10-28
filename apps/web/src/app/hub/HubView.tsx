@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import { AGENT_TOOLS } from "@/lib/agent-tools";
@@ -8,37 +8,13 @@ import { X402_PAY_TO } from "@/lib/x402-payee";
 import { useAccount, useSignTypedData, useReadContract, useChainId, useSwitchChain } from "wagmi";
 import { ConnectButton } from "@/components/ConnectModal";
 import HubHome from "./_components/HubHome";
-import SubmitTool from "./_components/SubmitTool";
-import DashboardView from "./_components/DashboardView";
 import MarkdownOutput from "@/components/MarkdownOutput";
-// `import type`, not a value import: hub-registry.ts pulls in the Upstash client,
-// and this is a "use client" file. The type-only form is erased by tsc, so no KV
-// code follows `Coverage` into the browser bundle.
-import type { Coverage } from "@/lib/hub-registry";
-// Type only — the probing module imports KV and must not reach this bundle.
-import { livenessLabel, ageLabel, type ToolHealth } from "@/lib/hub-liveness-format";
-// Deciding which payment requirement to sign for a tool WE DO NOT RUN. Pure —
-// no fetch, no wallet, no imports of its own — so it is safe in this client
-// bundle and drivable by fixtures in scripts/external-payee-check.ts. Read its
-// header before touching the external branch of run(): every refusal in it is
-// there because the alternative is signing away the user's USDC.
-import { selectBaseUsdcAccept, priceToUnits, extractAccepts } from "@/lib/x402-accepts";
-import { COMMUNITY_LISTINGS_OPEN, COMMUNITY_CLOSED_TEXT } from "@/lib/hub-closed";
 
 const USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
 const ERC20_BAL_ABI = [{
   name: "balanceOf", type: "function", stateMutability: "view",
   inputs: [{ name: "account", type: "address" }], outputs: [{ type: "uint256" }],
 }] as const;
-
-// Hover text for the `≥` that replaces a bare catalog count when the community
-// half of the registry came back short (#149). The distinction is the whole
-// point: a number we cannot stand behind has to LOOK different from one we can,
-// and "≥" is the convention already used for partial wallet reads (#211/#212).
-const COVERAGE_TITLE =
-  "Part of the community registry could not be read, so this is a lower bound — " +
-  "there are at least this many tools, possibly more. The first-party catalog is " +
-  "always complete; only community submissions can be short.";
 
 // ─── Tool registry ──────────────────────────────────────────────────────────
 
@@ -48,11 +24,10 @@ const COVERAGE_TITLE =
 type Agent = "blue";
 type Category = "all" | "intelligence" | "builder" | "trading" | "content" | "agent-economy" | "base-ecosystem" | "on-chain";
 
-// v2 marketplace filters (sidebar-driven, applied to the unified grid).
-// Hosted tools (AI-tool / API-wrapper) are hidden from the marketplace for now —
-// the backend (hub-hosted.ts + /api/hub/community/*) is kept for a later phase.
-// The grid shows Native + live External only.
-type SourceFilter = "all" | "native" | "external";
+// Community listings (External / Hosted) were retired 2026-10-28 with the
+// builder registry; the Agent Exchange (/exchange) indexes outside sellers
+// from the chain instead. The grid is the first-party catalog only.
+type SourceFilter = "all";
 type PriceFilter  = "all" | "free" | "under" | "over";
 
 // Parse a "$0.05" price string → number (community tools may carry raw values).
@@ -63,11 +38,6 @@ function matchPrice(f: PriceFilter, n: number): boolean {
   if (f === "under") return n > 0 && n < 0.5;
   return n >= 0.5; // "over"
 }
-const SOURCE_CHIPS: { key: SourceFilter; label: string; color: string }[] = [
-  { key: "all",      label: "All",         color: "#94A3B8" },
-  { key: "native",   label: "🔵 Native",   color: "#4FC3F7" },
-  { key: "external", label: "🌐 External", color: "#34D399" },
-];
 const PRICE_CHIPS: { key: PriceFilter; label: string }[] = [
   { key: "all",   label: "Any"     },
   { key: "free",  label: "Free"    },
@@ -85,19 +55,6 @@ interface Tool {
   aiReady?:        boolean;
   builderAddress?: string;
   releasedAt?:    number;
-  // Phase 3 — community-submitted tools: when set, ToolRunner POSTs here
-  // instead of /api/x402/[id]. Hub registry proxy → builder's endpoint.
-  callPath?:       string;
-  // v2 marketplace: provenance + denormalized stats for the unified grid.
-  source?:         "native" | "external" | "hosted";
-  status?:         "live";   // external tools auto-live after x402 probe; grid shows live only
-  creatorHandle?:  string;   // "@handle" or brand shown as "by …" on community cards
-  logoUrl?:        string;   // creator-supplied logo (public) shown on the tool card
-  callCount?:      number;   // lifetime paid runs (community tools carry this from KV)
-  /** Live re-probe of the builder's endpoint. Absent/`null` = NOT CHECKED. */
-  health?:         ToolHealth | null;
-  // Hosted tools invoke asynchronously (202 + job poll) — see ToolRunner.run().
-  async?:          boolean;
 }
 
 const FEATURED_IDS = ["pre-trade-check", "risk-gate", "safe-trending", "rh-rwa-verify"];
@@ -547,11 +504,7 @@ function ToolInfoBlock({ tool }: { tool: Tool }) {
       <div className={`${open ? "block mt-3" : "hidden"} lg:block lg:mt-0 space-y-4`}>
         <div>
           <p className="font-mono text-[10px] text-slate-600 tracking-widest mb-1.5">// API ENDPOINT</p>
-          {/* The SAME expression ToolRunner.run() posts to. A community tool is
-              served by the registry proxy, not by /api/x402/<id> — printing the
-              native path on all six external cards handed every reader a URL
-              that 404s, in the one panel whose whole job is to be copied. */}
-          <code className="font-mono text-[11px] text-[#4FC3F7] bg-[#0D0D1A] border border-[#1A1A2E] rounded-md px-2 py-1 inline-block">POST {tool.callPath ?? `/api/x402/${tool.id}`}</code>
+          <code className="font-mono text-[11px] text-[#4FC3F7] bg-[#0D0D1A] border border-[#1A1A2E] rounded-md px-2 py-1 inline-block">POST /api/x402/{tool.id}</code>
         </div>
         <div>
           <p className="font-mono text-[10px] text-[#A78BFA] tracking-widest mb-2">// HOW IT WORKS</p>
@@ -707,100 +660,18 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
         const priceVal    = parseFloat(priceRaw) || 0;
         const priceUnits  = String(Math.round(priceVal * 1_000_000)); // USDC 6 decimals
 
-        /* ── WHO GETS PAID, AND HOW MUCH ─────────────────────────────────────
-           EIP-3009 `transferWithAuthorization` settles to exactly ONE
-           recipient. There is no on-chain fan-out, so the payee IS the revenue
-           split — 100% to whoever ends up in `to`. Two different answers here,
-           and using the native one for an external tool is the whole reason no
-           registered community tool had ever been paid:
-
-             native / hosted → the Blue treasury (PAY_TO_WALLET).
-               /api/x402/<id> verifies and settles against PAY_TO, so any other
-               payee fails.
-             external        → the BUILDER, 100%, read from that builder's own
-               402. `callPath` sends the call to /api/hub/tools/<id>/call, which
-               verifies and settles NOTHING — it forwards our X-PAYMENT to the
-               builder's endpoint, and THAT endpoint checks `authorization.to`
-               against the builder's own wallet.
-
-           MEASURED 2026-09-26 on desk-x402-block, the one registered endpoint
-           still up: its 402 `payTo` and its registry `builderAddress` agree with
-           each other (0x2e88…6f22) and both disagree with PAY_TO_WALLET. That
-           tool read callCount 2 / revenueTotal 0 — two people tried to pay and
-           the builder's verifier correctly refused both.
-
-           🔴 The payee is read from the LIVE 402, not from tool.builderAddress,
-           and that is not a style preference:
-             • a cached registry address goes stale the day a builder rotates
-               wallets, and the failure mode is a signature for the wrong payee;
-             • only the live 402 gives us an amount to check, so only this path
-               can hold the builder to the price the Hub advertised. The card
-               price is what the builder typed into the registry at submit time;
-               the 402 is generated live and can say anything.
-           Every refusal lives in lib/x402-accepts.ts, every one of them signs
-           nothing, and there is NO fallback to PAY_TO_WALLET — a fallback would
-           silently restore the original bug on the first unreadable 402.
-
-           The two alternatives were considered and are products, not refactors:
-           routing to Blue and forwarding later is a CUSTODY change (Blue holds a
-           third party's money — ShunTr's call); splitting needs two
-           authorizations, so two wallet signatures per call. */
-        let payTo: `0x${string}` = PAY_TO_WALLET;
-        let payUnits      = priceUnits;
-        let domainName    = "USD Coin";
-        let domainVersion = "2";
-        let payNetwork    = "eip155:8453";
+        // EIP-3009 settles to ONE recipient: every Hub tool is first-party and
+        // settles through /api/x402/<id>, which verifies against PAY_TO.
+        const payTo: `0x${string}` = PAY_TO_WALLET;
+        const payUnits      = priceUnits;
+        const domainName    = "USD Coin";
+        const domainVersion = "2";
+        const payNetwork    = "eip155:8453";
         // Life of the signature. The native default must equal the one in
         // buildRequirements() (api/_lib/x402-cdp.ts), because that is the
         // requirements object CDP compares this payment against.
-        let payTimeoutS   = 120;
+        const payTimeoutS   = 120;
 
-        if (tool.source === "external") {
-          setStep("calling");
-          let probe: Response;
-          try {
-            probe = await fetch(tool.callPath!, {
-              method:  "POST",
-              headers: { "Content-Type": "application/json" },
-              body:    JSON.stringify(tool.x402Body(body)),
-            });
-          } catch (e) {
-            setErr(`Could not reach this tool to ask how to pay it. Nothing was signed. (${(e as Error).message})`);
-            setStep("error");
-            return;
-          }
-          // Anything but 402 means the tool has not told us where to send money.
-          // Refuse: a wrong payee is a signature the user cannot undo, and a
-          // guess here is indistinguishable from a working payment until the
-          // USDC is gone.
-          if (probe.status !== 402) {
-            const t = await probe.text().catch(() => "");
-            setErr(probe.ok
-              ? "This tool answered without asking for payment, so the Hub has nothing to sign. Nothing was signed."
-              : `This tool is not answering right now (HTTP ${probe.status}). Nothing was signed.${t ? ` ${t.slice(0, 160)}` : ""}`);
-            setStep("error");
-            return;
-          }
-          const sel = selectBaseUsdcAccept(
-            extractAccepts(await probe.json().catch(() => null)),
-            priceToUnits(tool.price),   // the ceiling — refuse above it, never clamp
-          );
-          if (!sel.ok) {
-            // The module's reasons deliberately omit this sentence so it is
-            // appended once, here, and cannot be forgotten on a new branch.
-            setErr(`${sel.reason} Nothing was signed.`);
-            setStep("error");
-            return;
-          }
-          // Checked against /^0x[0-9a-fA-F]{40}$/ inside the module — the cast
-          // is asserting a validation that already ran, not skipping one.
-          payTo         = sel.accept.payTo as `0x${string}`;
-          payUnits      = sel.accept.amountUnits;
-          domainName    = sel.accept.domainName;
-          domainVersion = sel.accept.domainVersion;
-          payNetwork    = sel.accept.network;
-          payTimeoutS   = sel.accept.maxTimeoutSeconds;
-        }
 
         // Computed HERE, not above the branch, because the window has to outlive
         // the `maxTimeoutSeconds` this payment is about to advertise in
@@ -892,9 +763,9 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
              was missing until 2026-09-26, and NATIVE tools never noticed because
              OUR OWN SERVER rebuilds it: toV2PaymentPayload in
              api/_lib/x402-cdp.ts injects `accepted: requirements` before calling
-             CDP. /api/hub/tools/<id>/call forwards this header byte-for-byte to
-             the builder and patches nothing, so an external tool's facilitator
-             received a payload with no requirements in it at all.
+             CDP. (The retired community-tool proxy forwarded this header
+             byte-for-byte to a builder and patched nothing, so an external
+             tool's facilitator received a payload with no requirements in it.)
 
              MEASURED 2026-09-26 against PayAI's public /verify with a dummy
              signature: without this key, 400 `invalid_payload` — "accepted:
@@ -931,49 +802,11 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
           },
         }));
 
-        // ── Hosted tools: async invoke (202 + job_id) → poll job status ──────────
-        // The invoke route verifies payment, returns immediately, runs in the
-        // background, and settles ONLY on success — so a failure leaves the user
-        // uncharged. We poll the job until it reports done | error.
-        if (tool.async) {
-          const inv = await fetch(tool.callPath!, {
-            method:  "POST",
-            headers: { "Content-Type": "application/json", "X-PAYMENT": xPayment },
-            body:    JSON.stringify(tool.x402Body(body)),
-          });
-          const invJson = await inv.json() as { job_id?: string; poll?: string; error?: string; detail?: unknown };
-          if (!inv.ok || !invJson.job_id) {
-            throw new Error([invJson.error, invJson.detail].filter(Boolean).join(": ") || `Invoke failed ${inv.status}`);
-          }
-          const pollUrl = invJson.poll ?? `/api/hub/community/jobs/${invJson.job_id}`;
-          type Job = { status: string; result?: { body?: string; contentType?: string }; error?: string };
-          let done: Job | null = null;
-          for (let i = 0; i < 40; i++) {              // ~60s budget (40 × 1.5s)
-            await new Promise(res => setTimeout(res, 1500));
-            const p = await fetch(pollUrl);
-            if (!p.ok) continue;
-            const pj = await p.json() as Job;
-            if (pj.status === "done" || pj.status === "error") { done = pj; break; }
-          }
-          if (!done) throw new Error("Timed out waiting for the tool — you were not charged.");
-          if (done.status === "error") throw new Error(done.error || "Tool failed — you were not charged.");
-          const raw = done.result?.body ?? "";
-          // Body is the tool output (never config). Render JSON as an object if it
-          // parses, otherwise show the raw text.
-          let parsed: Record<string,unknown> | string = raw;
-          try { const j = JSON.parse(raw); if (j && typeof j === "object") parsed = j as Record<string,unknown>; } catch {}
-          setResult(parsed);
-          setStep("done");
-          setMobileTab("output");
-          onResult({ result: parsed, isMock: false, mockReason: "dev" });
-          return;
-        }
-
         // Single call with X-PAYMENT, settled in-process by /api/x402/<id> via the
         // CDP facilitator. (This said "proxy forwards to Bankr" until 2026-09-26;
         // there has been no Bankr in the payment path since the 403 ban — see the
         // header of api/x402/[tool]/route.ts.)
-        const r2 = await fetch(tool.callPath ?? `/api/x402/${tool.id}`, {
+        const r2 = await fetch(`/api/x402/${tool.id}`, {
           method:  "POST",
           headers: { "Content-Type": "application/json", "X-PAYMENT": xPayment },
           body:    JSON.stringify(tool.x402Body(body)),
@@ -1008,15 +841,6 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
           // Nothing has been signed, so the only thing that can have refused is
           // the wallet prompt, and "rejected" can only mean the user.
           setErr(/reject|denied/i.test(msg) ? "Signature cancelled" : msg);
-        } else if (tool.source === "external") {
-          /* An external tool settles its own payments; /api/hub/tools/<id>/call
-             verifies nothing and settles nothing, it forwards. So once the
-             signature is out the door we genuinely do not know whether the USDC
-             moved, and saying either "paid" or "not charged" would be a guess
-             about someone's money. The native branch does not need this and must
-             not copy it: /api/x402/<id> settles only after a successful run, so
-             a failure there really does mean uncharged. */
-          setErr(`${msg}\n\nYour wallet signed a USDC authorization and it was sent. Blue does not settle this tool's payments, its builder does, so we cannot tell you whether the USDC moved. Check your wallet on Basescan before retrying, or you may pay twice.`);
         } else {
           setErr(msg);
         }
@@ -1036,7 +860,7 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
     setStep("calling");
 
     try {
-      const res = await fetch(tool.callPath ?? `/api/x402/${tool.id}`, {
+      const res = await fetch(`/api/x402/${tool.id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -1156,30 +980,6 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
 
           {/* Run button + error */}
           <div className="px-6 pb-6 shrink-0">
-            {/* The grid already badges this, and the runner did not — so the one
-                screen where someone is about to spend money was the one screen
-                that never mentioned the endpoint had failed its last probe.
-
-                🔴 Gated on "unreachable" ALONE. "unknown" is a third state, not
-                a soft "down": warning on it would accuse every builder whose
-                tool is fine before the probe has landed, which is most of them
-                on first paint. See the 🔴 block in lib/hub-liveness-format.ts.
-
-                It does not disable Run. Tunnel expiry is normal, the probe may
-                be minutes stale, and delisting is not ours to do. The last
-                sentence is load-bearing and it is true by construction: for an
-                external tool `run()` asks for the 402 before it asks for a
-                signature, so an unreachable endpoint returns before the wallet
-                is ever opened. */}
-            {tool.source === "external" && livenessLabel(tool.health) === "unreachable" && (
-              <p className="font-mono text-[11px] text-[#F87171]/90 mb-3 leading-relaxed">
-                ⚠ This endpoint did not answer our last check
-                {ageLabel(tool.health?.checkedAt) ? `, ${ageLabel(tool.health?.checkedAt)} ago` : ""}.
-                It runs on its builder&apos;s own server, often a dev tunnel that expires.
-                It may be back up since; we have not re-checked.
-                {" "}You can still run it: if it is unreachable, nothing is signed and you are not charged.
-              </p>
-            )}
             {step === "error" && err && (
               // pre-line: the post-signature "we cannot tell you whether the
               // USDC moved" warning is a second paragraph, and collapsing it
@@ -1206,30 +1006,6 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
                   usdcBalance < (parseFloat(tool.price.replace("$", "")) || 0) ? "text-red-400" : "text-[#34D399]"
                 }`}>
                   ${usdcBalance.toFixed(2)}
-                </span>
-              </div>
-            )}
-            {/* Who receives the USDC, said out loud BEFORE the wallet opens.
-                An external tool settles at the builder's own endpoint, so the
-                signature pays the builder directly and Blue takes 0%. The wallet
-                prompt shows a bare `to` address with no idea whose it is; this
-                row is the only place the user learns that answer while they can
-                still decline. Do not soften it into "processed by Blue" — that
-                would be false, and the address in the prompt would contradict
-                it. */}
-            {tool.source === "external" && tool.x402Body && isConnected && (
-              <div className="flex items-center justify-between mb-2 px-1 gap-2">
-                <span className="font-mono text-[10px] text-slate-600">Paid to</span>
-                <span
-                  className="font-mono text-[10px] text-slate-500 text-right"
-                  title={
-                    "This tool runs on its builder's own server. Your signature sends USDC " +
-                    "straight to the builder's wallet, read from that server's live payment " +
-                    "request, and Blue takes no cut. The exact address is shown in your wallet " +
-                    "prompt. The Hub will not sign an amount above the listed price."
-                  }
-                >
-                  the builder&apos;s wallet, 100%
                 </span>
               </div>
             )}
@@ -1348,18 +1124,7 @@ function ToolRunner({ tool, onBack, cached, onResult }: {
               {typeof result === "string"
                 ? <MarkdownOutput content={result} />
                 : <ResultObj obj={result} />}
-              {tool.source && tool.source !== "native" ? (
-                // Community tool — attribute the builder, not Blue Agent.
-                // (Said "not the 3-agent stack" until 2026-09-27; the stack is
-                // one agent now, but the branch exists for the same reason:
-                // a hosted tool's output is its creator's work, not ours.)
-                <p className="font-mono text-[10px] text-slate-700 mt-6 pt-4 border-t border-[#1A1A2E]">
-                  powered by <span className="text-[#A78BFA]">{tool.creatorHandle || "an independent builder"}</span> via Blue Hub
-                  {!isMock && typeof result !== "string" && result.timestamp
-                    ? `  ·  ${new Date(result.timestamp as string).toLocaleString()}`
-                    : ""}
-                </p>
-              ) : isMock ? (
+              {isMock ? (
                 <p className="font-mono text-[10px] text-slate-700 mt-6 pt-4 border-t border-[#1A1A2E]">
                   preview data — live results powered by Blue Agent
                 </p>
@@ -1450,7 +1215,7 @@ type ViewMode = "grid" | "list";
 
 function EmptyState({
   tools, onSelect, featuredIds, usage, recentIds,
-  search, setSearch, cat, setCat, filtered, onListTool,
+  search, setSearch, cat, setCat, filtered,
   source, price, onClearFilters,
 }: {
   tools:       Tool[];
@@ -1463,7 +1228,6 @@ function EmptyState({
   cat:        Category;
   setCat:     (c: Category) => void;
   filtered:   Tool[];
-  onListTool?: () => void;
   source:      SourceFilter;
   price:       PriceFilter;
   onClearFilters: () => void;
@@ -1485,7 +1249,6 @@ function EmptyState({
       onSearch={setSearch}
       onPickCat={(id) => setCat(id as Category)}
       onSelect={(t) => onSelect(t as unknown as Tool)}
-      onListTool={onListTool}
       onClearFilters={onClearFilters}
     />
   );
@@ -1598,14 +1361,9 @@ function decodeShare(hash: string): { toolId: string } & ToolResult | null {
 
 // ─── Hub page ─────────────────────────────────────────────────────────────────
 
-export default function HubPage({ inShell = false, initialToolId, initialView = "browse" }: { inShell?: boolean; initialToolId?: string; initialView?: "browse" | "dashboard" | "submit" }) {
+export default function HubPage({ inShell = false, initialToolId }: { inShell?: boolean; initialToolId?: string }) {
   const [cat, setCat]         = useState<Category>("all");
   const [selected, setSelected] = useState<Tool | null>(null);
-  // View mode — "browse" shows the marketplace grid / tool runner; "dashboard"
-  // renders the creator dashboard and "submit" the List-your-tool form, both
-  // IN-SHELL (sidebar + nav kept), mirroring the per-tool inShell pattern so a
-  // creator can jump back to Browse in one click.
-  const [view, setView]       = useState<"browse" | "dashboard" | "submit">(initialView);
   const [search, setSearch]   = useState("");
   const [cache, setCache]     = useState<Map<string, ToolResult>>(new Map());
   // Result to preload into the runner. Set ONLY by the ?s=/#s= share readers
@@ -1613,74 +1371,12 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
   // clean idle form, even if localStorage has an old run for that tool.
   const [preload, setPreload] = useState<{ toolId: string; data: ToolResult } | null>(null);
   const [usage, setUsage]     = useState<Record<string, number>>({});
-  const [communityTools, setCommunityTools] = useState<Tool[]>([]);
-  /**
-   * How much of the COMMUNITY half of the catalog we actually read (#149).
-   *
-   * Starts `unavailable`, not `complete`: before the fetch resolves we have not
-   * read the registry, and the header renders on that first paint. Defaulting
-   * optimistically would print an unqualified count during every load and, on a
-   * failed load, leave it printed.
-   *
-   * The first-party half is compiled into the bundle, so it is never short —
-   * only this half can be, which is why one flag covers the whole count.
-   */
-  const [communityCoverage, setCommunityCoverage] = useState<Coverage>("unavailable");
-  /**
-   * Live re-probe of each external builder's endpoint, keyed by tool id.
-   *
-   * `{}` until the second fetch lands, so every card starts as "Not checked" —
-   * which is the honest state before we have asked, and the one state that was
-   * MISSING before: `status: "live"` is written once at submit and never
-   * re-verified, so 5 expired dev tunnels advertised themselves as live
-   * indefinitely (measured 2026-09-26, see lib/hub-liveness.ts).
-   *
-   * A missing key and an explicit `null` both mean "we do not know" and must
-   * never render as up or down.
-   */
-  const [toolHealth, setToolHealth] = useState<Record<string, ToolHealth | null>>({});
-  const [source, setSource] = useState<SourceFilter>("all"); // v2 sidebar: provenance filter
+  const source: SourceFilter = "all";
   const [price, setPrice]   = useState<PriceFilter>("all");  // v2 sidebar: price bucket
   const searchRef             = useRef<HTMLInputElement>(null);
 
-  // ── Merge first-party (TOOLS) + community-submitted (registered) ──────────
-  // `toolHealth` is folded in HERE rather than at fetch time on purpose: the
-  // catalog and the probe are two independent requests and the probe is the slow
-  // one (it fans out to third-party endpoints). Merging late means the grid
-  // paints from the catalog alone and the badges fill in afterwards, so nobody's
-  // dead tunnel can delay the Hub's first render.
-  const allTools = useMemo<Tool[]>(
-    () => [
-      ...TOOLS,
-      ...communityTools.map((t) =>
-        // `in` rather than a truthy check — an explicit `null` from the route is
-        // a real answer ("asked, could not find out") and must overwrite the
-        // absent-key default, not be mistaken for it.
-        t.id in toolHealth ? { ...t, health: toolHealth[t.id] } : t,
-      ),
-    ],
-    [communityTools, toolHealth],
-  );
-
-  /**
-   * The open tool, re-read from the live probe map.
-   *
-   * `selected` is a SNAPSHOT taken at click time, and the probe is deliberately
-   * the slow second fetch — so a tool opened before it lands keeps
-   * `health: undefined` for as long as the panel stays open, no matter what
-   * comes back. The runner's warning could therefore never fire on the path it
-   * exists for: someone who deep-links straight into a dead tool.
-   *
-   * Same `in` check as above, for the same reason: an explicit `null` is an
-   * answer and must overwrite the absent-key default.
-   */
-  const selectedLive = useMemo<Tool | null>(
-    () =>
-      selected && selected.id in toolHealth
-        ? { ...selected, health: toolHealth[selected.id] }
-        : selected,
-    [selected, toolHealth],
-  );
+  const allTools = TOOLS;
+  const selectedLive = selected;
 
   // ── App-shell deep routing ────────────────────────────────────────────────
   // Selecting a tool updates the URL to /app/hub/[id] without a reload (the view
@@ -1696,28 +1392,8 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
     if (inShell && typeof window !== "undefined") window.history.pushState(null, "", "/hub");
   };
 
-  // Creator dashboard — switch the in-shell view (keeps sidebar + nav). URL is
-  // updated to /hub/dashboard so a refresh/deep-link resolves to the same route.
-  const openDashboard = () => {
-    setSelected(null);
-    setView("dashboard");
-    if (typeof window !== "undefined") window.history.pushState(null, "", "/hub/dashboard");
-  };
-  // List-your-tool — same in-shell view swap (keeps sidebar + nav). URL → /hub/submit.
-  const openSubmit = () => {
-    setSelected(null);
-    setView("submit");
-    if (typeof window !== "undefined") window.history.pushState(null, "", "/hub/submit");
-  };
-  const backToBrowse = () => {
-    setView("browse");
-    if (typeof window !== "undefined") window.history.pushState(null, "", "/hub");
-  };
-  // Any sidebar filter (search / source / category / price) must drop you back
-  // into the browse grid. Without this, picking a filter while on the Creator
-  // Dashboard or Submit view mutates the filter state invisibly — the dashboard
-  // stays on screen and the "filtered" tools never appear.
-  const ensureBrowse = () => { if (view !== "browse") backToBrowse(); };
+  // Any sidebar filter drops an open tool so the filtered grid is what shows.
+  const ensureBrowse = () => { if (selected) clearSelected(); };
 
   // Open the tool from the route param (/app/hub/[tool]). Applies once the tool
   // is present (community tools load async), and only once.
@@ -1734,11 +1410,8 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
     const onPop = () => {
       const path = window.location.pathname;
       setPreload(null); // back/forward → fresh form
-      if (/\/hub\/dashboard$/.test(path)) { setView("dashboard"); setSelected(null); return; }
-      if (/\/hub\/submit$/.test(path))    { setView("submit");    setSelected(null); return; }
-      setView("browse");
       const m = path.match(/\/hub\/([^/?#]+)/);
-      const id = m && m[1] !== "dashboard" ? m[1] : null;
+      const id = m ? m[1] : null;
       setSelected(id ? (allTools.find(x => x.id === id) ?? null) : null);
     };
     window.addEventListener("popstate", onPop);
@@ -1768,104 +1441,6 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
     fetch("/api/usage").then(r => r.json()).then(setUsage).catch(() => {});
   }, []);
 
-  // ── Fetch community-submitted tools from the Builder Registry ──────────────
-  // Maps RegisteredTool shape → local Tool shape and routes calls through the
-  // Hub proxy (which forwards to the builder's endpoint + tracks usage). Kept as
-  // a useCallback so the "List your tool" modal can refresh the grid on submit.
-  const loadCommunityTools = useCallback(() => {
-    // Community listings are closed (lib/hub-closed.ts): the grid shows the
-    // first-party catalog only, and nothing is fetched from the registry.
-    if (!COMMUNITY_LISTINGS_OPEN) {
-      setCommunityTools([]);
-      setCommunityCoverage("complete");
-      return;
-    }
-    type Registered = {
-      id: string; name: string; description: string; category: string;
-      price: string; priceUSDC: number;
-      inputs: { key: string; label: string; placeholder: string; required?: boolean }[];
-      verified: boolean; aiReady: boolean; status?: "live";
-      builderAddress: string; submittedAt: number;
-      agentName?: string; callCount?: number; logoUrl?: string;
-    };
-    const asCat = (c: string): Exclude<Category, "all"> =>
-      (["intelligence","builder","trading","content","agent-economy","base-ecosystem","on-chain"] as const)
-        .includes(c as never) ? (c as Exclude<Category, "all">) : "intelligence";
-    const shortAddr = (a?: string) => a ? `${a.slice(0, 6)}…${a.slice(-4)}` : undefined;
-
-    // External tools (builder hosts the endpoint; Hub proxies + forwards payment).
-    // no-store: the registry is mutable (submit/delete) — a stale list would keep
-    // showing a tool the creator just removed, so never serve a cached copy here.
-    // ⚠ A FAILED READ IS NOT AN EMPTY REGISTRY (#149). The three fallbacks below
-    // (`!r.ok`, a missing `tools`, the `.catch`) each produce the same `[]` as a
-    // genuinely empty community registry, and the header then prints a confident
-    // "N tools" that is short by however many we could not read. `coverage` —
-    // published by the route as of #149 — is what tells those apart, so it is
-    // carried out of here rather than discarded. An older response without the
-    // field is treated as `unavailable`, not assumed complete.
-    const external = fetch("/api/hub/tools", { cache: "no-store" })
-      .then(r => r.ok ? r.json() : { tools: [], coverage: "unavailable" })
-      .then((d: { tools: Registered[]; coverage?: Coverage }) => {
-        setCommunityCoverage(d.coverage ?? "unavailable");
-        return (d.tools ?? []).map((r): Tool => ({
-          id:             r.id,
-          name:           r.name,
-          cat:            asCat(r.category),
-          price:          r.price,
-          agents:         ["blue"],
-          desc:           r.description,
-          inputs:         r.inputs.map(i => ({ key: i.key, label: i.label, placeholder: i.placeholder, required: !!i.required })),
-          verified:       r.verified,
-          aiReady:        r.aiReady,
-          builderAddress: r.builderAddress,
-          releasedAt:     r.submittedAt,
-          source:         "external",
-          status:         r.status ?? "live",
-          creatorHandle:  r.agentName || shortAddr(r.builderAddress),
-          logoUrl:        r.logoUrl,
-          callCount:      r.callCount,
-          // Route through Hub proxy (forwards to builder endpoint + tracks usage/revenue)
-          callPath:       `/api/hub/tools/${r.id}/call`,
-          x402Body:       r.priceUSDC > 0
-                            ? (vals: Record<string, string>) => vals as Record<string, unknown>
-                            : undefined,
-        }));
-      })
-      .catch((): Tool[] => { setCommunityCoverage("unavailable"); return []; });
-
-    // NOTE: Hosted tools (AI-tool / API-wrapper) are intentionally NOT loaded into
-    // the marketplace grid right now — the backend (/api/hub/hosted + community
-    // /invoke + jobs) is kept intact for a later phase. To re-enable, fetch
-    // /api/hub/hosted, map source:"hosted" + async:true + callPath
-    // `/api/hub/community/<slug>/invoke`, and merge below.
-    external.then(e => setCommunityTools(e));
-  }, []);
-
-  useEffect(() => { loadCommunityTools(); }, [loadCommunityTools]);
-
-  // ── Re-probe the builders' endpoints, AFTER the grid already has data ──────
-  // A SECOND request on purpose. `status: "live"` is written once at submit and
-  // never re-checked, so the Hub happily advertised 5 expired dev tunnels; this
-  // is the pulse. It is kept off the catalog fetch because it fans out to
-  // third-party endpoints — folding it in would let someone else's dead tunnel
-  // hold up the Hub's first paint.
-  //
-  // Every failure path leaves `toolHealth` as-is, so the badges stay at
-  // "Not checked". A failed probe fetch is not evidence about anyone's endpoint,
-  // and rendering it as one would accuse builders whose tools are fine.
-  useEffect(() => {
-    // Nothing to probe while community listings are closed — and the probe
-    // fans out to third-party endpoints, so do not wake them for nothing.
-    if (!COMMUNITY_LISTINGS_OPEN) return;
-    let cancelled = false;
-    fetch("/api/hub/tools/health", { cache: "no-store" })
-      .then(r => (r.ok ? r.json() : null))
-      .then((d: { health?: Record<string, ToolHealth | null> } | null) => {
-        if (!cancelled && d?.health) setToolHealth(d.health);
-      })
-      .catch(() => {});
-    return () => { cancelled = true; };
-  }, []);
 
   const featuredIds = useMemo<Set<string>>(() => {
     // Most-run tools first, then pad with static FEATURED_IDS so we always show 4
@@ -1981,13 +1556,6 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
   const filtered = allTools.filter(t => {
     const matchesSearch = !search || t.name.toLowerCase().includes(search.toLowerCase()) || t.desc.toLowerCase().includes(search.toLowerCase());
     if (!matchesSearch) return false;
-    // Marketplace shows Native + live External only. Hosted is hidden (backend
-    // kept for a later phase); non-live externals never persist but guard anyway.
-    const src = t.source ?? "native";
-    if (src === "hosted") return false;
-    if (src === "external" && (t.status ?? "live") !== "live") return false;
-    // v2 marketplace filters — provenance + price bucket
-    if (source !== "all" && src !== source) return false;
     if (!matchPrice(price, priceNum(t.price))) return false;
     if (cat === "all") { /* fall through to source/price-only result */ }
     else {
@@ -2000,12 +1568,6 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
     return true;
   });
 
-  // Per-source counts across the search/price/category-filtered set (drives sidebar chip labels).
-  const sourceCounts: Record<SourceFilter, number> = {
-    all:      allTools.length,
-    native:   allTools.filter(t => (t.source ?? "native") === "native").length,
-    external: allTools.filter(t => t.source === "external").length,
-  };
 
   return (
     <>
@@ -2023,18 +1585,11 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
             <span className="font-mono text-[10.5px]" style={{ color: "#64748B" }}>
               AI tools · multi-agent · x402 · Base
             </span>
-            <Link href="/app/hub/agents" className="font-mono text-[10.5px] text-[#4FC3F7] hover:underline">
+            <Link href="/exchange" className="font-mono text-[10.5px] text-[#4FC3F7] hover:underline">
               Agent Exchange →
             </Link>
-            {/* `≥` when the community half was short — the same lower-bound
-                convention the wallet tables use for a partial read (#211/#212).
-                An unqualified count here would be an assertion we cannot make. */}
-            <span
-              className="ml-auto font-mono text-[10.5px]"
-              style={{ color: "#94A3B8" }}
-              title={communityCoverage === "complete" ? undefined : COVERAGE_TITLE}
-            >
-              {communityCoverage === "complete" ? "" : "≥"}{allTools.length} tools
+            <span className="ml-auto font-mono text-[10.5px]" style={{ color: "#94A3B8" }}>
+              {allTools.length} tools
             </span>
           </div>
         )}
@@ -2047,12 +1602,8 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
           {/* Header */}
           <div className="px-4 min-h-[56px] py-2 flex items-center gap-3 border-b border-[#1A1A2E] shrink-0">
             <p className="font-mono font-semibold text-[10.5px] tracking-[0.14em]" style={{ color: "#E2E8F0" }}>// MARKETPLACE</p>
-            <span
-              className="font-mono text-[9.5px]"
-              style={{ color: "#64748B" }}
-              title={communityCoverage === "complete" ? undefined : COVERAGE_TITLE}
-            >
-              {filtered.length} of {communityCoverage === "complete" ? "" : "≥"}{allTools.length}
+            <span className="font-mono text-[9.5px]" style={{ color: "#64748B" }}>
+              {filtered.length} of {allTools.length}
             </span>
           </div>
 
@@ -2068,26 +1619,6 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
                 value={search}
                 onChange={e => { setSearch(e.target.value); ensureBrowse(); }}
               />
-            </div>
-
-            {/* Source filter */}
-            <div className="px-4 pt-3 pb-3">
-              <p className="font-mono text-[9px] tracking-[0.16em] mb-2" style={{ color: "#475569" }}>SOURCE</p>
-              <div className="flex flex-wrap gap-1.5">
-                {SOURCE_CHIPS.map(s => {
-                  const active = source === s.key;
-                  const count = sourceCounts[s.key];
-                  return (
-                    <button key={s.key} onClick={() => { setSource(s.key); ensureBrowse(); }}
-                      className="font-mono text-[9.5px] px-2.5 py-1 rounded-[7px] border transition-colors"
-                      style={active
-                        ? { color: "#050508", background: "#4FC3F7", borderColor: "#4FC3F7", fontWeight: 600 }
-                        : { color: "#94A3B8", borderColor: "#1A1A2E", background: "transparent" }}>
-                      {s.label} <span className="opacity-60">{count}</span>
-                    </button>
-                  );
-                })}
-              </div>
             </div>
 
             {/* Category filter */}
@@ -2135,45 +1666,12 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
             {/* Clear filters — only when a filter is active */}
             {(search.trim() || cat !== "all" || source !== "all" || price !== "all") && (
               <div className="px-4 pb-4">
-                <button onClick={() => { setSearch(""); setCat("all"); setSource("all"); setPrice("all"); ensureBrowse(); }}
+                <button onClick={() => { setSearch(""); setCat("all"); setPrice("all"); ensureBrowse(); }}
                   className="font-mono text-[10px] text-slate-600 hover:text-white transition-colors">
                   ✕ Clear filters
                 </button>
               </div>
             )}
-          </div>
-
-          {/* Builder actions (v2). "List your tool" is hidden while community
-              listings are closed; the dashboard stays so a builder can still
-              remove an existing listing. */}
-          <div className="px-4 pb-3 border-t border-[#1A1A2E] pt-3.5">
-            {COMMUNITY_LISTINGS_OPEN && <>
-            <button
-              type="button"
-              onClick={view === "submit" ? backToBrowse : openSubmit}
-              className={`flex items-center gap-2 w-full px-2 py-1.5 rounded-lg transition-colors group ${view === "submit" ? "bg-[#A78BFA]/10" : "hover:bg-[#A78BFA]/5"}`}
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-[#A78BFA] animate-pulse shrink-0" />
-              <span className={`font-mono text-[10.5px] font-medium transition-colors ${view === "submit" ? "text-[#A78BFA]" : "text-[#4FC3F7] group-hover:text-[#A78BFA]"}`}>
-                {view === "submit" ? "← Browse tools" : "+ List your tool"}
-              </span>
-            </button>
-            {view !== "submit" && (
-              <p className="pl-4 mt-1 font-mono text-[9.5px] leading-[1.6]" style={{ color: "#64748B" }}>
-                100% self-hosted<br />90% hosted on Blue Hub
-              </p>
-            )}
-            </>}
-            <button
-              type="button"
-              onClick={view === "dashboard" ? backToBrowse : openDashboard}
-              className={`${COMMUNITY_LISTINGS_OPEN ? "mt-2.5 " : ""}flex items-center gap-2 w-full px-2 py-1.5 rounded-lg transition-colors group ${view === "dashboard" ? "bg-[#34D399]/10" : "hover:bg-[#34D399]/5"}`}
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-[#34D399] shrink-0" />
-              <span className={`font-mono text-[10.5px] font-medium transition-colors ${view === "dashboard" ? "text-[#34D399]" : "text-[#94A3B8] group-hover:text-[#34D399]"}`}>
-                {view === "dashboard" ? "← Browse tools" : "Creator dashboard →"}
-              </span>
-            </button>
           </div>
 
           {/* Footer */}
@@ -2186,7 +1684,7 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
         <main className="flex-1 h-full overflow-hidden flex flex-col">
 
           {/* Mobile search + filter chips (browse state only) */}
-          {!selected && view === "browse" && (
+          {!selected && (
             <div className="lg:hidden px-4 pt-3 pb-2 border-b border-[#1A1A2E] shrink-0 space-y-2">
               {/* On the home state the large SearchHero is the single search bar;
                   this compact input only appears once browsing (search/category). */}
@@ -2217,36 +1715,10 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
                 </div>
                 <div className="pointer-events-none absolute right-0 top-0 bottom-1 w-10 bg-gradient-to-l from-[#050508] to-transparent" />
               </div>
-              {/* Source chips — only once community tools exist alongside native. */}
-              {sourceCounts.external > 0 && (
-                <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar">
-                  {SOURCE_CHIPS.filter(s => s.key === "all" || sourceCounts[s.key] > 0).map(s => {
-                    const active = source === s.key;
-                    return (
-                      <button key={s.key} onClick={() => setSource(s.key)}
-                        className="font-mono text-[10px] px-3 py-1.5 rounded-full whitespace-nowrap border shrink-0 transition-colors"
-                        style={active
-                          ? { color: s.color, borderColor: `${s.color}55`, background: `${s.color}15` }
-                          : { color: "#64748b", borderColor: "#1A1A2E" }}>
-                        {s.label} <span className="opacity-60">{sourceCounts[s.key]}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
             </div>
           )}
 
-          {view === "submit"
-            ? COMMUNITY_LISTINGS_OPEN
-              ? <SubmitTool variant="shell" onBack={backToBrowse} onSubmitted={() => loadCommunityTools()} />
-              : <div className="flex-1 overflow-y-auto p-8">
-                  <p className="font-mono text-[12px] text-slate-300 max-w-md leading-[1.7]">{COMMUNITY_CLOSED_TEXT}</p>
-                  <button type="button" onClick={backToBrowse} className="mt-4 font-mono text-[11px] text-[#4FC3F7] hover:underline">← Browse tools</button>
-                </div>
-            : view === "dashboard"
-            ? <DashboardView inShell onBack={() => { loadCommunityTools(); backToBrowse(); }} />
-            : selectedLive
+          {selectedLive
             ? <ToolRunner
                 // Remount per tool (clean state); when a shared ?s= result
                 // arrives, the key flips to ":shared" so the runner re-inits
@@ -2270,10 +1742,9 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
                 cat={cat}
                 setCat={setCat}
                 filtered={filtered}
-                onListTool={COMMUNITY_LISTINGS_OPEN ? openSubmit : undefined}
                 source={source}
                 price={price}
-                onClearFilters={() => { setSearch(""); setCat("all"); setSource("all"); setPrice("all"); }}
+                onClearFilters={() => { setSearch(""); setCat("all"); setPrice("all"); }}
               /></div>
           }
         </main>

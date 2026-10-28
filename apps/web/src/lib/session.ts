@@ -127,12 +127,11 @@ export type NonceSpend =
 /**
  * Appended to the spend-failure text on routes an EXTERNAL agent may call.
  *
- * The Hub submit/remove endpoints are a documented public API, and #172 changed
- * their contract: a self-minted nonce used to be accepted and now 401s. A
- * third-party builder whose script breaks has no way to discover the new step
+ * #172 changed the SIWE contract: a self-minted nonce used to be accepted and
+ * now 401s. A caller whose script breaks has no way to discover the new step
  * from "Nonce unknown or expired" alone, so the error names the endpoint that
- * issues them. Defined once because it must stay identical across four routes
- * and the /docs/list-a-tool page.
+ * issues them. (The Hub submit/remove routes and /docs/list-a-tool that also
+ * carried it retired 2026-10-28 with the builder registry.)
  */
 export const NONCE_SOURCE_HINT =
   "Nonces are issued by GET /api/auth/nonce and are single-use — a self-generated nonce is no longer accepted.";
