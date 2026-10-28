@@ -53,7 +53,7 @@ export default async function ToolProfile({ params }: { params: Promise<{ tool: 
         <Link href="/services" className="ml-auto text-[10.5px] text-[#94A3B8] hover:text-[#E2E8F0] border border-[#1A1A2E] rounded-[7px] px-2.5 py-[5px]">← All services</Link>
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto">
-      <div className="px-5 py-[18px] grid gap-5 mx-auto w-full max-w-6xl">
+      <div className="px-5 py-[18px] grid gap-5 w-full">
         <div>
           <Link href="/services" className="text-[10px] tracking-[.14em] text-[#64748B] hover:text-[#4FC3F7] lg:hidden">← SERVICES</Link>
           <div className="mt-1 flex flex-wrap items-center gap-3">

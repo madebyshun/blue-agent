@@ -52,7 +52,7 @@ export default async function SellerPage({ params }: { params: Promise<{ payTo: 
     <div className="flex flex-col h-full bg-[#050508] overflow-hidden font-mono [&_a]:font-mono">
       <ExchangeHeader active={null} chip={`seller · ${short(payTo)}`} />
       <div className="flex-1 min-h-0 overflow-y-auto">
-      <div className="px-5 py-[18px] grid gap-5 mx-auto w-full max-w-6xl">
+      <div className="px-5 py-[18px] grid gap-5 w-full">
         <div>
           <Link href="/exchange" className="text-[10px] tracking-[.14em] text-[#64748B] hover:text-[#4FC3F7]">← SELLERS</Link>
           <h1 className="mt-1 text-[15px] font-semibold text-[#E2E8F0]">{name}</h1>
