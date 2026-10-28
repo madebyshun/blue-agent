@@ -55,7 +55,11 @@ const nextConfig: NextConfig = {
 
   // ERC-8004 registration file (lib/erc8004.ts) at the spec's well-known path.
   async rewrites() {
-    return [{ source: "/.well-known/agent-registration.json", destination: "/api/agent-registration" }];
+    return [
+      { source: "/.well-known/agent-registration.json", destination: "/api/agent-registration" },
+      // x402 discovery document (api/x402-discovery) at the path marketplaces read.
+      { source: "/.well-known/x402", destination: "/api/x402-discovery" },
+    ];
   },
   async redirects() {
     return [

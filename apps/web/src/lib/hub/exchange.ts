@@ -226,10 +226,12 @@ export interface Exchange {
   listUpdatedAt: string | null;
   providersListed: number;
   rows: ProviderRow[];
+  /** Every listed seller summed per UTC day, oldest first (keys as YYYYMMDD). */
+  daily: { day: string; usd: number; calls: number; sellers: number }[];
 }
 
 export async function readExchange(days = 30): Promise<Exchange> {
-  const out: Exchange = { readable: true, daysCovered: 0, firstDay: null, firstIndex: 0, lagBlocks: null, listUpdatedAt: null, providersListed: 0, rows: [] };
+  const out: Exchange = { readable: true, daysCovered: 0, firstDay: null, firstIndex: 0, lagBlocks: null, listUpdatedAt: null, providersListed: 0, rows: [], daily: [] };
   try {
     const idx = await readProviderIndex();
     out.listUpdatedAt = idx?.updatedAt ?? null;
@@ -243,6 +245,9 @@ export async function readExchange(days = 30): Promise<Exchange> {
       if (!b) return;
       out.daysCovered++;
       if (out.firstDay === null) { out.firstDay = keys[i]; out.firstIndex = i; }
+      let du = 0, dc = 0, ds = 0;
+      for (const c of Object.values(b.p)) { du += c.u / 1e6; dc += c.n; if (c.n > 0) ds++; }
+      out.daily.push({ day: keys[i], usd: du, calls: dc, sellers: ds });
       for (const [p, c] of Object.entries(b.p)) {
         const meta = idx?.providers[p];
         const r = acc.get(p) ?? {
@@ -333,3 +338,119 @@ export async function refreshSellerIdentities(deadline: number): Promise<{ check
 const ERC8004_OWNER_ABI = [
   { type: "function", name: "ownerOf", stateMutability: "view", inputs: [{ name: "tokenId", type: "uint256" }], outputs: [{ type: "address" }] },
 ] as const;
+
+// ── Endpoint checks ("is it really selling on Base?") ────────────────────────
+//
+// TOLLY ticks "endpoint reachable" per agent; ours is measured, not claimed:
+// call one listed resource of the seller WITHOUT paying and read its 402. It
+// passes only if the quote asks for USDC on Base 8453 to the seller's own
+// payTo. Rotates through the list like the identity walk; results are kept
+// with their time, and an old pass is shown with its age, never as current.
+
+const K_PROBE = "hub:x:probe";
+const K_PROBE_CURSOR = "hub:x:probe:cursor";
+const USDC_BASE_LC = USDC.toLowerCase();
+
+export type ProbeResult = "live" | "other_payto" | "other_chain" | "no_402" | "unreachable";
+export interface SellerProbe { result: ProbeResult; status: number | null; url: string; at: string }
+type ProbeMap = Record<string, SellerProbe>;
+
+export async function readSellerProbes(): Promise<ProbeMap> {
+  const p = await kvGetProbe<ProbeMap>(K_PROBE);
+  return p.status === "hit" ? p.value : {};
+}
+
+/** Read an x402 quote from a 402: v2 body `{accepts}`, or the base64 `PAYMENT-REQUIRED` header. Pure. */
+export function quoteAccepts(body: unknown, header: string | null): { network?: string; asset?: string; payTo?: string }[] {
+  const pick = (o: unknown) => {
+    const a = (o as { accepts?: unknown } | null)?.accepts;
+    return Array.isArray(a) ? (a as { network?: string; asset?: string; payTo?: string }[]) : [];
+  };
+  const fromBody = pick(body);
+  if (fromBody.length) return fromBody;
+  if (header) {
+    try { return pick(JSON.parse(Buffer.from(header, "base64").toString("utf8"))); } catch { /* not base64 JSON */ }
+  }
+  return [];
+}
+
+/** Classify one seller's 402 against its own payTo. Pure: exported for the test. */
+export function classifyQuote(payTo: string, status: number, accepts: { network?: string; asset?: string; payTo?: string }[]): ProbeResult {
+  if (status !== 402 || !accepts.length) return "no_402";
+  const base = accepts.filter((a) => (a.network === "eip155:8453" || a.network === "base") && String(a.asset ?? "").toLowerCase() === USDC_BASE_LC);
+  if (!base.length) return "other_chain";
+  return base.some((a) => String(a.payTo ?? "").toLowerCase() === payTo.toLowerCase()) ? "live" : "other_payto";
+}
+
+async function probeOne(payTo: string, url: string): Promise<SellerProbe> {
+  const at = new Date().toISOString();
+  for (const method of ["POST", "GET"] as const) {
+    const r = await fetch(url, {
+      method, signal: AbortSignal.timeout(6_000), cache: "no-store", redirect: "follow",
+      headers: method === "POST" ? { "content-type": "application/json" } : undefined,
+      body: method === "POST" ? "{}" : undefined,
+    }).catch(() => null);
+    if (!r) return { result: "unreachable", status: null, url, at };
+    if (r.status === 405 && method === "POST") continue;
+    const body = await r.json().catch(() => null);
+    return { result: classifyQuote(payTo, r.status, quoteAccepts(body, r.headers.get("payment-required"))), status: r.status, url, at };
+  }
+  return { result: "no_402", status: 405, url, at };
+}
+
+/** Probe the next slice of sellers, 12 at a time, until `deadline`. */
+export async function probeSellers(deadline: number): Promise<{ probed: number; live: number }> {
+  const idx = await readProviderIndex();
+  if (!idx) return { probed: 0, live: 0 };
+  const shards = new Map<string, Record<string, ProviderDetail>>();
+  const all = Object.keys(idx.providers).sort();
+  let at = Number((await kv.get<number>(K_PROBE_CURSOR)) ?? 0) || 0;
+  const out: ProbeMap = {};
+  let probed = 0;
+  while (Date.now() < deadline - 8_000 && probed < all.length) {
+    const batch = Array.from({ length: Math.min(12, all.length - probed) }, (_, i) => all[(at + i) % all.length]);
+    const jobs = batch.map(async (p) => {
+      const k = detailKey(p);
+      if (!shards.has(k)) shards.set(k, (await kv.get<Record<string, ProviderDetail>>(k).catch(() => null)) ?? {});
+      const url = shards.get(k)?.[p]?.resources[0]?.url;
+      if (url) out[p] = await probeOne(p, url);
+    });
+    await Promise.all(jobs);
+    at = (at + batch.length) % all.length;
+    probed += batch.length;
+  }
+  if (probed) {
+    const res = await kvMutate<ProbeMap>(K_PROBE, {}, (cur) => ({ ...cur, ...out }));
+    if (res === "ok" || res === "unchanged") await kv.set(K_PROBE_CURSOR, at);
+  }
+  return { probed, live: Object.values(out).filter((v) => v.result === "live").length };
+}
+
+// ── Live activity (seller profile) ───────────────────────────────────────────
+
+export interface Payment { tx: string; from: string; usd: number; block: string }
+
+/**
+ * The seller's latest x402 settlements, read from the chain at render time:
+ * the last ~2,000 blocks (~67 min on Base), same EIP-3009 test as the index.
+ * null = the RPC did not answer; [] = none in the window.
+ */
+export async function recentPayments(payTo: string, limit = 10): Promise<Payment[] | null> {
+  try {
+    const c = rpc();
+    const head = await c.getBlockNumber();
+    const from = head - CHUNK;
+    const logs = await c.getLogs({ address: USDC, event: TRANSFER, args: { to: payTo as Address }, fromBlock: from, toBlock: head });
+    if (!logs.length) return [];
+    const payers = [...new Set(logs.map((l) => l.args.from!))].slice(0, ADDR_BATCH) as Address[];
+    const auth = await c.getLogs({ address: USDC, event: AUTH_USED, args: { authorizer: payers }, fromBlock: from, toBlock: head });
+    const ok = new Set(auth.map((l) => `${l.transactionHash.toLowerCase()}:${l.args.authorizer!.toLowerCase()}`));
+    return logs
+      .filter((l) => ok.has(`${l.transactionHash.toLowerCase()}:${l.args.from!.toLowerCase()}`))
+      .reverse()
+      .slice(0, limit)
+      .map((l) => ({ tx: l.transactionHash, from: l.args.from!.toLowerCase(), usd: Number(l.args.value) / 1e6, block: l.blockNumber.toString() }));
+  } catch {
+    return null;
+  }
+}
