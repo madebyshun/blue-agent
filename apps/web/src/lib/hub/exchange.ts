@@ -98,7 +98,14 @@ export async function refreshProviders(deadline: number): Promise<{ resources: n
   const now = new Date().toISOString();
   const providers: Record<string, ProviderIndexEntry> = {};
   for (const [p, e] of by) providers[p] = { hosts: [...e.hosts].slice(0, 3), resources: e.total, title: e.res[0]?.description.slice(0, 90) ?? "" };
+  const first = (await kvGetProbe<ProviderIndex>(K_INDEX)).status === "miss";
   await kv.set(K_INDEX, { updatedAt: now, providers } satisfies ProviderIndex);
+  // First list ever: anything indexed before it watched Blue Agent alone, so
+  // restart the backfill rather than keep windows that miss every other seller.
+  if (first) {
+    await kv.del(K_CURSOR);
+    await Promise.all(Array.from({ length: BACKFILL_DAYS + 2 }, (_, i) => kv.del(dayKey(ymd(Date.now() - i * 86_400_000)))));
+  }
   const shards = new Map<string, Record<string, ProviderDetail>>();
   for (const [p, e] of by) {
     const k = detailKey(p);
@@ -160,7 +167,11 @@ export async function indexStep(deadline: number): Promise<{ chunks: number; cur
   // Only whole windows: an idle tick costs ONE KV read (the cursor), not the
   // ~270 KB provider list — Upstash's budget has suspended this DB before (#148).
   if (head - cursor + 1n < CHUNK) return { chunks: 0, cursor: cursor.toString(), head: head.toString(), lagBlocks: (head - cursor + 1n).toString() };
-  const watch = watchList(await readProviderIndex());
+  const idx = await readProviderIndex();
+  // No seller list yet (fresh deploy, before hub-providers ran): walking now
+  // would fold windows for Blue Agent alone and never revisit them.
+  if (!idx) return { chunks: 0, cursor: cursor.toString(), head: head.toString(), lagBlocks: "waiting for the provider list" };
+  const watch = watchList(idx);
   let chunks = 0;
   while (head - cursor + 1n >= CHUNK && Date.now() < deadline - 20_000) {
     const to = cursor + CHUNK - 1n;
