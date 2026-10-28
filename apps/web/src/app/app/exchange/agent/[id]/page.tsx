@@ -9,6 +9,7 @@ import { readExchange, readProviderDetail, readSellerProbes, recentPayments } fr
 import { listJobs } from "@/lib/jobs";
 import { X402_PAY_TO } from "@/lib/x402-payee";
 import ExchangeHeader from "../../ExchangeHeader";
+import HireAgent from "../../_components/HireAgent";
 
 export const dynamic = "force-dynamic";
 
@@ -78,6 +79,9 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
                 </div>
               </div>
             </div>
+            {!isBlue && detail && detail.resources.length > 0 && (
+              <div className="mt-3"><HireAgent payTo={p.payTo} name={name} services={detail.resources} /></div>
+            )}
             <p className="mt-3 max-w-[900px] whitespace-pre-line font-prose text-[11px] leading-[1.7] text-[#94A3B8]">{reg?.description?.trim() || (p.regError ?? "No description in its registration file.")}</p>
             {reg?.services?.length ? (
               <div className="mt-2 flex flex-wrap gap-[5px]">

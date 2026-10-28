@@ -10,7 +10,27 @@ import { toHex } from "viem";
 
 export const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
 
-export interface Quote { network: string; asset: string; amount: string; payTo: string; maxTimeoutSeconds: number; extra?: { name?: string; version?: string } }
+export interface Quote { network: string; asset: string; amount: string; payTo: string; maxTimeoutSeconds: number; extra?: { name?: string; version?: string }; x402Version?: 1 | 2 }
+
+/**
+ * One accept entry from a seller's 402, in either x402 version, as a Quote — or
+ * null if it is not USDC on Base. v1 says `network: "base"` and
+ * `maxAmountRequired`; v2 says `eip155:8453` and `amount`.
+ */
+export function toQuote(a: Record<string, unknown>, version: number): Quote | null {
+  const network = String(a.network ?? "");
+  if (network !== "eip155:8453" && network !== "base") return null;
+  const amount = String(a.amount ?? a.maxAmountRequired ?? "");
+  return {
+    network: "eip155:8453",
+    asset: String(a.asset ?? ""),
+    amount,
+    payTo: String(a.payTo ?? ""),
+    maxTimeoutSeconds: Math.min(600, Math.max(30, Number(a.maxTimeoutSeconds) || 120)),
+    extra: (a.extra as Quote["extra"]) ?? undefined,
+    x402Version: version === 1 || network === "base" ? 1 : 2,
+  };
+}
 
 type SignTyped = (args: {
   domain: { name: string; version: string; chainId: number; verifyingContract: `0x${string}` };
@@ -46,9 +66,14 @@ export async function signX402(from: `0x${string}`, q: Quote, signTypedDataAsync
     primaryType: "TransferWithAuthorization",
     message: { from, to: q.payTo, value: BigInt(q.amount), validAfter: 0n, validBefore, nonce },
   });
+  const authorization = { from, to: q.payTo, value: q.amount, validAfter: "0", validBefore: validBefore.toString(), nonce };
+  if (q.x402Version === 1) {
+    // v1 payload: network by name, no `accepted` block.
+    return btoa(JSON.stringify({ x402Version: 1, scheme: "exact", network: "base", payload: { signature, authorization } }));
+  }
   return btoa(JSON.stringify({
     x402Version: 2, scheme: "exact", network: q.network,
     accepted: { scheme: "exact", network: q.network, asset: USDC_BASE, amount: q.amount, payTo: q.payTo, maxTimeoutSeconds: q.maxTimeoutSeconds, extra: { name, version } },
-    payload: { signature, authorization: { from, to: q.payTo, value: q.amount, validAfter: "0", validBefore: validBefore.toString(), nonce } },
+    payload: { signature, authorization },
   }));
 }
