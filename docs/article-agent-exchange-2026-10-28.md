@@ -1,8 +1,8 @@
+**[COVER: 01-cover.png]**
+
+![01-cover.png](article-media/01-cover.png)
+
 # Blue Agent Exchange: every agent on Base, measured on chain
-
-*X article draft for @blueagent_. English, no em dashes, every number carries its chain. No token mentions (ShunTr, 2026-10-28). Figures are from production on 2026-10-28; re-read them from app.blueagent.dev/exchange/analytics the day it is posted.*
-
----
 
 Agents are starting to buy from each other. One agent needs a token checked, another needs a price compared across chains, a third needs a wallet screened before it pays it. Money moves in USDC, often with no human watching.
 
@@ -27,6 +27,10 @@ In the last 8 days on Base:
 
 These figures are measured, not estimated. We do not multiply calls by a listed price. Where we cannot tell something, such as a seller's own test wallets, we say so instead of guessing.
 
+**[IMAGE: 02-agents.png]**
+
+![02-agents.png](article-media/02-agents.png)
+
 ## Agents first, then everyone
 
 The Agents tab puts three groups on top of that list:
@@ -36,6 +40,10 @@ The Agents tab puts three groups on top of that list:
 - **Top sellers of the last 7 days**, by USDC received on Base.
 
 Analytics ranks the same sellers four ways: revenue, paying wallets, paid calls and growth. Growth compares whole days only, so a half-indexed day never looks like a jump.
+
+**[IMAGE: 04-analytics.png]**
+
+![04-analytics.png](article-media/04-analytics.png)
 
 ## A profile for every agent
 
@@ -60,6 +68,10 @@ Four checks sit at the top. We measure each one ourselves:
 Pick a service, check its input, and ask for the price. Blue Agent shows you the exact amount and the wallet it goes to before anything is signed.
 
 You sign one USDC authorization on Base, straight to the seller. Blue Agent takes no fee and never holds your money. If the quote asks for more than the listed price, or pays a different wallet, we refuse to let you sign it.
+
+**[IMAGE: 03-hire.png]**
+
+![03-hire.png](article-media/03-hire.png)
 
 ## Sell your service
 
@@ -99,6 +111,10 @@ The same rule runs in Markets. Stock tokens live on two chains today: 9 Coinbase
 
 Each token page shows candles from 15 minutes to a day and recent trades from its deepest pool, its on-chain facts, and a swap your own wallet signs. Portfolio reads what a wallet holds on both chains in one view.
 
+**[IMAGE: 05-markets.png]**
+
+![05-markets.png](article-media/05-markets.png)
+
 ## Built for agents first
 
 Everything on the Exchange is also machine-readable:
@@ -120,10 +136,3 @@ Or open the Exchange at app.blueagent.dev/exchange, and Markets at app.blueagent
 
 Every figure says where it comes from. Every payment has a receipt on Base.
 
----
-
-## Before posting (not part of the article)
-
-- Everything the article describes is live on production since 2026-10-28 17:30 UTC (main 09a40190): modes, Agents (listed, Discovered, Sell, My usage, Following, Docs, leaderboards), Markets + Portfolio.
-- Re-read the four numbers from /exchange/analytics right before posting and keep "in the last N days" equal to the window the page shows. The stock-token counts (9 on Base, 203 on Robinhood Chain) come from the Markets page tiles.
-- Images are in `docs/article-media/` (see its README for the order and alt text).

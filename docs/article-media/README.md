@@ -17,3 +17,9 @@ fetch `https://blueagent.dev/api/hub/providers?limit=500` to `prov.json` next to
 `03-hire.png` uses a live, unsigned quote from www.ax1.vc read through
 `blueagent.dev/api/hire`; nothing was paid. `05-markets.png` is a screenshot of
 the Markets page (PR #516) with live GeckoTerminal prices.
+
+## Posting notes (not part of the article)
+
+- `[COVER: …]` goes in X's article cover slot; each `[IMAGE: …]` line is replaced by that image in the body.
+- Re-read the four numbers on app.blueagent.dev/exchange/analytics right before posting; keep "in the last N days" equal to the window the page shows.
+- Style kept: English, no em dashes, every number with its chain, no token mentions.
