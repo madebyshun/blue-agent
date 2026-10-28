@@ -27,6 +27,14 @@
     {
       "path": "/api/cron/brief",
       "schedule": "3 * * * *"
+    },
+    {
+      "path": "/api/cron/hub-index",
+      "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron/hub-providers",
+      "schedule": "17 4 * * *"
     }
   ]
 }

@@ -178,3 +178,8 @@ Mỗi PR qua gate (`tsc` · `npm test` · `verify:build`). Sau khi merge thì x�
   - (a) Lọc chỉ lấy thanh toán x402: khớp Transfer với event `AuthorizationUsed` trong cùng tx.
   - (b) Đo 30 ngày cho 30 provider mẫu.
   - (c) Ước lượng số request/ngày và chi phí KV.
+
+### P0 xong (2026-10-28)
+- Một ngày block Base (43.200 block), quét toàn bộ 1.813 payTo: **110.658 lần chuyển USDC, 110.062 lần là settle EIP-3009; 777 seller được trả tiền; tổng $3.821; 341 seller có từ 2 ví trả tiền trở lên.** Cổng G0 ĐẠT.
+- Chi phí: 439 lệnh RPC, khoảng 5 phút cho mỗi ngày dữ liệu → cron chạy tăng dần theo con trỏ, mỗi lần một cửa sổ 2.000 block.
+- Hiện thực: `lib/hub/exchange.ts`, `/api/cron/hub-index` (mỗi 10 phút) và `/api/cron/hub-providers` (mỗi ngày).
