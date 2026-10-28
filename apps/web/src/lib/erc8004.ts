@@ -142,3 +142,15 @@ export async function readReputation(tool?: string): Promise<Reputation> {
     return { registered: true, readable: false, count: 0, average: null };
   }
 }
+
+/** Does `wallet` own ERC-8004 agent `agentId` on Base right now? null = could not read. */
+export async function ownsAgent(wallet: string, agentId: string): Promise<boolean | null> {
+  if (!/^\d{1,12}$/.test(agentId)) return false;
+  try {
+    const c = createPublicClient({ chain: base, transport: http(process.env.BASE_RPC_URL || "https://mainnet.base.org") });
+    const owner = await c.readContract({ address: ERC8004_IDENTITY, abi: ERC8004_ABI, functionName: "ownerOf", args: [BigInt(agentId)] });
+    return owner.toLowerCase() === wallet.toLowerCase();
+  } catch (e) {
+    return /nonexistent|ERC721/i.test(String((e as Error).message)) ? false : null;
+  }
+}
