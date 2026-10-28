@@ -108,7 +108,7 @@ export default async function TokenPage({ params }: P) {
 
             <div className="grid gap-4 content-start">
               <section className={`${card} p-4`}>
-                <h2 className="mb-2 text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">TRADE</h2>
+                <h2 id="trade" className="mb-2 scroll-mt-4 text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">TRADE</h2>
                 <p className="mb-3 text-[10.5px] leading-[1.6] text-[#94A3B8]">
                   {chain === "base" ? "Swap from your wallet on Base through the 0x router." : "Swap USDG for it on Robinhood Chain through the RH router."} You review the route and sign; Blue Agent never holds funds.
                 </p>

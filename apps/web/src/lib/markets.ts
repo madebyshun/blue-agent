@@ -32,7 +32,7 @@ export type MarketChain = "base" | "robinhood";
 export const MARKET_CHAINS: MarketChain[] = ["base", "robinhood"];
 export const CHAIN_NAME: Record<MarketChain, string> = { base: "Base 8453", robinhood: "Robinhood Chain 4663" };
 
-export interface StockRow {
+export type StockRow = {
   chain: MarketChain;
   ticker: string;
   name: string;
@@ -44,10 +44,24 @@ export interface StockRow {
   liquidityUsd: number | null;
   /** False when GeckoTerminal refused the read: nulls then mean unknown, not "no pool". */
   read: boolean;
+} & MarketExtras;
+
+/** What the Markets table shows beyond price: all GeckoTerminal, all optional. */
+export interface MarketExtras {
+  /** Token image GeckoTerminal holds for THIS contract (null = none on file). */
+  logo: string | null;
+  change24hPct: number | null;
+  /** Market cap; GeckoTerminal's FDV when it has no market cap (`mcapIsFdv`). */
+  mcapUsd: number | null;
+  mcapIsFdv: boolean;
+  /** Deepest pool: its address, which side our token is, and when it was created. */
+  pool: string | null;
+  side: "base" | "quote";
+  poolCreatedAt: string | null;
 }
 
 /** Every stock token we have verified, both chains. Static; prices come after. */
-export function stockUniverse(): Omit<StockRow, "priceUsd" | "volume24hUsd" | "liquidityUsd" | "read">[] {
+export function stockUniverse(): Omit<StockRow, "priceUsd" | "volume24hUsd" | "liquidityUsd" | "read" | keyof MarketExtras>[] {
   return [
     ...BASE_STOCKS.map((s) => ({ chain: "base" as const, ticker: s.ticker, name: s.name, contract: getAddress(s.token), decimals: 8, kind: "stock" as const })),
     ...RWA_TOKENS.filter((t) => t.kind === "stock" || t.kind === "etf")
@@ -57,19 +71,38 @@ export function stockUniverse(): Omit<StockRow, "priceUsd" | "volume24hUsd" | "l
 
 const num = (v: unknown, max = 1e13) => { const n = Number(v); return Number.isFinite(n) && n >= 0 && n < max ? n : null; };
 
-type GtToken = { attributes?: { address?: string; price_usd?: string; volume_usd?: { h24?: string }; total_reserve_in_usd?: string } };
+type GtToken = {
+  attributes?: { address?: string; price_usd?: string; volume_usd?: { h24?: string }; total_reserve_in_usd?: string; image_url?: string | null; market_cap_usd?: string | null; fdv_usd?: string | null };
+  relationships?: { top_pools?: { data?: { id?: string }[] } };
+};
+type GtPx = { price: number | null; vol: number | null; liq: number | null } & MarketExtras;
+
+const logoOf = (u: unknown) => (typeof u === "string" && /^https:\/\//.test(u) && !/missing/.test(u) ? u : null);
+const pct = (v: unknown) => { const n = Number(v); return v != null && Number.isFinite(n) ? n : null; };
 
 /** GeckoTerminal multi-token read, 30 addresses a call, sequential (it 429s on bursts). */
-async function gtPrices(chain: MarketChain, addrs: string[]): Promise<{ px: Record<string, { price: number | null; vol: number | null; liq: number | null }>; unread: Set<string> }> {
-  const out: Record<string, { price: number | null; vol: number | null; liq: number | null }> = {};
+async function gtPrices(chain: MarketChain, addrs: string[]): Promise<{ px: Record<string, GtPx>; unread: Set<string> }> {
+  const out: Record<string, GtPx> = {};
   const unread = new Set<string>();
   for (let i = 0; i < addrs.length; i += 30) {
     const chunk = addrs.slice(i, i + 30);
-    const { body } = await gtJson<{ data?: GtToken[] }>(`/networks/${chain}/tokens/multi/${chunk.join(",")}`, 2);
+    const { body } = await gtJson<{ data?: GtToken[]; included?: GtPool[] }>(`/networks/${chain}/tokens/multi/${chunk.join(",")}?include=top_pools`, 2);
     if (!body) chunk.forEach((x) => unread.add(x));
+    const pools = new Map((body?.included ?? []).map((p) => [String((p as { id?: string }).id ?? ""), p]));
     for (const t of body?.data ?? []) {
       const a = t.attributes ?? {};
-      out[String(a.address ?? "").toLowerCase()] = { price: num(a.price_usd, 1e9), vol: num(a.volume_usd?.h24), liq: num(a.total_reserve_in_usd) };
+      const addr = String(a.address ?? "").toLowerCase();
+      const top = pools.get(String(t.relationships?.top_pools?.data?.[0]?.id ?? ""));
+      const pa = top?.attributes ?? {};
+      const ours = String(top?.relationships?.base_token?.data?.id ?? "").toLowerCase().endsWith(addr);
+      const mcap = num(a.market_cap_usd), fdv = num(a.fdv_usd);
+      out[addr] = {
+        price: num(a.price_usd, 1e9), vol: num(a.volume_usd?.h24), liq: num(a.total_reserve_in_usd),
+        logo: logoOf(a.image_url), mcapUsd: mcap ?? fdv, mcapIsFdv: mcap === null && fdv !== null,
+        change24hPct: top && ours ? pct((pa.price_change_percentage as Record<string, unknown> | undefined)?.h24) : null,
+        pool: top ? String(pa.address ?? "") || null : null, side: ours ? "base" : "quote",
+        poolCreatedAt: typeof pa.pool_created_at === "string" ? pa.pool_created_at : null,
+      };
     }
   }
   return { px: out, unread };
@@ -95,13 +128,17 @@ export const readStockMarkets = cacheWhole(async (): Promise<{ rows: StockRow[];
     if (unread.size) partial = true;
     for (const u of mine) {
       const p = px[u.contract.toLowerCase()];
-      priced.push({ ...u, priceUsd: p?.price ?? null, volume24hUsd: p?.vol ?? null, liquidityUsd: p?.liq ?? null, read: !unread.has(u.contract.toLowerCase()) });
+      priced.push({
+        ...u, priceUsd: p?.price ?? null, volume24hUsd: p?.vol ?? null, liquidityUsd: p?.liq ?? null, read: !unread.has(u.contract.toLowerCase()),
+        logo: p?.logo ?? null, change24hPct: p?.change24hPct ?? null, mcapUsd: p?.mcapUsd ?? null, mcapIsFdv: p?.mcapIsFdv ?? false,
+        pool: p?.pool ?? null, side: p?.side ?? "base", poolCreatedAt: p?.poolCreatedAt ?? null,
+      });
     }
   }
   const out = { rows: priced, readAt: new Date().toISOString() };
   if (partial) throw new Uncached(out);
   return out;
-}, "markets:stocks:v2", 300);
+}, "markets:stocks:v3", 300);
 
 export interface TrendingRow {
   chain: MarketChain;
@@ -114,6 +151,11 @@ export interface TrendingRow {
   change24hPct: number | null;
   volume24hUsd: number | null;
   liquidityUsd: number | null;
+  name: string;
+  logo: string | null;
+  mcapUsd: number | null;
+  mcapIsFdv: boolean;
+  poolCreatedAt: string | null;
 }
 
 const MAJORS = new Set(["BTC", "WBTC", "CBBTC", "ETH", "WETH", "USDC", "USDT", "USDG", "DAI", "SOL", "BNB", "XRP", "DOGE", "USDE", "EURC"]);
@@ -128,8 +170,9 @@ export const readTrending = cacheWhole(async (): Promise<{ rows: TrendingRow[]; 
   const rows: TrendingRow[] = [];
   const unread: MarketChain[] = [];
   for (const chain of MARKET_CHAINS) {
-    const { body } = await gtJson<{ data?: GtPool[] }>(`/networks/${chain}/trending_pools?page=1`, 2);
+    const { body } = await gtJson<{ data?: GtPool[]; included?: (GtPool & { id?: string })[] }>(`/networks/${chain}/trending_pools?page=1&include=base_token`, 2);
     if (!body) unread.push(chain);
+    const toks = new Map((body?.included ?? []).map((t) => [String(t.id ?? ""), t.attributes ?? {}]));
     const seen = new Set<string>();
     for (const p of body?.data ?? []) {
       const a = p.attributes ?? {};
@@ -146,13 +189,17 @@ export const readTrending = cacheWhole(async (): Promise<{ rows: TrendingRow[]; 
         change24hPct: (() => { const n = Number((a.price_change_percentage as Record<string, unknown> | undefined)?.h24); return Number.isFinite(n) ? n : null; })(),
         volume24hUsd: num((a.volume_usd as Record<string, unknown> | undefined)?.h24),
         liquidityUsd: num(a.reserve_in_usd),
+        name: String(toks.get(baseId)?.name ?? symbol),
+        logo: logoOf(toks.get(baseId)?.image_url),
+        mcapUsd: num(a.market_cap_usd) ?? num(a.fdv_usd), mcapIsFdv: num(a.market_cap_usd) === null && num(a.fdv_usd) !== null,
+        poolCreatedAt: typeof a.pool_created_at === "string" ? a.pool_created_at : null,
       });
     }
   }
   const out = { rows, readAt: new Date().toISOString(), unread };
   if (unread.length) throw new Uncached(out);
   return out;
-}, "markets:trending:v2", 300);
+}, "markets:trending:v3", 300);
 
 // ── Token page ───────────────────────────────────────────────────────────────
 
@@ -181,7 +228,7 @@ export const readCandles = cacheWhole(async (chain: MarketChain, pool: string, s
     `/networks/${chain}/pools/${pool}/ohlcv/${t.unit}?aggregate=${t.aggregate}&limit=${t.limit}&currency=usd&token=${side}`, 2);
   if (!r.body) throw new Uncached(null);
   return parseCandles(r.body.data?.attributes?.ohlcv_list);
-}, "markets:candles:v1", 60);
+}, "markets:candles:v1", 180);
 
 export interface TokenMarket {
   pool: { address: string; name: string; dex: string; liquidityUsd: number | null; volume24hUsd: number | null; change24hPct: number | null; priceUsd: number | null } | null;
