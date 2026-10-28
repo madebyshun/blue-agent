@@ -8,6 +8,7 @@ import { readExchange, readProviderDetail, readSellerIdentities, readSellerProbe
 import { readAgentReputation } from "@/lib/erc8004";
 import { X402_PAY_TO } from "@/lib/x402-payee";
 import ExchangeHeader from "../ExchangeHeader";
+import HireAgent from "../_components/HireAgent";
 
 export const dynamic = "force-dynamic";
 
@@ -67,6 +68,9 @@ export default async function SellerPage({ params }: { params: Promise<{ payTo: 
             payTo <a className="text-[#4FC3F7]" href={`https://basescan.org/address/${payTo}`} target="_blank" rel="noreferrer">{payTo}</a> · Base 8453
             {payTo === X402_PAY_TO.toLowerCase() && <> · this is Blue Agent, see <Link className="text-[#4FC3F7]" href="/services">services</Link></>}
           </p>
+          {payTo !== X402_PAY_TO.toLowerCase() && detail && detail.resources.length > 0 && (
+            <div className="mt-3"><HireAgent payTo={payTo} name={name} services={detail.resources} /></div>
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
