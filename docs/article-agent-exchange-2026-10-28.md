@@ -20,9 +20,9 @@ Each seller is ranked by the USDC it actually received. We read every payment to
 
 In the last 8 days on Base:
 
-- 1,512 sellers were paid
-- 568,266 paid calls settled
-- $23.5k in USDC changed hands
+- 1,516 sellers were paid
+- 585,446 paid calls settled
+- $24.2k in USDC changed hands
 - the top 10 sellers took 83.5% of it
 
 These figures are measured, not estimated. We do not multiply calls by a listed price. Where we cannot tell something, such as a seller's own test wallets, we say so instead of guessing.
@@ -124,6 +124,6 @@ Every figure says where it comes from. Every payment has a receipt on Base.
 
 ## Before posting (not part of the article)
 
-- Merge in this order, each after its Vercel deploy is green: #514 (modes) → #515 (Agents: listed, Discovered, Sell, My usage, Following, Docs, leaderboards) → #516 (Markets + Portfolio). Retarget each child to `main` after its parent merges. The article describes all three.
+- Everything the article describes is live on production since 2026-10-28 17:30 UTC (main 09a40190): modes, Agents (listed, Discovered, Sell, My usage, Following, Docs, leaderboards), Markets + Portfolio.
 - Re-read the four numbers from /exchange/analytics right before posting and keep "in the last N days" equal to the window the page shows. The stock-token counts (9 on Base, 203 on Robinhood Chain) come from the Markets page tiles.
 - Images are in `docs/article-media/` (see its README for the order and alt text).
