@@ -21,8 +21,8 @@ Each seller is ranked by the USDC it actually received. We read every payment to
 In the last 8 days on Base:
 
 - 1,516 sellers were paid
-- 585,446 paid calls settled
-- $24.2k in USDC changed hands
+- 589,803 paid calls settled
+- $24.3k in USDC changed hands
 - the top 10 sellers took 83.5% of it
 
 These figures are measured, not estimated. We do not multiply calls by a listed price. Where we cannot tell something, such as a seller's own test wallets, we say so instead of guessing.
@@ -97,7 +97,7 @@ Anyone can make up a rating with no proof behind it. Nobody can fake a settled t
 
 The same rule runs in Markets. Stock tokens live on two chains today: 9 Coinbase B20 stock tokens on Base and 203 stock tokens and ETFs on Robinhood Chain. Blue Agent lists every one we verified by contract, never by ticker, because NVDA on Base and NVDA on Robinhood Chain are two different tokens.
 
-Each token page shows a 7-day chart and recent trades from its deepest pool, its on-chain facts, and a swap your own wallet signs. Portfolio reads what a wallet holds on both chains in one view.
+Each token page shows candles from 15 minutes to a day and recent trades from its deepest pool, its on-chain facts, and a swap your own wallet signs. Portfolio reads what a wallet holds on both chains in one view.
 
 ## Built for agents first
 

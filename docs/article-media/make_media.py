@@ -9,10 +9,10 @@ LOGO = LOGO[LOGO.index("<svg"):]
 prov = json.load(open(os.path.join(SP, "prov.json")))
 rows = prov.get("providers") or prov.get("rows")
 
-# Analytics (prod /exchange/analytics, read 2026-10-28 17:27 UTC)
+# Analytics (prod /exchange/analytics, read 2026-10-28 18:14 UTC)
 DAYS = [("10-21", 2.4, 39059, True), ("10-22", 2.8, 58686, False), ("10-23", 3.6, 67685, False), ("10-24", 2.8, 51903, False),
-        ("10-25", 3.6, 122324, False), ("10-26", 2.9, 69085, False), ("10-27", 3.5, 100833, False), ("10-28", 2.5, 75871, True)]
-STATS = [("X402 VOLUME · 8D", "$24.2k", "USDC on Base, measured"), ("PAID CALLS", "585,446", "EIP-3009 settlements"),
+        ("10-25", 3.6, 122324, False), ("10-26", 2.9, 69085, False), ("10-27", 3.5, 100833, False), ("10-28", 2.6, 80228, True)]
+STATS = [("X402 VOLUME · 8D", "$24.3k", "USDC on Base, measured"), ("PAID CALLS", "589,803", "EIP-3009 settlements"),
          ("SELLERS PAID", "1,516", "of 1,817 on Base"), ("TOP 10 SHARE", "83.5%", "of the volume")]
 
 def usd(n):
@@ -107,7 +107,7 @@ pages["04-analytics"] = (1600, 900, page(1600, 900, f"""
   <div style='display:grid;grid-template-columns:repeat(4,1fr);gap:14px'>{tiles(STATS, 30)}</div>
   <div class='card' style='padding:20px 24px;height:300px;display:flex;flex-direction:column'><div class='lbl'>USDC SETTLED PER DAY ON BASE <span class='sub' style='letter-spacing:0'>· lighter: first (mid-backfill) and today (partial)</span></div><div style='flex:1;display:flex;gap:16px;margin-top:14px'>{bars}</div></div>
   <div style='display:grid;grid-template-columns:repeat(3,1fr);gap:14px'>{board("REVENUE", "8d, USDC", rev)}{board("PAYING WALLETS", "distinct payers", wal)}{board("PAID CALLS", "settlements", cal)}</div>
-  <div class='sub' style='font-size:13px;margin-top:auto'>Source: app.blueagent.dev/exchange/analytics, read 2026-10-28 17:27 UTC. Gross USDC; a seller's own test wallets are not subtracted.</div>
+  <div class='sub' style='font-size:13px;margin-top:auto'>Source: app.blueagent.dev/exchange/analytics, read 2026-10-28 18:14 UTC. Gross USDC; a seller's own test wallets are not subtracted.</div>
 </div>"""))
 
 for name, (w, hgt, html) in pages.items():

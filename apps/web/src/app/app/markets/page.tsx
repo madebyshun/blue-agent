@@ -30,6 +30,12 @@ export default async function MarketsPage() {
       createdAt: r.poolCreatedAt, pool: r.pool || null, side: "base" as const, read: true,
     })),
   ];
+  // An image GeckoTerminal hands to many contracts is the ISSUER's mark, not the
+  // company's (every Robinhood stock token carries Robinhood's feather). Drop it
+  // so the row falls back to its own company mark (StockMark) or a monogram.
+  const uses = new Map<string, number>();
+  for (const r of rows) if (r.logo) uses.set(r.logo, (uses.get(r.logo) ?? 0) + 1);
+  for (const r of rows) if (r.logo && (uses.get(r.logo) ?? 0) >= 3) r.logo = null;
   const count = (c: MarketChain) => stocks.rows.filter((r) => r.chain === c).length;
   const vol = (c: MarketChain) => stocks.rows.filter((r) => r.chain === c).reduce((a, r) => a + (r.volume24hUsd ?? 0), 0);
 
