@@ -8,7 +8,10 @@
  *              (lib/robinhood/rwa-registry). Matched by CONTRACT, never ticker:
  *              NVDA is two different tokens on the two chains.
  *   market     GeckoTerminal's keyless API: price, 24h volume, liquidity, the
- *              deepest pool, its hourly candles and its recent trades.
+ *              deepest pool, its OHLCV candles and its recent trades. These are
+ *              DEX numbers: GeckoTerminal builds them from the pool's own swaps
+ *              (Aerodrome / Uniswap on Base, Uniswap v4 on RH); the page names
+ *              the pool and the DEX so either can be checked on chain.
  *   on-chain   balances for the portfolio, read from each chain's RPC.
  *
  * Trending crypto is GeckoTerminal's list as-is, marked "unchecked": nothing here
@@ -153,12 +156,41 @@ export const readTrending = cacheWhole(async (): Promise<{ rows: TrendingRow[]; 
 
 // ── Token page ───────────────────────────────────────────────────────────────
 
+/** [unix seconds, open, high, low, close, volume usd] */
+export type Candle = [number, number, number, number, number, number];
+
+export const TIMEFRAMES = {
+  "15m": { unit: "minute", aggregate: 15, limit: 192 },
+  "1h": { unit: "hour", aggregate: 1, limit: 168 },
+  "4h": { unit: "hour", aggregate: 4, limit: 180 },
+  "1d": { unit: "day", aggregate: 1, limit: 180 },
+} as const;
+export type Timeframe = keyof typeof TIMEFRAMES;
+
+function parseCandles(list: number[][] | undefined): Candle[] {
+  return (list ?? [])
+    .map((r) => r.slice(0, 6).map(Number) as Candle)
+    .filter((c) => c.length === 6 && c.every(Number.isFinite) && c[2] >= c[3] && c[3] > 0)
+    .sort((x, y) => x[0] - y[0]);
+}
+
+/** Candles for one pool and timeframe, cached 60s when GT answered. */
+export const readCandles = cacheWhole(async (chain: MarketChain, pool: string, side: "base" | "quote", tf: Timeframe): Promise<Candle[] | null> => {
+  const t = TIMEFRAMES[tf];
+  const r = await gtJson<{ data?: { attributes?: { ohlcv_list?: number[][] } } }>(
+    `/networks/${chain}/pools/${pool}/ohlcv/${t.unit}?aggregate=${t.aggregate}&limit=${t.limit}&currency=usd&token=${side}`, 2);
+  if (!r.body) throw new Uncached(null);
+  return parseCandles(r.body.data?.attributes?.ohlcv_list);
+}, "markets:candles:v1", 60);
+
 export interface TokenMarket {
   pool: { address: string; name: string; dex: string; liquidityUsd: number | null; volume24hUsd: number | null; change24hPct: number | null; priceUsd: number | null } | null;
   /** Up to three deepest pools, for the side panel. */
   pools: { name: string; dex: string; liquidityUsd: number | null }[];
-  /** Hourly closes, oldest first: [unix seconds, usd]. Empty + candlesRead=false when GT refused. */
-  candles: [number, number][];
+  /** 1h OHLCV, oldest first. Empty + candlesRead=false when GT refused. */
+  candles: Candle[];
+  /** Whether our token is the pool's base token (GeckoTerminal's `token=` side). */
+  side: "base" | "quote";
   candlesRead: boolean;
   trades: { at: string; side: "buy" | "sell"; usd: number | null; tx: string; from: string }[];
   tradesRead: boolean;
@@ -173,7 +205,7 @@ export interface TokenMarket {
  */
 async function fetchTokenMarket(chain: MarketChain, token: string): Promise<TokenMarket> {
   const t = token.toLowerCase();
-  const empty = (status: TokenMarket["status"]): TokenMarket => ({ pool: null, pools: [], candles: [], candlesRead: status !== "unread", trades: [], tradesRead: status !== "unread", status });
+  const empty = (status: TokenMarket["status"]): TokenMarket => ({ pool: null, pools: [], candles: [], side: "base", candlesRead: status !== "unread", trades: [], tradesRead: status !== "unread", status });
   const pools = await gtJson<{ data?: GtPool[] }>(`/networks/${chain}/tokens/${t}/pools?page=1`, 2);
   if (pools.status === 404) return empty("none_listed");
   if (!pools.body) throw new Uncached(empty("unread"));
@@ -192,10 +224,7 @@ async function fetchTokenMarket(chain: MarketChain, token: string): Promise<Toke
   const top = ranked.slice(0, 3).map(({ p, liq }) => ({ name: String(p.attributes?.name ?? "?"), dex: String(p.relationships?.dex?.data?.id ?? "?"), liquidityUsd: liq }));
   const ohlcv = await gtJson<{ data?: { attributes?: { ohlcv_list?: number[][] } } }>(`/networks/${chain}/pools/${addr}/ohlcv/hour?aggregate=1&limit=168&currency=usd&token=${ours ? "base" : "quote"}`, 2);
   const trades = await gtJson<{ data?: { attributes?: Record<string, unknown> }[] }>(`/networks/${chain}/pools/${addr}/trades`, 2);
-  const candles = (ohlcv.body?.data?.attributes?.ohlcv_list ?? [])
-    .map((r) => [Number(r[0]), Number(r[4])] as [number, number])
-    .filter(([ts, c]) => Number.isFinite(ts) && Number.isFinite(c))
-    .sort((x, y) => x[0] - y[0]);
+  const candles = parseCandles(ohlcv.body?.data?.attributes?.ohlcv_list);
   const tr = (trades.body?.data ?? []).slice(0, 25).map((d) => {
     const x = d.attributes ?? {};
     const kind = String(x.kind ?? "");
@@ -203,15 +232,15 @@ async function fetchTokenMarket(chain: MarketChain, token: string): Promise<Toke
     const buy = ours ? kind === "buy" : kind === "sell";
     return { at: String(x.block_timestamp ?? ""), side: (buy ? "buy" : "sell") as "buy" | "sell", usd: num(x.volume_in_usd), tx: String(x.tx_hash ?? ""), from: String(x.tx_from_address ?? "") };
   });
-  const out: TokenMarket = { pool, pools: top, candles, candlesRead: !!ohlcv.body, trades: tr, tradesRead: !!trades.body, status: "ok" };
+  const out: TokenMarket = { pool, pools: top, candles, side: ours ? "base" : "quote", candlesRead: !!ohlcv.body, trades: tr, tradesRead: !!trades.body, status: "ok" };
   if (!ohlcv.body || !trades.body) throw new Uncached(out);
   return out;
 }
 
-const cachedTokenMarket = cacheWhole(fetchTokenMarket, "markets:token:v2", 120);
+const cachedTokenMarket = cacheWhole(fetchTokenMarket, "markets:token:v3", 120);
 
 export async function readTokenMarket(chain: MarketChain, token: string): Promise<TokenMarket> {
-  return cachedTokenMarket(chain, token).catch(() => ({ pool: null, pools: [], candles: [], candlesRead: false, trades: [], tradesRead: false, status: "unread" as const }));
+  return cachedTokenMarket(chain, token).catch(() => ({ pool: null, pools: [], candles: [], side: "base" as const, candlesRead: false, trades: [], tradesRead: false, status: "unread" as const }));
 }
 
 // ── Portfolio ────────────────────────────────────────────────────────────────

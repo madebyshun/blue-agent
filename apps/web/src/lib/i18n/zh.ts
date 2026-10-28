@@ -168,6 +168,7 @@ export const zh: Dict = {
     following: "关注",
     markets: "市场",
     portfolio: "投资组合",
+    launch_token: "发行代币",
     create_agent: "创建代理",
     stocks: "股票",
     group_exchange: "交易所",

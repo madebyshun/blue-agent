@@ -7,6 +7,7 @@ import { base } from "wagmi/chains";
 import { createPublicClient, encodeFunctionData, http, isAddress, parseEther, parseEventLogs } from "viem";
 import { ConnectButton } from "@/components/ConnectModal";
 import ExchangeHeader from "../ExchangeHeader";
+import MarketsHeader from "../../markets/MarketsHeader";
 import {
   QUADRA_FACTORY_V3 as FACTORY, QUADRA_V3_ABI as ABI, QUADRA_V3_EXPECTS as EXPECT, BLUE_REFERRER, ETH_QUOTE,
   REVENUE_SHARE_DEPLOYER as RSD, REVENUE_SHARE_DEPLOYER_ABI as RSD_ABI, MAX_AGENT_BPS, stakerWording,
@@ -41,7 +42,8 @@ async function preflight(): Promise<Check> {
   return { ok: why.length === 0, why, referrerOk: approved };
 }
 
-export default function TokenizeClient() {
+/** `markets`: rendered as Markets → Launch token (/markets/launch); otherwise the Exchange tab. */
+export default function TokenizeClient({ markets = false }: { markets?: boolean } = {}) {
   const { address, chainId, isConnected } = useAccount();
   const { switchChainAsync } = useSwitchChain();
   const { sendTransactionAsync } = useSendTransaction();
@@ -144,13 +146,13 @@ export default function TokenizeClient() {
 
   return (
     <div className="flex flex-col h-full bg-[#050508] overflow-hidden font-mono [&_button]:font-mono [&_a]:font-mono [&_input]:font-mono [&_textarea]:font-mono">
-      <ExchangeHeader active="tokenize" chip="Quadra launchpad v3 · Base 8453" />
+      {markets ? <MarketsHeader active="launch" chip="Quadra launchpad v3 · Base 8453" /> : <ExchangeHeader active="tokenize" chip="Quadra launchpad v3 · Base 8453" />}
       <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="px-5 py-[18px] grid gap-5 w-full">
           <div>
-            <h1 className="text-[15px] font-semibold text-[#E2E8F0]">Tokenize an agent</h1>
+            <h1 className="text-[15px] font-semibold text-[#E2E8F0]">{markets ? "Launch a token" : "Tokenize an agent"}</h1>
             <p className="mt-1.5 max-w-[860px] text-[11px] leading-[1.7] text-[#94A3B8]">
-              Launch a coin for your agent on Quadra&apos;s launchpad on Base 8453. The coin has no admin and a fixed supply, and its whole supply sits
+              {markets ? "Launch a token on Quadra's launchpad on Base 8453, for yourself or for an agent." : "Launch a coin for your agent on Quadra's launchpad on Base 8453."} The coin has no admin and a fixed supply, and its whole supply sits
               in a Uniswap v4 pool as liquidity nobody can pull. Every trade pays the pool fee, and 80% of it can go straight to your agent&apos;s wallet
               to fund its work. You sign every step from your own wallet.
             </p>

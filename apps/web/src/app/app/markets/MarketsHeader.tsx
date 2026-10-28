@@ -4,12 +4,11 @@ import Link from "next/link";
 
 const TABS = [
   { id: "markets", href: "/markets", label: "Markets" },
+  { id: "launch", href: "/markets/launch", label: "Launch token" },
   { id: "portfolio", href: "/portfolio", label: "Portfolio" },
-  { id: "hood", href: "/hood", label: "Stock signals" },
-  { id: "wallet", href: "/wallet", label: "Wallet" },
 ] as const;
 
-export default function MarketsHeader({ active, chip }: { active: "markets" | "portfolio" | null; chip?: string }) {
+export default function MarketsHeader({ active, chip }: { active: "markets" | "launch" | "portfolio" | null; chip?: string }) {
   const tab = (t: (typeof TABS)[number]) => (
     <Link key={t.id} href={t.href}
       className={`font-mono text-[10.5px] rounded-[7px] px-2.5 py-[5px] border transition-colors ${active === t.id ? "border-[#2a3350] bg-[#0F121A] text-[#E2E8F0]" : "border-[#1A1A2E] text-[#94A3B8] hover:text-[#E2E8F0]"}`}>

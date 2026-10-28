@@ -13,6 +13,7 @@ import { CHAIN_NAME, readTokenMarket, type MarketChain } from "@/lib/markets";
 import { explorerTokenUrl } from "@/lib/blue-hood/detail-support";
 import MarketsHeader from "../../MarketsHeader";
 import MarketSwap from "../../MarketSwap";
+import CandleChart from "../../CandleChart";
 
 export const dynamic = "force-dynamic";
 
@@ -28,30 +29,6 @@ const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 const card = "rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14]";
 const txUrl = (c: MarketChain, tx: string) => c === "base" ? `https://basescan.org/tx/${tx}` : `https://robinhoodchain.blockscout.com/tx/${tx}`;
 
-function Chart({ candles }: { candles: [number, number][] }) {
-  if (candles.length < 2) return <p className="text-[10.5px] text-[#64748B] py-10 text-center">No hourly candles for this pool yet.</p>;
-  const W = 900, H = 220, pad = 6;
-  const vs = candles.map((c) => c[1]);
-  const lo = Math.min(...vs), hi = Math.max(...vs), span = hi - lo || hi || 1;
-  const x = (i: number) => (i / (candles.length - 1)) * W;
-  const y = (v: number) => pad + (1 - (v - lo) / span) * (H - 2 * pad);
-  const d = candles.map((c, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(c[1]).toFixed(1)}`).join(" ");
-  const up = vs[vs.length - 1] >= vs[0];
-  const col = up ? "#34D399" : "#F87171";
-  const day = (s: number) => new Date(s * 1000).toISOString().slice(5, 10);
-  return (
-    <div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-[220px]" preserveAspectRatio="none">
-        <path d={`${d} L${W},${H} L0,${H} Z`} fill={col} opacity={0.08} />
-        <path d={d} fill="none" stroke={col} strokeWidth={1.6} vectorEffect="non-scaling-stroke" />
-      </svg>
-      <div className="mt-1 flex justify-between text-[9px] text-[#475569]">
-        <span>{day(candles[0][0])}</span><span>low {usd(lo)} · high {usd(hi)}</span><span>{day(candles[candles.length - 1][0])}</span>
-      </div>
-    </div>
-  );
-}
-
 export default async function TokenPage({ params }: P) {
   const { chain: c, address } = await params;
   if ((c !== "base" && c !== "robinhood") || !isAddress(address)) notFound();
@@ -64,7 +41,7 @@ export default async function TokenPage({ params }: P) {
   const stock = ov?.stockToken ?? null;
   const symbol = ov?.onchain.symbol ?? stock?.ticker ?? short(token);
   const price = mk.pool?.priceUsd ?? null;
-  const first = mk.candles[0]?.[1], last = mk.candles[mk.candles.length - 1]?.[1];
+  const first = mk.candles[0]?.[1], last = mk.candles[mk.candles.length - 1]?.[4];
   const ch7 = first && last ? ((last - first) / first) * 100 : null;
 
   return (
@@ -91,7 +68,7 @@ export default async function TokenPage({ params }: P) {
             {[
               ["PRICE", usd(price), mk.pool ? `${mk.pool.name} · ${mk.pool.dex}` : "no pool listed"],
               ["24H", mk.pool?.change24hPct == null ? "—" : `${mk.pool.change24hPct >= 0 ? "+" : ""}${mk.pool.change24hPct.toFixed(2)}%`, "deepest pool"],
-              ["7D", ch7 === null ? "—" : `${ch7 >= 0 ? "+" : ""}${ch7.toFixed(2)}%`, "first vs last hourly close"],
+              ["7D", ch7 === null ? "—" : `${ch7 >= 0 ? "+" : ""}${ch7.toFixed(2)}%`, "first open vs last close, 1h candles"],
               ["24H VOLUME", usd(mk.pool?.volume24hUsd ?? null), "deepest pool"],
               ["LIQUIDITY", usd(mk.pool?.liquidityUsd ?? null), "deepest pool"],
             ].map(([l, v, s]) => (
@@ -106,8 +83,10 @@ export default async function TokenPage({ params }: P) {
           <div className="grid gap-4 xl:grid-cols-[1fr_380px]">
             <div className="grid gap-4 content-start">
               <section className={`${card} p-4`}>
-                <h2 className="mb-3 text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">PRICE · 7 DAYS, HOURLY <span className="tracking-normal text-[#475569]">· GeckoTerminal</span></h2>
-                {mk.status === "unread" || !mk.candlesRead ? <p className="text-[10.5px] text-[#64748B] py-10 text-center">GeckoTerminal is rate-limiting right now; reload in a minute.</p> : <Chart candles={mk.candles} />}
+                <h2 className="mb-3 text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">PRICE <span className="tracking-normal text-[#475569]">· {mk.pool ? `${mk.pool.name} on ${mk.pool.dex}` : "no pool"}</span></h2>
+                {mk.status === "none_listed" || !mk.pool ? <p className="text-[10.5px] text-[#64748B] py-10 text-center">No DEX pool lists this token yet.</p>
+                  : <CandleChart chain={chain} pool={mk.pool.address} side={mk.side} initial={mk.candlesRead ? mk.candles : []}
+                      source={`DEX swaps · pool ${mk.pool.address.slice(0, 6)}…${mk.pool.address.slice(-4)} · via GeckoTerminal`} />}
               </section>
               <section className={`${card} overflow-hidden`}>
                 <h2 className="border-b border-[#1A1A2E] px-4 py-3 text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">RECENT TRADES <span className="tracking-normal text-[#475569]">· deepest pool</span></h2>
@@ -149,7 +128,6 @@ export default async function TokenPage({ params }: P) {
                     <Fragment key={String(k)}><dt className="text-[#64748B]">{k}</dt><dd className="truncate text-[#E2E8F0]">{String(v)}</dd></Fragment>
                   ))}
                 </dl>
-                {stock && <Link href="/hood" className="mt-3 inline-block text-[10.5px] text-[#4FC3F7]">Oracle vs DEX for {stock.ticker} → Stock signals</Link>}
               </section>
               {mk.pools.length ? (
                 <section className={`${card} p-4`}>

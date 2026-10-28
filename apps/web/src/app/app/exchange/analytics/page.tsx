@@ -5,19 +5,17 @@ import type { Metadata } from "next";
 import { readExchange } from "@/lib/hub/exchange";
 import Link from "next/link";
 import ExchangeHeader from "../ExchangeHeader";
+import DailyChart from "./DailyChart";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Analytics — Agent Exchange" };
 
 const usd = (n: number) => (n >= 1000 ? `$${(n / 1000).toFixed(1)}k` : `$${n.toFixed(2)}`);
-const ymd = (d: string) => `${d.slice(4, 6)}-${d.slice(6)}`;
 
 export default async function AnalyticsPage() {
   const ex = await readExchange(30);
   const days = ex.daily;
   const tot = days.reduce((a, d) => ({ usd: a.usd + d.usd, calls: a.calls + d.calls }), { usd: 0, calls: 0 });
-  const peakUsd = Math.max(0.01, ...days.map((d) => d.usd));
-  const peakCalls = Math.max(1, ...days.map((d) => d.calls));
   const top = ex.rows.slice(0, 10);
   const share = (u: number) => (tot.usd ? Math.round((u / tot.usd) * 1000) / 10 : 0);
   // Growth compares whole days only: the first indexed day began mid-backfill and
@@ -43,15 +41,6 @@ export default async function AnalyticsPage() {
       {s && <span className="text-[10px] text-[#475569]">{s}</span>}
     </div>
   );
-  const Bars = ({ v, peak, fmt }: { v: number[]; peak: number; fmt: (n: number) => string }) => (
-    <div className="flex h-[150px] items-end gap-1">
-      {v.map((n, i) => (
-        <div key={i} className="flex h-full flex-1 flex-col justify-end" title={`${ymd(days[i].day)}: ${fmt(n)}${i === v.length - 1 ? " (today, partial)" : i === 0 ? " (backfill began mid-day)" : ""}`}>
-          <span className={`block rounded-t-sm ${i === v.length - 1 || i === 0 ? "bg-[#1f6f93]/45" : "bg-[#1f6f93]"}`} style={{ height: `${Math.max(1, (n / peak) * 100)}%` }} />
-        </div>
-      ))}
-    </div>
-  );
 
   return (
     <div className="flex flex-col h-full bg-[#050508] overflow-hidden font-mono [&_a]:font-mono">
@@ -75,28 +64,24 @@ export default async function AnalyticsPage() {
 
           {days.length === 0 ? <p className="mt-6 text-[10.5px] text-[#64748B]">{ex.readable ? "Indexing the first day of Base blocks." : "Index unreadable right now."}</p> : (
             <>
-              <L t="VOLUME PER DAY" s="USDC settled on Base · lighter bars: today (partial) and the first, mid-backfill day" />
-              <div className={card}>
-                <Bars v={days.map((d) => d.usd)} peak={peakUsd} fmt={usd} />
-                <div className="mt-2 flex justify-between text-[9px] text-[#475569]"><span>{ymd(days[0].day)}</span><span>{ymd(days[days.length - 1].day)}</span></div>
-              </div>
-              <div className="grid gap-2.5 lg:grid-cols-2">
-                <div>
-                  <L t="PAID CALLS PER DAY" />
-                  <div className={card}><Bars v={days.map((d) => d.calls)} peak={peakCalls} fmt={(n) => `${n} calls`} /></div>
-                </div>
-                <div>
-                  <L t="TOP SELLERS" s="share of the window's volume" />
-                  <div className={`${card} grid gap-1.5`}>
-                    {top.map((r) => (
-                      <div key={r.payTo} className="flex items-center gap-3 text-[10.5px]">
-                        <span className="w-[40%] truncate text-[#E2E8F0]">{r.hosts[0] ?? r.payTo.slice(0, 10)}</span>
-                        <span className="flex-1 h-1.5 rounded-full bg-[#1A1A2E] overflow-hidden"><span className="block h-full bg-[#1f6f93]" style={{ width: `${share(r.usd)}%` }} /></span>
-                        <span className="w-[70px] text-right text-[#94A3B8] tabular-nums">{usd(r.usd)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+              <L t="PER DAY" s="USDC settled on Base over x402 · pick a metric, hover a day" />
+              <div className={card}><DailyChart days={days} /></div>
+              <L t="TOP SELLERS" s={`share of the ${ex.daysCovered}-day volume · click for the seller's page`} />
+              <div className={`${card} grid gap-0.5`}>
+                {top.map((r, i) => (
+                  <Link key={r.payTo} href={`/exchange/${r.payTo}`} className="group flex items-center gap-3 rounded-md px-1.5 py-1.5 text-[10.5px] hover:bg-[#0F121A]">
+                    <span className="w-5 text-[#475569] tabular-nums">{i + 1}</span>
+                    <span className="w-[30%] min-w-0">
+                      <span className="block truncate text-[#E2E8F0] group-hover:text-[#4FC3F7]">{r.hosts[0] ?? r.payTo.slice(0, 10)}</span>
+                      <span className="block truncate text-[9px] text-[#475569] font-prose">{r.title || "—"}</span>
+                    </span>
+                    <span className="flex-1 h-1.5 rounded-full bg-[#1A1A2E] overflow-hidden"><span className="block h-full bg-[#1f6f93] group-hover:bg-[#4FC3F7]" style={{ width: `${share(r.usd)}%` }} /></span>
+                    <span className="w-[52px] text-right text-[#64748B] tabular-nums">{share(r.usd)}%</span>
+                    <span className="w-[86px] text-right text-[#94A3B8] tabular-nums">{r.paidCalls.toLocaleString("en-US")} calls</span>
+                    <span className="w-[80px] text-right text-[#94A3B8] tabular-nums">{r.payers >= 2000 ? "2,000+" : r.payers.toLocaleString("en-US")} wallets</span>
+                    <span className="w-[70px] text-right text-[#E2E8F0] tabular-nums">{usd(r.usd)}</span>
+                  </Link>
+                ))}
               </div>
               <L t="LEADERBOARDS" s="Base 8453 · measured from x402 settlements" />
               <div className="grid gap-2.5 md:grid-cols-2 2xl:grid-cols-4">
