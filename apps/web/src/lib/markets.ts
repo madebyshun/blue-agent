@@ -20,13 +20,15 @@
  * impostor and a list is the wrong place to make the reader find out.
  */
 import { unstable_cache } from "next/cache";
-import { createPublicClient, formatUnits, getAddress, http, isAddress, type Address } from "viem";
+import { createPublicClient, erc20Abi, formatUnits, parseAbiItem, toFunctionSelector, getAddress, http, isAddress, type Address } from "viem";
 import { BASE_STOCKS } from "@/lib/base-stocks/registry";
 import { RWA_TOKENS } from "@/lib/robinhood/rwa-registry";
+import { base } from "viem/chains";
 import { robinhoodMainnet } from "@/lib/robinhood/chains";
 import { launchClient } from "@/lib/launchpads/resolve";
 import { WALLET_CHAINS } from "@/lib/wallet/chains";
 import { gtJson } from "@/lib/launchpads/gt";
+import { BLUE_REFERRER, QUADRA_FACTORY_V3 } from "@/lib/agent-coin";
 
 export type MarketChain = "base" | "robinhood";
 export const MARKET_CHAINS: MarketChain[] = ["base", "robinhood"];
@@ -200,6 +202,66 @@ export const readTrending = cacheWhole(async (): Promise<{ rows: TrendingRow[]; 
   if (unread.length) throw new Uncached(out);
   return out;
 }, "markets:trending:v3", 300);
+
+// ── Launched through Blue Agent ──────────────────────────────────────────────
+//
+// Tokens launched on Quadra's v3 factory on Base 8453 FROM Blue Agent's launch
+// page. The Launched event does not carry the referrer, so each launch tx is
+// read and kept only if its calldata calls launch() with Blue Agent's referrer
+// (0x884f…7a9b) — checked in the input bytes, which also covers a smart wallet
+// that wraps the call. Nothing self-reported: a launch elsewhere never shows.
+
+const QUADRA_V3_BLOCK = 52_929_530n;   // v3 deploy, quadra contracts/broadcast run-latest
+const LAUNCHED = parseAbiItem("event Launched(address indexed token, address indexed creator, bytes32 indexed poolId, uint256 devBuyIn, uint256 devBuyTokens)");
+const LAUNCH_SELECTOR = toFunctionSelector("launch(string,string,string,bytes32,address,uint256,uint24,address)").slice(2);
+const REFERRER_WORD = BLUE_REFERRER.slice(2).toLowerCase().padStart(64, "0");
+const SPAN = 49_000n;   // publicnode refuses getLogs past 50,000 blocks (measured 2026-10-28)
+
+export interface BlueLaunch { token: Address; creator: Address; tx: string; block: string; at: string | null; name: string | null; symbol: string | null }
+
+/** Launches made through Blue Agent, newest first. Cached 2 min when every read succeeded. */
+export const readBlueLaunches = cacheWhole(async (): Promise<{ launches: BlueLaunch[]; readAt: string }> => {
+  const c = createPublicClient({ chain: base, transport: http(process.env.HUB_RPC_URL || "https://base-rpc.publicnode.com", { retryCount: 2 }) });
+  const head = await c.getBlockNumber();
+  const logs = [];
+  for (let a = QUADRA_V3_BLOCK; a <= head; a += SPAN) {
+    logs.push(...(await c.getLogs({ address: QUADRA_FACTORY_V3, event: LAUNCHED, fromBlock: a, toBlock: a + SPAN - 1n < head ? a + SPAN - 1n : head })));
+  }
+  const ours: BlueLaunch[] = [];
+  for (const l of logs.reverse().slice(0, 200)) {
+    const tx = await c.getTransaction({ hash: l.transactionHash! });
+    const input = tx.input.toLowerCase();
+    if (!input.includes(LAUNCH_SELECTOR) || !input.includes(REFERRER_WORD)) continue;
+    ours.push({ token: getAddress(l.args.token!), creator: getAddress(l.args.creator!), tx: l.transactionHash!, block: String(l.blockNumber), at: null, name: null, symbol: null });
+  }
+  await Promise.all(ours.map(async (o) => {
+    const [name, symbol, blk] = await Promise.all([
+      c.readContract({ address: o.token, abi: erc20Abi, functionName: "name" }).catch(() => null),
+      c.readContract({ address: o.token, abi: erc20Abi, functionName: "symbol" }).catch(() => null),
+      c.getBlock({ blockNumber: BigInt(o.block) }).catch(() => null),
+    ]);
+    o.name = name; o.symbol = symbol; o.at = blk ? new Date(Number(blk.timestamp) * 1000).toISOString() : null;
+  }));
+  return { launches: ours, readAt: new Date().toISOString() };
+}, "markets:blue-launches:v1", 120);
+
+/** Blue Agent launches with GeckoTerminal market data (a fresh launch is often not indexed yet). */
+export async function readBlueLaunchMarkets(): Promise<{ rows: (BlueLaunch & { priceUsd: number | null; volume24hUsd: number | null; liquidityUsd: number | null; read: boolean } & MarketExtras)[]; readAt: string | null }> {
+  const { launches, readAt } = await readBlueLaunches();
+  if (!launches.length) return { rows: [], readAt };
+  const { px, unread } = await gtPrices("base", launches.map((l) => l.token.toLowerCase()));
+  return {
+    readAt,
+    rows: launches.map((l) => {
+      const p = px[l.token.toLowerCase()];
+      return {
+        ...l, priceUsd: p?.price ?? null, volume24hUsd: p?.vol ?? null, liquidityUsd: p?.liq ?? null, read: !unread.has(l.token.toLowerCase()),
+        logo: p?.logo ?? null, change24hPct: p?.change24hPct ?? null, mcapUsd: p?.mcapUsd ?? null, mcapIsFdv: p?.mcapIsFdv ?? false,
+        pool: p?.pool ?? null, side: p?.side ?? "base", poolCreatedAt: p?.poolCreatedAt ?? l.at,
+      };
+    }),
+  };
+}
 
 // ── Token page ───────────────────────────────────────────────────────────────
 

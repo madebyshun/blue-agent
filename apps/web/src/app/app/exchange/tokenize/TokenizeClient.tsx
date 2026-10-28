@@ -208,7 +208,8 @@ export default function TokenizeClient({ markets = false }: { markets?: boolean 
                 {launch.token && (
                   <p className="text-[10.5px] text-[#94A3B8]">
                     Token <a className="text-[#4FC3F7]" href={`https://basescan.org/token/${launch.token}`} target="_blank" rel="noreferrer">{short(launch.token)} ↗</a> ·{" "}
-                    <a className="text-[#4FC3F7]" href={`https://dexscreener.com/base/${launch.token}`} target="_blank" rel="noreferrer">chart ↗</a>
+                    <Link className="text-[#4FC3F7]" href={`/markets/base/${launch.token}`}>its Markets page</Link> ·{" "}
+                    <a className="text-[#4FC3F7]" href={`https://dexscreener.com/base/${launch.token}`} target="_blank" rel="noreferrer">DexScreener ↗</a>
                   </p>
                 )}
                 <p className="text-[9.5px] text-[#475569]">Factory <a className="text-[#4FC3F7]" href={`https://basescan.org/address/${FACTORY}`} target="_blank" rel="noreferrer">{short(FACTORY)}</a> · Quadra v3 is not audited.</p>

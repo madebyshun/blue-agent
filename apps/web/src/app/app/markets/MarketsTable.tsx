@@ -11,7 +11,7 @@ import StockMark from "@/components/blue-hood/StockMark";
 
 export interface MarketRow {
   chain: "base" | "robinhood";
-  kind: "stock" | "etf" | "crypto";
+  kind: "stock" | "etf" | "crypto" | "launch";
   token: string;
   symbol: string;
   name: string;
@@ -34,7 +34,7 @@ const CH = { base: "Base", robinhood: "Robinhood" } as const;
 const usd = (n: number | null) => n === null ? "—" : n >= 1e9 ? `$${(n / 1e9).toFixed(2)}B` : n >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(1)}K` : n >= 1 ? `$${n.toFixed(2)}` : n > 0 ? `$${n.toPrecision(3)}` : "$0";
 const ageDays = (iso: string | null) => (iso ? Math.max(0, Math.floor((Date.now() - Date.parse(iso)) / 86_400_000)) : null);
 const age = (iso: string | null) => { const d = ageDays(iso); return d === null ? "—" : d === 0 ? `${Math.max(1, Math.floor((Date.now() - Date.parse(iso!)) / 3_600_000))}h` : `${d}d`; };
-const label = (r: MarketRow) => (r.chain === "base" && r.kind !== "crypto" ? `${r.symbol}c` : r.symbol);
+const label = (r: MarketRow) => (r.chain === "base" && (r.kind === "stock" || r.kind === "etf") ? `${r.symbol}c` : r.symbol);
 
 // ── Logo ─────────────────────────────────────────────────────────────────────
 function Logo({ r, size = 28 }: { r: MarketRow; size?: number }) {
@@ -43,7 +43,7 @@ function Logo({ r, size = 28 }: { r: MarketRow; size?: number }) {
     // eslint-disable-next-line @next/next/no-img-element
     return <img src={r.logo} alt="" width={size} height={size} onError={() => setBad(true)} className="rounded-full shrink-0 bg-[#0F121A] object-cover" style={{ width: size, height: size }} />;
   }
-  if (r.kind !== "crypto") return <StockMark ticker={r.symbol} chain={r.chain} size={size} />;
+  if (r.kind === "stock" || r.kind === "etf") return <StockMark ticker={r.symbol} chain={r.chain} size={size} />;
   return (
     <span className="inline-flex items-center justify-center rounded-full shrink-0 border border-[#2a3350] bg-[#0F121A] text-[#94A3B8] font-semibold"
       style={{ width: size, height: size, fontSize: Math.round(size * 0.34) }}>{r.symbol.slice(0, 2).toUpperCase()}</span>
@@ -106,7 +106,7 @@ function Spark({ r, up }: { r: MarketRow; up: boolean | null }) {
 
 // ── Table ────────────────────────────────────────────────────────────────────
 export default function MarketsTable({ rows, readAt }: { rows: MarketRow[]; readAt: string | null }) {
-  const [kind, setKind] = useState<"all" | "stocks" | "crypto">("all");
+  const [kind, setKind] = useState<"all" | "stocks" | "crypto" | "launches">("all");
   const [chain, setChain] = useState<"all" | "base" | "robinhood">("all");
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<{ k: SortKey; dir: 1 | -1 }>({ k: "vol", dir: -1 });
@@ -117,7 +117,7 @@ export default function MarketsTable({ rows, readAt }: { rows: MarketRow[]; read
     const t = q.trim().toLowerCase();
     const val = (r: MarketRow): number | null => sort.k === "age" ? ageDays(r.createdAt) : r[sort.k];
     return rows
-      .filter((r) => kind === "all" || (kind === "crypto" ? r.kind === "crypto" : r.kind !== "crypto"))
+      .filter((r) => kind === "all" || (kind === "crypto" ? r.kind === "crypto" : kind === "launches" ? r.kind === "launch" : r.kind === "stock" || r.kind === "etf"))
       .filter((r) => chain === "all" || r.chain === chain)
       .filter((r) => !t || r.symbol.toLowerCase().includes(t) || r.name.toLowerCase().includes(t) || r.token.toLowerCase() === t)
       .sort((a, b) => {
@@ -159,7 +159,7 @@ export default function MarketsTable({ rows, readAt }: { rows: MarketRow[]; read
       </div>
 
       <div className="mt-3 flex items-center gap-2 flex-wrap">
-        {([["all", "All"], ["stocks", "Stock tokens"], ["crypto", "Trending crypto"]] as const).map(([id, l]) => (
+        {([["all", "All"], ["stocks", "Stock tokens"], ["crypto", "Trending crypto"], ["launches", "Launched on Blue Agent"]] as const).map(([id, l]) => (
           <button key={id} type="button" onClick={() => setKind(id)} className={chip(kind === id)}>{l}</button>
         ))}
         <span className="mx-1 h-4 w-px bg-[#1A1A2E]" />
@@ -185,7 +185,7 @@ export default function MarketsTable({ rows, readAt }: { rows: MarketRow[]; read
             </tr>
           </thead>
           <tbody>
-            {slice.length === 0 && <tr><td colSpan={8} className="px-4 py-6 text-center text-[#64748B]">{readAt ? "No match." : "Market data unreadable right now."}</td></tr>}
+            {slice.length === 0 && <tr><td colSpan={8} className="px-4 py-6 text-center text-[#64748B]">{kind === "launches" ? "No token has been launched through Blue Agent yet." : readAt ? "No match." : "Market data unreadable right now."}</td></tr>}
             {slice.map((r, i) => {
               const up = r.change === null ? null : r.change >= 0;
               return (
@@ -196,7 +196,8 @@ export default function MarketsTable({ rows, readAt }: { rows: MarketRow[]; read
                       <Logo r={r} />
                       <span className="min-w-0 leading-tight">
                         <span className="flex items-center gap-1.5"><span className="truncate max-w-[200px] font-prose text-[12px] text-[#E2E8F0]">{r.name}</span>
-                          {r.kind !== "crypto" && <span className="text-[8px] rounded-full border border-[#34D399]/30 px-1.5 text-[#34D399]">{r.kind === "etf" ? "ETF" : "STOCK"}</span>}</span>
+                          {(r.kind === "stock" || r.kind === "etf") && <span className="text-[8px] rounded-full border border-[#34D399]/30 px-1.5 text-[#34D399]">{r.kind === "etf" ? "ETF" : "STOCK"}</span>}
+                          {r.kind === "launch" && <span className="text-[8px] rounded-full border border-[#4FC3F7]/40 px-1.5 text-[#4FC3F7]">VIA BLUE AGENT</span>}</span>
                         <span className="text-[9.5px] text-[#64748B]">${label(r)} · {CH[r.chain]}</span>
                       </span>
                     </Link>

@@ -3,7 +3,7 @@
 // Every row names its chain; a ticker alone never identifies a token (NVDA is
 // two contracts). Data: lib/markets.ts (registries + GeckoTerminal).
 import type { Metadata } from "next";
-import { readStockMarkets, readTrending, type MarketChain } from "@/lib/markets";
+import { readBlueLaunchMarkets, readStockMarkets, readTrending, type MarketChain } from "@/lib/markets";
 import MarketsHeader from "./MarketsHeader";
 import MarketsTable, { type MarketRow } from "./MarketsTable";
 
@@ -14,17 +14,24 @@ const usd = (n: number) => n >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `
 const card = "rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14]";
 
 export default async function MarketsPage() {
-  const [stocks, trending] = await Promise.all([
+  const [stocks, trending, launches] = await Promise.all([
     readStockMarkets().catch(() => ({ rows: [], readAt: null as string | null })),
     readTrending().catch(() => ({ rows: [], readAt: null as string | null, unread: ["base", "robinhood"] as MarketChain[] })),
+    readBlueLaunchMarkets().catch(() => ({ rows: [], readAt: null })),
   ]);
+  const launched = new Set(launches.rows.map((r) => r.token.toLowerCase()));
   const rows: MarketRow[] = [
     ...stocks.rows.map((r) => ({
       chain: r.chain, kind: r.kind, token: r.contract, symbol: r.ticker, name: r.name, logo: r.logo,
       price: r.priceUsd, change: r.change24hPct, mcap: r.mcapUsd, mcapIsFdv: r.mcapIsFdv, liq: r.liquidityUsd, vol: r.volume24hUsd,
       createdAt: r.poolCreatedAt, pool: r.pool, side: r.side, read: r.read,
     })),
-    ...trending.rows.map((r) => ({
+    ...launches.rows.map((r) => ({
+      chain: "base" as const, kind: "launch" as const, token: r.token, symbol: r.symbol ?? `${r.token.slice(0, 6)}…`, name: r.name ?? r.token, logo: r.logo,
+      price: r.priceUsd, change: r.change24hPct, mcap: r.mcapUsd, mcapIsFdv: r.mcapIsFdv, liq: r.liquidityUsd, vol: r.volume24hUsd,
+      createdAt: r.poolCreatedAt, pool: r.pool, side: r.side, read: r.read,
+    })),
+    ...trending.rows.filter((r) => !launched.has(r.token.toLowerCase())).map((r) => ({
       chain: r.chain, kind: "crypto" as const, token: r.token, symbol: r.symbol, name: r.name, logo: r.logo,
       price: r.priceUsd, change: r.change24hPct, mcap: r.mcapUsd, mcapIsFdv: r.mcapIsFdv, liq: r.liquidityUsd, vol: r.volume24hUsd,
       createdAt: r.poolCreatedAt, pool: r.pool || null, side: "base" as const, read: true,
