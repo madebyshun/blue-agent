@@ -21,3 +21,13 @@ assert.equal(c.pay.length, 1, "payer deduped");
 assert.equal(c.tn, 1, "team call split out");
 assert.equal(c.tu, 5_000);
 console.log("hub-exchange-test: ok");
+
+// Endpoint check: only a Base USDC quote to the seller's own payTo is "live".
+const usdc = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+assert.equal(M.classifyQuote(seller, 402, [{ network: "eip155:8453", asset: usdc, payTo: seller }]), "live");
+assert.equal(M.classifyQuote(seller, 402, [{ network: "eip155:8453", asset: usdc, payTo: buyer }]), "other_payto");
+assert.equal(M.classifyQuote(seller, 402, [{ network: "eip155:5042", asset: usdc, payTo: seller }]), "other_chain");
+assert.equal(M.classifyQuote(seller, 200, [{ network: "eip155:8453", asset: usdc, payTo: seller }]), "no_402");
+const hdr = Buffer.from(JSON.stringify({ accepts: [{ network: "base", asset: usdc, payTo: seller }] })).toString("base64");
+assert.equal(M.classifyQuote(seller, 402, M.quoteAccepts(null, hdr)), "live");
+console.log("hub-exchange-test: probe ok");

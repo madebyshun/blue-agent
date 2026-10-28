@@ -5,11 +5,12 @@ import Link from "next/link";
 
 const TABS = [
   { id: "sellers", href: "/exchange", label: "Sellers" },
+  { id: "analytics", href: "/exchange/analytics", label: "Analytics" },
   { id: "tokenize", href: "/exchange/tokenize", label: "Tokenize" },
   { id: "create", href: "/exchange/create", label: "Create an agent" },
 ] as const;
 
-export default function ExchangeHeader({ active, chip }: { active: "sellers" | "create" | "tokenize" | null; chip?: string }) {
+export default function ExchangeHeader({ active, chip }: { active: "sellers" | "analytics" | "create" | "tokenize" | null; chip?: string }) {
   return (
     <>
     {/* Mobile: the MobileTopBar already prints the title, so only the tabs. */}
