@@ -2023,6 +2023,9 @@ export default function HubPage({ inShell = false, initialToolId, initialView = 
             <span className="font-mono text-[10.5px]" style={{ color: "#64748B" }}>
               AI tools · multi-agent · x402 · Base
             </span>
+            <Link href="/app/hub/agents" className="font-mono text-[10.5px] text-[#4FC3F7] hover:underline">
+              Agent Exchange →
+            </Link>
             {/* `≥` when the community half was short — the same lower-bound
                 convention the wallet tables use for a partial read (#211/#212).
                 An unqualified count here would be an assertion we cannot make. */}
