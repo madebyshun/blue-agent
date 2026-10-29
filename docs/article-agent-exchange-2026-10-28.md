@@ -107,7 +107,7 @@ Anyone can make up a rating with no proof behind it. Nobody can fake a settled t
 
 ## Markets on Base and Robinhood Chain
 
-The same rule runs in Markets. Stock tokens live on two chains today: 9 Coinbase B20 stock tokens on Base and 203 stock tokens and ETFs on Robinhood Chain. Blue Agent lists every one we verified by contract, never by ticker, because NVDA on Base and NVDA on Robinhood Chain are two different tokens.
+The same rule runs in Markets. Stock tokens live on two chains today: 218 Coinbase tokenized stocks on Base and 203 stock tokens and ETFs on Robinhood Chain. Blue Agent lists every one, checked by contract on chain, never by ticker, because NVDA on Base and NVDA on Robinhood Chain are two different tokens.
 
 Each token page shows candles from 15 minutes to a day and recent trades from its deepest pool, its on-chain facts, and a swap your own wallet signs. Portfolio reads what a wallet holds on both chains in one view.
 

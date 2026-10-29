@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import StockMark from "@/components/blue-hood/StockMark";
+import { resolveStockLogo } from "@/lib/blue-hood/stock-logo";
 
 export interface MarketRow {
   chain: "base" | "robinhood";
@@ -43,7 +44,9 @@ function Logo({ r, size = 28 }: { r: MarketRow; size?: number }) {
     // eslint-disable-next-line @next/next/no-img-element
     return <img src={r.logo} alt="" width={size} height={size} onError={() => setBad(true)} className="rounded-full shrink-0 bg-[#0F121A] object-cover" style={{ width: size, height: size }} />;
   }
-  if (r.kind === "stock" || r.kind === "etf") return <StockMark ticker={r.symbol} chain={r.chain} size={size} />;
+  // StockMark only where Blue Hood holds the company mark; its "?" means "not on
+  // Hood's desk", which is wrong for a Coinbase-listed token. Monogram otherwise.
+  if ((r.kind === "stock" || r.kind === "etf") && resolveStockLogo(r.chain, r.symbol).mark) return <StockMark ticker={r.symbol} chain={r.chain} size={size} />;
   return (
     <span className="inline-flex items-center justify-center rounded-full shrink-0 border border-[#2a3350] bg-[#0F121A] text-[#94A3B8] font-semibold"
       style={{ width: size, height: size, fontSize: Math.round(size * 0.34) }}>{r.symbol.slice(0, 2).toUpperCase()}</span>

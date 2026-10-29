@@ -22,6 +22,7 @@
 import { unstable_cache } from "next/cache";
 import { createPublicClient, erc20Abi, formatUnits, parseAbiItem, toFunctionSelector, getAddress, http, isAddress, type Address } from "viem";
 import { BASE_STOCKS } from "@/lib/base-stocks/registry";
+import { COINBASE_BASE_STOCKS } from "@/lib/base-stocks/coinbase-list";
 import { RWA_TOKENS } from "@/lib/robinhood/rwa-registry";
 import { base } from "viem/chains";
 import { robinhoodMainnet } from "@/lib/robinhood/chains";
@@ -65,7 +66,13 @@ export interface MarketExtras {
 /** Every stock token we have verified, both chains. Static; prices come after. */
 export function stockUniverse(): Omit<StockRow, "priceUsd" | "volume24hUsd" | "liquidityUsd" | "read" | keyof MarketExtras>[] {
   return [
-    ...BASE_STOCKS.map((s) => ({ chain: "base" as const, ticker: s.ticker, name: s.name, contract: getAddress(s.token), decimals: 8, kind: "stock" as const })),
+    // Base: every Coinbase Tokenized Stock Base publishes (lib/base-stocks/
+    // coinbase-list, 218 checked on chain), named as Blue Hood's registry names
+    // them where it lists the ticker too.
+    ...COINBASE_BASE_STOCKS.map((s) => ({
+      chain: "base" as const, ticker: s.ticker, name: BASE_STOCKS.find((b) => b.token.toLowerCase() === s.token.toLowerCase())?.name ?? s.name,
+      contract: getAddress(s.token), decimals: 8, kind: "stock" as const,
+    })),
     ...RWA_TOKENS.filter((t) => t.kind === "stock" || t.kind === "etf")
       .map((t) => ({ chain: "robinhood" as const, ticker: t.ticker, name: t.name, contract: getAddress(t.contract), decimals: t.decimals, kind: t.kind as "stock" | "etf" })),
   ];
@@ -140,7 +147,7 @@ export const readStockMarkets = cacheWhole(async (): Promise<{ rows: StockRow[];
   const out = { rows: priced, readAt: new Date().toISOString() };
   if (partial) throw new Uncached(out);
   return out;
-}, "markets:stocks:v3", 300);
+}, "markets:stocks:v4", 300);
 
 export interface TrendingRow {
   chain: MarketChain;

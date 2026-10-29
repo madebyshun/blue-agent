@@ -59,7 +59,7 @@ export default async function MarketsPage() {
         <div className="px-5 py-[18px] w-full">
           <div className="mb-3 grid gap-2.5 grid-cols-2 md:grid-cols-4">
             {[
-              ["STOCK TOKENS · BASE", String(count("base")), "Coinbase B20, verified on chain"],
+              ["STOCK TOKENS · BASE", String(count("base")), "every Coinbase B20 on base.org, checked on chain"],
               ["STOCK TOKENS · ROBINHOOD", String(count("robinhood")), "Robinhood stock tokens + ETFs"],
               ["24H VOLUME · BASE", volRead("base") ? usd(vol("base")) : "—", "stock tokens, DEX pools"],
               ["24H VOLUME · ROBINHOOD", volRead("robinhood") ? usd(vol("robinhood")) : "—", "stock tokens, DEX pools"],
