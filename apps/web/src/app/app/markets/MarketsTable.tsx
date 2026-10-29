@@ -212,7 +212,7 @@ export default function MarketsTable({ rows, readAt }: { rows: MarketRow[]; read
                     </div>
                   </td>
                   <td className="px-2 text-right text-[#94A3B8] tabular-nums">{age(r.createdAt)}</td>
-                  <td className="px-2 text-right text-[#E2E8F0] tabular-nums" title={r.mcapIsFdv ? "fully diluted value (no market cap on file)" : undefined}>{usd(r.mcap)}{r.mcapIsFdv && <span className="text-[11px] text-[#64748B]"> FDV</span>}</td>
+                  <td className="px-2 text-right text-[#E2E8F0] tabular-nums" title={r.mcapIsFdv ? "fully diluted value (no market cap on file)" : undefined}>{r.mcap ? usd(r.mcap) : "—"}{r.mcap !== null && r.mcap > 0 && r.mcapIsFdv && <span className="text-[11px] text-[#64748B]"> FDV</span>}</td>
                   <td className="px-2 text-right text-[#94A3B8] tabular-nums">{!r.read ? "—" : usd(r.liq)}</td>
                   <td className="px-2 text-right text-[#E2E8F0] tabular-nums">{!r.read ? "—" : r.vol === null ? <span className="text-[#64748B]">no pool</span> : usd(r.vol)}</td>
                   <td className="px-3 text-right">

@@ -50,6 +50,9 @@ export default async function MarketsPage() {
   const count = (c: MarketChain) => stocks.rows.filter((r) => r.chain === c).length;
   const vol = (c: MarketChain) => stocks.rows.filter((r) => r.chain === c).reduce((a, r) => a + (r.volume24hUsd ?? 0), 0);
   // A chain whose GeckoTerminal read was refused shows "—", never a summed $0.
+  // Partial read (GeckoTerminal refused a chunk): the sum of what was read, as a
+  // lower bound; nothing read at all: a dash. Never a confident total.
+  const volShow = (c: MarketChain) => !stocks.readAt || !stocks.rows.some((r) => r.chain === c && r.read) ? "—" : `${volRead(c) ? "" : "≥"}${usd(vol(c))}`;
   const volRead = (c: MarketChain) => stocks.rows.some((r) => r.chain === c) && stocks.rows.filter((r) => r.chain === c).every((r) => r.read);
 
   return (
@@ -61,8 +64,8 @@ export default async function MarketsPage() {
             {[
               ["STOCK TOKENS · BASE", String(count("base")), "every Coinbase B20 on base.org, checked on chain"],
               ["STOCK TOKENS · ROBINHOOD", String(count("robinhood")), "Robinhood stock tokens + ETFs"],
-              ["24H VOLUME · BASE", volRead("base") ? usd(vol("base")) : "—", "stock tokens, DEX pools"],
-              ["24H VOLUME · ROBINHOOD", volRead("robinhood") ? usd(vol("robinhood")) : "—", "stock tokens, DEX pools"],
+              ["24H VOLUME · BASE", volShow("base"), volRead("base") ? "stock tokens, DEX pools" : "partial read: a lower bound"],
+              ["24H VOLUME · ROBINHOOD", volShow("robinhood"), volRead("robinhood") ? "stock tokens, DEX pools" : "partial read: a lower bound"],
             ].map(([l, v, s]) => (
               <div key={l} className={`${card} p-[14px]`}>
                 <p className="text-[12px] tracking-[0.12em] text-[#64748B]">{l}</p>
