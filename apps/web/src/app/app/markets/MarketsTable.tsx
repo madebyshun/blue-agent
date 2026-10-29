@@ -7,6 +7,7 @@
 // token page uses (GeckoTerminal is keyless and 429s on bursts).
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import StockMark from "@/components/blue-hood/StockMark";
 import { resolveStockLogo } from "@/lib/blue-hood/stock-logo";
 
@@ -109,6 +110,7 @@ function Spark({ r, up }: { r: MarketRow; up: boolean | null }) {
 
 // ── Table ────────────────────────────────────────────────────────────────────
 export default function MarketsTable({ rows, readAt }: { rows: MarketRow[]; readAt: string | null }) {
+  const router = useRouter();
   const [kind, setKind] = useState<"all" | "stocks" | "crypto" | "launches">("all");
   const [chain, setChain] = useState<"all" | "base" | "robinhood">("all");
   const [q, setQ] = useState("");
@@ -192,7 +194,10 @@ export default function MarketsTable({ rows, readAt }: { rows: MarketRow[]; read
             {slice.map((r, i) => {
               const up = r.change === null ? null : r.change >= 0;
               return (
-                <tr key={`${r.chain}:${r.token}`} className="border-t border-[#1A1A2E] first:border-t-0 hover:bg-[#0F121A]">
+                <tr key={`${r.chain}:${r.token}`}
+                  // The whole row opens the token page (links inside keep their own targets).
+                  onClick={(e) => { if (!(e.target as HTMLElement).closest("a")) router.push(`/markets/${r.chain}/${r.token}`); }}
+                  className="cursor-pointer border-t border-[#1A1A2E] first:border-t-0 hover:bg-[#0F121A]">
                   <td className="px-3 py-2.5 text-[13px] text-[#64748B] tabular-nums">{page * PAGE + i + 1}</td>
                   <td className="px-2">
                     <Link href={`/markets/${r.chain}/${r.token}`} className="flex items-center gap-2.5 min-w-[220px]">
