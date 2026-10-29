@@ -1,21 +1,12 @@
 import { DocHeader, H2, P, CodeBlock, PrevNext } from "../_ui";
 import { MCP_TOOLS } from "../_data";
+import { groupMcpTools, formatUsdcMicros } from "./groups";
 
 export const metadata = { title: "MCP Setup — Blue Agent Docs" };
 
-// ⚠️ This page groups BY NAME PREFIX, so a tool with no `blue_`/`hub_`/`b20_`
-// prefix renders nowhere at all — silently, since `.filter()` cannot report a
-// tool it never matched. Any new MCP tool must carry one of these three.
-//
-// `blue_` was labelled "Console commands" until 2026-09-26, which stopped being
-// true when the 85 → 18 cut left only two console commands in it (build, audit)
-// alongside the registry, the paid door, and three execution primitives. The
-// label now describes what the group IS rather than what it once held.
-const GROUPS = [
-  { key: "blue_", label: "Agent core — discovery, execution, console", color: "#4FC3F7" },
-  { key: "hub_",  label: "Live reads — chain data and safety checks",  color: "#A78BFA" },
-  { key: "b20_",  label: "B20 calldata builder",                       color: "#22C55E" },
-];
+// Grouped by price, not name prefix — see the header of ./groups.ts for the
+// 2026-10-29 bug where every MCP v2 tool silently vanished from this page.
+const GROUPS = groupMcpTools();
 
 export default function McpDoc() {
   return (
@@ -39,7 +30,7 @@ export default function McpDoc() {
 
       <H2 id="tools">Available tools · {MCP_TOOLS.length}</H2>
       {GROUPS.map((g) => {
-        const tools = MCP_TOOLS.filter((t) => t.name.startsWith(g.key));
+        const tools = g.tools;
         return (
           <section key={g.key} className="my-6">
             <div className="flex items-center gap-2 mb-2">
@@ -55,7 +46,12 @@ export default function McpDoc() {
                   reading the real manifest, which is the point of the extraction. */}
               {tools.map((t) => (
                 <div key={t.name} className="px-5 py-3">
-                  <code className="font-mono text-[12px] font-bold" style={{ color: g.color }}>{t.name}</code>
+                  <div className="flex items-baseline gap-2">
+                    <code className="font-mono text-[12px] font-bold" style={{ color: g.color }}>{t.name}</code>
+                    {t.priceMicros !== undefined && (
+                      <span className="font-mono text-[10px] text-slate-400">{formatUsdcMicros(t.priceMicros)} / call</span>
+                    )}
+                  </div>
                   <p className="font-mono text-[10px] text-slate-500 leading-relaxed mt-0.5">{t.description}</p>
                 </div>
               ))}
