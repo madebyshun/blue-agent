@@ -33,6 +33,7 @@ export const DOC_NAV: DocGroup[] = [
     { title: "x402 Tools",      href: "/docs/x402" },
     { title: "Credits & Tiers", href: "/docs/credits" },
     { title: "MCP Setup",       href: "/docs/mcp" },
+    { title: "With Coinbase for Agents", href: "/docs/coinbase-agents" },
     { title: "For Developers",  href: "/docs/develop" },
   ]},
 ];
