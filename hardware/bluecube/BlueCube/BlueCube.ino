@@ -11,11 +11,10 @@
  * LINKED (optional) — link the cube to your wallet from its control page.
  * It uses Blue Agent's existing device link (the BlueBot flow): the cube
  * shows a code, you approve it at app.blueagent.dev/link, the cube gets a
- * READ-ONLY token. It can never sign or move funds. Once linked:
- *   • cards: confirmed trades, fired alerts and refused trades from your
- *     timeline pop up on the screen (GET /api/devices/feed)
- *   • thinking: while your Blue Chat turn runs tools, the mascot shows it
- *     (GET /api/devices/agent — polled fast only while a session is live)
+ * READ-ONLY token. It can never sign or move funds. Once linked, the
+ * mascot reacts to what your agent actually did (GET /api/devices/feed,
+ * every 3 minutes): a confirmed trade → finished, a fired alert → approval,
+ * a refused or reverted trade → error. Then a card shows the details.
  *
  * CONTROL PAGE — http://bluecube.local (same WiFi): modes, coin/stock picks,
  * link/unlink, firmware update (a code shown on the screen authorises it).
@@ -47,7 +46,7 @@
 
 #include "cube_render.h"
 
-#define FW_VERSION "1.2.2"
+#define FW_VERSION "1.3.0"
 
 // --- DISPLAY PINS ---
 #define TFT_SCLK   13
@@ -86,8 +85,8 @@ Option stockCatalog[MAX_CATALOG]; int stockCount = 0;
 String pickCrypto = "";
 String pickHood   = "";
 
-cube::Feed     feeds[MAX_MODES];
-cube::FaceAnim face;
+cube::Feed    feeds[MAX_MODES];
+cube::BotAnim bot;
 
 // --- LINK (device token from the BlueBot device flow) ---
 String   token;                 // "bbt_…" or empty
@@ -99,14 +98,11 @@ bool     pairing = false;
 String   pairUserCode, pairDeviceCode;
 uint32_t pairUntil = 0, nextTokenPoll = 0, tokenPollMs = 5000;
 
-// --- AGENT (thinking) ---
-cube::Agent agent = { false, "" };
-bool     agentActive = false;
-uint32_t nextAgentPoll = 0, agentPollMs = 8000;
-
-// --- CARDS ---
+// --- CARDS (each one is introduced by the mascot reacting to it) ---
 #define CARD_QUEUE 3
 #define CARD_SHOW_MS 9000
+#define REACT_MS 3500
+uint32_t reactUntil = 0;
 cube::Card cardQ[CARD_QUEUE];
 int      cardN = 0;
 uint32_t cardUntil = 0;
@@ -127,7 +123,7 @@ Preferences prefs;
 WebServer   web(80);
 uint32_t lastRotate = 0, lastSec = 0;
 
-enum Screen { SCR_NONE, SCR_MODE, SCR_CARD, SCR_THINK, SCR_PAIR, SCR_UPDATE };
+enum Screen { SCR_NONE, SCR_MODE, SCR_REACT, SCR_CARD, SCR_PAIR, SCR_UPDATE };
 Screen shownScreen = SCR_NONE;
 
 int modeIndexOf(const String& m) {
@@ -225,7 +221,7 @@ void drawMode(int idx) {
   if (!f.fetchedAt || millis() - f.fetchedAt >= refreshMs) fetchFeed(idx);
   cube::Ctx c = makeCtx();
   if (!f.isBuddy) cube::drawHeader(c);
-  cube::drawFeed(c, f, face);
+  cube::drawFeed(c, f, bot);
   shownScreen = SCR_MODE;
 }
 
@@ -270,7 +266,7 @@ void unlink() {
     JsonDocument doc;
     httpJson("POST", String(SITE) + "/api/devices/revoke", "{}", doc, true);
   }
-  token = ""; linkedWallet = ""; agentActive = false; agent.thinking = false;
+  token = ""; linkedWallet = "";
   prefs.remove("tok"); prefs.remove("seen");
 }
 
@@ -295,7 +291,6 @@ void pollLinkedFeed() {
   if (code != 200) return;
   linkedWallet = doc["wallet"].as<String>();
   feedPollMs = (doc["next_poll_s"] | 180) * 1000UL;
-  if (doc["agent_active"] == true && !agentActive) { agentActive = true; nextAgentPoll = 0; }
 
   uint64_t newest = lastSeenAt;
   // Oldest first, so cards appear in the order things happened.
@@ -307,19 +302,6 @@ void pollLinkedFeed() {
     if (lastSeenAt && at > lastSeenAt) queueCard(it);   // first read after linking: history, not news
   }
   if (newest != lastSeenAt) { lastSeenAt = newest; prefs.putULong64("seen", lastSeenAt); }
-}
-
-void pollAgent() {
-  if (!token.length() || !agentActive || millis() < nextAgentPoll) return;
-  JsonDocument doc;
-  int code = httpJson("GET", String(SITE) + "/api/devices/agent", "", doc, true);
-  if (code != 200) { nextAgentPoll = millis() + 30000; return; }
-  bool was = agent.thinking;
-  agent.thinking = doc["thinking"] | false;
-  strlcpy(agent.label, doc["label"] | "", sizeof(agent.label));
-  agentActive = doc["active"] | false;
-  nextAgentPoll = millis() + (doc["next_poll_s"] | 8) * 1000UL;
-  if (was != agent.thinking) shownScreen = SCR_NONE;
 }
 
 // ───────────────────────────── control page ─────────────────────────────
@@ -380,13 +362,13 @@ void handleRoot() {
   h += "<h2>Blue Agent account</h2>";
   if (token.length()) {
     h += "<p class='s'>Linked" + (linkedWallet.length() ? " to " + linkedWallet : String("")) +
-         ". Trades, alerts and your agent's activity show up on the cube. Read-only: the cube can never sign or move funds.</p>"
+         ". Your trades and alerts show up on the cube as they happen. Read-only: the cube can never sign or move funds.</p>"
          "<a class='btn ghost' href='/unlink'>Unlink</a>";
   } else if (pairing) {
     h += "<p class='s'>The cube shows a code. Open <b>" + String(LINK_URL) + "</b>, sign in with your wallet and enter <b>" + pairUserCode + "</b>.</p>"
          "<a class='btn' href='https://" + String(LINK_URL) + "?code=" + pairUserCode + "'>Open the link page</a>";
   } else {
-    h += "<p class='s'>Optional. Shows your trades, alerts and what your agent is doing. Read-only.</p><a class='btn' href='/link'>Link to my wallet</a>";
+    h += "<p class='s'>Optional. Your mascot reacts to your trades and alerts as they happen. Read-only.</p><a class='btn' href='/link'>Link to my wallet</a>";
   }
   h += "<h2>Firmware</h2><p class='s'>Install a new BlueCube build (.bin) without a cable.</p><a class='btn ghost' href='/update'>Update firmware</a>";
   h += F("<script>document.querySelectorAll('.g').forEach(g=>g.addEventListener('change',e=>{if(g.querySelectorAll('input:checked').length>5){e.target.checked=false;alert('Pick up to 5');}}));</script></body></html>");
@@ -640,14 +622,13 @@ void loop() {
 
   pollPairing();
   pollLinkedFeed();
-  pollAgent();
 
   // BOOT button: short press = next mode
   static bool lastBtn = HIGH;
   bool btn = digitalRead(BTN_PIN);
   if (lastBtn == HIGH && btn == LOW) {
     delay(30);
-    if (digitalRead(BTN_PIN) == LOW) { cardUntil = 0; cardN = 0; drawMode((modeIdx + 1) % modeCount); lastRotate = millis(); }
+    if (digitalRead(BTN_PIN) == LOW) { cardUntil = 0; reactUntil = 0; cardN = 0; drawMode((modeIdx + 1) % modeCount); lastRotate = millis(); }
   }
   lastBtn = btn;
 
@@ -659,17 +640,26 @@ void loop() {
     if (shownScreen != SCR_UPDATE) { cube::drawUpdateCode(tft, updCode); shownScreen = SCR_UPDATE; }
   } else if (cardUntil && millis() < cardUntil) {
     // a card is up — leave it
-  } else if (cardN > 0) {
+  } else if (reactUntil && millis() < reactUntil) {
+    // the mascot is reacting to cardQ[0]: keep it moving
+    uint16_t col = cardQ[0].tone == 'a' ? cube::RED : cardQ[0].tone == 'w' ? cube::AMBER : cardQ[0].tone == 'g' ? cube::GREEN : cube::CYAN;
+    cube::botTick(c, cube::cardBot(cardQ[0]), cardQ[0].title, col, bot, false);
+  } else if (reactUntil) {
+    // reaction over: now the details
+    reactUntil = 0;
     cube::drawCard(c, cardQ[0]);
     for (int i = 1; i < cardN; i++) cardQ[i - 1] = cardQ[i];
     cardN--;
     cardUntil = millis() + CARD_SHOW_MS;
     shownScreen = SCR_CARD;
-  } else if (agent.thinking) {
-    bool fresh = shownScreen != SCR_THINK;
-    if (fresh) { tft.fillScreen(cube::BLACK); face.reset(); }
-    cube::thinkingTick(c, agent, face, fresh);
-    shownScreen = SCR_THINK;
+  } else if (cardN > 0) {
+    // something happened: the mascot reacts first
+    tft.fillScreen(cube::BLACK);
+    bot.reset();
+    uint16_t col = cardQ[0].tone == 'a' ? cube::RED : cardQ[0].tone == 'w' ? cube::AMBER : cardQ[0].tone == 'g' ? cube::GREEN : cube::CYAN;
+    cube::botTick(c, cube::cardBot(cardQ[0]), cardQ[0].title, col, bot, true);
+    reactUntil = millis() + REACT_MS;
+    shownScreen = SCR_REACT;
   } else {
     cardUntil = 0;
     bool pinned = modeIndexOf(pinnedMode) >= 0;
@@ -683,7 +673,7 @@ void loop() {
     } else if (pinned && millis() - feeds[modeIdx].fetchedAt >= refreshMs) {
       drawMode(modeIdx);
     } else if (feeds[modeIdx].isBuddy) {
-      cube::buddyTick(c, feeds[modeIdx], face, false);
+      cube::buddyTick(c, feeds[modeIdx], bot, false);
     }
     if (millis() - lastSec >= 1000) {
       if (!feeds[modeIdx].isBuddy) cube::drawHeader(c);
