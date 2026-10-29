@@ -439,15 +439,15 @@ export default function RhSwapCard({
   if (step === "done") {
     return (
       <div className="mt-2 rounded-xl border p-3.5" style={{ borderColor: "#22C55E40", background: "#22C55E08" }}>
-        <div className="font-mono text-[11px] font-bold mb-1" style={{ color: "#22C55E" }}>
+        <div className="font-mono text-[14px] font-bold mb-1" style={{ color: "#22C55E" }}>
           ✓ Swapped {fmt(amt)} {inSym} → {outSym} · {RH.short}
         </div>
         {txHash && (
           <a href={`${RH.explorer}/tx/${txHash}`} target="_blank" rel="noopener noreferrer"
-             className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#4FC3F730] text-[#4FC3F7] inline-block mt-1">View tx ↗</a>
+             className="font-mono text-[13px] px-2.5 py-1 rounded-lg border border-[#4FC3F730] text-[#4FC3F7] inline-block mt-1">View tx ↗</a>
         )}
         <button onClick={() => { setStep("idle"); setAmount(""); setTxHash(""); }}
-          className="font-mono text-[10px] text-slate-500 hover:text-slate-300 ml-3">Trade again</button>
+          className="font-mono text-[13px] text-slate-500 hover:text-slate-300 ml-3">Trade again</button>
       </div>
     );
   }
@@ -468,7 +468,7 @@ export default function RhSwapCard({
           off-screen, against a live index, and a symbol on 4663 does not
           identify a contract. */}
       {initialNote && (
-        <p className="text-[9px] text-slate-500 leading-relaxed mb-2 break-all">{initialNote}</p>
+        <p className="text-[12px] text-slate-500 leading-relaxed mb-2 break-all">{initialNote}</p>
       )}
 
       {/* Token — which ERC-20 is the non-ETH leg. ETH is the other leg, always,
@@ -477,13 +477,13 @@ export default function RhSwapCard({
       <Picker label="TOKEN" disabled={busy} onClose={() => setQuery("")}
         summary={
           <span className="flex items-center gap-2 min-w-0">
-            <span className="text-[12px] text-white truncate">{tokenSym}</span>
+            <span className="text-[15px] text-white truncate">{tokenSym}</span>
             {!isCustom && curated?.sym === RH.stableSymbol && (
-              <span className="text-[9px] text-slate-600 shrink-0">{RH.short} cash</span>
+              <span className="text-[12px] text-slate-600 shrink-0">{RH.short} cash</span>
             )}
             {/* The address, whenever the label ISN'T already one. */}
             {isCustom && customSym && shortAddr && (
-              <span className="text-[9px] text-slate-600 shrink-0">{shortAddr}</span>
+              <span className="text-[12px] text-slate-600 shrink-0">{shortAddr}</span>
             )}
           </span>
         }>
@@ -494,7 +494,7 @@ export default function RhSwapCard({
                 value={query} onChange={e => setQuery(e.target.value)}
                 placeholder="Search symbol, or paste a token address"
                 spellCheck={false} autoCapitalize="none" autoCorrect="off"
-                className="w-full bg-[#050508] border border-[#1A1A2E] rounded-md px-2 py-1.5 text-[11px] text-white outline-none placeholder:text-slate-700 focus:border-[#4FC3F740]" />
+                className="w-full bg-[#050508] border border-[#1A1A2E] rounded-md px-2 py-1.5 text-[14px] text-white outline-none placeholder:text-slate-700 focus:border-[#4FC3F740]" />
             </div>
 
             <div className="max-h-56 overflow-y-auto">
@@ -510,23 +510,23 @@ export default function RhSwapCard({
                   setChoice("custom"); setCustomAddr(pastedAddr); setCustomSym("");
                   setAmount(""); setPendingWord(""); close();
                 }}>
-                  <span className="text-[11px] text-[#4FC3F7] flex-1 truncate">
+                  <span className="text-[14px] text-[#4FC3F7] flex-1 truncate">
                     Use {pastedAddr.slice(0, 6)}…{pastedAddr.slice(-4)}
                   </span>
-                  <span className="text-[9px] text-slate-600">on {RH.short}</span>
+                  <span className="text-[12px] text-slate-600">on {RH.short}</span>
                 </PickerRow>
               )}
 
               {shownTokens.map(t => (
                 <PickerRow key={t.addr} selected={!isCustom && choice === t.sym}
                   onClick={() => { setChoice(t.sym); setCustomSym(""); setAmount(""); setPendingWord(""); close(); }}>
-                  <span className="text-[12px] text-white flex-1">{t.sym}</span>
-                  <span className="text-[9px] text-slate-600">{t.addr.slice(0, 6)}…{t.addr.slice(-4)}</span>
+                  <span className="text-[15px] text-white flex-1">{t.sym}</span>
+                  <span className="text-[12px] text-slate-600">{t.addr.slice(0, 6)}…{t.addr.slice(-4)}</span>
                 </PickerRow>
               ))}
 
               {shownTokens.length === 0 && !pastedAddr && (
-                <div className="px-2.5 py-3 text-[10px] text-slate-500">
+                <div className="px-2.5 py-3 text-[13px] text-slate-500">
                   Nothing matches “{q}”. Paste the token&apos;s address to swap it anyway.
                 </div>
               )}
@@ -535,7 +535,7 @@ export default function RhSwapCard({
             {/* What this list IS, stated rather than implied. One curated row is
                 not a claim that one token exists on 4663 — say so, or a short
                 list reads as a complete one. */}
-            <div className="px-2.5 py-1.5 border-t border-[#13131f] text-[9px] leading-relaxed text-slate-600">
+            <div className="px-2.5 py-1.5 border-t border-[#13131f] text-[12px] leading-relaxed text-slate-600">
               {RH.stableSymbol} is the only listed token — paste an address for anything else on {RH.short}.
             </div>
           </div>
@@ -549,26 +549,26 @@ export default function RhSwapCard({
           // Digits from the token's OWN scale, not from which side it is on. A
           // 6-decimal token shown to 5 places is a number with two digits of
           // theatre on the end.
-          <span className="text-[9px] text-slate-600">Bal {balance.toFixed(bal.decimals === 6 ? 2 : 5)}
+          <span className="text-[12px] text-slate-600">Bal {balance.toFixed(bal.decimals === 6 ? 2 : 5)}
             <button type="button" onClick={() => setPct(10000)} className="text-[#4FC3F7] ml-1">Max</button></span>
         )}>
         <div className="flex items-center gap-2">
           <input type="number" min="0" value={amount} onChange={e => { setAmount(e.target.value); setPendingWord(""); }} placeholder="0.0"
-            className="flex-1 bg-transparent text-[16px] text-white outline-none placeholder:text-slate-700 w-0" />
-          <span className="text-[11px] text-slate-300 px-2 py-1.5 rounded-lg border border-[#1A1A2E] shrink-0">{inSym}</span>
+            className="flex-1 bg-transparent text-[19px] text-white outline-none placeholder:text-slate-700 w-0" />
+          <span className="text-[14px] text-slate-300 px-2 py-1.5 rounded-lg border border-[#1A1A2E] shrink-0">{inSym}</span>
         </div>
         {pendingWord && (
-          <div className="text-[9px] text-slate-500 mt-1">
+          <div className="text-[12px] text-slate-500 mt-1">
             &ldquo;{pendingWord}&rdquo; — resolving against your {inSym} balance…
           </div>
         )}
-        {overBalance && <div className="text-[9px] text-red-500 mt-1">Exceeds your {inSym} balance</div>}
+        {overBalance && <div className="text-[12px] text-red-500 mt-1">Exceeds your {inSym} balance</div>}
       </Field>
 
       {/* Flip direction (buy ⇄ sell) */}
       <div className="flex justify-center my-1">
         <button type="button" onClick={flip} aria-label="Flip direction"
-          className="text-[12px] text-slate-400 hover:text-[#4FC3F7] w-7 h-7 rounded-lg border border-[#1A1A2E] bg-[#0a0a0f] leading-none">
+          className="text-[15px] text-slate-400 hover:text-[#4FC3F7] w-7 h-7 rounded-lg border border-[#1A1A2E] bg-[#0a0a0f] leading-none">
           ⇅
         </button>
       </div>
@@ -576,13 +576,13 @@ export default function RhSwapCard({
       {/* You receive (estimate — settled on-chain) */}
       <Field className="!mb-1" label="YOU RECEIVE (EST)">
         <div className="flex items-center gap-2">
-          <span className="flex-1 text-[16px] text-white truncate">{previewOut}</span>
-          <span className="text-[11px] text-slate-300 px-2 py-1.5 rounded-lg border border-[#1A1A2E] shrink-0">{outSym}</span>
+          <span className="flex-1 text-[19px] text-white truncate">{previewOut}</span>
+          <span className="text-[14px] text-slate-300 px-2 py-1.5 rounded-lg border border-[#1A1A2E] shrink-0">{outSym}</span>
         </div>
       </Field>
 
       {/* Meta: rate · slippage · min · pool */}
-      <div className="text-[9px] text-slate-600 mb-2 space-y-0.5">
+      <div className="text-[12px] text-slate-600 mb-2 space-y-0.5">
         <div className="flex items-center justify-between gap-2">
           <span className="truncate">{rate != null ? `1 ${inSym} ≈ ${fmt(rate)} ${outSym}` : "rate —"}</span>
           <span className="shrink-0">Slippage {SLIPPAGE_PCT}%</span>
@@ -599,16 +599,16 @@ export default function RhSwapCard({
         <UnverifiedBalance symbol={inSym} onRetry={() => { void bal.refetch(); }} busy={bal.refetching} />
       )}
       {tokenReady && quote?.ok && quote.hasPool === false && (
-        <p className="text-[10px] text-amber-400 mb-2">No Uniswap V3 pool for {tokenSym}/WETH on Robinhood Chain yet.</p>
+        <p className="text-[13px] text-amber-400 mb-2">No Uniswap V3 pool for {tokenSym}/WETH on Robinhood Chain yet.</p>
       )}
-      {quote?.error && <p className="text-[10px] text-amber-400 mb-2">Quote error: {quote.error}</p>}
+      {quote?.error && <p className="text-[13px] text-amber-400 mb-2">Quote error: {quote.error}</p>}
       {unpriced && (
-        <p className="text-[10px] text-amber-400 mb-2">
+        <p className="text-[13px] text-amber-400 mb-2">
           No price for {tokenSym} right now, so no minimum output can be set. Not offering an unbounded swap.
         </p>
       )}
-      {step === "broadcasting" && <p className="text-[10px] text-slate-400 mb-2">Broadcasting… waiting for the block.</p>}
-      {step === "error" && <p className="text-[10px] text-amber-400 mb-2">{err}</p>}
+      {step === "broadcasting" && <p className="text-[13px] text-slate-400 mb-2">Broadcasting… waiting for the block.</p>}
+      {step === "error" && <p className="text-[13px] text-amber-400 mb-2">{err}</p>}
 
       <PreTradeBanner pt={pt} />
       <ConfirmButton tone="blue" onClick={() => { void doSwap(); }} disabled={!valid || busy}>

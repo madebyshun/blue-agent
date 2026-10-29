@@ -93,34 +93,34 @@ export default function ActivityTab({ walletAddr }: { walletAddr?: string | null
       <div className="flex flex-wrap items-center gap-1.5 mb-4">
         {FILTERS.map((f) => (
           <button key={f.id} onClick={() => setFilter(f.id)}
-            className="font-mono text-[10.5px] rounded-lg px-2.5 py-1 border transition-colors"
+            className="font-mono text-[13px] rounded-lg px-2.5 py-1 border transition-colors"
             style={filter === f.id ? { color: C.accent, borderColor: "#4FC3F740", background: "#4FC3F710" } : { color: C.dim, borderColor: C.line }}>
             {f.label}
           </button>
         ))}
-        <button onClick={() => void load()} className="ml-auto font-mono text-[10px] text-[#64748B] hover:text-white">↻ Refresh</button>
+        <button onClick={() => void load()} className="ml-auto font-mono text-[13px] text-[#64748B] hover:text-white">↻ Refresh</button>
       </div>
       {st.unavailable.length > 0 && (
-        <p className="font-mono text-[10px] text-amber-400 mb-3">Could not read: {st.unavailable.join(", ")} — those entries are missing below, not absent.</p>
+        <p className="font-mono text-[13px] text-amber-400 mb-3">Could not read: {st.unavailable.join(", ")} — those entries are missing below, not absent.</p>
       )}
       {groups.length === 0 ? (
         <Note>Nothing here yet. Alerts that fire, automation checks, recurring runs and the trades you sign all land on this timeline.</Note>
       ) : groups.map((g) => (
         <div key={g.day} className="mb-5">
-          <p className="font-mono text-[9.5px] tracking-[0.14em] text-[#475569] mb-2">{g.day.toUpperCase()}</p>
+          <p className="font-mono text-[12px] tracking-[0.14em] text-[#64748B] mb-2">{g.day.toUpperCase()}</p>
           <ol className="relative border-l border-[#1A1A2E] ml-2 space-y-3">
             {g.items.map((i) => {
               const k = KIND[i.kind];
               return (
                 <li key={i.id} className="pl-5 relative">
-                  <span className="absolute -left-[9px] top-0.5 w-[17px] h-[17px] rounded-full flex items-center justify-center text-[9px] bg-[#0D0D14] border border-[#1A1A2E]" style={{ color: k.color }}>{k.icon}</span>
+                  <span className="absolute -left-[9px] top-0.5 w-[17px] h-[17px] rounded-full flex items-center justify-center text-[12px] bg-[#0D0D14] border border-[#1A1A2E]" style={{ color: k.color }}>{k.icon}</span>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-mono text-[11.5px] font-medium" style={{ color: k.color === C.dim ? C.sub : k.color }}>{i.title}</span>
+                    <span className="font-mono text-[14px] font-medium" style={{ color: k.color === C.dim ? C.sub : k.color }}>{i.title}</span>
                     {i.chain && <ChainBadge chain={i.chain} />}
-                    <span className="font-mono text-[9.5px] text-[#475569]">{new Date(i.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                    <span className="font-mono text-[12px] text-[#64748B]">{new Date(i.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
                   </div>
-                  {i.detail && <p className="text-[12px] text-[#94A3B8] mt-0.5 leading-snug">{i.detail}</p>}
-                  <p className="font-mono text-[9.5px] text-[#475569] mt-0.5 flex gap-2">
+                  {i.detail && <p className="text-[15px] text-[#94A3B8] mt-0.5 leading-snug">{i.detail}</p>}
+                  <p className="font-mono text-[12px] text-[#64748B] mt-0.5 flex gap-2">
                     {i.href && <a className="hover:text-[#4FC3F7]" href={i.href} target="_blank" rel="noreferrer">{i.source ?? "explorer"} ↗</a>}
                     {i.kind === "alert" && i.title.includes("trade prepared") && <Link className="text-[#4FC3F7] hover:underline" href="/chat?alerts=1">Review &amp; sign →</Link>}
                   </p>
@@ -135,5 +135,5 @@ export default function ActivityTab({ walletAddr }: { walletAddr?: string | null
 }
 
 function Note({ children }: { children: React.ReactNode }) {
-  return <p className="font-mono text-[11px] text-[#64748B] border border-dashed border-[#1A1A2E] rounded-2xl px-5 py-8 text-center">{children}</p>;
+  return <p className="font-mono text-[14px] text-[#64748B] border border-dashed border-[#1A1A2E] rounded-2xl px-5 py-8 text-center">{children}</p>;
 }

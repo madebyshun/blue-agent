@@ -16,7 +16,7 @@ export default function MarketSwap({ chain, contract, symbol }: { chain: "base" 
   return (
     <div>
       <button type="button" onClick={() => setOpen((v) => !v)}
-        className="text-[10.5px] font-semibold text-[#050508] bg-[#4FC3F7] hover:bg-[#29ABE2] rounded-[8px] px-[13px] py-2">
+        className="text-[13px] font-semibold text-[#050508] bg-[#4FC3F7] hover:bg-[#29ABE2] rounded-[8px] px-[13px] py-2">
         {open ? "Close swap" : `Swap ${symbol} on ${chain === "base" ? "Base" : "Robinhood Chain"}`}
       </button>
       {open && (

@@ -441,7 +441,7 @@ export default function BridgeCard({
     return (
       <div>
         <button onClick={() => setIntent(null)}
-          className="font-mono text-[10px] text-slate-500 hover:text-slate-300 mb-2">
+          className="font-mono text-[13px] text-slate-500 hover:text-slate-300 mb-2">
           ← Change
         </button>
         {/* Keyed on the frozen nonce: a NEW review remounts (fresh quote, fresh
@@ -470,15 +470,15 @@ export default function BridgeCard({
       <NetworkPicker label="FROM" chains={BRIDGE_CHAINS}
         value={fromChain} onChange={(c) => { setFromChain(c as ChainKey); setAssetHint(""); }} />
 
-      <div className="text-[9px] text-slate-600 mb-1">TO</div>
+      <div className="text-[12px] text-slate-600 mb-1">TO</div>
       <div className="flex items-center gap-2 mb-3">
         <div className="flex-1 min-w-0 flex items-center gap-1.5 rounded-lg border border-[#1A1A2E] bg-[#050508] px-2.5 py-2">
           <ChainMark chain={toChain} size={13} />
-          <span className="text-[12px] text-white truncate flex-1">{WALLET_CHAINS[toChain].label}</span>
-          <span className="text-[9px] text-slate-600 shrink-0">{WALLET_CHAINS[toChain].chainId}</span>
+          <span className="text-[15px] text-white truncate flex-1">{WALLET_CHAINS[toChain].label}</span>
+          <span className="text-[12px] text-slate-600 shrink-0">{WALLET_CHAINS[toChain].chainId}</span>
         </div>
         <button onClick={() => { setFromChain(toChain); setAssetHint(""); }} title="Swap direction"
-          className="w-9 h-9 rounded-lg shrink-0 text-[13px]"
+          className="w-9 h-9 rounded-lg shrink-0 text-[16px]"
           style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
           ⇄
         </button>
@@ -490,7 +490,7 @@ export default function BridgeCard({
           the default underneath, which is the failure this banner exists to
           make impossible to miss. */}
       {assetHint && (
-        <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/5 px-2.5 py-2 text-[9px] leading-relaxed text-amber-300">
+        <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/5 px-2.5 py-2 text-[12px] leading-relaxed text-amber-300">
           {assetHint}
         </div>
       )}
@@ -502,13 +502,13 @@ export default function BridgeCard({
           its picker carries a paste field and this one must not.) */}
       {tokenUnavailable || listLoading ? (
         <>
-          <div className="text-[9px] text-slate-600 mb-1">TOKEN</div>
+          <div className="text-[12px] text-slate-600 mb-1">TOKEN</div>
           {listLoading ? (
-            <div className="mb-3 rounded-lg border border-[#1A1A2E] bg-[#050508] px-2.5 py-2 text-[10px] text-slate-600">
+            <div className="mb-3 rounded-lg border border-[#1A1A2E] bg-[#050508] px-2.5 py-2 text-[13px] text-slate-600">
               Loading what Relay will move…
             </div>
           ) : listErr ? (
-            <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/5 px-2.5 py-2 text-[10px] text-amber-300">
+            <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/5 px-2.5 py-2 text-[13px] text-amber-300">
               {listErr}
               <button onClick={() => setReloadKey((k) => k + 1)} className="ml-2 underline">Retry</button>
             </div>
@@ -517,13 +517,13 @@ export default function BridgeCard({
             // but nothing movable" below — one is Relay not knowing the chain,
             // the other is Relay knowing it and moving nothing — and collapsing
             // them would report an outage as a fact about the bridge.
-            <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/5 px-2.5 py-2 text-[10px] text-amber-300">
+            <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/5 px-2.5 py-2 text-[13px] text-amber-300">
               Relay isn&apos;t listing {LABEL[!originChain ? fromChain : toChain]} right now, so this
               direction can&apos;t be quoted.
               <button onClick={() => setReloadKey((k) => k + 1)} className="ml-2 underline">Retry</button>
             </div>
           ) : (
-            <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/5 px-2.5 py-2 text-[10px] text-amber-300">
+            <div className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/5 px-2.5 py-2 text-[13px] text-amber-300">
               Relay lists nothing bridgeable from {LABEL[fromChain]} right now.
             </div>
           )}
@@ -532,9 +532,9 @@ export default function BridgeCard({
         <Picker label="TOKEN"
           summary={
             <span className="flex items-center gap-2 min-w-0">
-              <span className="text-[12px] text-white truncate">{token?.symbol ?? "—"}</span>
+              <span className="text-[15px] text-white truncate">{token?.symbol ?? "—"}</span>
               {token && isNativeAddress(token.address) && (
-                <span className="text-[9px] text-slate-600 shrink-0">gas token</span>
+                <span className="text-[12px] text-slate-600 shrink-0">gas token</span>
               )}
             </span>
           }>
@@ -543,8 +543,8 @@ export default function BridgeCard({
               {originTokens.map((t) => (
                 <PickerRow key={t.address} selected={t.address === tokenAddr}
                   onClick={() => { setTokenAddr(t.address); setAssetHint(""); close(); }}>
-                  <span className="text-[12px] text-white flex-1 truncate">{t.symbol}</span>
-                  <span className="text-[9px] text-slate-600 shrink-0">
+                  <span className="text-[15px] text-white flex-1 truncate">{t.symbol}</span>
+                  <span className="text-[12px] text-slate-600 shrink-0">
                     {isNativeAddress(t.address) ? "gas token" : truncAddr(t.address)}
                   </span>
                 </PickerRow>
@@ -557,7 +557,7 @@ export default function BridgeCard({
       {/* What lands. Amber when the asset changes, red-ish when the trip is
           refused — either way it is on screen BEFORE the amount is typed. */}
       {outlook && (
-        <div className="mb-3 rounded-lg px-2.5 py-2 text-[9px] leading-relaxed"
+        <div className="mb-3 rounded-lg px-2.5 py-2 text-[12px] leading-relaxed"
           style={outlook.kind === "same"
             ? { border: "1px solid #1A1A2E", color: "#64748b" }
             : outlook.kind === "dollar"
@@ -581,7 +581,7 @@ export default function BridgeCard({
                 render the same. Five decimals for the gas token, where the
                 interesting digits are small. */}
             {bal.balance != null && token && (
-              <span className="font-mono text-[9px] text-slate-600">
+              <span className="font-mono text-[12px] text-slate-600">
                 Bal {bal.balance.toFixed(isNative ? 5 : 2)} {token.symbol}
               </span>
             )}
@@ -598,7 +598,7 @@ export default function BridgeCard({
                     ? "Your balance couldn't be read, so there is no figure to take all of."
                     : "Reading your balance…"
               }
-              className="text-[9px] px-2 py-0.5 rounded-md text-[#4FC3F7] border border-[#4FC3F730] disabled:opacity-40 disabled:cursor-not-allowed">
+              className="text-[12px] px-2 py-0.5 rounded-md text-[#4FC3F7] border border-[#4FC3F730] disabled:opacity-40 disabled:cursor-not-allowed">
               Max
             </button>
           </span>
@@ -606,9 +606,9 @@ export default function BridgeCard({
         <div className="flex items-center gap-2">
           <input value={amount} onChange={(e) => { setAmount(e.target.value); setPendingWord(""); }}
             inputMode="decimal" placeholder="0.0"
-            className="flex-1 w-0 bg-transparent text-[16px] text-white outline-none placeholder:text-slate-700" />
+            className="flex-1 w-0 bg-transparent text-[19px] text-white outline-none placeholder:text-slate-700" />
           {token && (
-            <span className="text-[11px] text-slate-300 px-2 py-1.5 rounded-lg border border-[#1A1A2E] shrink-0">
+            <span className="text-[14px] text-slate-300 px-2 py-1.5 rounded-lg border border-[#1A1A2E] shrink-0">
               {token.symbol}
             </span>
           )}
@@ -617,7 +617,7 @@ export default function BridgeCard({
             empty box reads as "being worked out" rather than as an instruction
             that got dropped somewhere between chat and here. */}
         {pendingWord && (
-          <div className="font-mono text-[9px] text-slate-500 mt-1.5">
+          <div className="font-mono text-[12px] text-slate-500 mt-1.5">
             “{pendingWord}” — resolving against your {token?.symbol ?? "token"} balance…
           </div>
         )}
@@ -627,18 +627,18 @@ export default function BridgeCard({
             user expected to see isn't there, and offers the re-read. */}
         {!pendingWord && isWord && bal.failed && (
           <div className="flex items-center justify-between gap-2 mt-1.5">
-            <span className="font-mono text-[9px] text-amber-400">
+            <span className="font-mono text-[12px] text-amber-400">
               Couldn&apos;t read your balance here — “{amount.trim()}” is resolved on the next screen.
             </span>
             <button type="button" onClick={() => { void bal.refetch(); }} disabled={bal.refetching}
-              className="shrink-0 font-mono text-[9px] text-amber-400 underline disabled:opacity-50">
+              className="shrink-0 font-mono text-[12px] text-amber-400 underline disabled:opacity-50">
               {bal.refetching ? "reading…" : "Retry"}
             </button>
           </div>
         )}
       </Field>
 
-      {!from && <p className="text-[10px] text-amber-400 mb-2">Connect your wallet to bridge.</p>}
+      {!from && <p className="text-[13px] text-amber-400 mb-2">Connect your wallet to bridge.</p>}
 
       <ConfirmButton onClick={review} disabled={!canReview}>
         {!from ? "Connect your wallet"

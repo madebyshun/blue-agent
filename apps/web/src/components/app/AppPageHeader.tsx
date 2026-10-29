@@ -24,11 +24,11 @@ export default function AppPageHeader({
           // {label}
         </p>
         {subtitle && (
-          <p className="font-mono text-[10px] text-slate-700 hidden sm:block truncate">{subtitle}</p>
+          <p className="font-mono text-[13px] text-slate-700 hidden sm:block truncate">{subtitle}</p>
         )}
       </div>
       {right && (
-        <div className="font-mono text-[10px] text-slate-600 shrink-0">{right}</div>
+        <div className="font-mono text-[13px] text-slate-600 shrink-0">{right}</div>
       )}
     </div>
   );

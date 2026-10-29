@@ -230,29 +230,29 @@ export default function PositionsStrip({ tickers, tickersWithOpenArrow, onOpenTr
     >
       <div className="flex items-center justify-between px-4 py-2.5 border-b" style={{ borderColor: BORDER }}>
         <div className="flex items-center gap-3">
-          <span className="text-[11px] uppercase tracking-widest" style={{ color: MUTED }}>
+          <span className="text-[14px] uppercase tracking-widest" style={{ color: MUTED }}>
             Your positions
           </span>
           {heldCount > 0 && (
-            <span className="text-[10px]" style={{ color: RH_GREEN }}>
+            <span className="text-[13px]" style={{ color: RH_GREEN }}>
               {heldCount} held
             </span>
           )}
           {isLoading && (
-            <span className="text-[10px]" style={{ color: MUTED }}>
+            <span className="text-[13px]" style={{ color: MUTED }}>
               refreshing…
             </span>
           )}
         </div>
-        <div className="tabular-nums text-[12px]" style={{ color: totalValueUsd > 0 ? "#e7e9ee" : MUTED }}>
+        <div className="tabular-nums text-[15px]" style={{ color: totalValueUsd > 0 ? "#e7e9ee" : MUTED }}>
           total {formatUsd(totalValueUsd)}
         </div>
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-[12px]">
+        <table className="w-full text-[15px]">
           <thead>
-            <tr className="text-[10px] uppercase" style={{ color: MUTED, letterSpacing: "0.08em" }}>
+            <tr className="text-[13px] uppercase" style={{ color: MUTED, letterSpacing: "0.08em" }}>
               <th className="px-3 py-1.5 text-left font-normal">ticker</th>
               <th className="px-3 py-1.5 text-right font-normal">qty</th>
               <th className="px-3 py-1.5 text-right font-normal">value</th>
@@ -275,7 +275,7 @@ export default function PositionsStrip({ tickers, tickersWithOpenArrow, onOpenTr
                     <div className="flex items-center gap-2">
                       <span className="text-white">{p.ticker}</span>
                       {p.isDenom && (
-                        <span className="text-[9px] uppercase" style={{ color: MUTED }}>
+                        <span className="text-[12px] uppercase" style={{ color: MUTED }}>
                           denom
                         </span>
                       )}
@@ -292,12 +292,12 @@ export default function PositionsStrip({ tickers, tickersWithOpenArrow, onOpenTr
                   </td>
                   <td className="px-3 py-1.5 text-right">
                     {p.isDenom ? (
-                      <span className="text-[10px]" style={{ color: MUTED }}>—</span>
+                      <span className="text-[13px]" style={{ color: MUTED }}>—</span>
                     ) : p.balance > 0n && onOpenTrade ? (
                       tickersWithOpenArrow.has(p.ticker) ? (
                         <button
                           onClick={() => onOpenTrade(p.ticker, "sell")}
-                          className="rounded border px-2 py-0.5 text-[10px] hover:bg-black/40 transition-colors"
+                          className="rounded border px-2 py-0.5 text-[13px] hover:bg-black/40 transition-colors"
                           style={{ borderColor: AMBER, color: AMBER }}
                           title={`Open sell panel for ${p.ticker}`}
                         >
@@ -305,7 +305,7 @@ export default function PositionsStrip({ tickers, tickersWithOpenArrow, onOpenTr
                         </button>
                       ) : (
                         <span
-                          className="text-[9px]"
+                          className="text-[12px]"
                           style={{ color: MUTED }}
                           title="No open signal on this ticker — hit the row on the drift board to see verdict, or wait for the next arrow."
                         >
@@ -321,7 +321,7 @@ export default function PositionsStrip({ tickers, tickersWithOpenArrow, onOpenTr
         </table>
       </div>
 
-      <div className="px-4 py-1.5 border-t text-[9px]" style={{ borderColor: BORDER, color: MUTED }}>
+      <div className="px-4 py-1.5 border-t text-[12px]" style={{ borderColor: BORDER, color: MUTED }}>
         Balances refresh every 30s · prices from drift-board snapshot · non-custodial · no cost basis stored (P&L requires historical transfer tracking, not yet wired)
       </div>
     </div>

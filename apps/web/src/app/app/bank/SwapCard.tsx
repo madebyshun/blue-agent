@@ -458,15 +458,15 @@ export default function SwapCard({
   if (step === "done") {
     return (
       <div className="mt-2 rounded-xl border p-3.5" style={{ borderColor: "#22C55E40", background: "#22C55E08" }}>
-        <div className="font-mono text-[11px] font-bold mb-1" style={{ color: "#22C55E" }}>
+        <div className="font-mono text-[14px] font-bold mb-1" style={{ color: "#22C55E" }}>
           ✓ Converted {fmt(amt)} {label(sell)} → {buyAmount != null ? fmt(buyAmount) : ""} {label(buy)}
         </div>
         {txHash && (
           <a href={`https://basescan.org/tx/${txHash}`} target="_blank" rel="noopener noreferrer"
-             className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#4FC3F730] text-[#4FC3F7] inline-block mt-1">View tx ↗</a>
+             className="font-mono text-[13px] px-2.5 py-1 rounded-lg border border-[#4FC3F730] text-[#4FC3F7] inline-block mt-1">View tx ↗</a>
         )}
         <button onClick={() => { setStep("idle"); setAmount(""); setQuote(null); }}
-          className="font-mono text-[10px] text-slate-500 hover:text-slate-300 ml-3">Trade again</button>
+          className="font-mono text-[13px] text-slate-500 hover:text-slate-300 ml-3">Trade again</button>
       </div>
     );
   }
@@ -484,15 +484,15 @@ export default function SwapCard({
   // one above the other need different accessible names.
   const tokenChip = (side: "sell" | "buy", value: Token, options: Token[]) => (
     <Picker inline label={side === "sell" ? "Pay with" : "Receive"}
-      summary={<span className="text-[11px] text-slate-200">{label(value)}</span>}>
+      summary={<span className="text-[14px] text-slate-200">{label(value)}</span>}>
       {close => options.map(t => (
         <PickerRow key={t.addr} selected={t.addr.toLowerCase() === value.addr.toLowerCase()}
           onClick={() => { pick(side, t.addr); close(); }}>
-          <span className="text-[12px] text-white flex-1">{label(t)}</span>
+          <span className="text-[15px] text-white flex-1">{label(t)}</span>
           {/* The address, because a ticker does not identify a token — and the
               sell list can carry an arbitrary one injected by `preset`. An
               `<option>` had nowhere to put this. */}
-          <span className="text-[9px] text-slate-600">{t.native ? "native" : truncAddr(t.addr)}</span>
+          <span className="text-[12px] text-slate-600">{t.native ? "native" : truncAddr(t.addr)}</span>
         </PickerRow>
       ))}
     </Picker>
@@ -514,7 +514,7 @@ export default function SwapCard({
           it were their request understood. */}
       {assetHint.length > 0 && (
         <div className="rounded-lg border border-amber-500/25 bg-amber-500/5 px-2.5 py-2 mb-3">
-          <p className="text-[9px] text-amber-300/90 leading-relaxed">
+          <p className="text-[12px] text-amber-300/90 leading-relaxed">
             Couldn&apos;t arm <span className="text-amber-200 font-bold">{assetHint.join(" / ")}</span> — a ticker
             alone doesn&apos;t identify a token on Base. Pick it below, or paste the contract address.
           </p>
@@ -525,31 +525,31 @@ export default function SwapCard({
           flip button and must sit closer than the card's normal field rhythm. */}
       <Field className="!mb-1" label="YOU PAY"
         right={balance != null && (
-          <span className="text-[9px] text-slate-600">Bal {balance.toFixed(bal.decimals === 6 ? 2 : 5)}
+          <span className="text-[12px] text-slate-600">Bal {balance.toFixed(bal.decimals === 6 ? 2 : 5)}
             <button type="button" onClick={() => setPct(10000)} className="text-[#4FC3F7] ml-1">Max</button></span>
         )}>
         <div className="flex items-center gap-2">
           <input type="number" min="0" value={amount} onChange={e => { setAmount(e.target.value); setPendingWord(""); }} placeholder="0.0"
-            className="flex-1 bg-transparent text-[16px] text-white outline-none placeholder:text-slate-700 w-0" />
+            className="flex-1 bg-transparent text-[19px] text-white outline-none placeholder:text-slate-700 w-0" />
           {tokenChip("sell", sell, optionsFor(sell))}
         </div>
         {pendingWord && (
-          <div className="text-[9px] text-slate-500 mt-1">
+          <div className="text-[12px] text-slate-500 mt-1">
             &ldquo;{pendingWord}&rdquo; — resolving against your {label(sell)} balance…
           </div>
         )}
-        {overBalance && <div className="text-[9px] text-red-500 mt-1">Exceeds your {label(sell)} balance</div>}
+        {overBalance && <div className="text-[12px] text-red-500 mt-1">Exceeds your {label(sell)} balance</div>}
       </Field>
 
       {/* Flip */}
       <div className="flex justify-center -my-1 relative z-10">
-        <button onClick={flip} className="w-7 h-7 rounded-lg border border-[#1A1A2E] bg-[#0d0d12] text-slate-400 hover:text-[#4FC3F7] hover:border-[#4FC3F7]/40 text-[12px]">⇅</button>
+        <button onClick={flip} className="w-7 h-7 rounded-lg border border-[#1A1A2E] bg-[#0d0d12] text-slate-400 hover:text-[#4FC3F7] hover:border-[#4FC3F7]/40 text-[15px]">⇅</button>
       </div>
 
       {/* Buy */}
       <Field className="mt-1" label="YOU RECEIVE">
         <div className="flex items-center gap-2">
-          <div className="flex-1 text-[16px] text-white w-0 truncate">
+          <div className="flex-1 text-[19px] text-white w-0 truncate">
             {loading ? <span className="text-slate-600">…</span> : buyAmount != null ? fmt(buyAmount) : <span className="text-slate-700">0.0</span>}
           </div>
           {tokenChip("buy", buy, optionsFor(buy))}
@@ -557,19 +557,19 @@ export default function SwapCard({
         {/* An unread exponent is not a small display gap — it is the difference
             between this line and 100× this line. The button is disabled with it. */}
         {buyDec == null && (
-          <div className="text-[9px] text-amber-400 mt-1">Reading {label(buy)}&apos;s decimals on-chain…</div>
+          <div className="text-[12px] text-amber-400 mt-1">Reading {label(buy)}&apos;s decimals on-chain…</div>
         )}
       </Field>
 
       {rate != null && (
-        <div className="text-[9px] text-slate-500 mb-2 flex items-center justify-between">
+        <div className="text-[12px] text-slate-500 mb-2 flex items-center justify-between">
           <span>1 {label(sell)} ≈ {fmt(rate)} {label(buy)}</span>
           {minBuy != null && <span className="text-slate-600">min {fmt(minBuy)} {label(buy)}</span>}
         </div>
       )}
 
       {/* Slippage the user chose — sent to 0x and enforced as minBuyAmount. */}
-      <div className="text-[9px] text-slate-500 mb-2 flex items-center gap-1.5">
+      <div className="text-[12px] text-slate-500 mb-2 flex items-center gap-1.5">
         <span>Max slippage</span>
         {SLIPPAGE_CHOICES.map(bps => (
           <button key={bps} type="button" disabled={busy} onClick={() => setSlippageBps(bps)}
@@ -585,8 +585,8 @@ export default function SwapCard({
 
       <PreTradeBanner pt={pt} />
 
-      {quote?.needsKey && <p className="text-[9px] text-amber-400 mb-2">Trading needs a free 0x API key — set <span className="text-slate-300">ZEROX_API_KEY</span>.</p>}
-      {step === "error" && <p className="text-[10px] text-amber-400 mb-2">{err}</p>}
+      {quote?.needsKey && <p className="text-[12px] text-amber-400 mb-2">Trading needs a free 0x API key — set <span className="text-slate-300">ZEROX_API_KEY</span>.</p>}
+      {step === "error" && <p className="text-[13px] text-amber-400 mb-2">{err}</p>}
 
       {gate === "unverified" && (
         <UnverifiedBalance symbol={label(sell)} onRetry={() => { void bal.refetch(); }} busy={bal.refetching} />

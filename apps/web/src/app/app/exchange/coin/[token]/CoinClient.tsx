@@ -15,12 +15,12 @@ const pub = createPublicClient({ chain: base, transport: http() });
 const ZERO = "0x0000000000000000000000000000000000000000";
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 const card = "rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] p-[14px]";
-const input = "w-full rounded-lg border border-[#1A1A2E] bg-[#050508] px-3 py-2 text-[11px] text-[#E2E8F0] outline-none focus:border-[#4FC3F7]/40";
-const btn = "rounded-[8px] px-[13px] py-2 text-[10.5px] disabled:opacity-40";
+const input = "w-full rounded-lg border border-[#1A1A2E] bg-[#050508] px-3 py-2 text-[14px] text-[#E2E8F0] outline-none focus:border-[#4FC3F7]/40";
+const btn = "rounded-[8px] px-[13px] py-2 text-[13px] disabled:opacity-40";
 const L = ({ t, s }: { t: string; s?: string }) => (
   <div className="flex items-baseline gap-2.5 mt-[24px] mb-3 flex-wrap">
-    <span className="text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">{t}</span>
-    {s && <span className="text-[10px] text-[#475569]">{s}</span>}
+    <span className="text-[12px] font-medium tracking-[0.14em] text-[#64748B]">{t}</span>
+    {s && <span className="text-[13px] text-[#64748B]">{s}</span>}
   </div>
 );
 
@@ -89,16 +89,16 @@ export default function CoinClient({ token, shares }: { token: string; shares: {
     finally { setBusy(false); }
   }
 
-  if (shares === null) return <p className="text-[10.5px] text-[#64748B]">Could not read the share contracts from Base right now.</p>;
-  if (active === undefined) return <p className="text-[10.5px] text-[#64748B]">Reading the chain…</p>;
+  if (shares === null) return <p className="text-[13px] text-[#64748B]">Could not read the share contracts from Base right now.</p>;
+  if (active === undefined) return <p className="text-[13px] text-[#64748B]">Reading the chain…</p>;
   if (!active) return (
     <div className={card}>
-      <p className="text-[12px] text-[#E2E8F0]">No active share contract for {short(token)}.</p>
-      <p className="mt-1 text-[10.5px] text-[#64748B]">Its launcher&apos;s fees are not shared with stakers. The launcher can set that up on <Link className="text-[#4FC3F7]" href="/exchange/tokenize">Tokenize</Link>, step 2.</p>
+      <p className="text-[15px] text-[#E2E8F0]">No active share contract for {short(token)}.</p>
+      <p className="mt-1 text-[13px] text-[#64748B]">Its launcher&apos;s fees are not shared with stakers. The launcher can set that up on <Link className="text-[#4FC3F7]" href="/exchange/tokenize">Tokenize</Link>, step 2.</p>
     </div>
   );
-  if (!st) return <p className="text-[10.5px] text-[#64748B]">Reading the share contract…</p>;
-  if (!st.launchpadOk) return <p className="text-[10.5px] text-[#F87171]">This share contract is not bound to Quadra&apos;s launchpad; not offering it.</p>;
+  if (!st) return <p className="text-[13px] text-[#64748B]">Reading the share contract…</p>;
+  if (!st.launchpadOk) return <p className="text-[13px] text-[#F87171]">This share contract is not bound to Quadra&apos;s launchpad; not offering it.</p>;
 
   const f = (v: bigint, c: Cur) => Number(formatUnits(v, c.decimals)).toLocaleString("en-US", { maximumFractionDigits: 6 });
   let want = 0n;
@@ -108,9 +108,9 @@ export default function CoinClient({ token, shares }: { token: string; shares: {
 
   return (
     <div>
-      <h1 className="text-[15px] font-semibold text-[#E2E8F0]">Stake ${st.coin.symbol}</h1>
-      <p className="mt-1.5 max-w-[860px] text-[11px] leading-[1.7] text-[#94A3B8]">{stakerWording(st.coin.symbol, st.c0.symbol === st.coin.symbol ? st.c1.symbol : st.c0.symbol)}</p>
-      <p className="mt-1 text-[10px] text-[#64748B]">
+      <h1 className="text-[18px] font-semibold text-[#E2E8F0]">Stake ${st.coin.symbol}</h1>
+      <p className="mt-1.5 max-w-[860px] text-[14px] leading-[1.7] text-[#94A3B8]">{stakerWording(st.coin.symbol, st.c0.symbol === st.coin.symbol ? st.c1.symbol : st.c0.symbol)}</p>
+      <p className="mt-1 text-[13px] text-[#64748B]">
         Share contract <a className="text-[#4FC3F7]" href={`https://basescan.org/address/${S}`} target="_blank" rel="noreferrer">{short(S)}</a> ·{" "}
         {st.agentBps > 0 ? <>{short(st.agent)} receives {st.agentBps / 100}% of the launcher&apos;s fee share; stakers share the rest</> : "stakers share all of the launcher's fee share"} ·
         released over 7 days · no owner · not audited
@@ -123,7 +123,7 @@ export default function CoinClient({ token, shares }: { token: string; shares: {
           [`CLAIMABLE ${st.c0.symbol}`, isConnected ? f(st.claim0, st.c0) : "—"],
           [`CLAIMABLE ${st.c1.symbol}`, isConnected ? f(st.claim1, st.c1) : "—"],
         ].map(([l, v]) => (
-          <div key={l} className={card}><p className="text-[9.5px] tracking-[0.12em] text-[#64748B]">{l}</p><p className="mt-1.5 text-[16px] font-semibold text-[#E2E8F0] tabular-nums">{v}</p></div>
+          <div key={l} className={card}><p className="text-[12px] tracking-[0.12em] text-[#64748B]">{l}</p><p className="mt-1.5 text-[19px] font-semibold text-[#E2E8F0] tabular-nums">{v}</p></div>
         ))}
       </div>
 
@@ -133,7 +133,7 @@ export default function CoinClient({ token, shares }: { token: string; shares: {
           <>
             {gate === "unverified"
               ? <UnverifiedBalance symbol={st.coin.symbol} onRetry={() => { void bal.refetch(); }} busy={bal.refetching} />
-              : <p className="text-[10px] text-[#64748B]">Wallet balance: {bal.raw != null ? f(bal.raw, st.coin) : "reading…"} {st.coin.symbol}{gate === "insufficient" ? " · not enough for this amount" : ""}</p>}
+              : <p className="text-[13px] text-[#64748B]">Wallet balance: {bal.raw != null ? f(bal.raw, st.coin) : "reading…"} {st.coin.symbol}{gate === "insufficient" ? " · not enough for this amount" : ""}</p>}
             <input className={`${input} max-w-[320px]`} value={amt} onChange={(e) => setAmt(e.target.value.trim())} placeholder={`Amount of ${st.coin.symbol}`} />
             <div className="flex flex-wrap gap-2">
               {st.allowance < want ? (
@@ -147,10 +147,10 @@ export default function CoinClient({ token, shares }: { token: string; shares: {
               <button type="button" disabled={busy || (st.claim0 === 0n && st.claim1 === 0n)} className={`${btn} border border-[#34D399]/40 text-[#34D399]`}
                 onClick={() => tx(S, encodeFunctionData({ abi: RS, functionName: "claim", args: [address!] }), "Claim")}>Claim to this wallet</button>
             </div>
-            {!st.active && <p className="text-[10px] text-[#FBBF24]">This contract is no longer the coin&apos;s fee recipient; staking is off. You can still unstake and claim.</p>}
+            {!st.active && <p className="text-[13px] text-[#FBBF24]">This contract is no longer the coin&apos;s fee recipient; staking is off. You can still unstake and claim.</p>}
           </>
         )}
-        {msg && <p className={`text-[10.5px] ${msg.ok ? "text-[#94A3B8]" : "text-[#F87171]"}`}>{msg.text}{msg.hash && <> · <a className="text-[#4FC3F7]" href={`https://basescan.org/tx/${msg.hash}`} target="_blank" rel="noreferrer">Basescan ↗</a></>}</p>}
+        {msg && <p className={`text-[13px] ${msg.ok ? "text-[#94A3B8]" : "text-[#F87171]"}`}>{msg.text}{msg.hash && <> · <a className="text-[#4FC3F7]" href={`https://basescan.org/tx/${msg.hash}`} target="_blank" rel="noreferrer">Basescan ↗</a></>}</p>}
       </div>
 
       <L t="ANYONE CAN" s="public calls, they move nothing to the caller" />
@@ -162,7 +162,7 @@ export default function CoinClient({ token, shares }: { token: string; shares: {
             onClick={() => tx(S, encodeFunctionData({ abi: RS, functionName: "payAgent" }), "Pay agent")}>Pay the agent its share</button>
         )}
       </div>
-      <p className="mt-4 text-[9.5px] leading-relaxed text-[#475569]">
+      <p className="mt-4 text-[12px] leading-relaxed text-[#64748B]">
         Fees reach stakers over 7 days after they arrive. Holders who do not stake receive nothing. This contract has no owner, cannot be upgraded or paused,
         and is not audited. Blue Agent builds these calls; your wallet signs every one.
       </p>

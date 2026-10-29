@@ -11,7 +11,7 @@
  * three kept the shape they were born with — Deposit drew two rows of segmented
  * buttons straight into the modal with no card around them at all, Convert put
  * its chain selector OUTSIDE the card it belonged to, and Bridge opened with a
- * bare `<div className="font-mono text-[11px]">`.
+ * bare `<div className="font-mono text-[14px]">`.
  *
  * That is not only a cosmetic gap. Four panels reachable from four buttons that
  * sit side by side in one row, each drawn differently, read as four different
@@ -105,8 +105,8 @@ export function WalletCard({
   return (
     <div className="mt-2 font-mono rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3.5">
       <div className="flex items-center justify-between gap-2 mb-3">
-        <span className="font-mono text-[10px] text-slate-500 tracking-widest font-bold">{title}</span>
-        <span className="font-mono text-[9px] text-slate-600 flex items-center gap-1 shrink-0">
+        <span className="font-mono text-[13px] text-slate-500 tracking-widest font-bold">{title}</span>
+        <span className="font-mono text-[12px] text-slate-600 flex items-center gap-1 shrink-0">
           {chain && <ChainMark chain={chain} size={11} />}
           {chain && WALLET_CHAINS[chain].short}
           {note && <span className="text-slate-700">· {note}</span>}
@@ -134,7 +134,7 @@ export function Field({
     <div className={`rounded-lg border border-[#1A1A2E] bg-[#050508] p-2.5 mb-3 ${className}`}>
       {(label || right) && (
         <div className="flex items-center justify-between gap-2 mb-1">
-          <span className="font-mono text-[9px] text-slate-600">{label}</span>
+          <span className="font-mono text-[12px] text-slate-600">{label}</span>
           {right}
         </div>
       )}
@@ -169,15 +169,15 @@ export function NetworkPicker({
   return (
     <Picker label={label} disabled={disabled}
       summary={
-        <span className="flex items-center gap-1.5 font-mono text-[12px] text-white">
+        <span className="flex items-center gap-1.5 font-mono text-[15px] text-white">
           <ChainMark chain={value} size={13} />{WALLET_CHAINS[value].label}
         </span>
       }>
       {close => chains.map(k => (
         <PickerRow key={k} selected={value === k} onClick={() => { onChange(k); close(); }}>
           <ChainMark chain={k} size={14} />
-          <span className="font-mono text-[12px] text-white flex-1">{WALLET_CHAINS[k].label}</span>
-          <span className="font-mono text-[9px] text-slate-600">{WALLET_CHAINS[k].chainId}</span>
+          <span className="font-mono text-[15px] text-white flex-1">{WALLET_CHAINS[k].label}</span>
+          <span className="font-mono text-[12px] text-slate-600">{WALLET_CHAINS[k].chainId}</span>
         </PickerRow>
       ))}
     </Picker>
@@ -204,7 +204,7 @@ export function ConfirmButton({
   const c = tone === "blue" ? "#4FC3F7" : "#34D399";
   return (
     <button type="button" onClick={onClick} disabled={disabled}
-      className="w-full font-mono text-[12px] font-bold py-2 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+      className="w-full font-mono text-[15px] font-bold py-2 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
       style={{ background: `${c}15`, color: c, border: `1px solid ${c}40` }}>
       {children}
     </button>
@@ -213,5 +213,5 @@ export function ConfirmButton({
 
 /** The line under the button: what this card is, who signs, what is final. */
 export function CardNote({ children }: { children: React.ReactNode }) {
-  return <p className="font-mono text-[9px] text-slate-700 mt-1.5 leading-relaxed">{children}</p>;
+  return <p className="font-mono text-[12px] text-slate-700 mt-1.5 leading-relaxed">{children}</p>;
 }

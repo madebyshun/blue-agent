@@ -23,7 +23,7 @@ export default function RewardsRetired() {
   return (
     <div className="min-h-full bg-[#050508] text-white font-mono flex items-center justify-center p-6">
       <div className="max-w-[560px] w-full rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] p-8">
-        <div className="font-mono text-[10px] text-slate-600 tracking-widest mb-3">
+        <div className="font-mono text-[13px] text-slate-600 tracking-widest mb-3">
           STAKING · RETIRED
         </div>
 
@@ -46,18 +46,18 @@ export default function RewardsRetired() {
         </p>
 
         <div className="rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-4 mb-6">
-          <div className="font-mono text-[9px] text-slate-600 tracking-widest mb-2">
+          <div className="font-mono text-[12px] text-slate-600 tracking-widest mb-2">
             CONTRACT · BASE 8453
           </div>
           <a
             href={`https://basescan.org/address/${STAKING_ADDRESS}#writeContract`}
             target="_blank"
             rel="noopener noreferrer"
-            className="font-mono text-[11px] sm:text-xs text-[#4FC3F7] hover:underline break-all"
+            className="font-mono text-[14px] sm:text-xs text-[#4FC3F7] hover:underline break-all"
           >
             {STAKING_ADDRESS} ↗
           </a>
-          <div className="font-mono text-[10px] text-slate-600 mt-3 leading-relaxed">
+          <div className="font-mono text-[13px] text-slate-600 mt-3 leading-relaxed">
             Withdrawing is two transactions:{" "}
             <span className="text-slate-400">requestUnstake()</span>, then{" "}
             <span className="text-slate-400">unstake()</span> after the 1-day
@@ -68,7 +68,7 @@ export default function RewardsRetired() {
 
         <a
           href="/app/dashboard"
-          className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-2 rounded-lg bg-[#4FC3F7]/15 text-[#4FC3F7] border border-[#4FC3F7]/40 hover:bg-[#4FC3F7]/20 transition-colors"
+          className="inline-flex items-center gap-1.5 text-[14px] font-bold px-3 py-2 rounded-lg bg-[#4FC3F7]/15 text-[#4FC3F7] border border-[#4FC3F7]/40 hover:bg-[#4FC3F7]/20 transition-colors"
         >
           Back to dashboard →
         </a>

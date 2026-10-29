@@ -9,6 +9,7 @@ import { readListings } from "@/lib/hub/listings";
 import { X402_PAY_TO } from "@/lib/x402-payee";
 import { BLUE_AGENT_ID } from "@/lib/erc8004";
 import ExchangeHeader from "./ExchangeHeader";
+import SubTabs, { AGENTS_TABS } from "./_components/SubTabs";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
@@ -21,8 +22,8 @@ const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 const card = "rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14]";
 const L = ({ t, s }: { t: string; s?: string }) => (
   <div className="flex items-baseline gap-2.5 mt-[24px] mb-3 flex-wrap">
-    <span className="text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">{t}</span>
-    {s && <span className="text-[10px] text-[#475569]">{s}</span>}
+    <span className="text-[12px] font-medium tracking-[0.14em] text-[#64748B]">{t}</span>
+    {s && <span className="text-[13px] text-[#64748B]">{s}</span>}
   </div>
 );
 const sum7 = (r: ProviderRow) => r.series.slice(-7).reduce((a, b) => a + b, 0);
@@ -32,21 +33,21 @@ function Row({ href, title, sub, meta, right, rightSub, badges }: { href: string
     <Link href={href} className={`${card} flex items-center gap-3 px-4 py-2.5 transition-colors hover:border-[#4FC3F7]/45`}>
       <div className="min-w-0 flex-1">
         <span className="flex items-center gap-2 min-w-0">
-          <span className="truncate text-[12px] font-semibold text-[#E2E8F0]">{title}</span>{badges}
+          <span className="truncate text-[15px] font-semibold text-[#E2E8F0]">{title}</span>{badges}
         </span>
-        <p className="truncate font-prose text-[10.5px] text-[#94A3B8]">{sub}</p>
-        <p className="text-[9px] text-[#475569]">{meta}</p>
+        <p className="truncate font-prose text-[13px] text-[#94A3B8]">{sub}</p>
+        <p className="text-[12px] text-[#64748B]">{meta}</p>
       </div>
       <div className="w-[120px] shrink-0 text-right">
-        <p className="text-[12px] font-semibold text-[#E2E8F0] tabular-nums">{right}</p>
-        <p className="text-[9px] text-[#475569]">{rightSub}</p>
+        <p className="text-[15px] font-semibold text-[#E2E8F0] tabular-nums">{right}</p>
+        <p className="text-[12px] text-[#64748B]">{rightSub}</p>
       </div>
     </Link>
   );
 }
 
 const Badge = ({ c, children }: { c: string; children: React.ReactNode }) => (
-  <span className="shrink-0 text-[8.5px] font-medium rounded-full border px-[7px] py-[2px]" style={{ color: c, borderColor: `${c}4d` }}>{children}</span>
+  <span className="shrink-0 text-[11px] font-medium rounded-full border px-[7px] py-[2px]" style={{ color: c, borderColor: `${c}4d` }}>{children}</span>
 );
 
 export default async function AgentsPage() {
@@ -66,8 +67,9 @@ export default async function AgentsPage() {
       <ExchangeHeader active="agents" chip={`${listings.length + 1} listed · ${ex.rows.length.toLocaleString("en-US")} paid · ${ex.daysCovered}d`} />
       <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="px-5 py-[18px] w-full">
-          <h1 className="text-[15px] font-semibold text-[#E2E8F0]">Agent Exchange</h1>
-          <p className="mt-1.5 max-w-[900px] text-[11px] leading-[1.7] text-[#94A3B8]">
+          <SubTabs tabs={AGENTS_TABS} active="/exchange" />
+          <h1 className="text-[18px] font-semibold text-[#E2E8F0]">Agent Exchange</h1>
+          <p className="mt-1.5 max-w-[900px] text-[14px] leading-[1.7] text-[#94A3B8]">
             Every agent Blue Agent knows on Base: the ones listed here first, then sellers with an ERC-8004 identity, then everyone else on{" "}
             <Link className="text-[#4FC3F7]" href="/exchange/discovered">Discovered</Link>. Each figure says where it comes from.
           </p>
@@ -80,9 +82,9 @@ export default async function AgentsPage() {
               ["PAYING WALLETS", R ? `≥${payersApprox.toLocaleString("en-US")}` : "—", "sum per seller, a lower bound"],
             ].map(([l, v, s]) => (
               <div key={l} className={`${card} p-[14px]`}>
-                <p className="text-[9.5px] tracking-[0.12em] text-[#64748B]">{l}</p>
-                <p className="mt-1.5 text-[18px] font-semibold text-[#E2E8F0] tabular-nums">{v}</p>
-                <p className="mt-0.5 text-[9.5px] text-[#475569]">{s}</p>
+                <p className="text-[12px] tracking-[0.12em] text-[#64748B]">{l}</p>
+                <p className="mt-1.5 text-[22px] font-semibold text-[#E2E8F0] tabular-nums">{v}</p>
+                <p className="mt-0.5 text-[12px] text-[#64748B]">{s}</p>
               </div>
             ))}
           </div>
@@ -105,13 +107,13 @@ export default async function AgentsPage() {
             })}
           </div>
           <Link href="/exchange/sell" className={`${card} mt-2 flex items-center gap-3 px-4 py-[11px] hover:border-[#4FC3F7]/45`}>
-            <span className="text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">SELL</span>
-            <span className="flex-1 text-[10.5px] text-[#94A3B8]">Run an x402 service on Base? Prove it and get listed. Buyers pay you directly; Blue Agent takes nothing.</span>
-            <span className="text-[10.5px] text-[#4FC3F7]">Sell services →</span>
+            <span className="text-[12px] font-medium tracking-[0.14em] text-[#64748B]">SELL</span>
+            <span className="flex-1 text-[13px] text-[#94A3B8]">Run an x402 service on Base? Prove it and get listed. Buyers pay you directly; Blue Agent takes nothing.</span>
+            <span className="text-[13px] text-[#4FC3F7]">Sell services →</span>
           </Link>
 
           <L t="AGENTS WITH AN ERC-8004 IDENTITY" s="sellers whose payTo owns an agent in the Identity Registry on Base" />
-          {withId.length === 0 ? <p className="text-[10.5px] text-[#64748B]">None found yet; the identity check walks the seller list a slice a day.</p> : (
+          {withId.length === 0 ? <p className="text-[13px] text-[#64748B]">None found yet; the identity check walks the seller list a slice a day.</p> : (
             <div className="space-y-1.5">
               {withId.map((r) => (
                 <Row key={r.payTo} href={`/exchange/agent/${ids[r.payTo].agentIds[0]}`} title={r.hosts[0] ?? short(r.payTo)} sub={r.title || "—"}
@@ -123,7 +125,7 @@ export default async function AgentsPage() {
           )}
 
           <L t="TOP SELLERS · LAST 7 DAYS" s="by measured x402 volume on Base" />
-          {top.length === 0 && <p className="text-[10.5px] text-[#64748B]">{R ? "No x402 settlements indexed in the last 7 days." : "Index unreadable right now."}</p>}
+          {top.length === 0 && <p className="text-[13px] text-[#64748B]">{R ? "No x402 settlements indexed in the last 7 days." : "Index unreadable right now."}</p>}
           <div className="space-y-1.5">
             {top.map((r, i) => (
               <Row key={r.payTo} href={`/exchange/${r.payTo}`} title={`${i + 1}. ${r.hosts[0] ?? short(r.payTo)}`} sub={r.title || "—"}
@@ -132,11 +134,11 @@ export default async function AgentsPage() {
                 badges={live(r.payTo) ? <Badge c="#34D399">✓ live 402</Badge> : null} />
             ))}
           </div>
-          <Link href="/exchange/discovered" className="mt-3 inline-block text-[10.5px] text-[#4FC3F7]">Every x402 seller on Base ({ex.providersListed.toLocaleString("en-US")}) → Discovered</Link>
+          <Link href="/exchange/discovered" className="mt-3 inline-block text-[13px] text-[#4FC3F7]">Every x402 seller on Base ({ex.providersListed.toLocaleString("en-US")}) → Discovered</Link>
 
-          <p className="text-[9.5px] text-[#475569] mt-4 leading-relaxed">
+          <p className="text-[12px] text-[#64748B] mt-4 leading-relaxed">
             Revenue counts USDC paid to a seller&apos;s payTo on Base in a transaction that used the payer&apos;s EIP-3009 authorization, the way x402 settles. Gross:
-            a seller&apos;s own test wallets cannot be told apart, so nothing is subtracted on a guess. Not financial advice.
+            a seller&apos;s own test wallets cannot be told apart, so nothing is subtracted on a guess. Not financial advice. <Link className="text-[#4FC3F7]" href="/exchange/docs">How it works →</Link>
           </p>
         </div>
       </div>

@@ -50,7 +50,7 @@ function ChangeBadge({ change }: { change: WatchChange }) {
       style={{ background: `${color}0a`, border: `1px solid ${color}25` }}>
       <span className="w-1.5 h-1.5 rounded-full shrink-0 mt-1.5"
         style={{ background: color, boxShadow: `0 0 4px ${color}80` }} />
-      <span className="font-mono text-[11px] leading-relaxed" style={{ color }}>
+      <span className="font-mono text-[14px] leading-relaxed" style={{ color }}>
         {change.text}
       </span>
     </div>
@@ -92,11 +92,11 @@ function WatchCard({
           <p className="font-mono text-xs text-white truncate">
             {title}{item.symbol ? <span className="text-slate-500"> ${item.symbol}</span> : null}
           </p>
-          <p className="font-mono text-[9px] text-slate-600 truncate">
+          <p className="font-mono text-[12px] text-slate-600 truncate">
             {truncAddr(item.address, 10)} · {netTag}
           </p>
         </div>
-        <span className="font-mono text-[9px] shrink-0" style={{ color: status.color }}>
+        <span className="font-mono text-[12px] shrink-0" style={{ color: status.color }}>
           {status.text}
         </span>
       </div>
@@ -111,11 +111,11 @@ function WatchCard({
       {/* Live state line (when in sync / available) */}
       {!unavailable && isB20 && live && !hasChanges && (
         <div className="px-4 py-2.5 border-b border-[#1A1A2E] flex items-center gap-x-3 gap-y-1 flex-wrap">
-          <span className="font-mono text-[9px] text-slate-600">{live.variant}</span>
-          {live.currency && <span className="font-mono text-[9px] text-slate-600">· {live.currency}</span>}
-          <span className="font-mono text-[9px] text-slate-600">· cap {live.supplyCap}</span>
+          <span className="font-mono text-[12px] text-slate-600">{live.variant}</span>
+          {live.currency && <span className="font-mono text-[12px] text-slate-600">· {live.currency}</span>}
+          <span className="font-mono text-[12px] text-slate-600">· cap {live.supplyCap}</span>
           {(live.paused.transfer || live.paused.mint || live.paused.burn) && (
-            <span className="font-mono text-[9px] text-[#F59E0B]">
+            <span className="font-mono text-[12px] text-[#F59E0B]">
               · paused: {[live.paused.transfer && "transfer", live.paused.mint && "mint", live.paused.burn && "burn"].filter(Boolean).join(", ")}
             </span>
           )}
@@ -124,7 +124,7 @@ function WatchCard({
 
       {unavailable && (
         <div className="px-4 py-2.5 border-b border-[#1A1A2E]">
-          <span className="font-mono text-[9px] text-slate-600">
+          <span className="font-mono text-[12px] text-slate-600">
             Live read failed — showing last-known. No change inferred.
           </span>
         </div>
@@ -132,23 +132,23 @@ function WatchCard({
 
       {/* Footer actions */}
       <div className="px-4 py-2.5 flex items-center gap-3">
-        <span className="font-mono text-[9px] text-slate-700">
+        <span className="font-mono text-[12px] text-slate-700">
           baseline {relTime(item.snapshotAt)}
         </span>
         <div className="ml-auto flex items-center gap-3">
           <a href={explorerUrl} target="_blank" rel="noopener noreferrer"
-            className="font-mono text-[9px] text-slate-600 hover:text-slate-400 transition-colors">
+            className="font-mono text-[12px] text-slate-600 hover:text-slate-400 transition-colors">
             Explorer ↗
           </a>
           {hasChanges && (
             <button onClick={onAck} disabled={busy}
-              className="font-mono text-[9px] transition-colors"
+              className="font-mono text-[12px] transition-colors"
               style={{ color: busy ? "#334155" : "#4FC3F7" }}>
               {busy ? "…" : "Acknowledge"}
             </button>
           )}
           <button onClick={onRemove} disabled={busy}
-            className="font-mono text-[9px] text-slate-600 hover:text-[#EF4444] transition-colors">
+            className="font-mono text-[12px] text-slate-600 hover:text-[#EF4444] transition-colors">
             Remove
           </button>
         </div>
@@ -241,7 +241,7 @@ export default function WatchlistTab({
     <div>
       {/* Add token */}
       <div className="mb-4">
-        <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
+        <label className="font-mono text-[12px] text-slate-600 tracking-widest uppercase block mb-1.5">
           Watch a B20 token
         </label>
         <div className="flex gap-2 mb-2">
@@ -257,7 +257,7 @@ export default function WatchlistTab({
           <div className="flex rounded-xl border border-[#1A1A2E] overflow-hidden shrink-0">
             {(["mainnet", "sepolia"] as Network[]).map(n => (
               <button key={n} onClick={() => setNetwork(n)}
-                className="px-3 py-2.5 font-mono text-[10px] transition-colors"
+                className="px-3 py-2.5 font-mono text-[13px] transition-colors"
                 style={network === n
                   ? { background: "#4FC3F720", color: "#4FC3F7" }
                   : { background: "#0a0a12", color: "#475569" }}>
@@ -286,25 +286,25 @@ export default function WatchlistTab({
           </button>
         </div>
         {error && (
-          <p className="font-mono text-[11px] text-[#EF4444] mt-2">{error}</p>
+          <p className="font-mono text-[14px] text-[#EF4444] mt-2">{error}</p>
         )}
       </div>
 
       {/* Summary line */}
       {list.length > 0 && (
         <div className="flex items-center gap-3 mb-3">
-          <span className="font-mono text-[9px] text-slate-600">
+          <span className="font-mono text-[12px] text-slate-600">
             {list.length} watched
           </span>
           {changedCount > 0 ? (
-            <span className="font-mono text-[9px] text-[#F59E0B]">
+            <span className="font-mono text-[12px] text-[#F59E0B]">
               {changedCount} with changes
             </span>
           ) : (
-            <span className="font-mono text-[9px] text-[#22C55E]">all in sync</span>
+            <span className="font-mono text-[12px] text-[#22C55E]">all in sync</span>
           )}
           <button onClick={refresh} disabled={pending}
-            className="ml-auto font-mono text-[9px] text-slate-600 hover:text-slate-400 transition-colors">
+            className="ml-auto font-mono text-[12px] text-slate-600 hover:text-slate-400 transition-colors">
             {pending ? "Refreshing…" : "↻ Re-check"}
           </button>
         </div>

@@ -185,11 +185,11 @@ export default function CronPanel() {
   const actions = (
     <>
       <button onClick={() => setAlertOpen(true)}
-        className="font-mono text-[10.5px] font-semibold rounded-[7px] px-[11px] py-[6px]" style={{ color: "#050508", background: "#4FC3F7" }}>
+        className="font-mono text-[13px] font-semibold rounded-[7px] px-[11px] py-[6px]" style={{ color: "#050508", background: "#4FC3F7" }}>
         + Alert / automation
       </button>
       <button onClick={() => { setTab("tasks"); setShowForm(true); }}
-        className="font-mono text-[10.5px] font-semibold rounded-[7px] px-[11px] py-[6px] border border-[#2A2A4E] text-[#E2E8F0] hover:border-[#4FC3F7]/40">
+        className="font-mono text-[13px] font-semibold rounded-[7px] px-[11px] py-[6px] border border-[#2A2A4E] text-[#E2E8F0] hover:border-[#4FC3F7]/40">
         + Recurring task
       </button>
     </>
@@ -203,8 +203,8 @@ export default function CronPanel() {
            prints "// SCHEDULED", so rendering this too would duplicate it; the
            two actions move into the body there. ─── */}
       <div className="hidden lg:flex items-center gap-3.5 flex-wrap shrink-0 min-h-[56px] px-5 py-2 border-b border-[#1A1A2E]">
-        <span className="font-mono text-[11px] font-semibold tracking-[0.16em] text-[#E2E8F0]">// SCHEDULED</span>
-        <span className="font-mono text-[10.5px] text-[#64748B]">alerts · automations that prepare trades you sign · recurring runs</span>
+        <span className="font-mono text-[14px] font-semibold tracking-[0.16em] text-[#E2E8F0]">// SCHEDULED</span>
+        <span className="font-mono text-[13px] text-[#64748B]">alerts · automations that prepare trades you sign · recurring runs</span>
         <span className="ml-auto flex gap-2">{actions}</span>
       </div>
 
@@ -226,9 +226,9 @@ export default function CronPanel() {
         <div className="flex items-center gap-1 mt-6 mb-4 border-b border-[#1A1A2E]">
           {([["alerts", "Alerts & automations", w.state.s === "ok" ? w.state.watches.length : null], ["tasks", "Recurring tasks", crons.length], ["activity", "Activity", null]] as const).map(([id, label, count]) => (
             <button key={id} onClick={() => setTab(id)}
-              className="relative font-mono text-[11.5px] px-3.5 py-2.5 -mb-px border-b-2 transition-colors"
+              className="relative font-mono text-[14px] px-3.5 py-2.5 -mb-px border-b-2 transition-colors"
               style={tab === id ? { color: "#E2E8F0", borderColor: "#4FC3F7" } : { color: "#64748B", borderColor: "transparent" }}>
-              {label}{count != null && <span className="ml-1.5 text-[10px] text-[#475569]">{count}</span>}
+              {label}{count != null && <span className="ml-1.5 text-[13px] text-[#64748B]">{count}</span>}
               {id === "alerts" && unread > 0 && <span className="absolute top-2 right-0.5 w-1.5 h-1.5 rounded-full bg-[#4FC3F7]" />}
             </button>
           ))}
@@ -244,8 +244,8 @@ export default function CronPanel() {
                  tasks this browser never saw (L4). ─── */}
             {schedule.count > 0 && (
               <div className="rounded-xl border border-[#1A1A2E] px-4 py-2.5 mb-4 flex items-center gap-3">
-                <p className="font-mono text-[10px] text-[#64748B]">{schedule.count} background task{schedule.count === 1 ? "" : "s"} run with this tab closed.</p>
-                <button onClick={() => void schedule.disableAll()} className="ml-auto font-mono text-[10px] rounded-md px-2.5 py-1"
+                <p className="font-mono text-[13px] text-[#64748B]">{schedule.count} background task{schedule.count === 1 ? "" : "s"} run with this tab closed.</p>
+                <button onClick={() => void schedule.disableAll()} className="ml-auto font-mono text-[13px] rounded-md px-2.5 py-1"
                   style={{ color: "#F87171", border: "1px solid rgba(248,113,113,.3)" }}>
                   Turn off all background tasks
                 </button>
@@ -253,7 +253,7 @@ export default function CronPanel() {
             )}
             {/* ── Background scheduler state — honest about what keeps it running. ─── */}
             {(schedule.state.phase === "signed-out" || schedule.state.phase === "error") && (
-              <p className="font-mono text-[10px] text-[#64748B] mb-4">
+              <p className="font-mono text-[13px] text-[#64748B] mb-4">
                 {schedule.state.phase === "signed-out"
                   ? "Sign in with your wallet to keep background tasks running while this tab is closed."
                   : schedule.state.message}
@@ -265,8 +265,8 @@ export default function CronPanel() {
             {/* ── NEXT 24 HOURS ─── */}
             <div className="border border-[#1A1A2E] bg-[#0D0D14] rounded-2xl px-[18px] py-4">
               <div className="flex justify-between items-baseline gap-3">
-                <span className="font-mono text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">NEXT 24 HOURS</span>
-                <span className="font-mono text-[10px] text-[#64748B] text-right">
+                <span className="font-mono text-[12px] font-medium tracking-[0.14em] text-[#64748B]">NEXT 24 HOURS</span>
+                <span className="font-mono text-[13px] text-[#64748B] text-right">
                   {upcoming.length > 0
                     ? `${upcoming.length} scheduled · ~${upcomingCredits} cr + tools est.`
                     : "no background runs due"}
@@ -292,7 +292,7 @@ export default function CronPanel() {
                             style={{ left: `${pct}%`, top: 6, background: "#4FC3F7", boxShadow: "0 0 10px #4FC3F7" }}
                           />
                           <span
-                            className="absolute font-mono text-[9.5px] text-[#94A3B8] whitespace-nowrap overflow-hidden"
+                            className="absolute font-mono text-[12px] text-[#94A3B8] whitespace-nowrap overflow-hidden"
                             style={{ left: `${pct}%`, top: 20, transform: `translateX(${shift}px)`, maxWidth: 150, textOverflow: "ellipsis" }}
                           >
                             {clock} {cron.label}
@@ -301,13 +301,13 @@ export default function CronPanel() {
                       );
                     })}
                   </div>
-                  <div className="flex justify-between mt-1.5 font-mono text-[9px] text-[#475569]">
+                  <div className="flex justify-between mt-1.5 font-mono text-[12px] text-[#64748B]">
                     <span>now</span><span>+6h</span><span>+12h</span><span>+18h</span><span>+24h</span>
                   </div>
                 </>
               ) : (
                 <div className="h-14 mt-4 flex items-center justify-center text-center border border-dashed border-[#1A1A2E] rounded-xl px-4">
-                  <p className="font-mono text-[10px] text-[#475569] leading-relaxed">
+                  <p className="font-mono text-[13px] text-[#64748B] leading-relaxed">
                     No background task fires in the next 24 hours — switch a task to Background to plot it here.
                   </p>
                 </div>
@@ -316,15 +316,15 @@ export default function CronPanel() {
 
             {/* ── TASKS ─── */}
             <div className="flex justify-between items-baseline gap-3 mt-6">
-              <span className="font-mono text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">TASKS · {crons.length}</span>
-              <span className="hidden sm:block font-mono text-[10px] text-[#64748B] text-right">Background tasks run server-side; each result shows up here, on its task.</span>
+              <span className="font-mono text-[12px] font-medium tracking-[0.14em] text-[#64748B]">TASKS · {crons.length}</span>
+              <span className="hidden sm:block font-mono text-[13px] text-[#64748B] text-right">Background tasks run server-side; each result shows up here, on its task.</span>
             </div>
 
             <div className="overflow-x-auto mt-3">
               <div style={{ minWidth: 800 }}>
                 {/* header row */}
                 <div
-                  className="grid items-center px-3.5 py-2.5 border-b border-[#1A1A2E] font-mono text-[9.5px] tracking-[0.06em] text-[#64748B]"
+                  className="grid items-center px-3.5 py-2.5 border-b border-[#1A1A2E] font-mono text-[12px] tracking-[0.06em] text-[#64748B]"
                   style={{ gridTemplateColumns: GRID, gap: "0 14px" }}
                 >
                   <span>TASK</span><span>SCHEDULE</span><span>NEXT RUN</span><span>LAST RESULT</span><span>MODE</span>
@@ -356,28 +356,28 @@ export default function CronPanel() {
                           <span className="min-w-0">
                             <span className="flex items-center gap-1.5">
                               <StatusDot active={cron.active} />
-                              <span className={`font-mono text-[12px] font-medium truncate ${cron.active ? "text-[#E2E8F0]" : "text-[#64748B]"}`}>
+                              <span className={`font-mono text-[15px] font-medium truncate ${cron.active ? "text-[#E2E8F0]" : "text-[#64748B]"}`}>
                                 {cron.label}
                               </span>
                             </span>
-                            <span className="block font-mono text-[9.5px] text-[#64748B] mt-[3px] truncate">{cron.prompt}</span>
+                            <span className="block font-mono text-[12px] text-[#64748B] mt-[3px] truncate">{cron.prompt}</span>
                           </span>
                         </span>
-                        <span className="font-mono text-[10.5px] text-[#94A3B8]">{scheduleLabel(cron)}</span>
-                        <span className="font-mono text-[10.5px] text-[#E2E8F0]">{nextRunLabel(cron)}</span>
-                        <span className="font-mono text-[10.5px] font-medium" style={{ color: st.color }}>{st.label}</span>
+                        <span className="font-mono text-[13px] text-[#94A3B8]">{scheduleLabel(cron)}</span>
+                        <span className="font-mono text-[13px] text-[#E2E8F0]">{nextRunLabel(cron)}</span>
+                        <span className="font-mono text-[13px] font-medium" style={{ color: st.color }}>{st.label}</span>
                         <span>
                           {bg ? (
-                            <span className="font-mono text-[9.5px] font-medium rounded-[5px] px-2 py-[3px]" style={{ color: "#4FC3F7", background: "rgba(79,195,247,.12)" }}>
+                            <span className="font-mono text-[12px] font-medium rounded-[5px] px-2 py-[3px]" style={{ color: "#4FC3F7", background: "rgba(79,195,247,.12)" }}>
                               Background
                             </span>
                           ) : (
-                            <span className="font-mono text-[9.5px] font-medium rounded-[5px] px-2 py-[3px] border" style={{ color: "#94A3B8", borderColor: "#1A1A2E" }}>
+                            <span className="font-mono text-[12px] font-medium rounded-[5px] px-2 py-[3px] border" style={{ color: "#94A3B8", borderColor: "#1A1A2E" }}>
                               On open
                             </span>
                           )}
                         </span>
-                        <span className="font-mono text-[10.5px] font-medium text-[#E2E8F0] text-right" title="Message cost, plus the price of any paid Hub tool the run calls">{cost} cr{cron.tier === "free" ? "" : " + tools"}</span>
+                        <span className="font-mono text-[13px] font-medium text-[#E2E8F0] text-right" title="Message cost, plus the price of any paid Hub tool the run calls">{cost} cr{cron.tier === "free" ? "" : " + tools"}</span>
                       </div>
 
                       {/* ── Expanded controls — every real interaction the summary
@@ -388,16 +388,16 @@ export default function CronPanel() {
                         <div className="border-b px-3.5 py-4 bg-[#08080E]" style={{ borderColor: "rgba(26,26,46,.55)" }}>
                           {/* model + per-run cost */}
                           <div className="flex flex-wrap items-center gap-1.5 mb-3">
-                            <span className="font-mono text-[10px] px-2 py-1 rounded-md bg-[#11111A] text-[#94A3B8]">🗓 {scheduleLabel(cron)}</span>
-                            <span className="font-mono text-[10px] px-2 py-1 rounded-md bg-[#11111A] text-[#64748B]">
+                            <span className="font-mono text-[13px] px-2 py-1 rounded-md bg-[#11111A] text-[#94A3B8]">🗓 {scheduleLabel(cron)}</span>
+                            <span className="font-mono text-[13px] px-2 py-1 rounded-md bg-[#11111A] text-[#64748B]">
                               {presetLabel(cron.tier)} · {cost} cr/run{cron.tier === "free" ? "" : " + any paid tool it calls"}
                             </span>
                           </div>
 
                           {/* prompt */}
                           <div className="rounded-xl bg-[#050508] border border-[#1A1A2E] px-3 py-2.5 mb-3">
-                            <p className="font-mono text-[8px] text-[#475569] tracking-widest mb-1">PROMPT</p>
-                            <p className="font-mono text-[11px] text-[#94A3B8] leading-relaxed">{cron.prompt}</p>
+                            <p className="font-mono text-[11px] text-[#64748B] tracking-widest mb-1">PROMPT</p>
+                            <p className="font-mono text-[14px] text-[#94A3B8] leading-relaxed">{cron.prompt}</p>
                           </div>
 
                           {/* ── Background switch — per task, not global. Flipping
@@ -408,10 +408,10 @@ export default function CronPanel() {
                             style={{ borderColor: bg ? "#4FC3F730" : "#1A1A2E", background: bg ? "#4FC3F708" : "#050508" }}
                           >
                             <span className="min-w-0">
-                              <span className="font-mono text-[11px] block" style={{ color: bg ? "#4FC3F7" : "#64748B" }}>
+                              <span className="font-mono text-[14px] block" style={{ color: bg ? "#4FC3F7" : "#64748B" }}>
                                 {bg ? "Runs in the background" : "Run in the background"}
                               </span>
-                              <span className="font-mono text-[9px] text-[#475569] block mt-0.5">
+                              <span className="font-mono text-[12px] text-[#64748B] block mt-0.5">
                                 {bg
                                   ? `Fires at ${cron.time} ${cron.tz ?? ""} with this tab closed`
                                   : "Switching this on asks for a signature, then it fires at its set time with the tab closed"}
@@ -423,16 +423,16 @@ export default function CronPanel() {
                           {/* why the scheduler switched this off */}
                           {cron.pausedReason && (
                             <div className="rounded-xl border px-3 py-2.5 mb-3" style={{ borderColor: "#F59E0B30", background: "#F59E0B08" }}>
-                              <p className="font-mono text-[8px] tracking-widest mb-1" style={{ color: "#F59E0B" }}>PAUSED</p>
-                              <p className="font-mono text-[11px] text-[#94A3B8] leading-relaxed">{cron.pausedReason}</p>
+                              <p className="font-mono text-[11px] tracking-widest mb-1" style={{ color: "#F59E0B" }}>PAUSED</p>
+                              <p className="font-mono text-[14px] text-[#94A3B8] leading-relaxed">{cron.pausedReason}</p>
                             </div>
                           )}
 
                           {/* a run that produced nothing says so */}
                           {cron.lastError && !cron.pausedReason && (
                             <div className="rounded-xl border border-[#1A1A2E] bg-[#070710] px-3 py-2.5 mb-3">
-                              <p className="font-mono text-[8px] text-[#475569] tracking-widest mb-1">LAST RUN FAILED</p>
-                              <p className="font-mono text-[11px] text-[#64748B] leading-relaxed line-clamp-2">{cron.lastError}</p>
+                              <p className="font-mono text-[11px] text-[#64748B] tracking-widest mb-1">LAST RUN FAILED</p>
+                              <p className="font-mono text-[14px] text-[#64748B] leading-relaxed line-clamp-2">{cron.lastError}</p>
                             </div>
                           )}
 
@@ -443,22 +443,22 @@ export default function CronPanel() {
                               className="w-full text-left rounded-xl bg-[#070710] border border-[#15151F] hover:border-[#4FC3F730] px-3 py-2.5 mb-3 transition-colors group"
                             >
                               <div className="flex items-center justify-between mb-1">
-                                <span className="font-mono text-[8px] text-[#475569] tracking-widest">LAST RESULT</span>
-                                <span className="font-mono text-[9px] text-[#64748B] group-hover:text-[#4FC3F7] transition-colors">View full →</span>
+                                <span className="font-mono text-[11px] text-[#64748B] tracking-widest">LAST RESULT</span>
+                                <span className="font-mono text-[12px] text-[#64748B] group-hover:text-[#4FC3F7] transition-colors">View full →</span>
                               </div>
-                              <p className="font-mono text-[11px] text-[#94A3B8] leading-relaxed line-clamp-2">{plainPreview(cron.lastResult)}</p>
+                              <p className="font-mono text-[14px] text-[#94A3B8] leading-relaxed line-clamp-2">{plainPreview(cron.lastResult)}</p>
                             </button>
                           )}
 
                           {/* footer: last run + pause/resume + run-now + delete */}
                           <div className="flex items-center justify-between gap-2 flex-wrap">
-                            <p className="font-mono text-[10px] text-[#475569]">
+                            <p className="font-mono text-[13px] text-[#64748B]">
                               {cron.lastRun ? `Ran ${fmtRan(cron.lastRun)}` : "Not run yet"}
                             </p>
                             <div className="flex items-center gap-2">
                               <button
                                 onClick={() => updateCron(cron.id, { active: !cron.active })}
-                                className="font-mono text-[10px] px-2.5 py-1.5 rounded-lg border transition-colors"
+                                className="font-mono text-[13px] px-2.5 py-1.5 rounded-lg border transition-colors"
                                 style={cron.active
                                   ? { color: "#64748B", borderColor: "#1A1A2E" }
                                   : { color: "#34D399", borderColor: "#34D39930", background: "#34D39910" }}
@@ -468,7 +468,7 @@ export default function CronPanel() {
                               <button
                                 onClick={() => runCron(cron.id)}
                                 disabled={isRunning}
-                                className="flex items-center gap-1.5 font-mono text-[11px] font-semibold px-3 py-1.5 rounded-lg border transition-all disabled:opacity-40 shrink-0"
+                                className="flex items-center gap-1.5 font-mono text-[14px] font-semibold px-3 py-1.5 rounded-lg border transition-all disabled:opacity-40 shrink-0"
                                 style={isRunning
                                   ? { color: "#34D399", borderColor: "#34D39930", background: "#34D39910" }
                                   : { color: "#4FC3F7", borderColor: "#4FC3F730", background: "#4FC3F710" }}
@@ -484,7 +484,7 @@ export default function CronPanel() {
                               </button>
                               <button
                                 onClick={() => deleteCron(cron.id)}
-                                className="p-1.5 rounded-lg text-[#475569] hover:text-[#F87171] hover:bg-[#F87171]/10 transition-colors shrink-0"
+                                className="p-1.5 rounded-lg text-[#64748B] hover:text-[#F87171] hover:bg-[#F87171]/10 transition-colors shrink-0"
                                 title="Delete"
                               >
                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -505,18 +505,18 @@ export default function CronPanel() {
             ) : (
               <div className="border border-[#1A1A2E] bg-[#0D0D14] rounded-2xl px-6 py-12 flex flex-col items-center text-center">
                 <div className="w-10 h-10 rounded-xl border border-[#1A1A2E] flex items-center justify-center mb-3 text-lg">⏱</div>
-                <p className="font-mono text-[13px] text-[#94A3B8] mb-1">No recurring tasks yet</p>
-                <p className="font-mono text-[10.5px] text-[#64748B] max-w-sm leading-relaxed mb-4">
+                <p className="font-mono text-[16px] text-[#94A3B8] mb-1">No recurring tasks yet</p>
+                <p className="font-mono text-[13px] text-[#64748B] max-w-sm leading-relaxed mb-4">
                   A prompt that runs daily or weekly — next time you open Blue Chat, or in the background once you switch it on. Each run costs chat credits.
                 </p>
                 <div className="flex flex-wrap justify-center gap-1.5">
                   {CRON_PRESETS.map((p) => (
                     <button key={p.label} onClick={() => usePreset(p)}
-                      className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#1A1A2E] hover:border-[#4FC3F7]/30 text-slate-500 hover:text-[#4FC3F7]">
+                      className="font-mono text-[13px] px-2.5 py-1 rounded-lg border border-[#1A1A2E] hover:border-[#4FC3F7]/30 text-slate-500 hover:text-[#4FC3F7]">
                       {p.label}
                     </button>
                   ))}
-                  <button onClick={() => setShowForm(true)} className="font-mono text-[10px] font-semibold rounded-lg px-2.5 py-1" style={{ color: "#050508", background: "#4FC3F7" }}>+ Custom</button>
+                  <button onClick={() => setShowForm(true)} className="font-mono text-[13px] font-semibold rounded-lg px-2.5 py-1" style={{ color: "#050508", background: "#4FC3F7" }}>+ Custom</button>
                 </div>
               </div>
             )}
@@ -531,7 +531,7 @@ export default function CronPanel() {
           <form onSubmit={handleAdd} className="space-y-3">
             {/* Task name */}
             <div>
-              <label className="font-mono text-[10px] text-slate-500 block mb-1.5">TASK NAME</label>
+              <label className="font-mono text-[13px] text-slate-500 block mb-1.5">TASK NAME</label>
               <input
                 value={form.label}
                 onChange={e => setForm(f => ({ ...f, label: e.target.value }))}
@@ -543,7 +543,7 @@ export default function CronPanel() {
             {/* Schedule + Time */}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="font-mono text-[10px] text-slate-500 block mb-1.5">SCHEDULE</label>
+                <label className="font-mono text-[13px] text-slate-500 block mb-1.5">SCHEDULE</label>
                 <select
                   value={form.schedule}
                   onChange={e => setForm(f => ({ ...f, schedule: e.target.value as CronSchedule }))}
@@ -557,7 +557,7 @@ export default function CronPanel() {
                     through `lib/cron-schedule.ts`, in the zone shown below. It
                     is still ignored for a foreground task — hence the two-line
                     explanation under the grid rather than a bare label. */}
-                <label className="font-mono text-[10px] text-slate-500 block mb-1.5">
+                <label className="font-mono text-[13px] text-slate-500 block mb-1.5">
                   TIME <span className="text-slate-700">· {tzLabel}</span>
                 </label>
                 <input
@@ -569,7 +569,7 @@ export default function CronPanel() {
               </div>
             </div>
 
-            <p className="font-mono text-[10px] text-slate-700 leading-relaxed">
+            <p className="font-mono text-[13px] text-slate-700 leading-relaxed">
               The time is used once you switch the task to Background. Until then
               a daily task runs the first time you open Blue Chat after 24h have
               passed.
@@ -577,7 +577,7 @@ export default function CronPanel() {
 
             {/* Prompt */}
             <div>
-              <label className="font-mono text-[10px] text-slate-500 block mb-1.5">PROMPT</label>
+              <label className="font-mono text-[13px] text-slate-500 block mb-1.5">PROMPT</label>
               <textarea
                 value={form.prompt}
                 onChange={e => setForm(f => ({ ...f, prompt: e.target.value }))}
@@ -589,14 +589,14 @@ export default function CronPanel() {
 
             {/* Presets */}
             <div>
-              <p className="font-mono text-[10px] text-slate-600 mb-2">Quick presets:</p>
+              <p className="font-mono text-[13px] text-slate-600 mb-2">Quick presets:</p>
               <div className="flex flex-wrap gap-1.5">
                 {CRON_PRESETS.map(p => (
                   <button
                     key={p.label}
                     type="button"
                     onClick={() => usePreset(p)}
-                    className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#1A1A2E] hover:border-[#4FC3F7]/30 text-slate-500 hover:text-[#4FC3F7] transition-all"
+                    className="font-mono text-[13px] px-2.5 py-1 rounded-lg border border-[#1A1A2E] hover:border-[#4FC3F7]/30 text-slate-500 hover:text-[#4FC3F7] transition-all"
                   >
                     {p.label}
                   </button>
@@ -636,8 +636,8 @@ function ResultModal({ cron, onClose }: { cron: CronTask; onClose: () => void })
         {/* Header */}
         <div className="flex items-center justify-between px-5 h-14 border-b border-[#1A1A2E] shrink-0">
           <div className="min-w-0">
-            <p className="font-mono text-[11px] text-[#4FC3F7] tracking-widest truncate">// {cron.label.toUpperCase()}</p>
-            <p className="font-mono text-[9px] text-slate-600 mt-0.5">
+            <p className="font-mono text-[14px] text-[#4FC3F7] tracking-widest truncate">// {cron.label.toUpperCase()}</p>
+            <p className="font-mono text-[12px] text-slate-600 mt-0.5">
               {/* Same rule as the card chip: the time is shown only when a
                   background task actually fires at it. `ran` is a real observed
                   timestamp (stamped by the run), so it always stays. */}
@@ -656,7 +656,7 @@ function ResultModal({ cron, onClose }: { cron: CronTask; onClose: () => void })
           </button>
         </div>
         {/* Body — full markdown */}
-        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 font-mono text-[13px] text-slate-300 leading-relaxed">
+        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 font-mono text-[16px] text-slate-300 leading-relaxed">
           {cron.lastResult
             ? <MarkdownRenderer content={cron.lastResult} />
             : <p className="text-slate-600">No result yet.</p>}

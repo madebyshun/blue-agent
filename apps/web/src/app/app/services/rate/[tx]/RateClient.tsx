@@ -38,37 +38,37 @@ export default function RateClient(p: { agentId: string; tool: string; tx: strin
   const card = "rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] p-[14px]";
   return (
     <div className="grid gap-3">
-      <h1 className="text-[15px] font-semibold text-[#E2E8F0]">Rate this call</h1>
+      <h1 className="text-[18px] font-semibold text-[#E2E8F0]">Rate this call</h1>
       <div className={card}>
-        <p className="text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">THE CALL</p>
-        <p className="mt-2 text-[12px] text-[#E2E8F0]">{p.tool} · ${(p.units / 1e6).toFixed(2)} USDC · {p.at.slice(0, 16).replace("T", " ")}Z</p>
-        <p className="mt-1 text-[10.5px] text-[#94A3B8]">
+        <p className="text-[12px] font-medium tracking-[0.14em] text-[#64748B]">THE CALL</p>
+        <p className="mt-2 text-[15px] text-[#E2E8F0]">{p.tool} · ${(p.units / 1e6).toFixed(2)} USDC · {p.at.slice(0, 16).replace("T", " ")}Z</p>
+        <p className="mt-1 text-[13px] text-[#94A3B8]">
           Paid by {short(p.payer)} · <a className="text-[#4FC3F7]" href={`https://basescan.org/tx/${p.tx}`} target="_blank" rel="noreferrer">Base tx ↗</a> ·{" "}
           <a className="text-[#4FC3F7]" href={p.feedbackURI} target="_blank" rel="noreferrer">proof file ↗</a>
         </p>
       </div>
       <div className={card}>
-        <p className="text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">YOUR SCORE</p>
+        <p className="text-[12px] font-medium tracking-[0.14em] text-[#64748B]">YOUR SCORE</p>
         <div className="mt-3 flex items-center gap-3">
           <input type="range" min={0} max={100} value={score} onChange={(e) => setScore(Number(e.target.value))} className="flex-1 accent-[#4FC3F7]" />
-          <span className="w-14 text-right text-[18px] font-semibold text-[#E2E8F0] tabular-nums">{score}</span>
+          <span className="w-14 text-right text-[22px] font-semibold text-[#E2E8F0] tabular-nums">{score}</span>
         </div>
-        <p className="mt-2 text-[10px] leading-[1.6] text-[#64748B]">
+        <p className="mt-2 text-[13px] leading-[1.6] text-[#64748B]">
           Posted to the ERC-8004 Reputation Registry on Base 8453 for agent #{p.agentId}, tagged <span className="text-[#94A3B8]">mcp · {p.tool}</span>, pointing at the proof file above.
           Only the wallet that paid can rate it here, and you pay the gas. Blue Agent never signs ratings.
         </p>
         <div className="mt-3">
           {!isConnected ? <ConnectButton label="Connect the wallet that paid" /> : !isPayer ? (
-            <p className="text-[10.5px] text-[#FBBF24]">Connected {short(address ?? null)}. This call was paid by {short(p.payer)}; connect that wallet to rate it.</p>
+            <p className="text-[13px] text-[#FBBF24]">Connected {short(address ?? null)}. This call was paid by {short(p.payer)}; connect that wallet to rate it.</p>
           ) : (
             <button type="button" onClick={submit} disabled={st.s === "busy" || st.s === "done"}
-              className="rounded-[8px] bg-[#4FC3F7] px-[13px] py-2 text-[10.5px] font-semibold text-[#050508] hover:bg-[#29ABE2] disabled:opacity-40">
+              className="rounded-[8px] bg-[#4FC3F7] px-[13px] py-2 text-[13px] font-semibold text-[#050508] hover:bg-[#29ABE2] disabled:opacity-40">
               {st.s === "busy" ? "Posting…" : `Post ${score}/100 on Base`}
             </button>
           )}
         </div>
         {st.s !== "idle" && (
-          <p className={`mt-2 text-[10.5px] ${st.s === "error" ? "text-[#F87171]" : st.s === "done" ? "text-[#34D399]" : "text-[#94A3B8]"}`}>
+          <p className={`mt-2 text-[13px] ${st.s === "error" ? "text-[#F87171]" : st.s === "done" ? "text-[#34D399]" : "text-[#94A3B8]"}`}>
             {st.msg}{st.hash && <> · <a className="text-[#4FC3F7]" href={`https://basescan.org/tx/${st.hash}`} target="_blank" rel="noreferrer">Basescan ↗</a></>}
           </p>
         )}

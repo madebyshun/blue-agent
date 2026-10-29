@@ -200,7 +200,7 @@ export default function ClaimClient() {
     <div className="min-h-screen bg-[#050508] text-slate-200 pb-20">
       <div className="max-w-2xl mx-auto px-4 pt-10">
         <div className="mb-6">
-          <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase mb-1">B20HUB</p>
+          <p className="font-mono text-[12px] text-slate-600 tracking-widest uppercase mb-1">B20HUB</p>
           <h1 className="font-mono text-2xl font-bold text-slate-100">Claim Creator Fees</h1>
           <p className="font-mono text-xs text-slate-500 mt-2 leading-relaxed">
             Trigger the <span className="text-[#34D399]">80</span>/<span className="text-[#4FC3F7]">15</span>/<span className="text-slate-400">5</span> split
@@ -211,7 +211,7 @@ export default function ClaimClient() {
 
         <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5 space-y-4">
           <div>
-            <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
+            <label className="font-mono text-[12px] text-slate-600 tracking-widest uppercase block mb-1.5">
               B20HUB Token Address
             </label>
             <input
@@ -224,7 +224,7 @@ export default function ClaimClient() {
           </div>
 
           <div>
-            <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
+            <label className="font-mono text-[12px] text-slate-600 tracking-widest uppercase block mb-1.5">
               Fee Tier
             </label>
             <div className="flex rounded-xl border border-[#1A1A2E] overflow-hidden">
@@ -232,7 +232,7 @@ export default function ClaimClient() {
                 <button
                   key={t}
                   onClick={() => setTier(t)}
-                  className="flex-1 py-2 font-mono text-[10px] transition-all"
+                  className="flex-1 py-2 font-mono text-[13px] transition-all"
                   style={tier === t
                     ? { background: "#4FC3F715", color: "#4FC3F7", borderRight: i < 2 ? "1px solid #1A1A2E" : undefined }
                     : { color: "#475569", borderRight: i < 2 ? "1px solid #1A1A2E" : undefined }}
@@ -255,28 +255,28 @@ export default function ClaimClient() {
           {status === "ready" && creator && lpTokenId !== null && (
             <div className="rounded-xl border border-[#4FC3F7]/20 bg-[#4FC3F7]/[0.03] p-4 space-y-3">
               <div className="flex items-center justify-between">
-                <span className="font-mono text-[10px] text-slate-500">Creator</span>
+                <span className="font-mono text-[13px] text-slate-500">Creator</span>
                 <span className="font-mono text-xs text-slate-200">
                   {creator.slice(0, 8)}…{creator.slice(-6)}
-                  {isCreator && <span className="ml-2 text-[9px] text-[#34D399]">(you)</span>}
+                  {isCreator && <span className="ml-2 text-[12px] text-[#34D399]">(you)</span>}
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="font-mono text-[10px] text-slate-500">Position A tokenId</span>
+                <span className="font-mono text-[13px] text-slate-500">Position A tokenId</span>
                 <span className="font-mono text-xs text-slate-200">#{lpTokenId.toString()}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="font-mono text-[10px] text-slate-500">BuyBack</span>
+                <span className="font-mono text-[13px] text-slate-500">BuyBack</span>
                 <span className="font-mono text-xs text-slate-200">
                   {B20HUB_BUYBACK.slice(0, 8)}…{B20HUB_BUYBACK.slice(-6)}
                 </span>
               </div>
 
               <div className="pt-3 border-t border-[#4FC3F7]/10 space-y-2">
-                <p className="font-mono text-[10px] text-slate-500 leading-relaxed">
+                <p className="font-mono text-[13px] text-slate-500 leading-relaxed">
                   On claim, ANY accumulated Position A fees (WETH + token) split:
                 </p>
-                <div className="grid grid-cols-3 gap-2 text-center font-mono text-[10px]">
+                <div className="grid grid-cols-3 gap-2 text-center font-mono text-[13px]">
                   <div className="rounded-lg border border-[#34D399]/20 py-2">
                     <div className="text-[#34D399] font-bold">80%</div>
                     <div className="text-slate-600 mt-0.5">creator</div>
@@ -304,7 +304,7 @@ export default function ClaimClient() {
                 </button>
               )}
 
-              <p className="font-mono text-[9px] text-amber-400/60 leading-relaxed mt-2">
+              <p className="font-mono text-[12px] text-amber-400/60 leading-relaxed mt-2">
                 ⚠ v3 hook only tracks Position A (wide). Position B (narrow, tighter concentration)
                 fees are stuck until v4 hook ships with dual-position support. This claims wide-position
                 fees only.
@@ -319,11 +319,11 @@ export default function ClaimClient() {
                 href={`https://basescan.org/tx/${txHash}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="font-mono text-[10px] text-[#4FC3F7] hover:underline break-all"
+                className="font-mono text-[13px] text-[#4FC3F7] hover:underline break-all"
               >
                 {txHash.slice(0, 16)}…{txHash.slice(-8)} ↗
               </a>
-              <p className="font-mono text-[9px] text-slate-600 mt-2">
+              <p className="font-mono text-[12px] text-slate-600 mt-2">
                 Check creator + BuyBack + Treasury balances on Basescan after ~2s.
               </p>
             </div>
@@ -338,7 +338,7 @@ export default function ClaimClient() {
 
         <div className="mt-6 rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5">
           <h2 className="font-mono text-sm font-bold text-slate-200 mb-3">How the split works</h2>
-          <ul className="font-mono text-[11px] text-slate-500 space-y-2 leading-relaxed">
+          <ul className="font-mono text-[14px] text-slate-500 space-y-2 leading-relaxed">
             <li>
               <span className="text-[#34D399]">80%</span> — you (or whoever launched the token). Locked
               at launch via <code className="text-slate-300">setPending</code>; cannot be reassigned.

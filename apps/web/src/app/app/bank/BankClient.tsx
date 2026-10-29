@@ -1541,13 +1541,13 @@ export default function BankPage() {
       <aside className="hidden lg:flex flex-col w-[272px] shrink-0 border-r border-[#1A1A2E] bg-[#07070c]">
         <div className="flex items-center gap-2 min-h-[56px] px-4 border-b border-[#1A1A2E] shrink-0">
           <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] shrink-0" style={{ boxShadow: "0 0 8px #4FC3F7" }} />
-          <span className="font-mono text-[11px] font-semibold tracking-[0.16em] text-[#E2E8F0]">// WALLET</span>
+          <span className="font-mono text-[14px] font-semibold tracking-[0.16em] text-[#E2E8F0]">// WALLET</span>
         </div>
         <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-5">
 
           {/* ASK BLUEAGENT — the relocated command input, same handlers */}
           <div>
-            <div className="font-mono text-[9px] font-medium tracking-[0.16em] text-[#64748B] mb-2">ASK BLUEAGENT</div>
+            <div className="font-mono text-[12px] font-medium tracking-[0.16em] text-[#64748B] mb-2">ASK BLUEAGENT</div>
             <div className="flex gap-1.5">
               <input
                 value={chatInput}
@@ -1560,18 +1560,18 @@ export default function BankPage() {
                 }}
                 onClick={() => setChatOpen(true)}
                 placeholder="Ask anything…"
-                className="flex-1 min-w-0 bg-[#0D0D14] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-[8px] px-2.5 py-2 font-mono text-[11px] text-slate-200 placeholder:text-slate-600 outline-none"
+                className="flex-1 min-w-0 bg-[#0D0D14] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-[8px] px-2.5 py-2 font-mono text-[14px] text-slate-200 placeholder:text-slate-600 outline-none"
               />
               <button
                 onClick={() => { if (chatInput.trim()) sendChat(chatInput); setChatOpen(true); }}
                 aria-label="Ask BlueAgent"
-                className="w-[34px] shrink-0 rounded-[8px] bg-[#4FC3F7] text-[#050508] flex items-center justify-center font-mono text-[13px] font-semibold hover:bg-[#29ABE2] transition-colors"
+                className="w-[34px] shrink-0 rounded-[8px] bg-[#4FC3F7] text-[#050508] flex items-center justify-center font-mono text-[16px] font-semibold hover:bg-[#29ABE2] transition-colors"
               >→</button>
             </div>
             <div className="flex flex-wrap gap-1.5 mt-2">
               {["what changed today", "top up gas"].map(q => (
                 <button key={q} onClick={() => { setChatInput(q); setChatOpen(true); }}
-                  className="font-mono text-[9.5px] text-[#94A3B8] border border-[#1A1A2E] rounded-full px-2 py-[3px] hover:border-[#4FC3F7]/40 hover:text-[#E2E8F0] transition-colors">{q}</button>
+                  className="font-mono text-[12px] text-[#94A3B8] border border-[#1A1A2E] rounded-full px-2 py-[3px] hover:border-[#4FC3F7]/40 hover:text-[#E2E8F0] transition-colors">{q}</button>
               ))}
             </div>
           </div>
@@ -1589,7 +1589,7 @@ export default function BankPage() {
               figure at all for Base Sepolia (testnet, no real $). Base carries a
               "home" tag because the balance headline + Activity read from it. */}
           <div>
-            <div className="font-mono text-[9px] font-medium tracking-[0.16em] text-[#64748B] mb-2">CHAINS</div>
+            <div className="font-mono text-[12px] font-medium tracking-[0.16em] text-[#64748B] mb-2">CHAINS</div>
             <div className="flex flex-col gap-[7px]">
               {WALLET_CHAIN_ORDER.filter(nk => testnetUnlocked || !WALLET_CHAINS[nk].testnet).map(nk => {
                 const c = WALLET_CHAINS[nk];
@@ -1625,21 +1625,21 @@ export default function BankPage() {
                       :        "border-[#1A1A2E] hover:border-[#4FC3F7]/35"}`}
                     style={{ background: home ? "#4FC3F708" : "transparent" }}>
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-mono text-[11px] font-medium flex items-center gap-1.5"
+                      <span className="font-mono text-[14px] font-medium flex items-center gap-1.5"
                         style={{ color: home ? "#4FC3F7" : c.testnet ? "#F59E0B" : "#94A3B8" }}>
                         {c.label}
-                        {home && <span className="font-mono text-[8px] text-[#4FC3F7]/70 border border-[#4FC3F7]/25 rounded px-1 py-px">home</span>}
+                        {home && <span className="font-mono text-[11px] text-[#4FC3F7]/70 border border-[#4FC3F7]/25 rounded px-1 py-px">home</span>}
                       </span>
                       {worth != null && (
-                        <span className="font-mono text-[10px] shrink-0"
+                        <span className="font-mono text-[13px] shrink-0"
                           style={{ color: worth === "unread" ? "#F59E0B99" : worth === "…" ? "#64748B" : "#E2E8F0" }}>
                           {worth}
                         </span>
                       )}
                     </div>
                     <div className="flex items-center justify-between gap-2 mt-1">
-                      <span className="font-mono text-[9.5px] text-[#64748B]">{caps}</span>
-                      <span className="font-mono text-[9px] shrink-0"
+                      <span className="font-mono text-[12px] text-[#64748B]">{caps}</span>
+                      <span className="font-mono text-[12px] shrink-0"
                         style={{ color: sel ? "#4FC3F7" : "#334155" }}>
                         {sel ? "showing" : "show →"}
                       </span>
@@ -1661,22 +1661,22 @@ export default function BankPage() {
               "$41.85 · 62% left": credits are not dollar-denominated, and no
               credit BALANCE is read anywhere on this page. */}
           <div>
-            <div className="font-mono text-[9px] font-medium tracking-[0.16em] text-[#64748B] mb-2">CREDIT · x402</div>
+            <div className="font-mono text-[12px] font-medium tracking-[0.16em] text-[#64748B] mb-2">CREDIT · x402</div>
             <a href="/app/usage"
               className="group block rounded-[10px] border border-[#1A1A2E] bg-[#0D0D14] p-3 hover:border-[#4FC3F7]/40 transition-colors">
               <div className="flex items-center justify-between">
-                <span className="font-mono text-[11px] text-[#E2E8F0]">Usage &amp; spend</span>
-                <span className="font-mono text-[11px] text-[#4FC3F7] group-hover:translate-x-0.5 transition-transform">→</span>
+                <span className="font-mono text-[14px] text-[#E2E8F0]">Usage &amp; spend</span>
+                <span className="font-mono text-[14px] text-[#4FC3F7] group-hover:translate-x-0.5 transition-transform">→</span>
               </div>
-              <div className="font-mono text-[9.5px] text-[#64748B] mt-1.5">Per-tool x402 spend on the Usage page</div>
+              <div className="font-mono text-[12px] text-[#64748B] mt-1.5">Per-tool x402 spend on the Usage page</div>
             </a>
           </div>
         </div>
 
         {/* footer — the account triple: identity, explorer, disconnect */}
         <div className="border-t border-[#1A1A2E] px-4 py-3 shrink-0">
-          <div className="font-mono text-[11px] font-medium text-[#E2E8F0] truncate">{displayName}</div>
-          <div className="font-mono text-[9.5px] text-[#64748B] mt-[3px] flex items-center gap-1.5">
+          <div className="font-mono text-[14px] font-medium text-[#E2E8F0] truncate">{displayName}</div>
+          <div className="font-mono text-[12px] text-[#64748B] mt-[3px] flex items-center gap-1.5">
             <a href={`${net.explorer}/address/${acct}`} target="_blank" rel="noopener noreferrer"
               className="hover:text-[#4FC3F7] transition-colors">{net.explorerName} ↗</a>
             <span>·</span>
@@ -1703,7 +1703,7 @@ export default function BankPage() {
             colorSeed={identityCard.colorSeed}
             size={22}
           />
-          <span className="font-mono text-[13px] text-[#E2E8F0] truncate">
+          <span className="font-mono text-[16px] text-[#E2E8F0] truncate">
             {isNamed
               ? <>Good {greeting}, <span className="text-[#4FC3F7]">{displayName}</span></>
               : <>Good {greeting}</>}
@@ -1711,13 +1711,13 @@ export default function BankPage() {
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           {trustChips.map(c => (
-            <span key={c.label} className="font-mono text-[10px] px-2 py-1 rounded-md"
+            <span key={c.label} className="font-mono text-[13px] px-2 py-1 rounded-md"
               style={c.warn
                 ? { color: "#F59E0B", border: "1px solid #F59E0B40", background: "#F59E0B10" }
                 : { color: "#94A3B8", border: "1px solid #1A1A2E", background: "#0d0d12" }}>{c.label}</span>
           ))}
           {new Date() >= new Date("2026-06-25") && (
-            <span className="font-mono text-[10px] px-2 py-1 rounded-md font-medium"
+            <span className="font-mono text-[13px] px-2 py-1 rounded-md font-medium"
               style={{ color: "#4FC3F7", border: "1px solid #4FC3F730", background: "#4FC3F710" }}>⌁ Beryl</span>
           )}
         </div>
@@ -1730,12 +1730,12 @@ export default function BankPage() {
           carry their own chain choice. Complementary by breakpoint with the
           desktop bar, so no control is ever on screen twice. */}
       <div className="lg:hidden flex items-center gap-1.5 shrink-0 px-3 py-2 border-b border-[#1A1A2E]">
-        <span className="font-mono text-[10px] flex items-center gap-1.5" style={{ color: "#4FC3F7" }}>
+        <span className="font-mono text-[13px] flex items-center gap-1.5" style={{ color: "#4FC3F7" }}>
           <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] shrink-0" /> {net.short}
-          <span className="font-mono text-[8px] text-[#4FC3F7]/70 border border-[#4FC3F7]/25 rounded px-1 py-px">home</span>
+          <span className="font-mono text-[11px] text-[#4FC3F7]/70 border border-[#4FC3F7]/25 rounded px-1 py-px">home</span>
         </span>
         <button onClick={() => setChatOpen(true)}
-          className="ml-auto shrink-0 font-mono text-[10px] font-semibold px-3 py-1 rounded-md"
+          className="ml-auto shrink-0 font-mono text-[13px] font-semibold px-3 py-1 rounded-md"
           style={{ background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
           Ask BlueAgent
         </button>
@@ -1845,7 +1845,7 @@ export default function BankPage() {
                   read in flight and a read that failed both get one; only a
                   landed read may print a figure. */}
               <div className="flex items-center gap-2 mb-1.5">
-                <span className="font-mono text-[9px] text-slate-500 tracking-widest">TOTAL · ALL CHAINS</span>
+                <span className="font-mono text-[12px] text-slate-500 tracking-widest">TOTAL · ALL CHAINS</span>
                 {/* Display-only, and deliberately reversible in one click. It
                     masks figures the page has ALREADY read — it never suppresses
                     an "unread" or a warning, because a hidden balance and an
@@ -1854,7 +1854,7 @@ export default function BankPage() {
                   aria-pressed={hideBal}
                   aria-label={hideBal ? "Show balance amounts" : "Hide balance amounts"}
                   title={hideBal ? "Show amounts" : "Hide amounts"}
-                  className="font-mono text-[9px] px-1.5 py-0.5 rounded-md text-slate-600 hover:text-slate-300 hover:bg-[#13131f] transition-colors">
+                  className="font-mono text-[12px] px-1.5 py-0.5 rounded-md text-slate-600 hover:text-slate-300 hover:bg-[#13131f] transition-colors">
                   {hideBal ? "👁 show" : "👁 hide"}
                 </button>
               </div>
@@ -1895,11 +1895,11 @@ export default function BankPage() {
                   figure, so they keep their line; the floor case has one and
                   explains itself through the `title` above. */}
               {netWorth.failed ? (
-                <div className="font-mono text-[9px] text-amber-500/80 mt-1.5 leading-relaxed">
+                <div className="font-mono text-[12px] text-amber-500/80 mt-1.5 leading-relaxed">
                   Couldn&apos;t read across chains — unknown, not zero.
                 </div>
               ) : !netWorth.data ? (
-                <div className="font-mono text-[9px] text-slate-600 mt-1.5">reading every chain…</div>
+                <div className="font-mono text-[12px] text-slate-600 mt-1.5">reading every chain…</div>
               ) : null}
 
               {/* Per-chain, `lg:hidden` — the sidebar carries these same figures
@@ -1921,7 +1921,7 @@ export default function BankPage() {
                       <button key={nk} type="button" onClick={() => showChain(nk)}
                         aria-pressed={on}
                         aria-label={`Show ${WALLET_CHAINS[nk].label} holdings in the Tokens and Stocks tabs`}
-                        className="font-mono text-[9.5px] px-2 py-1 rounded-md transition-colors"
+                        className="font-mono text-[12px] px-2 py-1 rounded-md transition-colors"
                         style={on
                           ? { background: "#4FC3F712", color: "#4FC3F7", border: "1px solid #4FC3F730" }
                           : { color: "#64748b", border: "1px solid #1A1A2E" }}>
@@ -1959,7 +1959,7 @@ export default function BankPage() {
                   through Base mainnet" reads as a fact about the chain the user
                   just picked. */}
               <div className="sm:w-[17.5rem] sm:shrink-0">
-                <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-2">ACTIONS</div>
+                <div className="font-mono text-[12px] text-slate-500 tracking-widest mb-2">ACTIONS</div>
                 {/* 1×4, not 2×2 (reversed 2026-09-11). The old comment here
                     argued four buttons "do not fit legibly across a 13.5rem
                     column" — true of that column, which is why the column moved
@@ -1985,7 +1985,7 @@ export default function BankPage() {
                     disabledReason={can.swap ? null : `Base only`} />
                   <ActionButton icon="⇄" label="Bridge" onClick={() => openAction("bridge")} />
                 </div>
-                {onrampMsg && <div className="font-mono text-[9px] text-amber-400 mt-2">{onrampMsg}</div>}
+                {onrampMsg && <div className="font-mono text-[12px] text-amber-400 mt-2">{onrampMsg}</div>}
               </div>
              </div>
 
@@ -2024,7 +2024,7 @@ export default function BankPage() {
                   and the tables carry their own read-state banners. */}
               {(balanceRead.body === "failed" || balanceRead.totalIsFloor) && (
                 <div className="mt-3 pt-3 border-t border-[#13131f] flex items-start justify-between gap-2">
-                  <span className="font-mono text-[9px] text-amber-500/80 leading-relaxed">
+                  <span className="font-mono text-[12px] text-amber-500/80 leading-relaxed">
                     {balanceRead.body === "failed"
                       ? `Couldn't read your balance on ${net.short}. Unknown — not zero.`
                       : `Part of your ${net.short} position could not be read — it holds at least this much.`}
@@ -2036,7 +2036,7 @@ export default function BankPage() {
 
             {/* Health card */}
             <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4">
-              <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-2">PORTFOLIO HEALTH</div>
+              <div className="font-mono text-[12px] text-slate-500 tracking-widest mb-2">PORTFOLIO HEALTH</div>
               <div className="flex items-end gap-2 mb-3">
                 <div className="font-mono text-[32px] font-bold leading-none" style={{ color: scoreColor }}>
                   {portfolioScore ?? "—"}
@@ -2050,7 +2050,7 @@ export default function BankPage() {
                     about the wallet ("nothing here") rather than about our
                     read ("we didn't get it"). Each branch below names which
                     input is missing, so the absence is attributable. */}
-                <div className="font-mono text-[13px] text-slate-500 mb-1">
+                <div className="font-mono text-[16px] text-slate-500 mb-1">
                   {portfolioScore != null ? `/100 · ${scoreGrade}`
                     /* `!!acct &&` for the same reason the legs are filtered by
                        `applies`: a disabled wagmi query is permanently
@@ -2196,15 +2196,15 @@ export default function BankPage() {
                         bleed through the counters. Full opacity, rounded to the
                         artwork's own corner. */}
                     <img src="/logomark.svg" alt="" aria-hidden className="w-4 h-4 rounded-sm" />
-                    <span className="font-mono text-[9px] text-slate-500 tracking-widest">AI MISSION CONTROL</span>
+                    <span className="font-mono text-[12px] text-slate-500 tracking-widest">AI MISSION CONTROL</span>
                   </div>
                   <button onClick={() => setChatOpen(o => !o)}
-                    className="font-mono text-[9px] px-2.5 py-1 rounded-lg font-bold transition-colors"
+                    className="font-mono text-[12px] px-2.5 py-1 rounded-lg font-bold transition-colors"
                     style={{ background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
                     Ask BlueAgent →
                   </button>
                 </div>
-                <p className="font-mono text-[11px] text-slate-300 mb-3 leading-relaxed">{missionSummary}</p>
+                <p className="font-mono text-[14px] text-slate-300 mb-3 leading-relaxed">{missionSummary}</p>
                 <div className="space-y-2">
                   {topMissions.map((item, i) => (
                     <div key={i} className="flex items-center justify-between gap-2 p-2.5 rounded-xl"
@@ -2217,11 +2217,11 @@ export default function BankPage() {
                           {item.priority === "info" && <span className="w-1.5 h-1.5 rounded-full bg-[#64748b]" />}
                           <span className="text-sm leading-none">{item.icon}</span>
                         </div>
-                        <span className="font-mono text-[10px] text-slate-300 leading-snug">{item.text}</span>
+                        <span className="font-mono text-[13px] text-slate-300 leading-snug">{item.text}</span>
                       </div>
                       {item.action && item.onAction && (
                         <button onClick={item.onAction}
-                          className="font-mono text-[9px] px-2 py-1 rounded-lg shrink-0 font-bold whitespace-nowrap"
+                          className="font-mono text-[12px] px-2 py-1 rounded-lg shrink-0 font-bold whitespace-nowrap"
                           style={{ background: `${item.color}20`, color: item.color, border: `1px solid ${item.color}40` }}>
                           {item.action}
                         </button>
@@ -2248,13 +2248,13 @@ export default function BankPage() {
                       missing, and the degraded one carries the way out. */}
                   {topMissions.length === 0 && (
                     balanceRead.state === "complete" ? (
-                      <div className="font-mono text-[10px] text-slate-600 py-2 text-center">✓ All good — no actions needed</div>
+                      <div className="font-mono text-[13px] text-slate-600 py-2 text-center">✓ All good — no actions needed</div>
                     ) : balanceRead.body === "pending" ? (
-                      <div className="font-mono text-[10px] text-slate-600 py-2 text-center">reading {net.short}…</div>
+                      <div className="font-mono text-[13px] text-slate-600 py-2 text-center">reading {net.short}…</div>
                     ) : (
                       <div className="flex items-center justify-between gap-2 p-2.5 rounded-xl"
                         style={{ background: "#F59E0B08", border: "1px solid #F59E0B20" }}>
-                        <span className="font-mono text-[10px] text-amber-500/80 leading-snug">
+                        <span className="font-mono text-[13px] text-amber-500/80 leading-snug">
                           No checklist over a wallet we couldn&apos;t finish reading — this is not an all-clear.
                         </span>
                         <RetryRead onRetry={retryBalance} busy={rereading} />
@@ -2266,7 +2266,7 @@ export default function BankPage() {
 
               {/* Portfolio Allocation with donut chart */}
               <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4">
-                <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-3">PORTFOLIO ALLOCATION</div>
+                <div className="font-mono text-[12px] text-slate-500 tracking-widest mb-3">PORTFOLIO ALLOCATION</div>
                 {/* ONE predicate for the whole card. It used to be two — the
                     chart asked `balance > 0` (stables only) and the bar below
                     asked whether a ratio existed (stables + priced ETH) — and
@@ -2290,7 +2290,7 @@ export default function BankPage() {
                     not — a wallet holding only ETH has zero funded USDC legs
                     and is still not empty. */}
                 {balanceRead.body === "pending" ? (
-                  <div className="font-mono text-[10px] text-slate-600">reading {net.short}…</div>
+                  <div className="font-mono text-[13px] text-slate-600">reading {net.short}…</div>
                 ) : holdsAssets ? (
                   <>
                   <div className="flex items-center gap-4">
@@ -2313,15 +2313,15 @@ export default function BankPage() {
                         <div key={d.name} className="flex items-center justify-between">
                           <div className="flex items-center gap-1.5">
                             <div className="w-2 h-2 rounded-full" style={{ background: d.color }} />
-                            <span className="font-mono text-[10px] text-slate-400">{d.name}</span>
+                            <span className="font-mono text-[13px] text-slate-400">{d.name}</span>
                           </div>
-                          <span className="font-mono text-[10px] text-slate-300">{priv(`$${usd(d.value)}`)}</span>
+                          <span className="font-mono text-[13px] text-slate-300">{priv(`$${usd(d.value)}`)}</span>
                         </div>
                       ))}
                       {/* Say so when the ETH leg is missing, rather than letting
                           the chart imply the wallet holds no ETH. */}
                       {ethUnpriced && (
-                        <div className="font-mono text-[9px] text-slate-500">
+                        <div className="font-mono text-[12px] text-slate-500">
                           {ethBal?.toFixed(4)} ETH — price unavailable, not charted
                         </div>
                       )}
@@ -2329,13 +2329,13 @@ export default function BankPage() {
                           unpriced leg, an unread one. Same caveat as the "≥"
                           on the balance card, in the shape it takes here. */}
                       {balanceRead.totalIsFloor && (
-                        <div className="font-mono text-[9px] text-amber-500/80">
+                        <div className="font-mono text-[12px] text-amber-500/80">
                           Part of the wallet was not read — slices are lower bounds
                         </div>
                       )}
-                      <div className="font-mono text-[8px] text-slate-700 pt-1">ETH counted as gas reserve</div>
+                      <div className="font-mono text-[11px] text-slate-700 pt-1">ETH counted as gas reserve</div>
                       {walletState.gasSavedUsd != null && (
-                        <div className="font-mono text-[9px] text-[#34D399]">~${walletState.gasSavedUsd} saved vs mainnet</div>
+                        <div className="font-mono text-[12px] text-[#34D399]">~${walletState.gasSavedUsd} saved vs mainnet</div>
                       )}
                     </div>
                   </div>
@@ -2346,7 +2346,7 @@ export default function BankPage() {
                       the wallet plainly holds something (unpriced ETH leg). */}
                   {walletState.allocation.stablecoin != null ? (
                     <>
-                      <div className="mt-3 flex items-center justify-between font-mono text-[10px]">
+                      <div className="mt-3 flex items-center justify-between font-mono text-[13px]">
                         <span className="text-slate-500">Stablecoin</span>
                         <span className="text-[#4FC3F7] font-bold">{walletState.allocation.stablecoin}%</span>
                       </div>
@@ -2356,7 +2356,7 @@ export default function BankPage() {
                       </div>
                     </>
                   ) : (
-                    <div className="mt-3 font-mono text-[9px] text-slate-600">
+                    <div className="mt-3 font-mono text-[12px] text-slate-600">
                       Split unknown — ETH price unavailable
                     </div>
                   )}
@@ -2364,7 +2364,7 @@ export default function BankPage() {
                 ) : balanceRead.body === "failed" ? (
                   <div className="rounded-lg px-3 py-2.5 flex items-start justify-between gap-2"
                     style={{ border: "1px solid #F59E0B30", background: "#F59E0B08" }}>
-                    <span className="font-mono text-[9px] leading-relaxed text-amber-500/80">
+                    <span className="font-mono text-[12px] leading-relaxed text-amber-500/80">
                       Your balance on {net.short} could not be read. The allocation is unknown —
                       this is not an empty wallet.
                     </span>
@@ -2373,7 +2373,7 @@ export default function BankPage() {
                 ) : balanceRead.body === "partial" ? (
                   <div className="rounded-lg px-3 py-2.5 flex items-start justify-between gap-2"
                     style={{ border: "1px solid #F59E0B30", background: "#F59E0B08" }}>
-                    <span className="font-mono text-[9px] leading-relaxed text-amber-500/80">
+                    <span className="font-mono text-[12px] leading-relaxed text-amber-500/80">
                       Nothing was found in the part that could be read, but part of this wallet was
                       not read at all. Incomplete, not empty.
                     </span>
@@ -2383,7 +2383,7 @@ export default function BankPage() {
                   // The one branch that ASSERTS something about the user, and
                   // it is now reached only from a complete read that found
                   // nothing — `resolveRead`'s `canAssertEmpty`.
-                  <div className="font-mono text-[10px] text-slate-600">No assets yet</div>
+                  <div className="font-mono text-[13px] text-slate-600">No assets yet</div>
                 )}
               </div>
 
@@ -2438,7 +2438,7 @@ export default function BankPage() {
             {VIEWS.map(v => (
               <button key={v.id} onClick={() => setView(v.id)}
                 aria-current={view === v.id ? "page" : undefined}
-                className="font-mono text-[11px] px-3 py-2 -mb-px border-b-2 transition-colors whitespace-nowrap"
+                className="font-mono text-[14px] px-3 py-2 -mb-px border-b-2 transition-colors whitespace-nowrap"
                 style={view === v.id
                   ? { color: "#4FC3F7", borderColor: "#4FC3F7" }
                   : { color: "#64748b", borderColor: "transparent" }}>
@@ -2488,7 +2488,7 @@ export default function BankPage() {
                     return (
                       <button key={f} type="button" onClick={() => setPortfolioChain(f)}
                         aria-pressed={on}
-                        className="font-mono text-[10px] px-3 py-1.5 rounded-lg transition-colors"
+                        className="font-mono text-[13px] px-3 py-1.5 rounded-lg transition-colors"
                         style={on
                           ? { background: "#4FC3F712", color: "#4FC3F7", border: "1px solid #4FC3F730" }
                           : { color: "#64748b", border: "1px solid #1A1A2E" }}>
@@ -2517,7 +2517,7 @@ export default function BankPage() {
                   title={hideDust
                     ? `Showing everything, including rows under $${DUST_USD} and rows with no price`
                     : `Hide rows priced under $${DUST_USD}, and rows with no price at all. Neither moves a total: a small row is already in it, an unpriced row never could be.`}
-                  className="font-mono text-[10px] px-3 py-1.5 rounded-lg transition-colors ml-auto"
+                  className="font-mono text-[13px] px-3 py-1.5 rounded-lg transition-colors ml-auto"
                   style={hideDust
                     ? { background: "#4FC3F712", color: "#4FC3F7", border: "1px solid #4FC3F730" }
                     : { color: "#64748b", border: "1px solid #1A1A2E" }}>
@@ -2525,7 +2525,7 @@ export default function BankPage() {
                 </button>
 
                 {portfolioChain !== "all" && (
-                  <span className="font-mono text-[9.5px] w-full" style={{ color: "#F59E0B99" }}>
+                  <span className="font-mono text-[12px] w-full" style={{ color: "#F59E0B99" }}>
                     filtered — other chains hidden, not empty
                   </span>
                 )}
@@ -2537,8 +2537,8 @@ export default function BankPage() {
                 <section>
                   <div className="flex items-center gap-2 mb-2">
                     <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: "#4FC3F7" }} />
-                    <span className="font-mono text-[11px] font-medium text-[#E2E8F0]">Base</span>
-                    <span className="font-mono text-[9px] text-slate-600">
+                    <span className="font-mono text-[14px] font-medium text-[#E2E8F0]">Base</span>
+                    <span className="font-mono text-[12px] text-slate-600">
                       {view === "tokens" ? "crypto tokens" : "tokenized stocks"}
                     </span>
                   </div>
@@ -2555,8 +2555,8 @@ export default function BankPage() {
                 <section>
                   <div className="flex items-center gap-2 mb-2">
                     <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: "#94A3B8" }} />
-                    <span className="font-mono text-[11px] font-medium text-[#E2E8F0]">Robinhood Chain</span>
-                    <span className="font-mono text-[9px] text-slate-600">
+                    <span className="font-mono text-[14px] font-medium text-[#E2E8F0]">Robinhood Chain</span>
+                    <span className="font-mono text-[12px] text-slate-600">
                       {view === "tokens" ? "crypto tokens" : "RWA equities"}
                     </span>
                   </div>
@@ -2591,16 +2591,16 @@ export default function BankPage() {
                 <section>
                   <div className="flex items-center gap-2 mb-2">
                     <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: "#F59E0B" }} />
-                    <span className="font-mono text-[11px] font-medium" style={{ color: "#F59E0B" }}>Base Sepolia</span>
-                    <span className="font-mono text-[9px] text-slate-600">testnet · no real value</span>
+                    <span className="font-mono text-[14px] font-medium" style={{ color: "#F59E0B" }}>Base Sepolia</span>
+                    <span className="font-mono text-[12px] text-slate-600">testnet · no real value</span>
                   </div>
                   {view === "tokens" ? (
                     <TokenTable address={acct} network="baseSepolia"
                       hideDust={hideDust} hideAmounts={hideBal} onShowDust={() => setDust(false)} />
                   ) : (
                     <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4">
-                      <div className="font-mono text-[9px] text-slate-500 tracking-widest mb-1.5">STOCKS</div>
-                      <p className="font-mono text-[10px] text-slate-600 leading-relaxed">
+                      <div className="font-mono text-[12px] text-slate-500 tracking-widest mb-1.5">STOCKS</div>
+                      <p className="font-mono text-[13px] text-slate-600 leading-relaxed">
                         Tokenized shares are issued on Base mainnet and Robinhood Chain only — there is no
                         testnet deployment to read.
                       </p>
@@ -2655,14 +2655,14 @@ export default function BankPage() {
               <div className="flex items-center gap-1 p-3 border-b border-[#1A1A2E] shrink-0">
                 {TABS.map(tb => (
                   <button key={tb.id} onClick={() => { if (tb.id === "send") { setScanPrefill(null); setScanKey(k => k + 1); } setPanel(tb.id); }}
-                    className="flex-1 font-mono text-[10px] py-1.5 rounded-md transition-colors"
+                    className="flex-1 font-mono text-[13px] py-1.5 rounded-md transition-colors"
                     style={panel === tb.id
                       ? { background: "#4FC3F712", color: "#4FC3F7", border: "1px solid #4FC3F730" }
                       : { color: "#64748b", border: "1px solid transparent" }}>
                     {tb.label}
                   </button>
                 ))}
-                <button onClick={() => setActionOpen(false)} className="ml-1 w-7 h-7 rounded-md font-mono text-[13px] text-slate-500 hover:text-white hover:bg-[#1A1A2E] shrink-0">✕</button>
+                <button onClick={() => setActionOpen(false)} className="ml-1 w-7 h-7 rounded-md font-mono text-[16px] text-slate-500 hover:text-white hover:bg-[#1A1A2E] shrink-0">✕</button>
               </div>
 
               <div className="overflow-y-auto p-4 min-h-0">
@@ -2684,7 +2684,7 @@ export default function BankPage() {
                     a network it can actually represent. */}
                 {panel === "withdraw" && (earnKey
                   ? <MoveToYieldCard result={{ network: earnKey, action: "withdraw" }} account={acct} withdrawOnly />
-                  : <p className="font-mono text-[11px] text-slate-500">Earn positions are on Base. Switch to Base to withdraw.</p>
+                  : <p className="font-mono text-[14px] text-slate-500">Earn positions are on Base. Switch to Base to withdraw.</p>
                 )}
                 {/* CONVERT — chain chosen HERE, in the panel, on its own selector.
                     The two venues are NOT interchangeable and the branch order is
@@ -2770,13 +2770,13 @@ export default function BankPage() {
                   <div>
                     {SHOW_SCAN_TO_PAY && (
                       <button onClick={() => setScanOpen(true)}
-                        className="w-full font-mono text-[11px] font-bold py-2 rounded-xl mb-3 flex items-center justify-center gap-2"
+                        className="w-full font-mono text-[14px] font-bold py-2 rounded-xl mb-3 flex items-center justify-center gap-2"
                         style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
                         📷 Scan to pay
                       </button>
                     )}
                     {SHOW_SCAN_TO_PAY && scanPrefill && (
-                      <div className="font-mono text-[9px] text-[#34D399] mb-2">
+                      <div className="font-mono text-[12px] text-[#34D399] mb-2">
                         ✓ scanned{scanPrefill.amount ? ` · request ${scanPrefill.amount} ${scanPrefill.asset ?? "USDC"}` : ""} — confirm + sign below
                       </div>
                     )}
@@ -2816,16 +2816,16 @@ export default function BankPage() {
                     <Picker label="ASSET"
                       summary={
                         <span className="flex items-center gap-2 min-w-0">
-                          <span className="text-[12px] text-white truncate">{reqSymbol}</span>
-                          <span className="text-[9px] text-slate-600 shrink-0">
+                          <span className="text-[15px] text-white truncate">{reqSymbol}</span>
+                          <span className="text-[12px] text-slate-600 shrink-0">
                             {reqAsset === "USDC" ? `${rcv.short} cash` : "gas token"}
                           </span>
                         </span>
                       }>
                       {close => (["USDC", "ETH"] as const).map(a => (
                         <PickerRow key={a} selected={reqAsset === a} onClick={() => { setReqAsset(a); close(); }}>
-                          <span className="text-[12px] text-white flex-1">{a === "USDC" ? rcv.stableSymbol : a}</span>
-                          <span className="text-[9px] text-slate-600">
+                          <span className="text-[15px] text-white flex-1">{a === "USDC" ? rcv.stableSymbol : a}</span>
+                          <span className="text-[12px] text-slate-600">
                             {a === "USDC" ? `${rcv.short} cash` : "gas token"}
                           </span>
                         </PickerRow>
@@ -2835,13 +2835,13 @@ export default function BankPage() {
                     <Field label="AMOUNT — OPTIONAL"
                       right={reqAmount ? (
                         <button onClick={() => setReqAmount("")}
-                          className="text-[9px] text-slate-500 hover:text-white">clear</button>
+                          className="text-[12px] text-slate-500 hover:text-white">clear</button>
                       ) : undefined}>
                       <div className="flex items-center gap-2">
                         <input value={reqAmount} onChange={e => setReqAmount(e.target.value.replace(/[^0-9.]/g, ""))}
                           inputMode="decimal" placeholder="0.0"
-                          className="flex-1 w-0 bg-transparent text-[16px] text-white outline-none placeholder:text-slate-700" />
-                        <span className="text-[11px] text-slate-300 px-2 py-1.5 rounded-lg border border-[#1A1A2E] shrink-0">{reqSymbol}</span>
+                          className="flex-1 w-0 bg-transparent text-[19px] text-white outline-none placeholder:text-slate-700" />
+                        <span className="text-[14px] text-slate-300 px-2 py-1.5 rounded-lg border border-[#1A1A2E] shrink-0">{reqSymbol}</span>
                       </div>
                     </Field>
                     </>)}
@@ -2855,10 +2855,10 @@ export default function BankPage() {
                         <QRCodeSVG value={!acct ? "" : SHOW_SCAN_TO_PAY ? buildPaymentUri({ to: acct, amount: reqAmount, asset: reqAsset, network: receiveChain }) : acct} size={180} bgColor="#ffffff" fgColor="#0a0a0f" level="M" />
                       </div>
                       {parseFloat(reqAmount) > 0 && (
-                        <div className="text-[12px] text-[#34D399] mt-3 font-bold">requesting {reqAmount} {reqSymbol}</div>
+                        <div className="text-[15px] text-[#34D399] mt-3 font-bold">requesting {reqAmount} {reqSymbol}</div>
                       )}
-                      {name && <div className="text-[13px] text-[#4FC3F7] mt-2">{name}</div>}
-                      <div className="text-[9px] text-slate-400 mt-1.5 break-all px-2">{acct}</div>
+                      {name && <div className="text-[16px] text-[#4FC3F7] mt-2">{name}</div>}
+                      <div className="text-[12px] text-slate-400 mt-1.5 break-all px-2">{acct}</div>
                       {/* "🔗 Share pay link" stood here until #254. It published
                           /pay/<address> URLs that middleware 301s to /chat with
                           the address stripped — see the note where sharePayLink()
@@ -2867,7 +2867,7 @@ export default function BankPage() {
                           from `receiveChain`, so it is correct on Robinhood (USDG)
                           as well as Base, which the /pay page is not. */}
                       <div className="flex items-center gap-2 mt-3">
-                        <button onClick={copyAddr} className="text-[11px] px-4 py-2 rounded-lg" style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
+                        <button onClick={copyAddr} className="text-[14px] px-4 py-2 rounded-lg" style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
                           {copied ? "✓ Copied" : "Copy address"}
                         </button>
                       </div>
@@ -2888,23 +2888,23 @@ export default function BankPage() {
                         only" — invisible on touch, on a wallet whose wedge is a
                         phone. */}
                     <div className="rounded-lg border border-[#1A1A2E] bg-[#0d0d12] p-3 mt-4">
-                      <div className="text-[9px] text-slate-500 tracking-widest mb-2">{SHOW_ONRAMP ? "CASH · CARD ↔ BANK" : "CASH OUT · TO BANK"}</div>
+                      <div className="text-[12px] text-slate-500 tracking-widest mb-2">{SHOW_ONRAMP ? "CASH · CARD ↔ BANK" : "CASH OUT · TO BANK"}</div>
                       <div className="flex gap-2">
                         {SHOW_ONRAMP && (
                           <button onClick={addCash} disabled={onrampBusy || !isConnected || !rcv.can.fiat}
-                            className="flex-1 text-[11px] font-bold py-2.5 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed transition-opacity hover:opacity-80"
+                            className="flex-1 text-[14px] font-bold py-2.5 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed transition-opacity hover:opacity-80"
                             style={{ background: "#34D39910", color: "#34D399", border: "1px solid #34D39930" }}>
                             {onrampBusy ? "opening…" : `💵 Buy ${rcv.stableSymbol}`}
                           </button>
                         )}
                         <button onClick={cashOut} disabled={cashOutBusy || !isConnected || !rcv.can.fiat}
-                          className="flex-1 text-[11px] py-2.5 rounded-xl text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity hover:text-white"
+                          className="flex-1 text-[14px] py-2.5 rounded-xl text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity hover:text-white"
                           style={{ border: "1px solid #1A1A2E" }}>
                           {cashOutBusy ? "opening…" : "🏦 Cash out"}
                         </button>
                       </div>
                       {!rcv.can.fiat && (
-                        <div className="text-[9px] text-slate-600 mt-2 leading-relaxed">
+                        <div className="text-[12px] text-slate-600 mt-2 leading-relaxed">
                           {SHOW_ONRAMP
                             ? <>Coinbase Onramp and Offramp settle on Base mainnet only — not {rcv.short}. Pick Base above to move cash in or out.</>
                             : <>Coinbase Offramp settles on Base mainnet only — not {rcv.short}. Pick Base above to cash out.</>}
@@ -2935,8 +2935,8 @@ export default function BankPage() {
             style={{ background: "#4FC3F708" }}>
             <div className="flex items-center gap-2">
               <img src="/logomark.svg" alt="" aria-hidden className="w-5 h-5 rounded-md" />
-              <span className="font-mono text-[11px] text-[#4FC3F7] font-bold">BlueAgent</span>
-              <span className="font-mono text-[9px] text-slate-600">Wallet mode</span>
+              <span className="font-mono text-[14px] text-[#4FC3F7] font-bold">BlueAgent</span>
+              <span className="font-mono text-[12px] text-slate-600">Wallet mode</span>
             </div>
             <button onClick={() => setChatOpen(false)}
               className="font-mono text-slate-500 hover:text-white text-sm w-6 h-6 flex items-center justify-center rounded">✕</button>
@@ -2958,10 +2958,10 @@ export default function BankPage() {
                     (advertising a capability the model does not have) in its
                     smallest possible form, and it survived the Earn removal
                     because the prompt was updated and the chips were not. */}
-                <div className="font-mono text-[10px] text-slate-600 mb-2">Balances, sending, and withdrawals on {net.short}:</div>
+                <div className="font-mono text-[13px] text-slate-600 mb-2">Balances, sending, and withdrawals on {net.short}:</div>
                 {["Show my balance breakdown", "How do I send USDC?", "How do I withdraw supplied funds?"].map(q => (
                   <button key={q} onClick={() => sendChat(q)}
-                    className="w-full text-left font-mono text-[10px] px-2 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 transition-colors"
+                    className="w-full text-left font-mono text-[13px] px-2 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 transition-colors"
                     style={{ background: "#0d0d12", border: "1px solid #1A1A2E" }}>
                     {q}
                   </button>
@@ -2969,7 +2969,7 @@ export default function BankPage() {
               </div>
             )}
             {chatMessages.map((m, i) => (
-              <div key={i} className={`font-mono text-[10px] p-2 rounded-lg leading-relaxed ${
+              <div key={i} className={`font-mono text-[13px] p-2 rounded-lg leading-relaxed ${
                 m.role === "user"
                   ? "ml-6 bg-[#4FC3F715] text-[#4FC3F7] border border-[#4FC3F730]"
                   : "mr-6 bg-[#0d0d12] text-slate-300 border border-[#1A1A2E]"
@@ -2978,7 +2978,7 @@ export default function BankPage() {
               </div>
             ))}
             {chatLoading && chatMessages[chatMessages.length - 1]?.role !== "assistant" && (
-              <div className="font-mono text-[10px] text-slate-600 p-2">thinking…</div>
+              <div className="font-mono text-[13px] text-slate-600 p-2">thinking…</div>
             )}
             <div ref={chatBottomRef} />
           </div>
@@ -2990,10 +2990,10 @@ export default function BankPage() {
               onChange={e => setChatInput(e.target.value)}
               onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendChat(chatInput)}
               placeholder="Ask anything…"
-              className="flex-1 bg-[#050508] border border-[#1A1A2E] rounded-lg px-3 py-1.5 font-mono text-[11px] text-slate-200 placeholder:text-slate-700 outline-none focus:border-[#4FC3F7]/40"
+              className="flex-1 bg-[#050508] border border-[#1A1A2E] rounded-lg px-3 py-1.5 font-mono text-[14px] text-slate-200 placeholder:text-slate-700 outline-none focus:border-[#4FC3F7]/40"
             />
             <button onClick={() => sendChat(chatInput)} disabled={chatLoading || !chatInput.trim()}
-              className="font-mono text-[11px] font-bold px-3 py-1.5 rounded-lg disabled:opacity-40"
+              className="font-mono text-[14px] font-bold px-3 py-1.5 rounded-lg disabled:opacity-40"
               style={{ background: "#4FC3F7", color: "#050508" }}>
               →
             </button>
@@ -3059,7 +3059,7 @@ export default function BankPage() {
 
 function AssetPill({ label, value, color }: { label: string; value: string; color: string }) {
   return (
-    <div className="font-mono text-[9px] px-2 py-0.5 rounded-full flex items-center gap-1"
+    <div className="font-mono text-[12px] px-2 py-0.5 rounded-full flex items-center gap-1"
       style={{ background: `${color}15`, border: `1px solid ${color}30`, color }}>
       <span className="text-slate-500">{label}</span>
       <span className="font-bold">{value}</span>
@@ -3085,11 +3085,11 @@ function AISuggestion({ icon, text, action, onAction, color }: {
       style={{ background: `${color}08`, border: `1px solid ${color}20` }}>
       <div className="flex items-center gap-2 min-w-0">
         <span className="text-sm shrink-0">{icon}</span>
-        <span className="font-mono text-[10px] text-slate-300 truncate">{text}</span>
+        <span className="font-mono text-[13px] text-slate-300 truncate">{text}</span>
       </div>
       {action && onAction && (
         <button onClick={onAction}
-          className="font-mono text-[9px] px-2 py-1 rounded-md shrink-0 font-bold"
+          className="font-mono text-[12px] px-2 py-1 rounded-md shrink-0 font-bold"
           style={{ background: `${color}20`, color, border: `1px solid ${color}40` }}>
           {action}
         </button>
@@ -3101,20 +3101,20 @@ function AISuggestion({ icon, text, action, onAction, color }: {
 function StatMini({ label, value, sub, color }: { label: string; value: string | number; sub: string; color: string }) {
   return (
     <div className="rounded-xl border border-[#1A1A2E] bg-[#050508] p-2.5">
-      <div className="font-mono text-[9px] text-slate-500 mb-1">{label}</div>
-      <div className="font-mono text-[14px] font-bold" style={{ color }}>{value}</div>
-      <div className="font-mono text-[8px] text-slate-600 mt-0.5">{sub}</div>
+      <div className="font-mono text-[12px] text-slate-500 mb-1">{label}</div>
+      <div className="font-mono text-[17px] font-bold" style={{ color }}>{value}</div>
+      <div className="font-mono text-[11px] text-slate-600 mt-0.5">{sub}</div>
     </div>
   );
 }
 
 function IdentityChip({ label, active, color }: { label: string; active: boolean; color: string }) {
   return (
-    <div className="font-mono text-[9px] px-2 py-0.5 rounded-full flex items-center gap-1"
+    <div className="font-mono text-[12px] px-2 py-0.5 rounded-full flex items-center gap-1"
       style={active
         ? { background: `${color}15`, border: `1px solid ${color}30`, color }
         : { background: "#0d0d12", border: "1px solid #1A1A2E", color: "#475569" }}>
-      {active && <span className="text-[8px]">✓</span>}
+      {active && <span className="text-[11px]">✓</span>}
       {label}
     </div>
   );
@@ -3145,17 +3145,17 @@ function ActionButton({ icon, label, onClick, primary, disabledReason }: {
           wrapped would make one control two lines tall and break the row's
           baseline. */}
       <button onClick={onClick} disabled={off} title={disabledReason ?? undefined}
-        className="font-mono text-[10px] font-bold py-2.5 px-1 rounded-xl flex flex-col items-center gap-1 transition-opacity hover:opacity-90 disabled:opacity-35 disabled:cursor-not-allowed"
+        className="font-mono text-[13px] font-bold py-2.5 px-1 rounded-xl flex flex-col items-center gap-1 transition-opacity hover:opacity-90 disabled:opacity-35 disabled:cursor-not-allowed"
         style={off
           ? { background: "#0d0d12", color: "#475569", border: "1px solid #1A1A2E" }
           : primary
             ? { background: "#4FC3F7", color: "#050508" }
             : { background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F740" }}>
-        <span className="text-[14px] leading-none">{icon}</span>
+        <span className="text-[17px] leading-none">{icon}</span>
         {label}
       </button>
       {off && (
-        <div className="font-mono text-[8px] text-slate-600 mt-1 text-center leading-tight">{disabledReason}</div>
+        <div className="font-mono text-[11px] text-slate-600 mt-1 text-center leading-tight">{disabledReason}</div>
       )}
     </div>
   );
@@ -3171,7 +3171,7 @@ function ActionButton({ icon, label, onClick, primary, disabledReason }: {
 function RetryRead({ onRetry, busy }: { onRetry: () => void; busy: boolean }) {
   return (
     <button onClick={onRetry} disabled={busy}
-      className="shrink-0 font-mono text-[9px] px-2 py-1 rounded-lg font-bold transition-opacity hover:opacity-80 disabled:opacity-50"
+      className="shrink-0 font-mono text-[12px] px-2 py-1 rounded-lg font-bold transition-opacity hover:opacity-80 disabled:opacity-50"
       style={{ background: "#F59E0B15", color: "#F59E0B", border: "1px solid #F59E0B35" }}>
       {busy ? "reading…" : "Retry"}
     </button>
@@ -3184,16 +3184,16 @@ function SpendRail({ label, value, sub, accent, unavailable }: {
 }) {
   return (
     <div className="rounded-xl border border-[#1A1A2E] bg-[#0d0d12] px-3 py-2.5">
-      <div className="font-mono text-[8.5px] text-slate-600 tracking-widest uppercase">{label}</div>
+      <div className="font-mono text-[11px] text-slate-600 tracking-widest uppercase">{label}</div>
       {unavailable ? (
         <>
-          <div className="font-mono text-[14px] font-bold text-slate-600 mt-1">—</div>
-          <div className="font-mono text-[8.5px] text-[#F59E0B] mt-0.5">store unreachable</div>
+          <div className="font-mono text-[17px] font-bold text-slate-600 mt-1">—</div>
+          <div className="font-mono text-[11px] text-[#F59E0B] mt-0.5">store unreachable</div>
         </>
       ) : (
         <>
-          <div className="font-mono text-[15px] font-bold mt-1 truncate" style={{ color: accent }}>{value}</div>
-          <div className="font-mono text-[8.5px] text-slate-600 mt-0.5 truncate">{sub}</div>
+          <div className="font-mono text-[18px] font-bold mt-1 truncate" style={{ color: accent }}>{value}</div>
+          <div className="font-mono text-[11px] text-slate-600 mt-0.5 truncate">{sub}</div>
         </>
       )}
     </div>
@@ -3253,7 +3253,7 @@ function SpendSplit({ d }: { d: SpendSummaryDTO }) {
       {!crDown && parts.length > 0 && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           {parts.map(p => (
-            <span key={p.k} className="font-mono text-[9px] text-slate-500">
+            <span key={p.k} className="font-mono text-[12px] text-slate-500">
               {p.label} <span className="text-slate-300 font-bold">{p.value}</span>
             </span>
           ))}
@@ -3265,19 +3265,19 @@ function SpendSplit({ d }: { d: SpendSummaryDTO }) {
           bucket per debit. Say so rather than letting the parts quietly
           disagree with the whole. */}
       {!crDown && parts.length > 0 && !s.balances && (
-        <p className="font-mono text-[9px] text-[#F59E0B]">
+        <p className="font-mono text-[12px] text-[#F59E0B]">
           These parts don&apos;t add up to the rail above — some debits went uncategorised.
         </p>
       )}
 
       {!crDown && d.credits.paidAllTime > 0 && (
-        <p className="font-mono text-[9px] text-slate-600">
+        <p className="font-mono text-[12px] text-slate-600">
           {d.credits.paidAllTime.toLocaleString()} cr bought all-time ≈ ${paidUsd.toFixed(2)}
           <span className="text-slate-700"> — the rest came from the free daily allowance.</span>
         </p>
       )}
 
-      <p className="font-mono text-[9px] text-slate-600">
+      <p className="font-mono text-[12px] text-slate-600">
         {hasTools || inWindow ? (
           <>
             {hasTools ? "Per-tool breakdown" : "Calls per day"}{hasTools && inWindow ? " and calls per day" : ""} on{" "}
@@ -3320,31 +3320,31 @@ function AgentSpendCard({ spend, priv }: { spend: SpendLoad; priv: (s: string) =
   return (
     <div className="mb-3 rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] px-4 py-3">
       <div className="flex items-baseline justify-between gap-3">
-        <div className="font-mono text-[9px] text-slate-500 tracking-widest">AGENT SPEND</div>
+        <div className="font-mono text-[12px] text-slate-500 tracking-widest">AGENT SPEND</div>
         <div className="flex items-baseline gap-2 shrink-0">
-          {scope && <span className="font-mono text-[9px] text-slate-700">{scope}</span>}
-          <Link href="/app/usage" className="font-mono text-[10px] text-[#4FC3F7] hover:underline">Usage →</Link>
+          {scope && <span className="font-mono text-[12px] text-slate-700">{scope}</span>}
+          <Link href="/app/usage" className="font-mono text-[13px] text-[#4FC3F7] hover:underline">Usage →</Link>
         </div>
       </div>
 
       {spend.s === "disconnected" ? (
-        <p className="font-mono text-[10px] text-slate-600 mt-2">
+        <p className="font-mono text-[13px] text-slate-600 mt-2">
           Connect a wallet to see what it has spent — receipts are per address.
         </p>
       ) : spend.s === "loading" ? (
-        <p className="font-mono text-[10px] text-slate-600 mt-2">Reading spend…</p>
+        <p className="font-mono text-[13px] text-slate-600 mt-2">Reading spend…</p>
       ) : spend.s === "failed" ? (
-        <p className="font-mono text-[10px] text-[#F59E0B] mt-2 leading-relaxed">
+        <p className="font-mono text-[13px] text-[#F59E0B] mt-2 leading-relaxed">
           Couldn&apos;t load spending. A read failure, not a zero — your history is intact.
         </p>
       ) : spend.s === "signed-out" ? (
-        <p className="font-mono text-[10px] text-slate-500 mt-2 leading-relaxed">
+        <p className="font-mono text-[13px] text-slate-500 mt-2 leading-relaxed">
           Spending is private to the wallet.{" "}
           <button onClick={spend.signIn} className="underline text-[#4FC3F7]">Sign in to see it</button>
           <span className="text-slate-600"> — one signature, no transaction.</span>
         </p>
       ) : spend.d.usdc.status === "unavailable" && spend.d.credits.status === "unavailable" ? (
-        <p className="font-mono text-[10px] text-[#F59E0B] mt-2 leading-relaxed">
+        <p className="font-mono text-[13px] text-[#F59E0B] mt-2 leading-relaxed">
           Both spend stores are unreachable right now.{" "}
           <span className="text-slate-600">That is not the same as zero.</span>
         </p>
@@ -3374,11 +3374,11 @@ function AgentSpendCard({ spend, priv }: { spend: SpendLoad; priv: (s: string) =
               never be worded as an empty wallet — one rail answered and was
               empty, the other never answered at all. */}
           {emptyState(spend.d) === "none" ? (
-            <p className="font-mono text-[9px] text-slate-600 mt-2">
+            <p className="font-mono text-[12px] text-slate-600 mt-2">
               Nothing spent yet — Hub tool calls and chat runs show up here.
             </p>
           ) : emptyState(spend.d) === "unreadable" ? (
-            <p className="font-mono text-[9px] text-[#F59E0B] mt-2">
+            <p className="font-mono text-[12px] text-[#F59E0B] mt-2">
               Nothing on the rail we can read, and the other is unreachable — half the picture.
             </p>
           ) : (
@@ -3456,35 +3456,35 @@ function BankLanding() {
               The label is the heading now rather than a decorative eyebrow over
               one: dropping the <h1> without promoting something would leave the
               page with no heading at all. */}
-          <h1 className="font-mono text-[13px] tracking-widest text-[#4FC3F7] font-bold mb-4">🔵 WALLET</h1>
+          <h1 className="font-mono text-[16px] tracking-widest text-[#4FC3F7] font-bold mb-4">🔵 WALLET</h1>
           <div className="space-y-3">
             {features.map(f => (
               <div key={f.title} className="flex gap-3">
                 <span className="text-base shrink-0">{f.icon}</span>
                 <div>
-                  <div className="font-mono text-[12px] text-slate-200">{f.title}</div>
-                  <div className="font-mono text-[10px] text-slate-600 leading-relaxed">{f.body}</div>
+                  <div className="font-mono text-[15px] text-slate-200">{f.title}</div>
+                  <div className="font-mono text-[13px] text-slate-600 leading-relaxed">{f.body}</div>
                 </div>
               </div>
             ))}
           </div>
         </div>
         <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-6">
-          <div className="font-mono text-[14px] font-bold text-white mb-1">Open your account</div>
+          <div className="font-mono text-[17px] font-bold text-white mb-1">Open your account</div>
           {/* Describes the control DIRECTLY BELOW IT, which is why it tracks
               PRIVY_ENABLED: with Privy off there is no "we create your wallet"
               path on this panel, only the wallet list. The old line promised
               Face ID and a passkey — the CTA that delivered that is gone. */}
-          <p className="font-mono text-[11px] text-slate-500 mb-5">
+          <p className="font-mono text-[14px] text-slate-500 mb-5">
             {PRIVY_ENABLED
               ? "Sign in and we create your wallet — no seed phrase, no app to install."
               : "Connect a wallet you already own — no signup, no KYC, no custody."}
           </p>
           <ConnectButton />
           <div className="flex items-center gap-2 my-4">
-            <div className="h-px flex-1 bg-[#1A1A2E]" /><span className="font-mono text-[9px] text-slate-700">SECURED BY YOU</span><div className="h-px flex-1 bg-[#1A1A2E]" />
+            <div className="h-px flex-1 bg-[#1A1A2E]" /><span className="font-mono text-[12px] text-slate-700">SECURED BY YOU</span><div className="h-px flex-1 bg-[#1A1A2E]" />
           </div>
-          <div className="flex items-center justify-center gap-4 font-mono text-[9px] text-slate-600">
+          <div className="flex items-center justify-center gap-4 font-mono text-[12px] text-slate-600">
             <span>🔒 Non-custodial</span><span>·</span><span>⛓ On Base</span><span>·</span><span>🔑 You sign everything</span>
           </div>
           {/* Named Aave v3 and Morpho, which this surface no longer sends money
@@ -3493,7 +3493,7 @@ function BankLanding() {
               lender under the signup button reads as "your deposit goes here".
               "Withdraw anytime" left the row above for the same reason: it
               answers a question about a deposit you can no longer make. */}
-          <p className="font-mono text-[9px] text-slate-700 text-center mt-4">Powered by Base · USDC</p>
+          <p className="font-mono text-[12px] text-slate-700 text-center mt-4">Powered by Base · USDC</p>
         </div>
       </div>
     </div>
@@ -3540,19 +3540,19 @@ function ConnectButton() {
               keep honest if the sign-in path changes again. */}
           <div className="flex items-center gap-2 mt-3">
             <div className="h-px flex-1 bg-[#1A1A2E]" />
-            <span className="font-mono text-[9px] text-slate-600 uppercase tracking-widest">or</span>
+            <span className="font-mono text-[12px] text-slate-600 uppercase tracking-widest">or</span>
             <div className="h-px flex-1 bg-[#1A1A2E]" />
           </div>
         </>
       )}
       <button onClick={() => setOpen(o => !o)} disabled={isPending}
-        className="w-full font-mono text-[11px] text-slate-400 hover:text-slate-200 py-2.5 mt-3 rounded-xl border border-[#1A1A2E] transition-colors disabled:opacity-60">
+        className="w-full font-mono text-[14px] text-slate-400 hover:text-slate-200 py-2.5 mt-3 rounded-xl border border-[#1A1A2E] transition-colors disabled:opacity-60">
         I already have a wallet
       </button>
       {open && (
         <>
           <div className="absolute left-0 right-0 top-full mt-2 z-50 rounded-xl border border-[#1A1A2E] bg-[#0A0A12] shadow-2xl overflow-hidden">
-            <p className="font-mono text-[10px] text-slate-600 px-3 pt-3 pb-2 tracking-widest">SELECT WALLET</p>
+            <p className="font-mono text-[13px] text-slate-600 px-3 pt-3 pb-2 tracking-widest">SELECT WALLET</p>
             {wallets.map(w => (
               <button key={w.key} onClick={() => { w.select(); setOpen(false); }}
                 className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-[#1A1A2E] transition-colors">

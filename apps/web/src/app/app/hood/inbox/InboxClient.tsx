@@ -181,13 +181,13 @@ function Header({ unread, onMarkAllRead }: { unread: number; onMarkAllRead: () =
           prints the title, so the label + unread count hide here to avoid a
           doubled title; the chip group below stays visible as mobile nav. */}
       <span
-        className="hidden lg:inline font-mono font-semibold text-[11px] tracking-[0.16em]"
+        className="hidden lg:inline font-mono font-semibold text-[14px] tracking-[0.16em]"
         style={{ color: "#E2E8F0" }}
       >
         // INBOX
       </span>
       <span
-        className="hidden lg:inline font-mono text-[10.5px] tabular-nums"
+        className="hidden lg:inline font-mono text-[13px] tabular-nums"
         style={{ color: unread > 0 ? RH_GREEN : "#64748B" }}
       >
         {unread === 0 ? "all caught up" : `${unread} unread`}
@@ -195,7 +195,7 @@ function Header({ unread, onMarkAllRead }: { unread: number; onMarkAllRead: () =
       {/* Right chip group — the Live board / Track record links double as
           mobile nav (the BLUEHOOD sidebar is lg-only), plus the alert
           opt-in and the mark-all-read action. */}
-      <div className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-2 font-mono text-[11px]">
+      <div className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-2 font-mono text-[14px]">
         <Link href="/hood" className="hover:text-white" style={{ color: "#64748B" }}>
           ← Live board
         </Link>
@@ -273,26 +273,26 @@ function InboxCard({ a, isUnread, initialOpen = false }: { a: Arrow; isUnread: b
           )}
           <div className="flex-1 min-w-0">
             <div className="flex items-baseline gap-2">
-              <span className="font-mono text-[11px]" style={{ color: RH_GREEN }}>{a.serial}</span>
-              <span className={`font-mono text-[13px] ${isUnread ? "text-white font-semibold" : "text-slate-300"}`}>
+              <span className="font-mono text-[14px]" style={{ color: RH_GREEN }}>{a.serial}</span>
+              <span className={`font-mono text-[16px] ${isUnread ? "text-white font-semibold" : "text-slate-300"}`}>
                 {a.ticker}
               </span>
-              <span className="font-mono text-[10px] uppercase" style={{ color: MUTED }}>{signal}</span>
-              <span className="ml-auto font-mono text-[10px]" style={{ color: MUTED }}>
+              <span className="font-mono text-[13px] uppercase" style={{ color: MUTED }}>{signal}</span>
+              <span className="ml-auto font-mono text-[13px]" style={{ color: MUTED }}>
                 {formatRelTime(a.fired_at)}
               </span>
             </div>
-            <div className="mt-1 font-mono text-[12px] truncate" style={{ color: "#9aa1ac" }}>
+            <div className="mt-1 font-mono text-[15px] truncate" style={{ color: "#9aa1ac" }}>
               {briefLine}
             </div>
           </div>
           <span
-            className="rounded px-2 py-0.5 font-mono text-[10px] font-semibold tracking-wider shrink-0"
+            className="rounded px-2 py-0.5 font-mono text-[13px] font-semibold tracking-wider shrink-0"
             style={{ color: outcome.color, backgroundColor: `${outcome.color}18` }}
           >
             {outcome.label}
           </span>
-          <span className="font-mono text-[10px]" style={{ color: MUTED }}>{open ? "▾" : "▸"}</span>
+          <span className="font-mono text-[13px]" style={{ color: MUTED }}>{open ? "▾" : "▸"}</span>
         </div>
         {open && (
           <div className="border-t px-3 py-3 space-y-3" style={{ borderColor: "#0f1218" }}>
@@ -342,7 +342,7 @@ function InboxCardTradeRow({ arrow }: { arrow: Arrow }) {
           type="button"
           onClick={(e) => { e.stopPropagation(); setOpen(true); }}
           disabled={!arrowOpen}
-          className="rounded border px-3 py-1.5 font-mono text-[11px] font-semibold hover:bg-black/40 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="rounded border px-3 py-1.5 font-mono text-[14px] font-semibold hover:bg-black/40 disabled:opacity-50 disabled:cursor-not-allowed"
           style={{ borderColor: RH_GREEN, color: RH_GREEN }}
           title={arrowOpen ? "Open the trade panel" : "Signal closed — read-only"}
         >
@@ -358,7 +358,7 @@ function InboxCardTradeRow({ arrow }: { arrow: Arrow }) {
               : a.status === "reverted" ? "#f87171"
               : "#facc15";
             return (
-              <span className="flex items-center gap-1 font-mono text-[10px]" style={{ color }}>
+              <span className="flex items-center gap-1 font-mono text-[13px]" style={{ color }}>
                 <span style={{ color: MUTED }}>you traded ·</span>
                 <a
                   href={`${RH_EXPLORER}/tx/${a.tx_hash}`}
@@ -375,7 +375,7 @@ function InboxCardTradeRow({ arrow }: { arrow: Arrow }) {
           })()
         ) : (
           <span
-            className="flex items-center gap-1 font-mono text-[10px]"
+            className="flex items-center gap-1 font-mono text-[13px]"
             title={`you traded ${tradedCount} times: ${successCount} success · ${revertedCount} reverted · ${pendingCount} broadcast/unknown`}
           >
             <span style={{ color: MUTED }}>you traded ·</span>
@@ -398,11 +398,11 @@ function EmptyState() {
     >
       {/* Empty-state title stays mono (short label). The paragraph below
           is a real ≥2-sentence run and takes the `hood-prose` token. */}
-      <div className="font-mono text-white text-[13px] mb-2">Inbox empty.</div>
+      <div className="font-mono text-white text-[16px] mb-2">Inbox empty.</div>
       {/* While frozen nothing fires, so "the moment the engine fires" is a
           delivery nobody performs — the header beside this already says
           "alerts paused". scripts/arrow-freeze-check.ts §4.4. */}
-      <p className="hood-prose max-w-md mx-auto text-[13.5px] leading-relaxed">
+      <p className="hood-prose max-w-md mx-auto text-[16px] leading-relaxed">
         {ARROWS_FROZEN
           ? ARROWS_FROZEN_NOTE
           : "Arrows land here the moment the engine fires. First delivery when NYSE opens Monday."}
@@ -413,7 +413,7 @@ function EmptyState() {
 
 function SectionHeader({ label }: { label: string }) {
   return (
-    <div className="mb-3 font-mono text-[10px] uppercase tracking-widest" style={{ color: MUTED }}>
+    <div className="mb-3 font-mono text-[13px] uppercase tracking-widest" style={{ color: MUTED }}>
       {label}
     </div>
   );
@@ -421,7 +421,7 @@ function SectionHeader({ label }: { label: string }) {
 
 function Footer() {
   return (
-    <footer className="mt-12 border-t pt-6 text-[11px]" style={{ borderColor: BORDER, color: MUTED }}>
+    <footer className="mt-12 border-t pt-6 text-[14px]" style={{ borderColor: BORDER, color: MUTED }}>
       <div className="flex flex-wrap gap-x-6 gap-y-2">
         <span>Oracle: Chainlink AggregatorV3 (RH) + B20 share price (Base)</span>
         <span>DEX: GeckoTerminal (Uniswap V3/V4 · Aerodrome)</span>

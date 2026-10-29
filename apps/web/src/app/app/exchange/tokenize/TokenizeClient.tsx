@@ -16,10 +16,10 @@ import {
 
 const pub = createPublicClient({ chain: base, transport: http() });
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
-const input = "w-full rounded-lg border border-[#1A1A2E] bg-[#050508] px-3 py-2 text-[11px] text-[#E2E8F0] outline-none focus:border-[#4FC3F7]/40";
-const label = "text-[10px] text-[#94A3B8]";
+const input = "w-full rounded-lg border border-[#1A1A2E] bg-[#050508] px-3 py-2 text-[14px] text-[#E2E8F0] outline-none focus:border-[#4FC3F7]/40";
+const label = "text-[13px] text-[#94A3B8]";
 const card = "rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] px-4 py-3.5";
-const H = ({ children }: { children: string }) => <h2 className="mb-2 text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">{children}</h2>;
+const H = ({ children }: { children: string }) => <h2 className="mb-2 text-[12px] font-medium tracking-[0.14em] text-[#64748B]">{children}</h2>;
 
 type Step = { s: "idle" | "busy" | "done" | "error"; msg?: string; hash?: string };
 interface Check { ok: boolean; why: string[]; referrerOk: boolean }
@@ -139,7 +139,7 @@ export default function TokenizeClient({ markets = false }: { markets?: boolean 
   }
 
   const Status = ({ s }: { s: Step }) => s.s === "idle" ? null : (
-    <p className={`text-[10.5px] ${s.s === "error" ? "text-[#F87171]" : s.s === "done" ? "text-[#34D399]" : "text-[#94A3B8]"}`}>
+    <p className={`text-[13px] ${s.s === "error" ? "text-[#F87171]" : s.s === "done" ? "text-[#34D399]" : "text-[#94A3B8]"}`}>
       {s.msg}{s.hash && <> · <a className="text-[#4FC3F7]" href={`https://basescan.org/tx/${s.hash}`} target="_blank" rel="noreferrer">Basescan ↗</a></>}
     </p>
   );
@@ -150,8 +150,8 @@ export default function TokenizeClient({ markets = false }: { markets?: boolean 
       <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="px-5 py-[18px] grid gap-5 w-full">
           <div>
-            <h1 className="text-[15px] font-semibold text-[#E2E8F0]">{markets ? "Launch a token" : "Tokenize an agent"}</h1>
-            <p className="mt-1.5 max-w-[860px] text-[11px] leading-[1.7] text-[#94A3B8]">
+            <h1 className="text-[18px] font-semibold text-[#E2E8F0]">{markets ? "Launch a token" : "Tokenize an agent"}</h1>
+            <p className="mt-1.5 max-w-[860px] text-[14px] leading-[1.7] text-[#94A3B8]">
               {markets ? "Launch a token on Quadra's launchpad on Base 8453, for yourself or for an agent." : "Launch a coin for your agent on Quadra's launchpad on Base 8453."} The coin has no admin and a fixed supply, and its whole supply sits
               in a Uniswap v4 pool as liquidity nobody can pull. Every trade pays the pool fee, and 80% of it can go straight to your agent&apos;s wallet
               to fund its work. You sign every step from your own wallet.
@@ -166,75 +166,75 @@ export default function TokenizeClient({ markets = false }: { markets?: boolean 
               <label className="grid gap-1"><span className={label}>Description</span><textarea className={`${input} min-h-[70px]`} value={d.description} onChange={set("description")} maxLength={280} /></label>
               <label className="grid gap-1"><span className={label}>Image URL (https)</span><input className={input} value={d.image} onChange={set("image")} placeholder="https://…/logo.png" /></label>
               <label className="grid gap-1"><span className={label}>ERC-8004 agent id (optional)</span><input className={input} value={d.agentId} onChange={set("agentId")} placeholder="e.g. 1137821" /></label>
-              {agentOwner === "none" && <p className="text-[10px] text-[#F87171]">No agent #{d.agentId} on Base.</p>}
-              {agentNotMine && <p className="text-[10px] text-[#FBBF24]">Agent #{d.agentId} is owned by {short(agentOwner!)}, not the connected wallet. The coin will point at it anyway; make sure it is yours.</p>}
+              {agentOwner === "none" && <p className="text-[13px] text-[#F87171]">No agent #{d.agentId} on Base.</p>}
+              {agentNotMine && <p className="text-[13px] text-[#FBBF24]">Agent #{d.agentId} is owned by {short(agentOwner!)}, not the connected wallet. The coin will point at it anyway; make sure it is yours.</p>}
               <div className="grid gap-1">
                 <span className={label}>Pool fee (chosen once, forever)</span>
                 <div className="flex gap-1.5">
                   {([[10_000, "1%"], [30_000, "3%"]] as const).map(([v, l]) => (
-                    <button key={v} type="button" onClick={() => setFee(v)} className="rounded-full border px-[11px] py-1 text-[9.5px]"
+                    <button key={v} type="button" onClick={() => setFee(v)} className="rounded-full border px-[11px] py-1 text-[12px]"
                       style={fee === v ? { color: "#050508", background: "#4FC3F7", borderColor: "#4FC3F7", fontWeight: 600 } : { color: "#94A3B8", borderColor: "#1A1A2E" }}>{l}</button>
                   ))}
                 </div>
               </div>
               <label className="grid gap-1"><span className={label}>Your first buy, in ETH (0 = none), at the opening price, before anyone else</span><input className={input} value={buy} onChange={(e) => setBuy(e.target.value.trim())} /></label>
-              {buyBad && <p className="text-[10px] text-[#F87171]">Not an ETH amount.</p>}
-              {problem && d.name && <p className="text-[10px] text-[#F87171]">{problem}</p>}
+              {buyBad && <p className="text-[13px] text-[#F87171]">Not an ETH amount.</p>}
+              {problem && d.name && <p className="text-[13px] text-[#F87171]">{problem}</p>}
             </section>
 
             <div className="grid gap-5">
               <section className={card}>
                 <H>WHERE THE FEES GO</H>
-                <ul className="grid gap-1 text-[10.5px] text-[#94A3B8]">
+                <ul className="grid gap-1 text-[13px] text-[#94A3B8]">
                   <li><span className="text-[#E2E8F0]">80%</span> to the launcher, or to the agent&apos;s wallet once you route it (step 2)</li>
                   <li><span className="text-[#E2E8F0]">5%</span> to Blue Agent as the referrer {check && !check.referrerOk && <span className="text-[#FBBF24]">(not approved right now: recorded as none)</span>}</li>
                   <li><span className="text-[#E2E8F0]">15%</span> to Quadra</li>
                 </ul>
-                <p className="mt-2 text-[10px] leading-[1.6] text-[#64748B]">
+                <p className="mt-2 text-[13px] leading-[1.6] text-[#64748B]">
                   Holders are not paid: the launchpad has one fee recipient per coin and no holder distribution. Anyone can call collect() to push the fees out.
                 </p>
               </section>
 
               <section className={`${card} grid gap-2.5`}>
                 <H>1 · LAUNCH</H>
-                {check === null ? <p className="text-[10.5px] text-[#64748B]">Reading the factory on Base…</p>
-                  : !check.ok ? <p className="text-[10.5px] text-[#F87171]">Not sending: the factory did not answer as expected ({check.why.join("; ")}).</p>
+                {check === null ? <p className="text-[13px] text-[#64748B]">Reading the factory on Base…</p>
+                  : !check.ok ? <p className="text-[13px] text-[#F87171]">Not sending: the factory did not answer as expected ({check.why.join("; ")}).</p>
                   : !isConnected ? <ConnectButton label="Connect wallet" />
                   : <button type="button" onClick={onLaunch} disabled={!!problem || buyBad || launch.s === "busy" || launch.s === "done"}
-                      className="rounded-[8px] bg-[#4FC3F7] px-[13px] py-2 text-[10.5px] font-semibold text-[#050508] hover:bg-[#29ABE2] disabled:opacity-40">
+                      className="rounded-[8px] bg-[#4FC3F7] px-[13px] py-2 text-[13px] font-semibold text-[#050508] hover:bg-[#29ABE2] disabled:opacity-40">
                       {launch.s === "busy" ? "Launching…" : `Launch ${d.symbol.trim() || "the coin"}${buyWei > 0n ? ` and buy ${buy} ETH` : ""}`}
                     </button>}
                 <Status s={launch} />
                 {launch.token && (
-                  <p className="text-[10.5px] text-[#94A3B8]">
+                  <p className="text-[13px] text-[#94A3B8]">
                     Token <a className="text-[#4FC3F7]" href={`https://basescan.org/token/${launch.token}`} target="_blank" rel="noreferrer">{short(launch.token)} ↗</a> ·{" "}
                     <Link className="text-[#4FC3F7]" href={`/markets/base/${launch.token}`}>its Markets page</Link> ·{" "}
                     <a className="text-[#4FC3F7]" href={`https://dexscreener.com/base/${launch.token}`} target="_blank" rel="noreferrer">DexScreener ↗</a>
                   </p>
                 )}
-                <p className="text-[9.5px] text-[#475569]">Factory <a className="text-[#4FC3F7]" href={`https://basescan.org/address/${FACTORY}`} target="_blank" rel="noreferrer">{short(FACTORY)}</a> · Quadra v3 is not audited.</p>
+                <p className="text-[12px] text-[#64748B]">Factory <a className="text-[#4FC3F7]" href={`https://basescan.org/address/${FACTORY}`} target="_blank" rel="noreferrer">{short(FACTORY)}</a> · Quadra v3 is not audited.</p>
               </section>
 
               <section className={`${card} grid gap-2.5`}>
                 <H>2 · WHERE THE 80% GOES</H>
                 <input className={input} value={launch.token ?? coin} onChange={(e) => setCoin(e.target.value.trim())} disabled={!!launch.token} placeholder="Coin address 0x… (or launch one above)" />
-                {holder === "none" && isAddress(token) && <p className="text-[10px] text-[#F87171]">Not a coin from this launchpad.</p>}
-                {holder && holder !== "none" && !canRoute && <p className="text-[10px] text-[#FBBF24]">Its fees go to {short(holder)} now; only that wallet can change it.</p>}
+                {holder === "none" && isAddress(token) && <p className="text-[13px] text-[#F87171]">Not a coin from this launchpad.</p>}
+                {holder && holder !== "none" && !canRoute && <p className="text-[13px] text-[#FBBF24]">Its fees go to {short(holder)} now; only that wallet can change it.</p>}
                 <div className="flex gap-1.5">
                   {([["agent", "The agent's wallet"], ["stakers", "Share with stakers"]] as const).map(([v, l]) => (
-                    <button key={v} type="button" onClick={() => setMode(v)} className="rounded-full border px-[11px] py-1 text-[9.5px]"
+                    <button key={v} type="button" onClick={() => setMode(v)} className="rounded-full border px-[11px] py-1 text-[12px]"
                       style={mode === v ? { color: "#050508", background: "#4FC3F7", borderColor: "#4FC3F7", fontWeight: 600 } : { color: "#94A3B8", borderColor: "#1A1A2E" }}>{l}</button>
                   ))}
                 </div>
                 {mode === "agent" ? (
                   <>
-                    <p className="text-[10px] leading-[1.6] text-[#64748B]">Point the launcher&apos;s share at the agent&apos;s own wallet, so its coin funds its work. The current recipient can change it again later.</p>
+                    <p className="text-[13px] leading-[1.6] text-[#64748B]">Point the launcher&apos;s share at the agent&apos;s own wallet, so its coin funds its work. The current recipient can change it again later.</p>
                     <input className={input} value={recip} onChange={(e) => setRecip(e.target.value.trim())} placeholder="Agent wallet 0x…" />
                   </>
                 ) : (
                   <>
-                    <p className="text-[10px] leading-[1.6] text-[#94A3B8]">{stakerWording(d.symbol.trim() || "COIN", "ETH")}</p>
-                    <p className="text-[10px] leading-[1.6] text-[#64748B]">
+                    <p className="text-[13px] leading-[1.6] text-[#94A3B8]">{stakerWording(d.symbol.trim() || "COIN", "ETH")}</p>
+                    <p className="text-[13px] leading-[1.6] text-[#64748B]">
                       Holders who do not stake receive nothing. The agent receives the share you set of the launcher&apos;s 80%; stakers share the rest, released over 7 days.
                       Quadra&apos;s and the referrer&apos;s shares are not affected. The contract has no owner and is not audited.
                     </p>
@@ -242,25 +242,25 @@ export default function TokenizeClient({ markets = false }: { markets?: boolean 
                       <input className={input} value={recip} onChange={(e) => setRecip(e.target.value.trim())} placeholder="Agent wallet 0x… (empty if 0%)" />
                       <input className={input} value={agentPct} onChange={(e) => setAgentPct(e.target.value.trim())} placeholder="Agent %" />
                     </div>
-                    <label className="flex items-start gap-2 text-[10px] leading-[1.5] text-[#FBBF24]">
+                    <label className="flex items-start gap-2 text-[13px] leading-[1.5] text-[#FBBF24]">
                       <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} className="mt-0.5" />
                       This cannot be undone. The launcher&apos;s fee share will go to this contract for good: not to me, not to the agent&apos;s wallet, not back.
                     </label>
                   </>
                 )}
                 <button type="button" onClick={onRoute} disabled={!canRoute || route.s === "busy" || route.s === "done" || (mode === "stakers" && !ack)}
-                  className="rounded-[8px] border border-[#1A1A2E] bg-[#0F121A] px-[13px] py-2 text-[10.5px] text-[#E2E8F0] disabled:opacity-40">
+                  className="rounded-[8px] border border-[#1A1A2E] bg-[#0F121A] px-[13px] py-2 text-[13px] text-[#E2E8F0] disabled:opacity-40">
                   {mode === "agent" ? "Route fees to this wallet" : "Create the share contract and hand fees to it"}
                 </button>
                 <Status s={route} />
                 {route.s === "done" && mode === "stakers" && isAddress(token) && (
-                  <Link className="text-[10.5px] text-[#4FC3F7]" href={`/exchange/coin/${token}`}>Open the staking page →</Link>
+                  <Link className="text-[13px] text-[#4FC3F7]" href={`/exchange/coin/${token}`}>Open the staking page →</Link>
                 )}
               </section>
             </div>
           </div>
 
-          <p className="text-[9.5px] leading-relaxed text-[#475569]">
+          <p className="text-[12px] leading-relaxed text-[#64748B]">
             A coin is not a share in the agent and pays no dividends. Launching one is your decision and your transaction; Blue Agent builds the calls and never holds your keys or funds.
             {" "}<Link className="text-[#4FC3F7]" href="/exchange/create">No agent yet? Create one first →</Link>
           </p>

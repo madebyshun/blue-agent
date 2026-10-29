@@ -58,11 +58,11 @@ export function PriceAlertCard({ result, account }: { result: PriceAlertDraft; a
 
   return (
     <div className="rounded-xl border border-[#1A1A2E] bg-[#0B0B12] p-3 my-2 max-w-[520px]">
-      <p className="font-mono text-[10px] text-slate-500 mb-1">
+      <p className="font-mono text-[13px] text-slate-500 mb-1">
         {result.automation ? "⚙ AUTOMATION" : "🔔 PRICE ALERT"} · {result.body.check_at ? "checked at its set time" : "checked every 5 min"} · free
       </p>
-      <p className="text-[13px] text-slate-200">{result.rule.charAt(0).toUpperCase() + result.rule.slice(1)}.</p>
-      <p className="font-mono text-[10px] text-slate-500 mt-1">
+      <p className="text-[16px] text-slate-200">{result.rule.charAt(0).toUpperCase() + result.rule.slice(1)}.</p>
+      <p className="font-mono text-[13px] text-slate-500 mt-1">
         {result.body.trade
           ? "When it fires, the trade is prepared in the “Price alerts” chat with the live quote and the trade check, and waits for your yes. Nothing executes on its own."
           : "Lands in Scheduled → Alerts and in the “Price alerts” chat. An alert is a message, not an order — nothing is traded."}
@@ -72,7 +72,7 @@ export function PriceAlertCard({ result, account }: { result: PriceAlertDraft; a
           <ConnectButton label="Connect to arm" />
         ) : state === "armed" ? (
           <div className="space-y-1">
-            <p className="font-mono text-[11px] text-emerald-400">
+            <p className="font-mono text-[14px] text-emerald-400">
               Armed. <Link href="/cron" className="underline hover:text-emerald-300">See all alerts →</Link>
             </p>
             {/* Delivery outside the app (lib/watches/deliver.ts). */}
@@ -81,11 +81,11 @@ export function PriceAlertCard({ result, account }: { result: PriceAlertDraft; a
         ) : (
           <>
             <button onClick={arm} disabled={state === "busy"}
-              className="font-mono text-[11px] font-bold px-3 py-1.5 rounded-lg disabled:opacity-50"
+              className="font-mono text-[14px] font-bold px-3 py-1.5 rounded-lg disabled:opacity-50"
               style={{ background: "#4FC3F712", color: "#4FC3F7", border: "1px solid #4FC3F740" }}>
               {state === "busy" ? "Arming…" : result.automation ? "Arm automation" : "Arm alert"}
             </button>
-            {state === "error" && <p className="font-mono text-[10px] text-amber-400 mt-1.5">{msg}</p>}
+            {state === "error" && <p className="font-mono text-[13px] text-amber-400 mt-1.5">{msg}</p>}
           </>
         )}
       </div>

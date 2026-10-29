@@ -105,15 +105,15 @@ export default function SkillsPanel({ onPick, onUse, costs }: {
       {/* `// SKILLS` header — desktop only. Below lg the global MobileTopBar
           prints the surface title, so rendering this too would duplicate it. */}
       <div className="hidden lg:flex items-center gap-3.5 flex-wrap shrink-0 min-h-[56px] px-5 py-2 border-b border-[#1A1A2E]">
-        <span className="font-mono text-[11px] font-semibold tracking-[0.16em] text-[#E2E8F0]">// SKILLS</span>
-        <span className="font-mono text-[10.5px] text-[#64748B]">what Chat can do · each runs a real tool or builds a card you sign</span>
+        <span className="font-mono text-[14px] font-semibold tracking-[0.16em] text-[#E2E8F0]">// SKILLS</span>
+        <span className="font-mono text-[13px] text-[#64748B]">what Chat can do · each runs a real tool or builds a card you sign</span>
         <div className="ml-auto flex items-center gap-2">
-          <span className="font-mono text-[10px] text-[#94A3B8] border border-[#1A1A2E] rounded-[7px] px-2.5 py-[5px]">
+          <span className="font-mono text-[13px] text-[#94A3B8] border border-[#1A1A2E] rounded-[7px] px-2.5 py-[5px]">
             {totalActive} active · {userInstalled.length} installed
           </span>
           <button
             onClick={openInstall}
-            className="font-mono text-[10.5px] font-semibold text-[#050508] bg-[#4FC3F7] hover:bg-[#29ABE2] rounded-[7px] px-2.5 py-[5px] transition-colors"
+            className="font-mono text-[13px] font-semibold text-[#050508] bg-[#4FC3F7] hover:bg-[#29ABE2] rounded-[7px] px-2.5 py-[5px] transition-colors"
           >
             + Install
           </button>
@@ -134,7 +134,7 @@ export default function SkillsPanel({ onPick, onUse, costs }: {
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 placeholder="Search skills…"
-                className="w-full bg-[#0D0D14] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg pl-9 pr-8 py-2 font-mono text-[11.5px] text-[#E2E8F0] placeholder:text-[#64748B] outline-none transition-colors"
+                className="w-full bg-[#0D0D14] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg pl-9 pr-8 py-2 font-mono text-[14px] text-[#E2E8F0] placeholder:text-[#64748B] outline-none transition-colors"
               />
               {search && (
                 <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#64748B] hover:text-[#94A3B8]">
@@ -150,7 +150,7 @@ export default function SkillsPanel({ onPick, onUse, costs }: {
                 <button
                   key={id}
                   onClick={() => setActiveGroup(id as SkillGroup | "all")}
-                  className="font-mono text-[9.5px] rounded-full px-[11px] py-1 border transition-colors"
+                  className="font-mono text-[12px] rounded-full px-[11px] py-1 border transition-colors"
                   style={on
                     ? { color: "#050508", background: SKILL_ACCENT, borderColor: SKILL_ACCENT, fontWeight: 600 }
                     : { color: "#94A3B8", borderColor: BORDER, background: "transparent" }}
@@ -163,8 +163,8 @@ export default function SkillsPanel({ onPick, onUse, costs }: {
 
           {catalogEmpty && (
             <div className="text-center py-12">
-              <p className="font-mono text-[13px] text-[#94A3B8]">No skills found</p>
-              <p className="font-mono text-[10px] text-[#475569] mt-1">Try a different search or filter</p>
+              <p className="font-mono text-[16px] text-[#94A3B8]">No skills found</p>
+              <p className="font-mono text-[13px] text-[#64748B] mt-1">Try a different search or filter</p>
             </div>
           )}
 
@@ -174,8 +174,8 @@ export default function SkillsPanel({ onPick, onUse, costs }: {
             return (
               <section key={g.id}>
                 <div className="flex items-baseline gap-2.5 mt-[24px] mb-3 flex-wrap">
-                  <span className="font-mono text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">{g.title}</span>
-                  <span className="font-mono text-[10px] text-[#475569]">{g.sub}</span>
+                  <span className="font-mono text-[12px] font-medium tracking-[0.14em] text-[#64748B]">{g.title}</span>
+                  <span className="font-mono text-[13px] text-[#64748B]">{g.sub}</span>
                 </div>
                 <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill,minmax(230px,1fr))" }}>
                   {rows.map((sk) => {
@@ -190,22 +190,22 @@ export default function SkillsPanel({ onPick, onUse, costs }: {
                         style={{ borderColor: sk.signs ? "rgba(79,195,247,.22)" : BORDER, background: sk.signs ? "rgba(79,195,247,.035)" : SURFACE }}
                       >
                         <div className="flex items-start justify-between gap-2">
-                          <span className="font-mono text-[12px] font-semibold text-[#E2E8F0]">{sk.name}</span>
+                          <span className="font-mono text-[15px] font-semibold text-[#E2E8F0]">{sk.name}</span>
                           {sk.signs && (
-                            <span className="font-mono text-[8.5px] font-medium text-[#4FC3F7] border border-[#4FC3F7]/30 rounded-full px-[7px] py-[2px] shrink-0">you sign</span>
+                            <span className="font-mono text-[11px] font-medium text-[#4FC3F7] border border-[#4FC3F7]/30 rounded-full px-[7px] py-[2px] shrink-0">you sign</span>
                           )}
                           {!sk.signs && sk.tools && sk.tools.length > 1 && (
-                            <span className="font-mono text-[8.5px] font-medium text-[#A78BFA] border border-[#A78BFA]/30 rounded-full px-[7px] py-[2px] shrink-0">{sk.tools.length} tools</span>
+                            <span className="font-mono text-[11px] font-medium text-[#A78BFA] border border-[#A78BFA]/30 rounded-full px-[7px] py-[2px] shrink-0">{sk.tools.length} tools</span>
                           )}
                         </div>
-                        <p className="font-prose text-[10.5px] leading-[1.6] text-[#94A3B8] mt-2 flex-1">{sk.description}</p>
+                        <p className="font-prose text-[13px] leading-[1.6] text-[#94A3B8] mt-2 flex-1">{sk.description}</p>
                         <div className="flex flex-wrap gap-[5px] mt-[10px]">
                           {(sk.chains ?? []).map((c) => (
-                            <span key={c} className="font-mono text-[8.5px] text-[#94A3B8] border border-[#1A1A2E] rounded-[5px] px-[6px] py-[2px]">{CHAIN_LABEL[c]}</span>
+                            <span key={c} className="font-mono text-[11px] text-[#94A3B8] border border-[#1A1A2E] rounded-[5px] px-[6px] py-[2px]">{CHAIN_LABEL[c]}</span>
                           ))}
                         </div>
-                        <div className="font-mono text-[9.5px] text-[#64748B] mt-[9px] truncate">“{sk.trigger?.trim()}”</div>
-                        <div className="font-mono text-[9px] text-[#475569] mt-1">
+                        <div className="font-mono text-[12px] text-[#64748B] mt-[9px] truncate">“{sk.trigger?.trim()}”</div>
+                        <div className="font-mono text-[12px] text-[#64748B] mt-1">
                           {[fee, runs !== null && runs > 0 ? `${runs.toLocaleString()} runs` : null].filter(Boolean).join(" · ") || "\u00a0"}
                         </div>
                       </button>
@@ -219,13 +219,13 @@ export default function SkillsPanel({ onPick, onUse, costs }: {
           {/* Scheduled tasks live on their own page — a pointer, not a skill. */}
           {(activeGroup === "all") && !lc && (
             <a href="/cron" className="flex items-center gap-3 mt-[24px] border border-[#1A1A2E] rounded-[14px] px-4 py-[13px] bg-[#0D0D14] hover:border-[#4FC3F7]/45 transition-colors">
-              <span className="font-mono text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">SCHEDULE</span>
-              <span className="flex-1 font-mono text-[10.5px] text-[#94A3B8]">Run any of these on a timer — daily or weekly, priced before it runs, paused when credits run out.</span>
-              <span className="font-mono text-[10.5px] text-[#4FC3F7]">Scheduled →</span>
+              <span className="font-mono text-[12px] font-medium tracking-[0.14em] text-[#64748B]">SCHEDULE</span>
+              <span className="flex-1 font-mono text-[13px] text-[#94A3B8]">Run any of these on a timer — daily or weekly, priced before it runs, paused when credits run out.</span>
+              <span className="font-mono text-[13px] text-[#4FC3F7]">Scheduled →</span>
             </a>
           )}
 
-          <p className="font-mono text-[9.5px] text-[#475569] mt-4 leading-relaxed">
+          <p className="font-mono text-[12px] text-[#64748B] mt-4 leading-relaxed">
             Every message also costs the model&apos;s credits (see Models). Chat-only presets cannot run any skill.
             Blue Agent never signs: a “you sign” skill builds a card, and nothing moves until your wallet signs it.
           </p>
@@ -234,13 +234,13 @@ export default function SkillsPanel({ onPick, onUse, costs }: {
               the real toggle/remove list. */}
           {userInstalled.length === 0 ? (
             <div className="flex items-center gap-3 mt-[26px] border border-dashed border-[#1A1A2E] rounded-[14px] px-4 py-[14px] flex-wrap">
-              <span className="font-mono text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">INSTALLED · 0</span>
-              <span className="flex-1 min-w-[200px] font-mono text-[10.5px] text-[#94A3B8]">
+              <span className="font-mono text-[12px] font-medium tracking-[0.14em] text-[#64748B]">INSTALLED · 0</span>
+              <span className="flex-1 min-w-[200px] font-mono text-[13px] text-[#94A3B8]">
                 No custom skills yet. Type <span className="text-[#4FC3F7]">/skill install owner/repo</span> in chat, or install from a GitHub repo.
               </span>
               <button
                 onClick={openInstall}
-                className="font-mono text-[10.5px] font-semibold text-[#050508] bg-[#4FC3F7] hover:bg-[#29ABE2] rounded-[8px] px-[13px] py-2 transition-colors"
+                className="font-mono text-[13px] font-semibold text-[#050508] bg-[#4FC3F7] hover:bg-[#29ABE2] rounded-[8px] px-[13px] py-2 transition-colors"
               >
                 + Install
               </button>
@@ -248,10 +248,10 @@ export default function SkillsPanel({ onPick, onUse, costs }: {
           ) : (
             <>
               <div className="flex items-center justify-between mt-[26px] mb-3">
-                <span className="font-mono text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">INSTALLED · {userInstalled.length}</span>
+                <span className="font-mono text-[12px] font-medium tracking-[0.14em] text-[#64748B]">INSTALLED · {userInstalled.length}</span>
                 <button
                   onClick={openInstall}
-                  className="font-mono text-[10px] text-[#4FC3F7] border border-[#4FC3F7]/30 hover:bg-[#4FC3F7]/10 rounded-lg px-2.5 py-1 transition-colors"
+                  className="font-mono text-[13px] text-[#4FC3F7] border border-[#4FC3F7]/30 hover:bg-[#4FC3F7]/10 rounded-lg px-2.5 py-1 transition-colors"
                 >
                   + Install
                 </button>
@@ -260,8 +260,8 @@ export default function SkillsPanel({ onPick, onUse, costs }: {
                 {userInstalled.map(s => (
                   <div key={s.name} className="flex items-center gap-3 px-4 py-2.5 rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14]">
                     <div className="flex-1 min-w-0">
-                      <span className="font-mono text-[13px] text-[#E2E8F0] truncate block">{s.name}</span>
-                      <p className="font-mono text-[10px] text-[#64748B] truncate">{s.description}</p>
+                      <span className="font-mono text-[16px] text-[#E2E8F0] truncate block">{s.name}</span>
+                      <p className="font-mono text-[13px] text-[#64748B] truncate">{s.description}</p>
                     </div>
                     <button
                       onClick={() => setSkillEnabled(s.name, !s.enabled)}
@@ -274,7 +274,7 @@ export default function SkillsPanel({ onPick, onUse, costs }: {
                     <button
                       onClick={() => removeSkill(s.name)}
                       title="Remove"
-                      className="font-mono text-[12px] text-[#475569] hover:text-red-400 transition-colors shrink-0"
+                      className="font-mono text-[15px] text-[#64748B] hover:text-red-400 transition-colors shrink-0"
                     >
                       ✕
                     </button>
@@ -288,14 +288,14 @@ export default function SkillsPanel({ onPick, onUse, costs }: {
               is attached for real. Non-interactive: they are not callable yet. */}
           {soon.length > 0 && (
             <>
-              <div className="font-mono text-[9.5px] font-medium tracking-[0.14em] text-[#64748B] mt-[26px] mb-3">
+              <div className="font-mono text-[12px] font-medium tracking-[0.14em] text-[#64748B] mt-[26px] mb-3">
                 COMING SOON · {soon.length}
               </div>
               <div className="grid gap-2.5 opacity-50" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(165px,1fr))" }}>
                 {soon.map(skill => (
                   <div key={skill.id} className="rounded-[12px] border border-[#1A1A2E] p-3">
-                    <div className="font-mono text-[11px] font-semibold text-[#E2E8F0]">{skill.name}</div>
-                    <p className="font-prose text-[9.5px] leading-[1.5] text-[#94A3B8] mt-1.5">{skill.description}</p>
+                    <div className="font-mono text-[14px] font-semibold text-[#E2E8F0]">{skill.name}</div>
+                    <p className="font-prose text-[12px] leading-[1.5] text-[#94A3B8] mt-1.5">{skill.description}</p>
                   </div>
                 ))}
               </div>
@@ -311,10 +311,10 @@ export default function SkillsPanel({ onPick, onUse, costs }: {
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setInstallOpen(false)} />
           <div className="relative z-10 w-full max-w-sm rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5">
             <div className="flex items-center justify-between mb-3">
-              <p className="font-mono text-[11px] text-[#4FC3F7] tracking-widest">// INSTALL SKILL</p>
-              <button onClick={() => setInstallOpen(false)} className="font-mono text-[13px] text-slate-500 hover:text-white">✕</button>
+              <p className="font-mono text-[14px] text-[#4FC3F7] tracking-widest">// INSTALL SKILL</p>
+              <button onClick={() => setInstallOpen(false)} className="font-mono text-[16px] text-slate-500 hover:text-white">✕</button>
             </div>
-            <p className="font-mono text-[10px] text-slate-600 mb-3">
+            <p className="font-mono text-[13px] text-slate-600 mb-3">
               GitHub repo — <span className="text-slate-400">owner/repo</span> or <span className="text-slate-400">owner/repo/path</span>. Fetches its SKILL.md.
             </p>
             <input
@@ -323,16 +323,16 @@ export default function SkillsPanel({ onPick, onUse, costs }: {
               onKeyDown={e => { if (e.key === "Enter") doInstall(); }}
               placeholder="base/skills"
               autoFocus
-              className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-3 py-2 font-mono text-[12px] text-white placeholder:text-slate-700 outline-none mb-3"
+              className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-3 py-2 font-mono text-[15px] text-white placeholder:text-slate-700 outline-none mb-3"
             />
             <button
               onClick={doInstall}
               disabled={installBusy || !installInput.trim()}
-              className="w-full font-mono text-[12px] font-bold py-2 rounded-lg border border-[#4FC3F7]/40 text-[#4FC3F7] hover:bg-[#4FC3F7]/10 transition-colors disabled:opacity-50"
+              className="w-full font-mono text-[15px] font-bold py-2 rounded-lg border border-[#4FC3F7]/40 text-[#4FC3F7] hover:bg-[#4FC3F7]/10 transition-colors disabled:opacity-50"
             >
               {installBusy ? "Installing…" : "Install"}
             </button>
-            {installMsg && <p className="font-mono text-[10px] text-slate-400 mt-3 whitespace-pre-wrap leading-relaxed">{installMsg}</p>}
+            {installMsg && <p className="font-mono text-[13px] text-slate-400 mt-3 whitespace-pre-wrap leading-relaxed">{installMsg}</p>}
           </div>
         </div>
       )}

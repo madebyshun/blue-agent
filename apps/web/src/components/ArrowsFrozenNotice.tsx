@@ -11,10 +11,10 @@ export default function ArrowsFrozenNotice() {
   return (
     <div
       role="status"
-      className="mb-6 rounded-lg border px-4 py-3 text-[12px] leading-relaxed"
+      className="mb-6 rounded-lg border px-4 py-3 text-[15px] leading-relaxed"
       style={{ borderColor: "#334155", background: "#0b0f17", color: "#9aa1ac" }}
     >
-      <span className="font-mono text-[10px] uppercase tracking-widest" style={{ color: "#F59E0B" }}>
+      <span className="font-mono text-[13px] uppercase tracking-widest" style={{ color: "#F59E0B" }}>
         Signals paused
       </span>
       <span className="mx-2" style={{ color: "#334155" }}>·</span>

@@ -455,7 +455,7 @@ export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
   // Server-side failure to resolve token → show plain error card.
   if (result.error) {
     return (
-      <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 font-mono text-[11px] text-amber-300">
+      <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 font-mono text-[14px] text-amber-300">
         <div className="font-bold mb-1">Can&apos;t prepare Robinhood swap</div>
         <div className="text-amber-200/80">{result.error}</div>
       </div>
@@ -463,7 +463,7 @@ export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
   }
   if (!token) {
     return (
-      <div className="rounded-xl border border-slate-700 bg-slate-900/40 p-4 font-mono text-[11px] text-slate-400">
+      <div className="rounded-xl border border-slate-700 bg-slate-900/40 p-4 font-mono text-[14px] text-slate-400">
         Missing token address — ask again with the token contract or a symbol I can look up.
       </div>
     );
@@ -485,17 +485,17 @@ export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
     : "";
 
   return (
-    <div className="rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-4 font-mono text-[11px] text-slate-300 max-w-md">
+    <div className="rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-4 font-mono text-[14px] text-slate-300 max-w-md">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2 min-w-0">
           <TokenGlyph symbol={inSym} />
           <div className="min-w-0">
-            <div className="text-white text-[12px] font-bold truncate">
+            <div className="text-white text-[15px] font-bold truncate">
               {isT2T
                 ? `Swap ${tokenInSym} → ${tokenSym}`
                 : `${direction === "buy" ? "Buy" : "Sell"} ${tokenSym}`} on Robinhood
             </div>
-            <div className="text-slate-600 text-[10px]">
+            <div className="text-slate-600 text-[13px]">
               RobinhoodSwapRouter · you sign · non-custodial · 4663
             </div>
           </div>
@@ -510,7 +510,7 @@ export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
           </div>
           {txHash && (
             <a href={`${RH_EXPLORER}/tx/${txHash}`} target="_blank" rel="noopener noreferrer"
-              className="text-[10px] px-2 py-1 rounded-lg border border-[#4FC3F730] text-[#4FC3F7] inline-block mt-1">View tx ↗</a>
+              className="text-[13px] px-2 py-1 rounded-lg border border-[#4FC3F730] text-[#4FC3F7] inline-block mt-1">View tx ↗</a>
           )}
         </div>
       ) : (
@@ -518,18 +518,18 @@ export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
           {/* The caller's own route note (a discovery row, the Hood board) —
               it tells the user to review the amount, so it must be on screen. */}
           {result.note && (
-            <p className="text-[9px] text-slate-500 leading-relaxed mb-2 break-all">{result.note}</p>
+            <p className="text-[12px] text-slate-500 leading-relaxed mb-2 break-all">{result.note}</p>
           )}
 
           {/* Only when the caller stated NO amount — see `editableAmount`. A
               stated amount stays confirm-only (#107). */}
           {editableAmount && (
             <div className="mb-2">
-              <div className="text-[9px] text-slate-500 mb-1">YOU PAY ({inSym})</div>
+              <div className="text-[12px] text-slate-500 mb-1">YOU PAY ({inSym})</div>
               <input type="number" min="0" inputMode="decimal" value={typedAmt}
                 onChange={e => setTypedAmt(e.target.value)} disabled={busy} placeholder="0.0"
                 aria-label={`Amount of ${inSym} to pay`}
-                className="w-full bg-[#050508] border border-[#1A1A2E] rounded-md px-2 py-1.5 text-[14px] text-white outline-none placeholder:text-slate-700 focus:border-[#4FC3F740]" />
+                className="w-full bg-[#050508] border border-[#1A1A2E] rounded-md px-2 py-1.5 text-[17px] text-white outline-none placeholder:text-slate-700 focus:border-[#4FC3F740]" />
             </div>
           )}
 
@@ -544,13 +544,13 @@ export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
               promise that an answer is coming, and there is no longer one. The
               banner below says what actually happened and offers the way out. */}
           {q.symbolic && gate !== "unverified" && (
-            <div className="text-[9px] text-[#4FC3F7] mb-2">
+            <div className="text-[12px] text-[#4FC3F7] mb-2">
               {q.value != null ? `${q.word} → ${fmtNum(q.value)} ${inSym}` : "Resolving your balance…"}
             </div>
           )}
 
           {/* Small meta text: rate · route · slippage · min · balance. */}
-          <div className="text-[9px] text-slate-500 mb-2 space-y-1">
+          <div className="text-[12px] text-slate-500 mb-2 space-y-1">
             <div className="flex items-center justify-between gap-2">
               <span className="truncate">
                 {rate != null ? <>1 {inSym} ≈ {fmtNum(rate)} {outSym}</> : "rate —"}
@@ -579,24 +579,24 @@ export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
             <UnverifiedBalance symbol={inSym} onRetry={() => { void bal.refetch(); }} busy={bal.refetching} />
           )}
 
-          {anyLoading && <p className="text-[9px] text-slate-600 mb-2">Checking pools + prices…</p>}
+          {anyLoading && <p className="text-[12px] text-slate-600 mb-2">Checking pools + prices…</p>}
           {unpriced && (
-            <p className="text-[10px] text-amber-400 mb-2">
+            <p className="text-[13px] text-amber-400 mb-2">
               No price for {inSym} → {outSym} right now, so no minimum output can be set. Not offering an unbounded swap.
             </p>
           )}
-          {overBalance && <p className="text-[10px] text-red-500 mb-2">Exceeds your {inSym} balance</p>}
+          {overBalance && <p className="text-[13px] text-red-500 mb-2">Exceeds your {inSym} balance</p>}
           {!isT2T && quote?.ok && quote.hasPool === false && (
-            <p className="text-[10px] text-amber-400 mb-2">
+            <p className="text-[13px] text-amber-400 mb-2">
               No Uniswap V3 pool for {tokenSym}/WETH on Robinhood Chain yet. The deployer needs to seed one.
             </p>
           )}
-          {quote?.error && <p className="text-[10px] text-amber-400 mb-2">Quote error: {quote.error}</p>}
+          {quote?.error && <p className="text-[13px] text-amber-400 mb-2">Quote error: {quote.error}</p>}
           {isT2T && t2tQuote?.error && (
-            <p className="text-[10px] text-amber-400 mb-2">Quote error: {t2tQuote.error}</p>
+            <p className="text-[13px] text-amber-400 mb-2">Quote error: {t2tQuote.error}</p>
           )}
           {prepRoute === "none" && (
-            <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-2.5 mb-2 text-[10px] text-amber-300">
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-2.5 mb-2 text-[13px] text-amber-300">
               <div className="font-bold mb-1">No route on Robinhood Chain</div>
               <div className="text-amber-200/80">
                 {noRouteMsg || "no direct pool AND no WETH-hopped route for this pair"}
@@ -605,11 +605,11 @@ export function RobinhoodSwapCard({ result }: { result: RobinhoodSwapResult }) {
               </div>
             </div>
           )}
-          {step === "error" && prepRoute !== "none" && <p className="text-[10px] text-amber-400 mb-2">{err}</p>}
+          {step === "error" && prepRoute !== "none" && <p className="text-[13px] text-amber-400 mb-2">{err}</p>}
 
           <PreTradeBanner pt={pt} />
           <button onClick={() => { void doSwap(); }} disabled={!canSwap || busy}
-            className="w-full text-[12px] font-bold py-2.5 rounded-lg transition-all disabled:opacity-50"
+            className="w-full text-[15px] font-bold py-2.5 rounded-lg transition-all disabled:opacity-50"
             style={(!isT2T && direction === "buy") || isT2T
               ? { background: "#22C55E15", color: "#22C55E", border: "1px solid #22C55E40" }
               : { background: "#EF444415", color: "#EF4444", border: "1px solid #EF444440" }}>

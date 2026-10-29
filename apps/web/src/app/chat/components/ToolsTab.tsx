@@ -53,11 +53,11 @@ function CategoryCard({
         <span className="text-base shrink-0">{CATEGORY_ICONS[cat]}</span>
         <div className="flex-1 min-w-0">
           <p className="font-mono text-sm text-slate-200 font-medium">{cat}</p>
-          <p className="font-mono text-[10px] text-slate-600">{skills.length} tools</p>
+          <p className="font-mono text-[13px] text-slate-600">{skills.length} tools</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <span
-            className="font-mono text-[8px] px-1.5 py-0.5 rounded border uppercase tracking-wider"
+            className="font-mono text-[11px] px-1.5 py-0.5 rounded border uppercase tracking-wider"
             style={{ color, borderColor: `${color}35`, background: `${color}10` }}
           >
             ENABLED
@@ -80,7 +80,7 @@ function CategoryCard({
               key={skill.id}
               onClick={() => onUse(skill.trigger)}
               title={skill.description}
-              className="font-mono text-[10px] px-2.5 py-1 rounded-lg border transition-all hover:opacity-100"
+              className="font-mono text-[13px] px-2.5 py-1 rounded-lg border transition-all hover:opacity-100"
               style={{
                 color,
                 borderColor: `${color}30`,
@@ -94,7 +94,7 @@ function CategoryCard({
           {!expanded && hidden > 0 && (
             <button
               onClick={onToggle}
-              className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#1A1A2E] text-slate-600 hover:text-slate-400 transition-colors"
+              className="font-mono text-[13px] px-2.5 py-1 rounded-lg border border-[#1A1A2E] text-slate-600 hover:text-slate-400 transition-colors"
             >
               +{hidden} more
             </button>
@@ -113,10 +113,10 @@ function CategoryCard({
               >
                 <div className="min-w-0">
                   <p className="font-mono text-sm text-slate-300 group-hover:text-white transition-colors">{skill.name}</p>
-                  <p className="font-mono text-[10px] text-slate-600 leading-relaxed">{skill.description}</p>
+                  <p className="font-mono text-[13px] text-slate-600 leading-relaxed">{skill.description}</p>
                 </div>
                 <span
-                  className="font-mono text-[9px] shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity px-2 py-0.5 rounded"
+                  className="font-mono text-[12px] shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity px-2 py-0.5 rounded"
                   style={{ color, background: `${color}15` }}
                 >
                   run →
@@ -146,10 +146,10 @@ function SearchRow({
       <span className="text-base shrink-0">{CATEGORY_ICONS[category]}</span>
       <div className="flex-1 min-w-0">
         <p className="font-mono text-sm text-slate-200 group-hover:text-white transition-colors">{name}</p>
-        <p className="font-mono text-[10px] text-slate-600 truncate">{description}</p>
+        <p className="font-mono text-[13px] text-slate-600 truncate">{description}</p>
       </div>
       <span
-        className="shrink-0 font-mono text-[9px] px-2 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+        className="shrink-0 font-mono text-[12px] px-2 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity"
         style={{ color, background: `${color}15` }}
       >
         run →
@@ -188,15 +188,15 @@ export default function ToolsTab({ onPick }: { onPick?: () => void }) {
       {/* ── Header — same SECTION-LABEL pattern as Settings/Cron/Skills ── */}
       <div className="px-5 py-4 border-b border-[#1A1A2E] flex-shrink-0">
         <div className="flex items-center justify-between mb-3">
-          <p className="font-mono text-[10px] text-slate-500 tracking-widest">HUB TOOLS</p>
+          <p className="font-mono text-[13px] text-slate-500 tracking-widest">HUB TOOLS</p>
           <span
-            className="font-mono text-[10px] px-1.5 py-0.5 rounded border font-semibold"
+            className="font-mono text-[13px] px-1.5 py-0.5 rounded border font-semibold"
             style={{ color: "#4FC3F7", borderColor: "#4FC3F730", background: "#4FC3F710" }}
           >
             BLUE HUB
           </span>
         </div>
-        <p className="font-mono text-[10px] text-slate-700 mb-3">
+        <p className="font-mono text-[13px] text-slate-700 mb-3">
           {HUB_SKILLS.length} tools · {SKILL_CATEGORIES.length} categories · click to run
         </p>
 
@@ -233,11 +233,11 @@ export default function ToolsTab({ onPick }: { onPick?: () => void }) {
             searchResults.length === 0 ? (
               <div className="text-center py-12">
                 <p className="font-mono text-sm text-slate-500">No tools found</p>
-                <p className="font-mono text-[10px] text-slate-700 mt-1">Try a different search term</p>
+                <p className="font-mono text-[13px] text-slate-700 mt-1">Try a different search term</p>
               </div>
             ) : (
               <>
-                <p className="font-mono text-[10px] text-slate-600 mb-2">{searchResults.length} results</p>
+                <p className="font-mono text-[13px] text-slate-600 mb-2">{searchResults.length} results</p>
                 {searchResults.map(skill => (
                   <SearchRow
                     key={skill.id}

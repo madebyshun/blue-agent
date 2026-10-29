@@ -81,7 +81,7 @@ export default function TokenDetailClient({ address }: { address: `0x${string}` 
     return (
       <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] py-16 text-center">
         <div className="inline-block w-2 h-2 rounded-full bg-[#4FC3F7] animate-pulse" />
-        <p className="font-mono text-[10px] text-slate-600 mt-3">Loading token…</p>
+        <p className="font-mono text-[13px] text-slate-600 mt-3">Loading token…</p>
       </div>
     );
   }
@@ -96,7 +96,7 @@ export default function TokenDetailClient({ address }: { address: `0x${string}` 
     return (
       <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-6">
         <p className="font-mono text-sm text-amber-400 mb-1">Not a B20 token</p>
-        <p className="font-mono text-[11px] text-slate-500">
+        <p className="font-mono text-[14px] text-slate-500">
           <code className="text-slate-300">isB20({address.slice(0, 8)}…)</code>{" "}
           returned <span className="text-red-400">false</span> at the factory.
         </p>
@@ -151,8 +151,8 @@ function HeaderCard({ sym, name, address, pool, supplyWhole }: {
           {pool && <Badge label={`V4 · ${pool.feeLabel}`} color="#FF007A" />}
           {pool && <Badge label="LP Locked" color="#22C55E" />}
         </div>
-        <p className="font-mono text-[10px] text-slate-600 break-all">{address}</p>
-        <p className="font-mono text-[11px] text-slate-400 mt-2">
+        <p className="font-mono text-[13px] text-slate-600 break-all">{address}</p>
+        <p className="font-mono text-[14px] text-slate-400 mt-2">
           Supply: <span className="text-slate-200">{supplyWhole.toLocaleString()}</span>
         </p>
       </div>
@@ -171,8 +171,8 @@ function MarketCard({ market, pool }: { market: MarketData | null; pool: PoolInf
   return (
     <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5">
       <div className="flex items-baseline justify-between mb-3">
-        <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase">Market</p>
-        <p className="font-mono text-[9px] text-slate-600">
+        <p className="font-mono text-[12px] text-slate-600 tracking-widest uppercase">Market</p>
+        <p className="font-mono text-[12px] text-slate-600">
           {usingOnchain
             ? `onchain · ETH=$${pool?.ethPriceUsd?.toFixed(0) ?? "?"}`
             : market?.marketCap != null ? "via DexScreener" : "—"}
@@ -186,7 +186,7 @@ function MarketCard({ market, pool }: { market: MarketData | null; pool: PoolInf
         <Stat label="LIQ"      value={fmtUsdCompact(market?.liquidityUsd)} />
       </div>
       {usingOnchain && (
-        <p className="font-mono text-[9px] text-slate-600 mt-3 leading-relaxed">
+        <p className="font-mono text-[12px] text-slate-600 mt-3 leading-relaxed">
           Computed from pool sqrtPrice × CoinGecko ETH spot — this is the
           real onchain mcap. Third-party wallets (Base App, Coinbase Wallet,
           DexScreener) may still show $0 until their aggregators finish
@@ -207,8 +207,8 @@ function PoolCard({ pool }: { pool: PoolInfo | null }) {
   const lpLocked = pool.lpNftOwner?.toLowerCase() === B20HUB_HOOK.toLowerCase();
   return (
     <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5">
-      <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase mb-3">B20HUB Pool</p>
-      <div className="space-y-2 text-[11px] font-mono">
+      <p className="font-mono text-[12px] text-slate-600 tracking-widest uppercase mb-3">B20HUB Pool</p>
+      <div className="space-y-2 text-[14px] font-mono">
         <Row label="Fee tier"    value={pool.feeLabel} />
         <Row label="Creator"     value={pool.creator.slice(0, 8) + "…" + pool.creator.slice(-6)} />
         <Row label="Position A"  value={pool.lpTokenIdA == null ? "—" : "#" + pool.lpTokenIdA} />
@@ -225,12 +225,12 @@ function ChartCard({ address }: { address: string }) {
   return (
     <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] overflow-hidden">
       <div className="flex items-center justify-between px-5 pt-4 pb-2">
-        <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase">Chart · via DexScreener</p>
+        <p className="font-mono text-[12px] text-slate-600 tracking-widest uppercase">Chart · via DexScreener</p>
         <a
           href={`https://dexscreener.com/base/${address}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="font-mono text-[10px] text-[#4FC3F7] hover:underline"
+          className="font-mono text-[13px] text-[#4FC3F7] hover:underline"
         >
           Open full ↗
         </a>
@@ -243,7 +243,7 @@ function ChartCard({ address }: { address: string }) {
           title="DexScreener chart"
         />
       </div>
-      <p className="font-mono text-[9px] text-slate-600 px-5 py-2 leading-relaxed">
+      <p className="font-mono text-[12px] text-slate-600 px-5 py-2 leading-relaxed">
         Chart populates after DexScreener indexes the pool (typically 1-3
         min after the first swap). Nothing to configure onchain — this is
         a third-party embed.
@@ -255,7 +255,7 @@ function ChartCard({ address }: { address: string }) {
 function ActionsCard({ address, pool }: { address: string; pool: PoolInfo | null }) {
   return (
     <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5">
-      <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase mb-3">Actions</p>
+      <p className="font-mono text-[12px] text-slate-600 tracking-widest uppercase mb-3">Actions</p>
       <div className="flex flex-wrap gap-2">
         <a href={`https://app.uniswap.org/swap?chain=base&outputCurrency=${address}`}
           target="_blank" rel="noopener noreferrer"
@@ -291,23 +291,23 @@ function ContractCard({ address, pool }: { address: string; pool: PoolInfo | nul
   ];
   return (
     <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5">
-      <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase mb-3">Onchain addresses</p>
+      <p className="font-mono text-[12px] text-slate-600 tracking-widest uppercase mb-3">Onchain addresses</p>
       <div className="space-y-1.5">
         {rows.map((r) => (
           <div key={r.l} className="flex items-center justify-between gap-3">
-            <span className="font-mono text-[10px] text-slate-500 tracking-wider uppercase">{r.l}</span>
+            <span className="font-mono text-[13px] text-slate-500 tracking-wider uppercase">{r.l}</span>
             {r.href ? (
               r.internal ? (
-                <Link href={r.href} className="font-mono text-[10px] text-[#4FC3F7] hover:underline break-all">
+                <Link href={r.href} className="font-mono text-[13px] text-[#4FC3F7] hover:underline break-all">
                   {r.v}
                 </Link>
               ) : (
-                <a href={r.href} target="_blank" rel="noopener noreferrer" className="font-mono text-[10px] text-[#4FC3F7] hover:underline break-all">
+                <a href={r.href} target="_blank" rel="noopener noreferrer" className="font-mono text-[13px] text-[#4FC3F7] hover:underline break-all">
                   {r.v} ↗
                 </a>
               )
             ) : (
-              <span className="font-mono text-[10px] text-slate-400 break-all">{r.v}</span>
+              <span className="font-mono text-[13px] text-slate-400 break-all">{r.v}</span>
             )}
           </div>
         ))}
@@ -328,14 +328,14 @@ function Row({ label, value, color }: { label: string; value: string; color?: st
 function Stat({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
     <div>
-      <div className="font-mono text-[9px] text-slate-600 tracking-widest uppercase mb-1">{label}</div>
+      <div className="font-mono text-[12px] text-slate-600 tracking-widest uppercase mb-1">{label}</div>
       <div className="font-mono text-sm font-bold tabular-nums" style={{ color: color ?? "#e2e8f0" }}>{value}</div>
     </div>
   );
 }
 function Badge({ label, color }: { label: string; color: string }) {
   return (
-    <span className="font-mono text-[9px] tracking-wider uppercase px-2 py-0.5 rounded"
+    <span className="font-mono text-[12px] tracking-wider uppercase px-2 py-0.5 rounded"
       style={{ background: `${color}15`, color, border: `1px solid ${color}40` }}>
       {label}
     </span>

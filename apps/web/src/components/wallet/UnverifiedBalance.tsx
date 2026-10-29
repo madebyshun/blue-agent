@@ -38,7 +38,7 @@ export function UnverifiedBalance({
 }) {
   return (
     <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-2.5 mb-2 flex items-start justify-between gap-2">
-      <div className="text-[10px] text-amber-300 leading-relaxed">
+      <div className="text-[13px] text-amber-300 leading-relaxed">
         <span className="font-bold">
           Couldn&apos;t read {subject ?? `your ${symbol ? `${symbol} ` : ""}balance`}.
         </span>{" "}
@@ -46,7 +46,7 @@ export function UnverifiedBalance({
         until the read succeeds. {disclaimer ?? "This says nothing about what you hold."}
       </div>
       <button onClick={onRetry} disabled={busy}
-        className="shrink-0 text-[10px] px-2 py-1 rounded-lg font-bold transition-opacity hover:opacity-80 disabled:opacity-50"
+        className="shrink-0 text-[13px] px-2 py-1 rounded-lg font-bold transition-opacity hover:opacity-80 disabled:opacity-50"
         style={{ background: "#F59E0B15", color: "#F59E0B", border: "1px solid #F59E0B35" }}>
         {busy ? "reading…" : "Retry"}
       </button>

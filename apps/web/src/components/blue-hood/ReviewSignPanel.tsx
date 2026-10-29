@@ -772,14 +772,14 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
       >
         {/* Header */}
         <div className="flex items-center gap-3 px-4 py-3 border-b" style={{ borderColor: "#0f1218" }}>
-          <span className="text-[11px]" style={{ color: RH_GREEN }}>{arrow.serial}</span>
-          <span className="text-[14px] font-semibold text-white">{arrow.ticker}</span>
-          <span className="text-[10px] uppercase" style={{ color: MUTED, letterSpacing: "0.08em" }}>
+          <span className="text-[14px]" style={{ color: RH_GREEN }}>{arrow.serial}</span>
+          <span className="text-[17px] font-semibold text-white">{arrow.ticker}</span>
+          <span className="text-[13px] uppercase" style={{ color: MUTED, letterSpacing: "0.08em" }}>
             {arrow.type} {arrow.expected_direction === "up" ? "↑" : arrow.expected_direction === "down" ? "↓" : ""}
           </span>
           <button
             onClick={onClose}
-            className="ml-auto text-[16px] hover:text-white"
+            className="ml-auto text-[19px] hover:text-white"
             style={{ color: MUTED }}
             aria-label="Close"
           >
@@ -790,7 +790,7 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
         {/* Market-closed drift banner — informational, not blocking */}
         {marketClosedDrift && (
           <div
-            className="mx-4 mt-3 rounded border px-3 py-2 text-[11px]"
+            className="mx-4 mt-3 rounded border px-3 py-2 text-[14px]"
             style={{ borderColor: "#3b2a15", backgroundColor: "#1a1408", color: "#f6c88f" }}
           >
             market closed — DEX may snap toward oracle at open; this is price
@@ -820,7 +820,7 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
             about the rule as written. */}
         {isArb && (
           <div
-            className="mx-4 mt-3 rounded border px-3 py-2 text-[11px]"
+            className="mx-4 mt-3 rounded border px-3 py-2 text-[14px]"
             style={{ borderColor: "#3b2a15", backgroundColor: "#1a1408", color: "#f6c88f" }}
           >
             spread signal — graded on the gap closing, not on direction: it counts
@@ -832,7 +832,7 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
         {/* Read-only lock when arrow closed */}
         {!arrowIsOpen && (
           <div
-            className="mx-4 mt-3 rounded border px-3 py-2 text-[11px]"
+            className="mx-4 mt-3 rounded border px-3 py-2 text-[14px]"
             style={{ borderColor: RED, backgroundColor: "#160b0b", color: "#f8b6b6" }}
           >
             {arrowClosedDetail}
@@ -842,14 +842,14 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
         {/* Inputs — amount + side + denom + slippage */}
         <div className="px-4 py-3 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
-            <label className="text-[10px] uppercase" style={{ color: MUTED, letterSpacing: "0.08em" }}>side</label>
+            <label className="text-[13px] uppercase" style={{ color: MUTED, letterSpacing: "0.08em" }}>side</label>
             <SideToggle value={side} onChange={setSide} disabled={!arrowIsOpen} />
-            <label className="text-[10px] uppercase ml-3" style={{ color: MUTED, letterSpacing: "0.08em" }}>denom</label>
+            <label className="text-[13px] uppercase ml-3" style={{ color: MUTED, letterSpacing: "0.08em" }}>denom</label>
             <DenomToggle value={denom} onChange={setDenom} disabled={!arrowIsOpen} />
           </div>
 
           <div className="flex items-center gap-2">
-            <label className="text-[10px] uppercase" style={{ color: MUTED, letterSpacing: "0.08em" }}>amount</label>
+            <label className="text-[13px] uppercase" style={{ color: MUTED, letterSpacing: "0.08em" }}>amount</label>
             <input
               type="number"
               inputMode="decimal"
@@ -857,7 +857,7 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               disabled={!arrowIsOpen}
-              className="flex-1 rounded border px-2 py-1 text-[13px] bg-black/40 text-white tabular-nums"
+              className="flex-1 rounded border px-2 py-1 text-[16px] bg-black/40 text-white tabular-nums"
               style={{ borderColor: BORDER }}
             />
             {/* Bug fix #1 (2026-07-24, arrow #0071): the unit label was
@@ -865,7 +865,7 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
                 enough that a user could type 1 while holding 0.0095 and think
                 they were selling ~$0.10 of NVDA. `payUnitSymbol` resolves to
                 the actual token being paid (arrow.ticker on SELL, denom on BUY). */}
-            <span className="text-[11px]" style={{ color: MUTED }}>{payUnitSymbol}</span>
+            <span className="text-[14px]" style={{ color: MUTED }}>{payUnitSymbol}</span>
           </div>
 
           {/* P2.2 amount presets (2026-07-24). BUY: fixed USDG amounts.
@@ -887,14 +887,14 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
           )}
 
           <div className="flex items-center gap-2">
-            <label className="text-[10px] uppercase" style={{ color: MUTED, letterSpacing: "0.08em" }}>slippage</label>
+            <label className="text-[13px] uppercase" style={{ color: MUTED, letterSpacing: "0.08em" }}>slippage</label>
             {[50, 100, 300].map((b) => (
               <button
                 key={b}
                 type="button"
                 onClick={() => setSlippageBps(b)}
                 disabled={!arrowIsOpen}
-                className="rounded border px-2 py-0.5 text-[11px]"
+                className="rounded border px-2 py-0.5 text-[14px]"
                 style={{
                   borderColor: slippageBps === b ? RH_GREEN : BORDER,
                   color: slippageBps === b ? RH_GREEN : "#9aa1ac",
@@ -912,10 +912,10 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
               value={slippageBps}
               onChange={(e) => setSlippageBps(Math.max(1, Math.min(5000, Math.trunc(Number(e.target.value) || 100))))}
               disabled={!arrowIsOpen}
-              className="w-20 rounded border px-2 py-0.5 text-[11px] bg-black/40 text-white tabular-nums"
+              className="w-20 rounded border px-2 py-0.5 text-[14px] bg-black/40 text-white tabular-nums"
               style={{ borderColor: BORDER }}
             />
-            <span className="text-[10px]" style={{ color: MUTED }}>bps</span>
+            <span className="text-[13px]" style={{ color: MUTED }}>bps</span>
           </div>
 
           {/* The way out of `unverified`. The gate is fail-closed, so the panel
@@ -931,7 +931,7 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
           )}
 
           {isConnected && (
-            <div className="text-[10px] flex flex-wrap gap-x-4" style={{ color: MUTED }}>
+            <div className="text-[13px] flex flex-wrap gap-x-4" style={{ color: MUTED }}>
               {walletBalance !== null && (
                 <span>
                   balance: <span className="tabular-nums">{formatNum(walletBalance)}</span> {payUnitSymbol}
@@ -966,7 +966,7 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
             confusion + gives the user a heads-up on the # of signatures
             they're about to be asked for. */}
         {isConnected && amountNum > 0 && payToken && (
-          <div className="mx-4 mb-3 rounded border px-3 py-2 text-[11px] space-y-1" style={{ borderColor: BORDER, backgroundColor: "#080a0f", color: "#9aa1ac" }}>
+          <div className="mx-4 mb-3 rounded border px-3 py-2 text-[14px] space-y-1" style={{ borderColor: BORDER, backgroundColor: "#080a0f", color: "#9aa1ac" }}>
             <div className="flex items-center gap-2">
               <span style={{ color: MUTED }}>allowance:</span>
               <span className="tabular-nums text-white">
@@ -990,7 +990,7 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
               )}
             </div>
             {currentAllowance !== null && currentAllowance > 0 && !willSkipApprove && amountNum > 0 && (
-              <div className="text-[10px]" style={{ color: MUTED }}>
+              <div className="text-[13px]" style={{ color: MUTED }}>
                 existing allowance {formatNum(currentAllowance)} {payUnitSymbol} is under the required {formatNum(amountNum)} — approve tx will overwrite it (safe on standard ERC-20).
               </div>
             )}
@@ -1007,17 +1007,17 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
         {quote?.warnings && quote.warnings.length > 0 && (
           <div className="px-4 pb-3 space-y-1">
             {quote.warnings.map((w, i) => (
-              <div key={i} className="text-[11px]" style={{ color: AMBER }}>⚠ {w}</div>
+              <div key={i} className="text-[14px]" style={{ color: AMBER }}>⚠ {w}</div>
             ))}
           </div>
         )}
         {poolTooThin && (
-          <div className="mx-4 mb-3 rounded border px-3 py-2 text-[11px]" style={{ borderColor: RED, color: "#f8b6b6", backgroundColor: "#160b0b" }}>
+          <div className="mx-4 mb-3 rounded border px-3 py-2 text-[14px]" style={{ borderColor: RED, color: "#f8b6b6", backgroundColor: "#160b0b" }}>
             pool too thin to trade safely (~${formatNum(poolTvl)} TVL) — engine's dust floor is ${MIN_TVL_USD.toLocaleString()}.
           </div>
         )}
         {multiHop && (
-          <div className="mx-4 mb-3 rounded border px-3 py-2 text-[11px]" style={{ borderColor: AMBER, color: "#f6c88f", backgroundColor: "#1a1408" }}>
+          <div className="mx-4 mb-3 rounded border px-3 py-2 text-[14px]" style={{ borderColor: AMBER, color: "#f6c88f", backgroundColor: "#1a1408" }}>
             no direct pool at this denom — X2 returned a multi-hop route.
             Multi-hop signing lands in v2. Try the other denom above for a
             direct route.
@@ -1025,7 +1025,7 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
         )}
         {heavyImpact && arrowIsOpen && !poolTooThin && (
           <div className="mx-4 mb-3">
-            <label className="flex items-start gap-2 text-[11px] cursor-pointer" style={{ color: AMBER }}>
+            <label className="flex items-start gap-2 text-[14px] cursor-pointer" style={{ color: AMBER }}>
               <input
                 type="checkbox"
                 checked={ackImpact}
@@ -1043,16 +1043,16 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
 
         {/* Progress + result */}
         {phase.kind === "signing" && (
-          <div className="mx-4 mb-3 rounded border px-3 py-2 text-[11px]" style={{ borderColor: BORDER, color: "#9aa1ac" }}>
+          <div className="mx-4 mb-3 rounded border px-3 py-2 text-[14px]" style={{ borderColor: BORDER, color: "#9aa1ac" }}>
             <span className="text-white">{phase.step}/{phase.total}</span> · {phase.label}
           </div>
         )}
         {phase.kind === "sign_error" && (
           <div className="mx-4 mb-3 rounded border px-3 py-2 space-y-2" style={{ borderColor: RED, color: "#f8b6b6", backgroundColor: "#160b0b" }}>
-            <div className="text-[11px]">sign failed · {phase.msg}</div>
+            <div className="text-[14px]">sign failed · {phase.msg}</div>
             {phase.approve_hash && phase.spender && phase.token && (
               <div className="border-t pt-2 space-y-1.5" style={{ borderColor: "#3a1010" }}>
-                <div className="text-[10px]" style={{ color: "#f8b6b6" }}>
+                <div className="text-[13px]" style={{ color: "#f8b6b6" }}>
                   ⚠ approve tx already confirmed — allowance dangling.{" "}
                   <a href={`${RH_EXPLORER}/tx/${phase.approve_hash}`} target="_blank" rel="noreferrer" className="underline">
                     {shorten(phase.approve_hash)}
@@ -1061,12 +1061,12 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
                 <button
                   type="button"
                   onClick={onRevoke}
-                  className="w-full rounded border px-3 py-1.5 text-[11px] font-mono hover:bg-black/40 transition-colors"
+                  className="w-full rounded border px-3 py-1.5 text-[14px] font-mono hover:bg-black/40 transition-colors"
                   style={{ borderColor: RED, color: RED }}
                 >
                   [Revoke approval] · approve(spender, 0)
                 </button>
-                <div className="text-[9px]" style={{ color: MUTED }}>
+                <div className="text-[12px]" style={{ color: MUTED }}>
                   Sends approve({shorten(phase.spender)}, 0) on the token contract — one wallet signature. Frees the allowance so no future call can spend it.
                 </div>
               </div>
@@ -1074,29 +1074,29 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
           </div>
         )}
         {phase.kind === "revoking" && (
-          <div className="mx-4 mb-3 rounded border px-3 py-2 text-[11px]" style={{ borderColor: AMBER, color: "#e0ba7c", backgroundColor: "rgba(245,179,66,0.04)" }}>
+          <div className="mx-4 mb-3 rounded border px-3 py-2 text-[14px]" style={{ borderColor: AMBER, color: "#e0ba7c", backgroundColor: "rgba(245,179,66,0.04)" }}>
             revoking approval — sign in wallet…
           </div>
         )}
         {phase.kind === "prepare_error" && (
-          <div className="mx-4 mb-3 rounded border px-3 py-2 text-[11px]" style={{ borderColor: RED, color: "#f8b6b6", backgroundColor: "#160b0b" }}>
+          <div className="mx-4 mb-3 rounded border px-3 py-2 text-[14px]" style={{ borderColor: RED, color: "#f8b6b6", backgroundColor: "#160b0b" }}>
             prepare failed · {phase.msg}
           </div>
         )}
         {phase.kind === "quote_error" && (
-          <div className="mx-4 mb-3 rounded border px-3 py-2 text-[11px]" style={{ borderColor: RED, color: "#f8b6b6", backgroundColor: "#160b0b" }}>
+          <div className="mx-4 mb-3 rounded border px-3 py-2 text-[14px]" style={{ borderColor: RED, color: "#f8b6b6", backgroundColor: "#160b0b" }}>
             quote failed · {phase.msg}
           </div>
         )}
         {phase.kind === "done" && (
-          <div className="mx-4 mb-3 rounded border px-3 py-3 text-[12px] space-y-1" style={{ borderColor: RH_GREEN, backgroundColor: "rgba(0,200,5,0.06)" }}>
+          <div className="mx-4 mb-3 rounded border px-3 py-3 text-[15px] space-y-1" style={{ borderColor: RH_GREEN, backgroundColor: "rgba(0,200,5,0.06)" }}>
             <div className="text-white">✓ swap signed & broadcast</div>
             {phase.approve_hash && (
-              <div className="text-[11px]" style={{ color: MUTED }}>
+              <div className="text-[14px]" style={{ color: MUTED }}>
                 approve · <a href={`${RH_EXPLORER}/tx/${phase.approve_hash}`} target="_blank" rel="noreferrer" className="underline">{shorten(phase.approve_hash)}</a>
               </div>
             )}
-            <div className="text-[11px]" style={{ color: MUTED }}>
+            <div className="text-[14px]" style={{ color: MUTED }}>
               swap · <a href={`${RH_EXPLORER}/tx/${phase.swap_hash}`} target="_blank" rel="noreferrer" className="underline" style={{ color: RH_GREEN }}>
                 {shorten(phase.swap_hash)}
               </a>
@@ -1117,7 +1117,7 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
             <div className="flex-1">
               <ConnectButton
                 label="Connect wallet to trade"
-                className="w-full rounded border px-4 py-2 text-[13px] font-semibold"
+                className="w-full rounded border px-4 py-2 text-[16px] font-semibold"
                 style={{ borderColor: RH_GREEN, color: RH_GREEN, backgroundColor: "rgba(0,200,5,0.10)" }}
               />
             </div>
@@ -1126,7 +1126,7 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
               type="button"
               onClick={onSmartClick}
               disabled={action.disabled || phase.kind === "signing" || phase.kind === "preparing"}
-              className="flex-1 rounded border px-4 py-2 text-[13px] font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 rounded border px-4 py-2 text-[16px] font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
               style={{
                 borderColor: action.color,
                 color: action.color,
@@ -1138,14 +1138,14 @@ export default function ReviewSignPanel({ arrow, onClose, onActionPending }: Rev
             </button>
           )}
           {action.reason && (
-            <span className="text-[10px] max-w-[240px]" style={{ color: MUTED }} title={action.reason}>
+            <span className="text-[13px] max-w-[240px]" style={{ color: MUTED }} title={action.reason}>
               {action.reason}
             </span>
           )}
         </div>
 
         {/* Footer trust note */}
-        <div className="px-4 py-2 border-t text-[9px] uppercase" style={{ borderColor: "#0f1218", color: MUTED, letterSpacing: "0.08em" }}>
+        <div className="px-4 py-2 border-t text-[12px] uppercase" style={{ borderColor: "#0f1218", color: MUTED, letterSpacing: "0.08em" }}>
           non-custodial · your wallet signs · <Link href="/hood/inbox" className="underline">/hood/inbox</Link>
         </div>
       </div>
@@ -1214,7 +1214,7 @@ function AmountPresetRow({
   const noBalance = rawBalance === undefined || rawBalance === 0n || payDecimals == null;
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      <label className="text-[10px] uppercase" style={{ color: MUTED, letterSpacing: "0.08em" }}>preset</label>
+      <label className="text-[13px] uppercase" style={{ color: MUTED, letterSpacing: "0.08em" }}>preset</label>
       {side === "buy"
         ? BUY_PRESETS.map((v) => {
             // Two reasons a preset is not offerable, and they are different
@@ -1231,7 +1231,7 @@ function AmountPresetRow({
                 type="button"
                 onClick={() => onSet(String(v))}
                 disabled={insufficient}
-                className="rounded border px-2 py-0.5 text-[11px] disabled:opacity-40 disabled:cursor-not-allowed"
+                className="rounded border px-2 py-0.5 text-[14px] disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{
                   borderColor: active ? RH_GREEN : BORDER,
                   color: active ? RH_GREEN : "#9aa1ac",
@@ -1262,7 +1262,7 @@ function AmountPresetRow({
                 type="button"
                 onClick={() => onSet(valueStr)}
                 disabled={disabled}
-                className="rounded border px-2 py-0.5 text-[11px] disabled:opacity-40 disabled:cursor-not-allowed"
+                className="rounded border px-2 py-0.5 text-[14px] disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{
                   borderColor: active ? RH_GREEN : BORDER,
                   color: active ? RH_GREEN : "#9aa1ac",
@@ -1279,7 +1279,7 @@ function AmountPresetRow({
             );
           })}
       {side === "sell" && rawBalance === 0n && (
-        <span className="text-[10px]" style={{ color: RED }}>
+        <span className="text-[13px]" style={{ color: RED }}>
           no {payUnitSymbol} to sell
         </span>
       )}
@@ -1296,7 +1296,7 @@ function SideToggle({ value, onChange, disabled }: { value: "buy" | "sell"; onCh
           type="button"
           onClick={() => onChange(s)}
           disabled={disabled}
-          className="px-2 py-0.5 text-[11px]"
+          className="px-2 py-0.5 text-[14px]"
           style={{
             color: value === s ? RH_GREEN : "#9aa1ac",
             backgroundColor: value === s ? "rgba(0,200,5,0.10)" : "transparent",
@@ -1318,7 +1318,7 @@ function DenomToggle({ value, onChange, disabled }: { value: "USDG" | "WETH"; on
           type="button"
           onClick={() => onChange(d)}
           disabled={disabled}
-          className="px-2 py-0.5 text-[11px]"
+          className="px-2 py-0.5 text-[14px]"
           style={{
             color: value === d ? RH_GREEN : "#9aa1ac",
             backgroundColor: value === d ? "rgba(0,200,5,0.10)" : "transparent",
@@ -1333,7 +1333,7 @@ function DenomToggle({ value, onChange, disabled }: { value: "USDG" | "WETH"; on
 
 function QuoteView({ phase, quote, denom, onRequote }: { phase: Phase; quote: QuoteResponse | null; denom: string; onRequote: () => void }) {
   if (phase.kind === "quoting") {
-    return <div className="px-4 pb-3 text-[11px]" style={{ color: MUTED }}>quoting…</div>;
+    return <div className="px-4 pb-3 text-[14px]" style={{ color: MUTED }}>quoting…</div>;
   }
   if (!quote) return null;
   const rows: [string, string][] = [
@@ -1347,10 +1347,10 @@ function QuoteView({ phase, quote, denom, onRequote }: { phase: Phase; quote: Qu
     ["route",            quote.route.kind ?? "—"],
   ];
   return (
-    <div className="mx-4 mb-3 rounded border px-3 py-2 text-[11px] space-y-0.5" style={{ borderColor: BORDER, backgroundColor: "#0a0c11", color: "#9aa1ac" }}>
+    <div className="mx-4 mb-3 rounded border px-3 py-2 text-[14px] space-y-0.5" style={{ borderColor: BORDER, backgroundColor: "#0a0c11", color: "#9aa1ac" }}>
       <div className="flex items-center gap-2 mb-1">
-        <span className="text-[9px] uppercase" style={{ color: MUTED, letterSpacing: "0.15em" }}>quote</span>
-        <button type="button" onClick={onRequote} className="ml-auto text-[10px] underline" style={{ color: MUTED }}>
+        <span className="text-[12px] uppercase" style={{ color: MUTED, letterSpacing: "0.15em" }}>quote</span>
+        <button type="button" onClick={onRequote} className="ml-auto text-[13px] underline" style={{ color: MUTED }}>
           re-quote
         </button>
       </div>
@@ -1362,7 +1362,7 @@ function QuoteView({ phase, quote, denom, onRequote }: { phase: Phase; quote: Qu
           </div>
         ))}
       </div>
-      <div className="mt-1 text-[9px]" style={{ color: MUTED }}>denom in: {denom}</div>
+      <div className="mt-1 text-[12px]" style={{ color: MUTED }}>denom in: {denom}</div>
     </div>
   );
 }
@@ -1375,8 +1375,8 @@ function FactsAtFire({ snap }: { snap: NonNullable<Arrow["snapshot_at_fire"]> })
     ["vol@fire",    snap.dex_volume_24h_usd !== null ? `$${formatNum(snap.dex_volume_24h_usd)}` : "—"],
   ];
   return (
-    <div className="mx-4 mb-3 rounded border px-3 py-2 text-[10px] tabular-nums" style={{ borderColor: BORDER, backgroundColor: "#080a0e", color: "#9aa1ac" }}>
-      <div className="text-[8px] uppercase mb-1" style={{ color: MUTED, letterSpacing: "0.15em" }}>facts at fire</div>
+    <div className="mx-4 mb-3 rounded border px-3 py-2 text-[13px] tabular-nums" style={{ borderColor: BORDER, backgroundColor: "#080a0e", color: "#9aa1ac" }}>
+      <div className="text-[11px] uppercase mb-1" style={{ color: MUTED, letterSpacing: "0.15em" }}>facts at fire</div>
       <div className="flex flex-wrap gap-x-3 gap-y-0.5">
         {pairs.map(([k, v]) => (
           <span key={k}><span style={{ color: MUTED }}>{k}</span> {v}</span>

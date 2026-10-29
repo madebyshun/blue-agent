@@ -38,7 +38,7 @@ export default function PanelHost({
             <p className="font-mono text-xs text-[#4FC3F7] tracking-widest truncate">
               // {title.toUpperCase()}
             </p>
-            <p className="font-mono text-[10px] text-slate-700 mt-1 truncate">{subtitle}</p>
+            <p className="font-mono text-[13px] text-slate-700 mt-1 truncate">{subtitle}</p>
           </div>
         </div>
         {/* Body — the promoted panel fills the remaining height and owns its

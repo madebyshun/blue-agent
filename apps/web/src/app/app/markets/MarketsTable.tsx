@@ -102,7 +102,7 @@ function Spark({ r, up }: { r: MarketRow; up: boolean | null }) {
           <path d={`${path} L${W},${H} L0,${H} Z`} fill={col} opacity={0.1} />
           <path d={path} fill="none" stroke={col} strokeWidth={1.3} vectorEffect="non-scaling-stroke" />
         </svg>
-      ) : <span className="block pt-2 text-center text-[9px] text-[#334155]">{!r.pool || (Array.isArray(v) && v.length < 2) ? "no history" : refused ? "·" : ""}</span>}
+      ) : <span className="block pt-2 text-center text-[12px] text-[#334155]">{!r.pool || (Array.isArray(v) && v.length < 2) ? "no history" : refused ? "·" : ""}</span>}
     </div>
   );
 }
@@ -135,12 +135,12 @@ export default function MarketsTable({ rows, readAt }: { rows: MarketRow[]; read
   const slice = shown.slice(page * PAGE, page * PAGE + PAGE);
   const trending = useMemo(() => [...rows].filter((r) => r.vol !== null).sort((a, b) => (b.vol ?? 0) - (a.vol ?? 0)).slice(0, 16), [rows]);
 
-  const chip = (on: boolean) => `text-[10px] rounded-[7px] px-2.5 py-[5px] border transition-colors ${on ? "border-[#4FC3F7]/60 text-[#4FC3F7] bg-[#4FC3F7]/10" : "border-[#1A1A2E] text-[#94A3B8] hover:text-[#E2E8F0]"}`;
+  const chip = (on: boolean) => `text-[13px] rounded-[7px] px-2.5 py-[5px] border transition-colors ${on ? "border-[#4FC3F7]/60 text-[#4FC3F7] bg-[#4FC3F7]/10" : "border-[#1A1A2E] text-[#94A3B8] hover:text-[#E2E8F0]"}`;
   const Th = ({ k, children, className = "" }: { k: SortKey; children: React.ReactNode; className?: string }) => (
     <th className={`px-2 font-medium ${className}`}>
       <button type="button" onClick={() => setSort((s) => ({ k, dir: s.k === k ? (s.dir === 1 ? -1 : 1) : -1 }))}
-        className={`inline-flex items-center gap-1 rounded-md px-2 py-1 ${sort.k === k ? "text-[#E2E8F0] border border-[#2a3350] bg-[#0F121A]" : "hover:text-[#E2E8F0]"}`}>
-        {children}<span className="text-[8px]">{sort.k === k ? (sort.dir === -1 ? "↓" : "↑") : "↕"}</span>
+        className={`inline-flex items-center gap-1 whitespace-nowrap rounded-md px-2 py-1 ${sort.k === k ? "text-[#E2E8F0] border border-[#2a3350] bg-[#0F121A]" : "hover:text-[#E2E8F0]"}`}>
+        {children}<span className="text-[11px]">{sort.k === k ? (sort.dir === -1 ? "↓" : "↑") : "↕"}</span>
       </button>
     </th>
   );
@@ -149,13 +149,13 @@ export default function MarketsTable({ rows, readAt }: { rows: MarketRow[]; read
     <div>
       {/* 24h trending strip */}
       <div className="flex items-center gap-3 overflow-x-auto rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] px-3 py-2 [scrollbar-width:none]">
-        <span className="shrink-0 flex items-center gap-1.5 text-[9.5px] font-semibold tracking-[0.12em] text-[#E2E8F0]"><span className="h-1.5 w-1.5 rounded-full bg-[#34D399]" />24H TRENDING</span>
+        <span className="shrink-0 flex items-center gap-1.5 text-[12px] font-semibold tracking-[0.12em] text-[#E2E8F0]"><span className="h-1.5 w-1.5 rounded-full bg-[#34D399]" />24H TRENDING</span>
         {trending.map((r) => (
           <Link key={`t${r.chain}${r.token}`} href={`/markets/${r.chain}/${r.token}`} className="shrink-0 flex items-center gap-2 rounded-lg px-2 py-1 hover:bg-[#0F121A]">
             <Logo r={r} size={20} />
             <span className="leading-tight">
-              <span className="block text-[10.5px] font-semibold text-[#E2E8F0]">{label(r)} <span className="font-normal text-[9px] text-[#64748B]">{CH[r.chain]}</span></span>
-              <span className="block text-[9px] text-[#64748B]">vol {usd(r.vol)}{r.change !== null && <span className={r.change >= 0 ? "text-[#34D399]" : "text-[#F87171]"}> {r.change >= 0 ? "+" : ""}{r.change.toFixed(1)}%</span>}</span>
+              <span className="block text-[13px] font-semibold text-[#E2E8F0]">{label(r)} <span className="font-normal text-[12px] text-[#64748B]">{CH[r.chain]}</span></span>
+              <span className="block text-[12px] text-[#64748B]">vol {usd(r.vol)}{r.change !== null && <span className={r.change >= 0 ? "text-[#34D399]" : "text-[#F87171]"}> {r.change >= 0 ? "+" : ""}{r.change.toFixed(1)}%</span>}</span>
             </span>
           </Link>
         ))}
@@ -170,13 +170,13 @@ export default function MarketsTable({ rows, readAt }: { rows: MarketRow[]; read
           <button key={id} type="button" onClick={() => setChain(id)} className={chip(chain === id)}>{l}</button>
         ))}
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search markets, ticker or 0x…"
-          className="ml-auto w-[260px] bg-[#0D0D14] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-3 py-[7px] text-[11px] text-[#E2E8F0] placeholder:text-[#64748B] outline-none" />
+          className="ml-auto w-[260px] bg-[#0D0D14] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-3 py-[7px] text-[14px] text-[#E2E8F0] placeholder:text-[#64748B] outline-none" />
       </div>
 
       <div className="mt-3 overflow-x-auto rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14]">
-        <table className="w-full min-w-[1080px] text-[11px]">
+        <table className="w-full min-w-[1180px] text-[14px]">
           <thead>
-            <tr className="text-left text-[9.5px] tracking-[0.08em] text-[#64748B] border-b border-[#1A1A2E]">
+            <tr className="text-left text-[12px] tracking-[0.08em] text-[#64748B] border-b border-[#1A1A2E]">
               <th className="w-10 px-3 py-2 font-medium">#</th>
               <th className="px-2 font-medium">MARKET</th>
               <Th k="change" className="w-[300px]">24H CHANGE</Th>
@@ -193,30 +193,30 @@ export default function MarketsTable({ rows, readAt }: { rows: MarketRow[]; read
               const up = r.change === null ? null : r.change >= 0;
               return (
                 <tr key={`${r.chain}:${r.token}`} className="border-t border-[#1A1A2E] first:border-t-0 hover:bg-[#0F121A]">
-                  <td className="px-3 py-2.5 text-[10px] text-[#475569] tabular-nums">{page * PAGE + i + 1}</td>
+                  <td className="px-3 py-2.5 text-[13px] text-[#64748B] tabular-nums">{page * PAGE + i + 1}</td>
                   <td className="px-2">
                     <Link href={`/markets/${r.chain}/${r.token}`} className="flex items-center gap-2.5 min-w-[220px]">
                       <Logo r={r} />
                       <span className="min-w-0 leading-tight">
-                        <span className="flex items-center gap-1.5"><span className="truncate max-w-[200px] font-prose text-[12px] text-[#E2E8F0]">{r.name}</span>
-                          {(r.kind === "stock" || r.kind === "etf") && <span className="text-[8px] rounded-full border border-[#34D399]/30 px-1.5 text-[#34D399]">{r.kind === "etf" ? "ETF" : "STOCK"}</span>}
-                          {r.kind === "launch" && <span className="text-[8px] rounded-full border border-[#4FC3F7]/40 px-1.5 text-[#4FC3F7]">VIA BLUE AGENT</span>}</span>
-                        <span className="text-[9.5px] text-[#64748B]">${label(r)} · {CH[r.chain]}</span>
+                        <span className="flex items-center gap-1.5"><span className="truncate max-w-[200px] font-prose text-[15px] text-[#E2E8F0]">{r.name}</span>
+                          {(r.kind === "stock" || r.kind === "etf") && <span className="text-[11px] rounded-full border border-[#34D399]/30 px-1.5 text-[#34D399]">{r.kind === "etf" ? "ETF" : "STOCK"}</span>}
+                          {r.kind === "launch" && <span className="text-[11px] rounded-full border border-[#4FC3F7]/40 px-1.5 text-[#4FC3F7]">VIA BLUE AGENT</span>}</span>
+                        <span className="text-[12px] text-[#64748B]">${label(r)} · {CH[r.chain]}</span>
                       </span>
                     </Link>
                   </td>
                   <td className="px-2">
                     <div className="flex items-center gap-2">
-                      <span className={`w-[56px] text-right tabular-nums text-[10.5px] ${up === null ? "text-[#64748B]" : up ? "text-[#34D399]" : "text-[#F87171]"}`}>{r.change === null ? "—" : `${r.change >= 0 ? "+" : ""}${r.change.toFixed(1)}%`}</span>
+                      <span className={`w-[56px] text-right tabular-nums text-[13px] ${up === null ? "text-[#64748B]" : up ? "text-[#34D399]" : "text-[#F87171]"}`}>{r.change === null ? "—" : `${r.change >= 0 ? "+" : ""}${r.change.toFixed(1)}%`}</span>
                       <div className="flex-1"><Spark r={r} up={up} /></div>
                     </div>
                   </td>
                   <td className="px-2 text-right text-[#94A3B8] tabular-nums">{age(r.createdAt)}</td>
-                  <td className="px-2 text-right text-[#E2E8F0] tabular-nums" title={r.mcapIsFdv ? "fully diluted value (no market cap on file)" : undefined}>{usd(r.mcap)}{r.mcapIsFdv && <span className="text-[8px] text-[#64748B]"> FDV</span>}</td>
+                  <td className="px-2 text-right text-[#E2E8F0] tabular-nums" title={r.mcapIsFdv ? "fully diluted value (no market cap on file)" : undefined}>{usd(r.mcap)}{r.mcapIsFdv && <span className="text-[11px] text-[#64748B]"> FDV</span>}</td>
                   <td className="px-2 text-right text-[#94A3B8] tabular-nums">{!r.read ? "—" : usd(r.liq)}</td>
                   <td className="px-2 text-right text-[#E2E8F0] tabular-nums">{!r.read ? "—" : r.vol === null ? <span className="text-[#64748B]">no pool</span> : usd(r.vol)}</td>
                   <td className="px-3 text-right">
-                    <Link href={`/markets/${r.chain}/${r.token}#trade`} className="inline-flex items-center gap-1 rounded-[7px] border border-[#2a3350] bg-[#0F121A] px-2.5 py-1 text-[10px] text-[#E2E8F0] hover:border-[#4FC3F7]/60 hover:text-[#4FC3F7]">⚡ Trade</Link>
+                    <Link href={`/markets/${r.chain}/${r.token}#trade`} className="inline-flex items-center whitespace-nowrap rounded-[8px] border border-[#2a3350] bg-[#0F121A] px-3.5 py-2 text-[13px] text-[#E2E8F0] hover:border-[#4FC3F7]/60 hover:text-[#4FC3F7]">Trade</Link>
                   </td>
                 </tr>
               );
@@ -225,7 +225,7 @@ export default function MarketsTable({ rows, readAt }: { rows: MarketRow[]; read
         </table>
       </div>
 
-      <div className="mt-3 flex items-center justify-center gap-1.5 text-[10px] text-[#64748B]">
+      <div className="mt-3 flex items-center justify-center gap-1.5 text-[13px] text-[#64748B]">
         <span className="mr-2 tabular-nums">{shown.length ? `${page * PAGE + 1}–${Math.min(shown.length, (page + 1) * PAGE)} of ${shown.length}` : "0"}</span>
         <button type="button" disabled={page === 0} onClick={() => setPage((p) => p - 1)} className="px-2 py-1 disabled:opacity-30 hover:text-[#E2E8F0]">‹</button>
         {Array.from({ length: pages }, (_, i) => i).filter((i) => i < 5 || Math.abs(i - page) <= 1 || i === pages - 1).map((i, k, arr) => (

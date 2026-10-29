@@ -131,17 +131,17 @@ export function usePreTradeCheck(input: {
 export function PreTradeBanner({ pt }: { pt: ReturnType<typeof usePreTradeCheck> }) {
   const { check, state, ack, setAck, retry } = pt;
   if (state === "idle") return null;
-  if (state === "loading") return <p className="text-[9px] text-slate-600 mb-2">Checking this trade…</p>;
+  if (state === "loading") return <p className="text-[12px] text-slate-600 mb-2">Checking this trade…</p>;
   if (state === "throttled") {
     return (
-      <p className="text-[9px] text-amber-400 mb-2">
+      <p className="text-[12px] text-amber-400 mb-2">
         Too many checks from this connection — the pre-trade check did not run, so signing is held.{" "}
         <button type="button" onClick={retry} className="underline text-[#4FC3F7]">Retry</button>
       </p>
     );
   }
   if (state === "unavailable" || !check) {
-    return <p className="text-[9px] text-slate-500 mb-2">Pre-trade check unavailable right now — it did not run, so nothing was checked.</p>;
+    return <p className="text-[12px] text-slate-500 mb-2">Pre-trade check unavailable right now — it did not run, so nothing was checked.</p>;
   }
   const color = check.verdict === "BLOCK" ? "#f87171" : check.verdict === "WARN" ? "#fbbf24" : "#64748b";
   const shown = check.reasons.filter((r) => check.verdict !== "PASS" || r.level === "INFO");
@@ -151,21 +151,21 @@ export function PreTradeBanner({ pt }: { pt: ReturnType<typeof usePreTradeCheck>
   return (
     <div className="rounded-lg border px-2.5 py-2 mb-3" style={{ borderColor: `${color}40`, background: `${color}0d` }}>
       {check.verdict !== "PASS" && (
-        <div className="text-[10px] font-semibold" style={{ color }}>
+        <div className="text-[13px] font-semibold" style={{ color }}>
           {check.verdict === "BLOCK" ? "Won't sign" : "Before you sign"}: {check.label}
         </div>
       )}
       {shown.length > 0 && (
         <ul className="mt-1 space-y-0.5">
           {shown.map((r, i) => (
-            <li key={i} className="text-[9px] leading-relaxed" style={{ color: r.level === "INFO" ? "#94a3b8" : color }}>• {r.text}</li>
+            <li key={i} className="text-[12px] leading-relaxed" style={{ color: r.level === "INFO" ? "#94a3b8" : color }}>• {r.text}</li>
           ))}
         </ul>
       )}
       {check.verdict === "WARN" && (
         <label className="flex items-center gap-2 mt-1.5 cursor-pointer">
           <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} />
-          <span className="text-[9px] text-slate-300">I read this and still want to continue.</span>
+          <span className="text-[12px] text-slate-300">I read this and still want to continue.</span>
         </label>
       )}
     </div>

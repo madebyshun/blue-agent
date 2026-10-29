@@ -60,7 +60,7 @@ export default function ArtifactCard({ lang, code }: { lang: string; code: strin
     } catch { /* storage blocked */ }
   }
 
-  const btn = "font-mono text-[11px] px-3 py-1.5 rounded-lg border transition-colors";
+  const btn = "font-mono text-[14px] px-3 py-1.5 rounded-lg border transition-colors";
 
   return (
     <>
@@ -70,13 +70,13 @@ export default function ArtifactCard({ lang, code }: { lang: string; code: strin
         className="my-3 w-full flex items-center gap-3 rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] hover:border-[#4FC3F7]/40 transition-colors px-3 py-2.5 text-left"
       >
         <span className="w-11 h-11 rounded-xl bg-[#15151f] border border-[#1A1A2E] flex items-center justify-center shrink-0">
-          <span className="font-mono text-[14px]" style={{ color }}>&lt;/&gt;</span>
+          <span className="font-mono text-[17px]" style={{ color }}>&lt;/&gt;</span>
         </span>
         <span className="flex-1 min-w-0">
-          <span className="block font-mono text-[13px] text-slate-100 truncate">{filename}</span>
-          <span className="block font-mono text-[11px] text-slate-500">Code · {l.toUpperCase()} · {lines} line{lines !== 1 ? "s" : ""}</span>
+          <span className="block font-mono text-[16px] text-slate-100 truncate">{filename}</span>
+          <span className="block font-mono text-[14px] text-slate-500">Code · {l.toUpperCase()} · {lines} line{lines !== 1 ? "s" : ""}</span>
         </span>
-        <span className="font-mono text-[12px] px-3.5 py-1.5 rounded-lg border border-[#1A1A2E] text-slate-300 shrink-0">Open</span>
+        <span className="font-mono text-[15px] px-3.5 py-1.5 rounded-lg border border-[#1A1A2E] text-slate-300 shrink-0">Open</span>
       </button>
 
       {/* ── Full view modal ── */}
@@ -86,17 +86,17 @@ export default function ArtifactCard({ lang, code }: { lang: string; code: strin
           <div className="relative z-10 w-full max-w-3xl max-h-[88vh] flex flex-col rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] overflow-hidden shadow-2xl">
             {/* header */}
             <div className="flex items-center gap-2 px-4 py-3 border-b border-[#1A1A2E] shrink-0">
-              <span className="text-[13px]">📄</span>
-              <span className="font-mono text-[12px] text-slate-200 truncate flex-1">{filename}</span>
-              <span className="font-mono text-[9px] px-2 py-0.5 rounded uppercase tracking-wider shrink-0" style={{ color, background: `${color}1a`, border: `1px solid ${color}40` }}>{l}</span>
-              <button onClick={() => setOpen(false)} className="ml-1 w-7 h-7 rounded-md font-mono text-[13px] text-slate-500 hover:text-white hover:bg-[#1A1A2E] shrink-0">✕</button>
+              <span className="text-[16px]">📄</span>
+              <span className="font-mono text-[15px] text-slate-200 truncate flex-1">{filename}</span>
+              <span className="font-mono text-[12px] px-2 py-0.5 rounded uppercase tracking-wider shrink-0" style={{ color, background: `${color}1a`, border: `1px solid ${color}40` }}>{l}</span>
+              <button onClick={() => setOpen(false)} className="ml-1 w-7 h-7 rounded-md font-mono text-[16px] text-slate-500 hover:text-white hover:bg-[#1A1A2E] shrink-0">✕</button>
             </div>
 
             {/* code / preview tabs (HTML only) */}
             {isHtml && (
               <div className="flex gap-1 px-3 py-2 border-b border-[#1A1A2E] shrink-0">
                 {(["code", "preview"] as const).map(t => (
-                  <button key={t} onClick={() => setTab(t)} className="font-mono text-[11px] px-3 py-1 rounded-md transition-colors"
+                  <button key={t} onClick={() => setTab(t)} className="font-mono text-[14px] px-3 py-1 rounded-md transition-colors"
                     style={tab === t ? { color: "#4FC3F7", background: "#4FC3F712", border: "1px solid #4FC3F730" } : { color: "#64748b", border: "1px solid transparent" }}>
                     {t === "code" ? "Code" : "Preview"}
                   </button>
@@ -111,7 +111,7 @@ export default function ArtifactCard({ lang, code }: { lang: string; code: strin
                   className="w-full block bg-white" style={{ minHeight: "62vh", border: "none" }} />
               ) : (
                 <pre className="p-4 overflow-x-auto">
-                  <code className="font-mono text-[12px] text-slate-300 leading-relaxed whitespace-pre">{code}</code>
+                  <code className="font-mono text-[15px] text-slate-300 leading-relaxed whitespace-pre">{code}</code>
                 </pre>
               )}
             </div>

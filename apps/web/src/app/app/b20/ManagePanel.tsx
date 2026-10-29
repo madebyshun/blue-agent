@@ -75,8 +75,8 @@ const INPUT = [
   "outline-none transition-colors",
 ].join(" ");
 
-const LABEL = "font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1";
-const DESC  = "font-mono text-[9px] text-slate-600 leading-relaxed mb-2";
+const LABEL = "font-mono text-[12px] text-slate-600 tracking-widest uppercase block mb-1";
+const DESC  = "font-mono text-[12px] text-slate-600 leading-relaxed mb-2";
 
 function isAddr(v: string) { return /^0x[a-fA-F0-9]{40}$/.test(v.trim()); }
 function isAmt (v: string) { return /^\d+(\.\d+)?$/.test(v.trim()) && parseFloat(v) > 0; }
@@ -95,7 +95,7 @@ function MemoField({
     <div>
       <div className="flex items-center justify-between mb-1">
         <p className={LABEL + " mb-0"}>Memo (optional)</p>
-        <span className={`font-mono text-[9px] ${tooLong ? "text-[#EF4444]" : "text-slate-600"}`}>
+        <span className={`font-mono text-[12px] ${tooLong ? "text-[#EF4444]" : "text-slate-600"}`}>
           {value.trim().length}/{MEMO_MAX_CHARS}
         </span>
       </div>
@@ -111,7 +111,7 @@ function MemoField({
         Attached onchain — order IDs, payment refs, audit trail.
       </p>
       {tooLong && (
-        <p className="font-mono text-[9px] text-[#EF4444] mt-1">
+        <p className="font-mono text-[12px] text-[#EF4444] mt-1">
           Memo must be ≤ {MEMO_MAX_CHARS} characters (fits in bytes32).
         </p>
       )}
@@ -147,12 +147,12 @@ function TxProgress({ tx }: { tx: TxState }) {
       <div className="flex items-center gap-2">
         <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] animate-pulse shrink-0" />
         <div>
-          <p className="font-mono text-[10px] font-semibold text-[#4FC3F7]">{tx.action}</p>
-          <p className="font-mono text-[9px] text-slate-500 mt-0.5">
+          <p className="font-mono text-[13px] font-semibold text-[#4FC3F7]">{tx.action}</p>
+          <p className="font-mono text-[12px] text-slate-500 mt-0.5">
             {tx.status === "pending" ? "Waiting for wallet signature…" : "Confirming on-chain…"}
           </p>
           {tx.status === "polling" && tx.hash && (
-            <p className="font-mono text-[8px] text-slate-600 mt-0.5 truncate">
+            <p className="font-mono text-[11px] text-slate-600 mt-0.5 truncate">
               {tx.hash.slice(0, 20)}…
             </p>
           )}
@@ -195,13 +195,13 @@ function Toast({
 
           {/* Content */}
           <div className="flex-1 min-w-0">
-            <p className="font-mono text-[11px] font-bold leading-tight"
+            <p className="font-mono text-[14px] font-bold leading-tight"
               style={{ color: ok ? "#22C55E" : "#EF4444" }}>
               {ok ? (tx.msg ?? tx.action) : `${tx.action} failed`}
             </p>
 
             {!ok && tx.error && (
-              <p className="font-mono text-[9px] leading-relaxed mt-1"
+              <p className="font-mono text-[12px] leading-relaxed mt-1"
                 style={{ color: "#EF444480" }}>
                 {tx.error}
               </p>
@@ -210,7 +210,7 @@ function Toast({
             {tx.hash && (
               <a href={`${explorerBase}/tx/${tx.hash}`}
                 target="_blank" rel="noopener noreferrer"
-                className="font-mono text-[8px] text-slate-500 hover:text-[#4FC3F7] transition-colors mt-1.5 block truncate">
+                className="font-mono text-[11px] text-slate-500 hover:text-[#4FC3F7] transition-colors mt-1.5 block truncate">
                 {tx.hash.slice(0, 18)}…{tx.hash.slice(-8)} ↗
               </a>
             )}
@@ -218,12 +218,12 @@ function Toast({
             {ok && tx.hash && (
               <div className="flex items-center gap-3 mt-2">
                 <button onClick={copyHash}
-                  className="font-mono text-[9px] text-slate-400 hover:text-[#4FC3F7] transition-colors">
+                  className="font-mono text-[12px] text-slate-400 hover:text-[#4FC3F7] transition-colors">
                   {copied ? "✓ Copied" : "⧉ Copy hash"}
                 </button>
                 {onCheckMemo && (
                   <button onClick={() => onCheckMemo(tx.hash!)}
-                    className="font-mono text-[9px] text-[#A78BFA] hover:text-[#C4B5FD] transition-colors">
+                    className="font-mono text-[12px] text-[#A78BFA] hover:text-[#C4B5FD] transition-colors">
                     🔖 Check memo →
                   </button>
                 )}
@@ -233,7 +233,7 @@ function Toast({
 
           {/* Close */}
           <button onClick={onDismiss}
-            className="font-mono text-[9px] text-slate-600 hover:text-slate-300 shrink-0 mt-0.5 transition-colors">
+            className="font-mono text-[12px] text-slate-600 hover:text-slate-300 shrink-0 mt-0.5 transition-colors">
             ✕
           </button>
         </div>
@@ -500,7 +500,7 @@ export default function ManagePanel({
     }
     if (gate === "insufficient" && capRemainingFmt != null) {
       return (
-        <p className="font-mono text-[9px] text-[#EF4444]">
+        <p className="font-mono text-[12px] text-[#EF4444]">
           ⚠ Exceeds remaining supply-cap headroom ({capRemainingFmt} {symbol}). The tx would revert.
         </p>
       );
@@ -593,11 +593,11 @@ export default function ManagePanel({
       <div className="rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] px-4 py-3 space-y-2">
         {/* Address + balance row */}
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-mono text-[9px] text-slate-600">Connected:</span>
-          <span className="font-mono text-[9px] text-slate-400">{address.slice(0, 10)}…{address.slice(-4)}</span>
+          <span className="font-mono text-[12px] text-slate-600">Connected:</span>
+          <span className="font-mono text-[12px] text-slate-400">{address.slice(0, 10)}…{address.slice(-4)}</span>
           <span className="mx-1 text-slate-700">·</span>
-          <span className="font-mono text-[9px] text-slate-600">Balance:</span>
-          <span className="font-mono text-[11px] font-semibold text-white">
+          <span className="font-mono text-[12px] text-slate-600">Balance:</span>
+          <span className="font-mono text-[14px] font-semibold text-white">
             {balFmt} <span className="text-[#4FC3F7]">{symbol}</span>
           </span>
         </div>
@@ -605,15 +605,15 @@ export default function ManagePanel({
         {/* Roles (hidden in compact to save space) */}
         {!compact && (
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="font-mono text-[9px] text-slate-600">Roles:</span>
-            {held.isAdmin      && <span className="font-mono text-[8px] px-1.5 py-0.5 rounded bg-[#4FC3F710] text-[#4FC3F7] border border-[#4FC3F720]">ADMIN</span>}
-            {held.canMint      && <span className="font-mono text-[8px] px-1.5 py-0.5 rounded bg-[#22C55E10] text-[#22C55E] border border-[#22C55E20]">MINT</span>}
-            {held.canBurn      && <span className="font-mono text-[8px] px-1.5 py-0.5 rounded bg-[#F59E0B10] text-[#F59E0B] border border-[#F59E0B20]">BURN</span>}
-            {held.canBurnBlock && <span className="font-mono text-[8px] px-1.5 py-0.5 rounded bg-[#EF444410] text-[#EF4444] border border-[#EF444420]">BURN_BLOCKED</span>}
-            {held.canPause     && <span className="font-mono text-[8px] px-1.5 py-0.5 rounded bg-[#F59E0B10] text-[#F59E0B] border border-[#F59E0B20]">PAUSE</span>}
-            {held.canUnpause   && <span className="font-mono text-[8px] px-1.5 py-0.5 rounded bg-[#22C55E10] text-[#22C55E] border border-[#22C55E20]">UNPAUSE</span>}
-            {held.canMetadata  && <span className="font-mono text-[8px] px-1.5 py-0.5 rounded bg-[#4FC3F710] text-[#4FC3F7] border border-[#4FC3F720]">METADATA</span>}
-            {held.hasBalance   && <span className="font-mono text-[8px] px-1.5 py-0.5 rounded bg-[#ffffff08] text-slate-400 border border-[#ffffff10]">HOLDER</span>}
+            <span className="font-mono text-[12px] text-slate-600">Roles:</span>
+            {held.isAdmin      && <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-[#4FC3F710] text-[#4FC3F7] border border-[#4FC3F720]">ADMIN</span>}
+            {held.canMint      && <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-[#22C55E10] text-[#22C55E] border border-[#22C55E20]">MINT</span>}
+            {held.canBurn      && <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-[#F59E0B10] text-[#F59E0B] border border-[#F59E0B20]">BURN</span>}
+            {held.canBurnBlock && <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-[#EF444410] text-[#EF4444] border border-[#EF444420]">BURN_BLOCKED</span>}
+            {held.canPause     && <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-[#F59E0B10] text-[#F59E0B] border border-[#F59E0B20]">PAUSE</span>}
+            {held.canUnpause   && <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-[#22C55E10] text-[#22C55E] border border-[#22C55E20]">UNPAUSE</span>}
+            {held.canMetadata  && <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-[#4FC3F710] text-[#4FC3F7] border border-[#4FC3F720]">METADATA</span>}
+            {held.hasBalance   && <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-[#ffffff08] text-slate-400 border border-[#ffffff10]">HOLDER</span>}
           </div>
         )}
       </div>
@@ -630,7 +630,7 @@ export default function ManagePanel({
             <p className={LABEL}>Mint — MINT_ROLE</p>
             <p className={DESC}>Create new tokens and send them to an address. Increases total supply.</p>
             {inspect.paused?.mint && (
-              <p className="font-mono text-[9px] text-[#F59E0B] mb-1">⚠ Mint is currently paused</p>
+              <p className="font-mono text-[12px] text-[#F59E0B] mb-1">⚠ Mint is currently paused</p>
             )}
             <div className="grid grid-cols-2 gap-2">
               <div>
@@ -676,7 +676,7 @@ export default function ManagePanel({
             <p className={LABEL}>Batch Mint — MINT_ROLE</p>
             <p className={DESC}>Mint to many recipients in a single transaction. Cheaper than separate mints and all-or-nothing — if one recipient is blocked by policy, the whole tx reverts.</p>
             {inspect.paused?.mint && (
-              <p className="font-mono text-[9px] text-[#F59E0B] mb-1">⚠ Mint is currently paused</p>
+              <p className="font-mono text-[12px] text-[#F59E0B] mb-1">⚠ Mint is currently paused</p>
             )}
 
             {/* Recipient rows */}
@@ -701,11 +701,11 @@ export default function ManagePanel({
             {/* Add / CSV controls */}
             <div className="flex gap-2">
               <button onClick={addBatchRow}
-                className="font-mono text-[10px] px-3 py-1.5 rounded-lg border border-[#1A1A2E] text-slate-400 hover:text-[#22C55E] hover:border-[#22C55E30] transition-colors">
+                className="font-mono text-[13px] px-3 py-1.5 rounded-lg border border-[#1A1A2E] text-slate-400 hover:text-[#22C55E] hover:border-[#22C55E30] transition-colors">
                 + Add recipient
               </button>
               <button onClick={() => setCsvOpen(v => !v)}
-                className="font-mono text-[10px] px-3 py-1.5 rounded-lg border border-[#1A1A2E] text-slate-400 hover:text-[#4FC3F7] hover:border-[#4FC3F730] transition-colors">
+                className="font-mono text-[13px] px-3 py-1.5 rounded-lg border border-[#1A1A2E] text-slate-400 hover:text-[#4FC3F7] hover:border-[#4FC3F730] transition-colors">
                 📋 Paste CSV
               </button>
             </div>
@@ -721,7 +721,7 @@ export default function ManagePanel({
                   placeholder={"0xabc…,100\n0xdef…,250"}
                   className={INPUT + " resize-y"} />
                 <button onClick={applyCsv} disabled={!csvText.trim()}
-                  className="font-mono text-[10px] px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40"
+                  className="font-mono text-[13px] px-3 py-1.5 rounded-lg transition-colors disabled:opacity-40"
                   style={{ background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
                   Apply CSV
                 </button>
@@ -731,10 +731,10 @@ export default function ManagePanel({
             {/* Total + cap headroom */}
             {batchValidRows.length > 0 && (
               <div className="flex items-center justify-between rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] px-3 py-2">
-                <span className="font-mono text-[9px] text-slate-600">
+                <span className="font-mono text-[12px] text-slate-600">
                   {batchValidRows.length} recipient{batchValidRows.length === 1 ? "" : "s"}
                 </span>
-                <span className="font-mono text-[11px] font-semibold text-white">
+                <span className="font-mono text-[14px] font-semibold text-white">
                   Total {batchTotalFmt} <span className="text-[#4FC3F7]">{symbol}</span>
                 </span>
               </div>
@@ -767,7 +767,7 @@ export default function ManagePanel({
             <p className={LABEL}>Transfer</p>
             <p className={DESC}>Send your tokens to another address. Subject to transfer policy and pause state.</p>
             {inspect.paused?.transfer && (
-              <p className="font-mono text-[9px] text-[#F59E0B]">⚠ Transfers are currently paused</p>
+              <p className="font-mono text-[12px] text-[#F59E0B]">⚠ Transfers are currently paused</p>
             )}
             <div className="grid grid-cols-2 gap-2">
               <div>
@@ -824,7 +824,7 @@ export default function ManagePanel({
 
           {/* Error state */}
           {memoErr && !memoLoading && (
-            <p className="font-mono text-[10px] text-[#EF4444]">⚠ {memoErr}</p>
+            <p className="font-mono text-[13px] text-[#EF4444]">⚠ {memoErr}</p>
           )}
 
           {/* Result */}
@@ -833,19 +833,19 @@ export default function ManagePanel({
               <div className="rounded-xl border border-[#A78BFA30] bg-[#A78BFA08] px-3 py-2 space-y-1">
                 <p className="font-mono text-xs text-[#A78BFA] break-all">✓ Memo: {memoResult.memo}</p>
                 {memoResult.caller && (
-                  <p className="font-mono text-[10px] text-slate-500">
+                  <p className="font-mono text-[13px] text-slate-500">
                     Caller {memoResult.caller.slice(0, 8)}…{memoResult.caller.slice(-6)}
                   </p>
                 )}
                 {memoResult.txUrl && (
                   <a href={memoResult.txUrl} target="_blank" rel="noopener noreferrer"
-                    className="inline-block font-mono text-[10px] text-slate-400 hover:text-[#A78BFA]">
+                    className="inline-block font-mono text-[13px] text-slate-400 hover:text-[#A78BFA]">
                     View tx ↗
                   </a>
                 )}
               </div>
             ) : (
-              <p className="font-mono text-[10px] text-slate-500">
+              <p className="font-mono text-[13px] text-slate-500">
                 {memoResult.status === "pending"
                   ? "Transaction not found or not yet mined on this network."
                   : "No memo found in this transaction."}
@@ -865,7 +865,7 @@ export default function ManagePanel({
             <p className={LABEL}>Burn (from your balance) — BURN_ROLE</p>
             <p className={DESC}>Destroy tokens from your own balance. Decreases total supply.</p>
             {inspect.paused?.burn && (
-              <p className="font-mono text-[9px] text-[#F59E0B] mb-1">⚠ Burn is currently paused</p>
+              <p className="font-mono text-[12px] text-[#F59E0B] mb-1">⚠ Burn is currently paused</p>
             )}
             <div className="flex gap-2">
               <input value={burnAmt} onChange={e => setBurnAmt(e.target.value)}
@@ -898,7 +898,7 @@ export default function ManagePanel({
             <p className={LABEL}>Burn Blocked (seize) — BURN_BLOCKED_ROLE</p>
             <p className={DESC}>Seize and destroy tokens from a blocklisted address without their consent.</p>
             <div className="rounded-xl border border-[#EF444430] bg-[#EF444408] px-3 py-2 mb-2">
-              <p className="font-mono text-[9px] text-[#EF4444] leading-relaxed">
+              <p className="font-mono text-[12px] text-[#EF4444] leading-relaxed">
                 <strong>Forcibly confiscates tokens from any holder.</strong> Irreversible.
                 Use only for regulatory / compliance enforcement.
               </p>
@@ -950,7 +950,7 @@ export default function ManagePanel({
                   style={{ background: f.paused ? "#EF4444" : "#22C55E",
                            boxShadow:  f.paused ? "0 0 4px #EF444480" : "0 0 4px #22C55E80" }} />
                 <span className="font-mono text-xs text-slate-300">{f.label}</span>
-                <span className="font-mono text-[9px]" style={{ color: f.paused ? "#EF4444" : "#22C55E" }}>
+                <span className="font-mono text-[12px]" style={{ color: f.paused ? "#EF4444" : "#22C55E" }}>
                   {f.paused ? "paused" : "active"}
                 </span>
               </div>
@@ -966,7 +966,7 @@ export default function ManagePanel({
                       }),
                       `Paused ${f.label}`,
                     )}
-                    className="font-mono text-[9px] px-3 py-1 rounded-lg transition-all disabled:opacity-40"
+                    className="font-mono text-[12px] px-3 py-1 rounded-lg transition-all disabled:opacity-40"
                     style={{ background: "#EF444415", color: "#EF4444", border: "1px solid #EF444430" }}>
                     Pause
                   </button>
@@ -982,16 +982,16 @@ export default function ManagePanel({
                       }),
                       `Unpaused ${f.label}`,
                     )}
-                    className="font-mono text-[9px] px-3 py-1 rounded-lg transition-all disabled:opacity-40"
+                    className="font-mono text-[12px] px-3 py-1 rounded-lg transition-all disabled:opacity-40"
                     style={{ background: "#22C55E15", color: "#22C55E", border: "1px solid #22C55E30" }}>
                     Unpause
                   </button>
                 )}
                 {held.canPause && !held.canUnpause && f.paused && (
-                  <span className="font-mono text-[9px] text-slate-700">need UNPAUSE_ROLE</span>
+                  <span className="font-mono text-[12px] text-slate-700">need UNPAUSE_ROLE</span>
                 )}
                 {!held.canPause && held.canUnpause && !f.paused && (
-                  <span className="font-mono text-[9px] text-slate-700">need PAUSE_ROLE</span>
+                  <span className="font-mono text-[12px] text-slate-700">need PAUSE_ROLE</span>
                 )}
               </div>
             </div>
@@ -1049,7 +1049,7 @@ export default function ManagePanel({
             <div className="flex rounded-lg border border-[#1A1A2E] overflow-hidden">
               {(["grant", "revoke"] as const).map(op => (
                 <button key={op} onClick={() => setRoleOp(op)}
-                  className="flex-1 py-1.5 font-mono text-[10px] capitalize transition-colors"
+                  className="flex-1 py-1.5 font-mono text-[13px] capitalize transition-colors"
                   style={roleOp === op
                     ? { background: "#4FC3F715", color: "#4FC3F7" }
                     : { color: "#475569" }}>
@@ -1093,7 +1093,7 @@ export default function ManagePanel({
 
             {/* Renounce last admin */}
             <div className="pt-3 border-t border-[#0d0d18]">
-              <p className="font-mono text-[9px] text-slate-600 mb-2 leading-relaxed">
+              <p className="font-mono text-[12px] text-slate-600 mb-2 leading-relaxed">
                 <span className="text-[#EF4444]">renounceLastAdmin()</span> — permanently removes
                 DEFAULT_ADMIN_ROLE from all holders. The token becomes immutable with no way to
                 recover admin control. This is irreversible.
@@ -1126,7 +1126,7 @@ export default function ManagePanel({
           <div className="space-y-2">
             <p className={DESC}>Set the maximum tokens that can ever exist. Uncapped (uint128.max) means no limit — issuers can mint freely.</p>
             {inspect.supplyCapFormatted && (
-              <p className="font-mono text-[9px] text-slate-500">
+              <p className="font-mono text-[12px] text-slate-500">
                 Current cap: <span className="text-slate-300">{inspect.supplyCapFormatted} {symbol}</span>
                 {inspect.supplyCapUncapped && " (uncapped)"}
               </p>
@@ -1135,7 +1135,7 @@ export default function ManagePanel({
               <input type="checkbox" id="cap-uncapped" checked={capUncapped}
                 onChange={e => setCapUncapped(e.target.checked)}
                 className="accent-[#4FC3F7]" />
-              <label htmlFor="cap-uncapped" className="font-mono text-[10px] text-slate-400 cursor-pointer">
+              <label htmlFor="cap-uncapped" className="font-mono text-[13px] text-slate-400 cursor-pointer">
                 Set uncapped (uint128.max)
               </label>
             </div>
@@ -1174,7 +1174,7 @@ export default function ManagePanel({
               <div className="flex rounded-lg border border-[#1A1A2E] overflow-hidden mb-2">
                 {(["name", "symbol", "uri"] as const).map(f => (
                   <button key={f} onClick={() => setMetaField(f)}
-                    className="flex-1 py-1.5 font-mono text-[10px] capitalize transition-colors"
+                    className="flex-1 py-1.5 font-mono text-[13px] capitalize transition-colors"
                     style={metaField === f ? { background: "#4FC3F715", color: "#4FC3F7" } : { color: "#475569" }}>
                     {f === "uri" ? "Contract URI" : f}
                   </button>

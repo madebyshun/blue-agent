@@ -538,7 +538,7 @@ export default function TransactionHistory({
   return (
     <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4">
       <div className="flex items-center justify-between gap-3 mb-3">
-        <div className="font-mono text-[9px] text-slate-500 tracking-widest">
+        <div className="font-mono text-[12px] text-slate-500 tracking-widest">
           {/* Named chains, never "ALL CHAINS". The heading states the scope it
               can actually back: if Robinhood is down, this list is Base's, and
               a banner reading "ALL CHAINS" over it would be the same wrong
@@ -556,7 +556,7 @@ export default function TransactionHistory({
             {(covered.length > 0 ? covered : sources.map(s => s.chain)).map(c => (
               <a key={c} href={`${WALLET_CHAINS[c].explorer}/address/${address}`}
                 target="_blank" rel="noopener noreferrer"
-                className="font-mono text-[9px] text-slate-600 hover:text-[#4FC3F7] transition-colors">
+                className="font-mono text-[12px] text-slate-600 hover:text-[#4FC3F7] transition-colors">
                 {WALLET_CHAINS[c].explorerName} ↗
               </a>
             ))}
@@ -566,7 +566,7 @@ export default function TransactionHistory({
       <div className="flex gap-1 mb-4 flex-wrap">
         {FILTERS.map(f => (
           <button key={f} onClick={() => setFilter(f)}
-            className="font-mono text-[9px] px-2.5 py-1 rounded-full transition-colors"
+            className="font-mono text-[12px] px-2.5 py-1 rounded-full transition-colors"
             style={filter === f
               ? { background: "#4FC3F712", color: "#4FC3F7", border: "1px solid #4FC3F730" }
               : { color: "#475569", border: "1px solid #1A1A2E" }}>
@@ -585,10 +585,10 @@ export default function TransactionHistory({
            is offered only when something is actually retryable, because a
            missing index key is not fixed by pressing a button. */
         <div className="py-6 text-center">
-          <div className="font-mono text-[11px] text-slate-300 mb-1">
+          <div className="font-mono text-[14px] text-slate-300 mb-1">
             Couldn&apos;t load your {proseList(downNames)} history
           </div>
-          <div className="font-mono text-[9px] text-slate-600 mb-3 leading-relaxed">
+          <div className="font-mono text-[12px] text-slate-600 mb-3 leading-relaxed">
             {unconfigured.length === down.length
               /* Addressed to the USER, about their wallet — not to us, about our
                  config. It used to read "Live history needs a Moralis key
@@ -600,13 +600,13 @@ export default function TransactionHistory({
           </div>
           <div className="flex items-center justify-center gap-2 flex-wrap">
             {retryable.length > 0 && (
-              <button onClick={onRetry} className="font-mono text-[10px] px-3 py-1.5 rounded-lg"
+              <button onClick={onRetry} className="font-mono text-[13px] px-3 py-1.5 rounded-lg"
                 style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>Retry</button>
             )}
             {address && down.map(s => (
               <a key={s.chain} href={`${WALLET_CHAINS[s.chain].explorer}/address/${address}`}
                 target="_blank" rel="noopener noreferrer"
-                className="font-mono text-[10px] px-3 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 transition-colors"
+                className="font-mono text-[13px] px-3 py-1.5 rounded-lg text-slate-400 hover:text-slate-200 transition-colors"
                 style={{ border: "1px solid #1A1A2E" }}>{WALLET_CHAINS[s.chain].explorerName} ↗</a>
             ))}
           </div>
@@ -617,13 +617,13 @@ export default function TransactionHistory({
            about a chain. The index may well show no treasury payment; what it
            cannot show is a payment it missed, which only a receipt can put
            back — so without the receipts "none" is not a claim we can make. */
-        <p className="font-mono text-[11px] text-slate-500 py-6 text-center leading-relaxed">
+        <p className="font-mono text-[14px] text-slate-500 py-6 text-center leading-relaxed">
           Agent spending is unknown until you sign in — receipts are private to the wallet.{" "}
           <button onClick={signInForReceipts} className="underline text-[#4FC3F7]">Sign in to see it</button>
           <span className="text-slate-600"> — one signature, no transaction.</span>
         </p>
       ) : filtered.length === 0 ? (
-        <p className="font-mono text-[11px] text-slate-600 py-6 text-center">
+        <p className="font-mono text-[14px] text-slate-600 py-6 text-center">
           {filter === "Agent"
             // "None" is a claim, and it needs the receipt store to make it. With
             // the store unreachable the honest answer is that we don't know —
@@ -645,7 +645,7 @@ export default function TransactionHistory({
         <div className="space-y-4">
           {groups.map(g => (
             <div key={g.day}>
-              <div className="font-mono text-[9px] text-slate-600 mb-2 pl-1">{g.day}</div>
+              <div className="font-mono text-[12px] text-slate-600 mb-2 pl-1">{g.day}</div>
               <div className="relative">
                 <div className="absolute left-3 top-2 bottom-2 w-px bg-[#1A1A2E]" />
                 {g.items.map(({ tx, c }) => (
@@ -673,7 +673,7 @@ export default function TransactionHistory({
        (unexplained > 0 && receipts.status !== "loading") ? (
         <div className="mt-3 pt-3 border-t border-[#12121c] space-y-1.5">
           {retryable.length > 0 && rows.length > 0 && (
-            <p className="font-mono text-[9px] text-amber-500/70 leading-relaxed">
+            <p className="font-mono text-[12px] text-amber-500/70 leading-relaxed">
               {/* It used to end "…so nothing from that chain is listed here."
                   That sentence is now capable of being false: a Blue Hub row
                   reconstructed from a receipt IS from that chain, and it renders
@@ -684,7 +684,7 @@ export default function TransactionHistory({
             </p>
           )}
           {unconfigured.length > 0 && rows.length > 0 && (
-            <p className="font-mono text-[9px] text-slate-600 leading-relaxed">
+            <p className="font-mono text-[12px] text-slate-600 leading-relaxed">
               {/* "Full" for the same reason: our own receipts can still put rows
                   on screen for a chain we have no index for. */}
               Full {proseList(unconfigured.map(s => shortOf(s.chain)))} history isn&apos;t available — our index for{" "}
@@ -692,7 +692,7 @@ export default function TransactionHistory({
             </p>
           )}
           {fromReceipts.length > 0 && (
-            <p className="font-mono text-[9px] text-slate-600 leading-relaxed">
+            <p className="font-mono text-[12px] text-slate-600 leading-relaxed">
               {/* Says which rows we are vouching for ourselves. The user can tell
                   a reconstructed row from an indexed one — it carries the tool
                   id and links to the settlement — but they should not have to
@@ -702,24 +702,24 @@ export default function TransactionHistory({
             </p>
           )}
           {unplaceable > 0 && (
-            <p className="font-mono text-[9px] text-slate-600 leading-relaxed">
+            <p className="font-mono text-[12px] text-slate-600 leading-relaxed">
               {unplaceable} more Blue Hub payment{unplaceable > 1 ? "s aren't" : " isn't"} listed — we recorded{" "}
               {unplaceable > 1 ? "them" : "it"} without a settlement hash, so there is nothing to link to.
             </p>
           )}
           {partialLive.length > 0 && (
-            <p className="font-mono text-[9px] text-amber-500/70 leading-relaxed">
+            <p className="font-mono text-[12px] text-amber-500/70 leading-relaxed">
               Part of the {proseList(partialLive.map(s => shortOf(s.chain)))} read didn&apos;t answer, so rows from{" "}
               {partialLive.length > 1 ? "those chains" : "that chain"} may be missing.
             </p>
           )}
           {cappedLive.length > 0 && (
-            <p className="font-mono text-[9px] text-slate-600 leading-relaxed">
+            <p className="font-mono text-[12px] text-slate-600 leading-relaxed">
               Showing the most recent activity on {proseList(cappedLive.map(s => shortOf(s.chain)))} — older history is on the explorer.
             </p>
           )}
           {unexplained > 0 && receipts.status !== "loading" && (
-            <p className="font-mono text-[9px] text-slate-600 leading-relaxed">
+            <p className="font-mono text-[12px] text-slate-600 leading-relaxed">
               {/* "Never recorded" is a claim about our receipt store, so only a
                   store we actually READ ("ok") may make it. A signed-out wallet
                   was never asked about, and its receipts are usually right
@@ -758,18 +758,18 @@ function TxRow({ tx, c, showChain }: { tx: WalletTx; c: TxClass; showChain: bool
       className="flex items-center gap-3 pl-7 py-2 -ml-1 rounded-lg hover:bg-[#0d0d12] transition-colors relative">
       <span className="absolute left-[9px] w-3 h-3 rounded-full border-2 border-[#050508] top-1/2 -translate-y-1/2"
         style={{ background: c.dot }} />
-      <span className="w-7 h-7 rounded-lg flex items-center justify-center text-[12px] shrink-0"
+      <span className="w-7 h-7 rounded-lg flex items-center justify-center text-[15px] shrink-0"
         style={{ background: c.bg, color: c.color }}>{c.icon}</span>
       <div className="flex-1 min-w-0">
-        <div className="font-mono text-[11px] text-slate-200 truncate">{heading}</div>
-        <div className="font-mono text-[9px] flex items-center gap-1.5 mt-0.5">
+        <div className="font-mono text-[14px] text-slate-200 truncate">{heading}</div>
+        <div className="font-mono text-[12px] flex items-center gap-1.5 mt-0.5">
           <span style={{ color: statusColor }}>{tx.status !== "complete" ? tx.status : fmtTime(tx.ts)}</span>
           {/* Which chain this row happened on, shown only when the list actually
               holds more than one. In a merged timeline the date and the amount
               are not enough to tell two chains apart, and the chain is the one
               fact that decides whether the link above goes anywhere. */}
           {showChain && (
-            <span className="px-1 rounded text-[8px] tracking-wide shrink-0"
+            <span className="px-1 rounded text-[11px] tracking-wide shrink-0"
               style={{ background: "#12121c", color: "#64748b" }}>{chainCfg.short}</span>
           )}
           {/* The catalog id behind the display name. Small, but it is the thing
@@ -779,7 +779,7 @@ function TxRow({ tx, c, showChain }: { tx: WalletTx; c: TxClass; showChain: bool
         </div>
       </div>
       {tx.amount != null && (
-        <div className="font-mono text-[11px] shrink-0"
+        <div className="font-mono text-[14px] shrink-0"
           style={{ color: tx.dir === "in" ? "#34D399" : tx.dir === "out" ? "#94a3b8" : "#64748b" }}>
           {tx.dir === "in" ? "+" : tx.dir === "out" ? "−" : ""}
           {tx.amount.toLocaleString("en-US", { maximumFractionDigits: tx.asset === "ETH" ? 5 : 2 })} {tx.asset ?? ""}

@@ -68,7 +68,7 @@ function RhSellControl({ h, onQuickSell }: { h: RhHolding; onQuickSell: (h: RhHo
       aria-label={`Sell ${h.symbol}`}
       defaultValue=""
       onChange={e => { const p = Number(e.target.value); e.currentTarget.selectedIndex = 0; if (p > 0) onQuickSell(h, p); }}
-      className="justify-self-end bg-[#050508] border border-[#1A1A2E] rounded-lg pl-1.5 pr-0.5 py-1 font-mono text-[9px] text-[#4FC3F7] outline-none cursor-pointer hover:border-[#4FC3F7]/40">
+      className="justify-self-end bg-[#050508] border border-[#1A1A2E] rounded-lg pl-1.5 pr-0.5 py-1 font-mono text-[12px] text-[#4FC3F7] outline-none cursor-pointer hover:border-[#4FC3F7]/40">
       <option value="">Sell ▾</option>
       <option value="25">25%</option>
       <option value="50">50%</option>
@@ -202,16 +202,16 @@ export default function RhTokenTable({ address, onQuickSell, hideDust, hideAmoun
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <span className="font-mono text-[9px] text-slate-500 tracking-widest">TOKENS</span>
-          <span className="font-mono text-[9px] px-1.5 py-0.5 rounded text-[#4FC3F7]"
+          <span className="font-mono text-[12px] text-slate-500 tracking-widest">TOKENS</span>
+          <span className="font-mono text-[12px] px-1.5 py-0.5 rounded text-[#4FC3F7]"
             style={{ border: "1px solid #4FC3F730", background: "#4FC3F710" }}>Robinhood Chain</span>
-          <span className="font-mono text-[8px] text-slate-600">4663</span>
+          <span className="font-mono text-[11px] text-slate-600">4663</span>
         </div>
         {read.body === "rows" && resp?.status === "ok" && (
           // "≥" when the list is short — a total computed from a truncated walk
           // is a lower bound, and printing it bare put a confident figure
           // directly above the note saying the list is incomplete.
-          <span className="font-mono text-[10px] text-slate-400 tabular-nums"
+          <span className="font-mono text-[13px] text-slate-400 tabular-nums"
             title={
               read.totalIsFloor && unpricedInTotal ? "At least this much — the token list is incomplete AND some tokens have no price"
               : read.totalIsFloor ? "Partial read — at least this much; the full token list was not available"
@@ -223,11 +223,11 @@ export default function RhTokenTable({ address, onQuickSell, hideDust, hideAmoun
       </div>
 
       {read.body === "pending" ? (
-        <div className="py-6 text-center font-mono text-[10px] text-slate-600">reading Robinhood Chain…</div>
+        <div className="py-6 text-center font-mono text-[13px] text-slate-600">reading Robinhood Chain…</div>
       ) : read.body === "failed" ? (
         // The one state this table exists to be able to say. An RH holder seeing
         // an empty list would conclude their tokens are gone.
-        <div className="rounded-lg px-3 py-2.5 font-mono text-[9px] leading-relaxed text-amber-500/80"
+        <div className="rounded-lg px-3 py-2.5 font-mono text-[12px] leading-relaxed text-amber-500/80"
           style={{ border: "1px solid #F59E0B30", background: "#F59E0B08" }}>
           Robinhood Chain explorer did not answer. Your holdings there are unknown — this is
           not an empty portfolio.
@@ -238,19 +238,19 @@ export default function RhTokenTable({ address, onQuickSell, hideDust, hideAmoun
         // "No tokens on Robinhood Chain" with an amber footnote underneath
         // contradicting it; now the read says what it did and did not cover,
         // once.
-        <div className="rounded-lg px-3 py-2.5 font-mono text-[9px] leading-relaxed text-amber-500/80"
+        <div className="rounded-lg px-3 py-2.5 font-mono text-[12px] leading-relaxed text-amber-500/80"
           style={{ border: "1px solid #F59E0B30", background: "#F59E0B08" }}>
           No ERC-20 tokens found, but the native ETH balance could not be read. This is a
           partial answer, not an empty portfolio.
         </div>
       ) : read.body === "empty" ? (
-        <div className="py-6 text-center font-mono text-[10px] text-slate-600">No tokens on Robinhood Chain</div>
+        <div className="py-6 text-center font-mono text-[13px] text-slate-600">No tokens on Robinhood Chain</div>
       ) : shown.length === 0 ? (
         // Rows exist, the filter hid all of them. Distinct from "empty" above:
         // that branch is a claim about the chain, this one is a claim about the
         // filter, and on RH the difference is sharp — a holder whose whole
         // position is sub-dollar must not read "No tokens on Robinhood Chain".
-        <div className="py-6 text-center font-mono text-[10px] text-slate-600">
+        <div className="py-6 text-center font-mono text-[13px] text-slate-600">
           All {holdings.length} token{holdings.length > 1 ? "s" : ""} here are{" "}
           {hid.dust > 0 && hid.unpriced > 0
             ? `under $${DUST_USD} or unpriced`
@@ -262,7 +262,7 @@ export default function RhTokenTable({ address, onQuickSell, hideDust, hideAmoun
         </div>
       ) : (
         <>
-          <div className={`grid ${gridCls} gap-3 px-1 pb-1.5 font-mono text-[9px] text-slate-600 border-b border-[#1A1A2E]`}>
+          <div className={`grid ${gridCls} gap-3 px-1 pb-1.5 font-mono text-[12px] text-slate-600 border-b border-[#1A1A2E]`}>
             <span>Token</span>
             <span className="text-right">Balance</span>
             <span className="text-right">Value</span>
@@ -279,28 +279,28 @@ export default function RhTokenTable({ address, onQuickSell, hideDust, hideAmoun
                       a Basescan link for a 4663 address resolves to nothing. */}
                   <a href={h.explorerUrl} target="_blank" rel="noopener noreferrer"
                     className="flex items-center gap-2 min-w-0">
-                    <span className="w-6 h-6 rounded-full shrink-0 flex items-center justify-center font-mono text-[9px] text-slate-400"
+                    <span className="w-6 h-6 rounded-full shrink-0 flex items-center justify-center font-mono text-[12px] text-slate-400"
                       style={{ background: "#1A1A2E" }}>{h.symbol.slice(0, 3).toUpperCase()}</span>
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <span className="font-mono text-[11px] font-bold truncate"
+                        <span className="font-mono text-[14px] font-bold truncate"
                           style={{ color: impostor ? "#94a3b8" : "#e2e8f0" }}>{h.symbol}</span>
-                        {h.isNative && <span className="font-mono text-[8px] px-1 rounded text-slate-500 shrink-0"
+                        {h.isNative && <span className="font-mono text-[11px] px-1 rounded text-slate-500 shrink-0"
                           style={{ border: "1px solid #1A1A2E" }}>native</span>}
-                        {badge && <span className="font-mono text-[8px] px-1 rounded shrink-0"
+                        {badge && <span className="font-mono text-[11px] px-1 rounded shrink-0"
                           style={{ color: badge.color, border: `1px solid ${badge.color}55` }}>{badge.label}</span>}
                       </div>
-                      {h.name && <div className="font-mono text-[9px] text-slate-600 truncate">{h.name}</div>}
+                      {h.name && <div className="font-mono text-[12px] text-slate-600 truncate">{h.name}</div>}
                     </div>
                   </a>
-                  <span className="font-mono text-[10px] text-slate-300 text-right tabular-nums">
+                  <span className="font-mono text-[13px] text-slate-300 text-right tabular-nums">
                     {maskFigure(fmtAmount(h.amount), hideAmounts)}
                   </span>
                   {/* An impostor's price is its own claim, quoted through its own
                       pool — same withholding as the Base table. Unpriced stays a
                       literal "—": on this chain most RWA rows have no feed, and
                       masking them would read as "hidden" rather than "unknown". */}
-                  <span className="font-mono text-[10px] text-right tabular-nums"
+                  <span className="font-mono text-[13px] text-right tabular-nums"
                     style={{ color: impostor ? "#64748b" : h.usdValue != null ? "#34D399" : "#64748b" }}>
                     {impostor || h.usdValue == null ? "—" : maskFigure(fmtUsd(h.usdValue), hideAmounts)}
                   </span>
@@ -317,14 +317,14 @@ export default function RhTokenTable({ address, onQuickSell, hideDust, hideAmoun
                       fact about their token. */}
                   {showSell && (
                     h.isNative
-                      ? <span className="justify-self-end font-mono text-[9px] text-slate-700"
+                      ? <span className="justify-self-end font-mono text-[12px] text-slate-700"
                           title="ETH is what a sell pays out on Robinhood Chain — swap it for a token from the Convert panel">—</span>
                     : !canQuickSell(h.trust)
-                      ? <span className="justify-self-end font-mono text-[9px] text-slate-700"
+                      ? <span className="justify-self-end font-mono text-[12px] text-slate-700"
                           title="Name does not match this contract — trading disabled here">—</span>
                     : canSellRow(sellable[h.address.toLowerCase()])
                       ? <RhSellControl h={h} onQuickSell={onQuickSell!} />
-                      : <span className="justify-self-end font-mono text-[9px] text-slate-700"
+                      : <span className="justify-self-end font-mono text-[12px] text-slate-700"
                           title={sellDashTitle(sellable[h.address.toLowerCase()])}>—</span>
                   )}
                 </div>
@@ -342,7 +342,7 @@ export default function RhTokenTable({ address, onQuickSell, hideDust, hideAmoun
           twice on one screen — the caveat has two shapes and exactly one of
           them is live at a time. */}
       {read.footnote && resp?.status === "ok" && resp.nativeUnread && (
-        <div className="mt-2 font-mono text-[9px] text-amber-500/80">
+        <div className="mt-2 font-mono text-[12px] text-amber-500/80">
           Native ETH balance could not be read — this list is short by up to one row.
         </div>
       )}
@@ -351,7 +351,7 @@ export default function RhTokenTable({ address, onQuickSell, hideDust, hideAmoun
           total is wrong", because those are different claims and only the first
           one is true — see RH_MAX_TOKEN_PAGES for the measurement. */}
       {read.footnote && resp?.status === "ok" && resp.truncated && (
-        <div className="mt-2 font-mono text-[9px] text-slate-600 leading-relaxed">
+        <div className="mt-2 font-mono text-[12px] text-slate-600 leading-relaxed">
           This address holds more tokens than shown. These are the highest-valued ones —{" "}
           <a href={`${resp.explorer}/address/${address}?tab=tokens`}
             target="_blank" rel="noopener noreferrer" className="underline hover:text-slate-400">
@@ -367,7 +367,7 @@ export default function RhTokenTable({ address, onQuickSell, hideDust, hideAmoun
           tables, so "still counted" stays attached to the dust count and never
           to the unpriced one. */}
       {note && shown.length > 0 && (
-        <div className="mt-2 font-mono text-[9px] text-slate-600 leading-relaxed">
+        <div className="mt-2 font-mono text-[12px] text-slate-600 leading-relaxed">
           {note}{" "}
           {onShowDust && (
             <button type="button" onClick={onShowDust}
@@ -376,7 +376,7 @@ export default function RhTokenTable({ address, onQuickSell, hideDust, hideAmoun
         </div>
       )}
       {nFlagged > 0 && (
-        <div className="mt-2 font-mono text-[9px] text-red-400/80 leading-relaxed">
+        <div className="mt-2 font-mono text-[12px] text-red-400/80 leading-relaxed">
           {nFlagged} token{nFlagged > 1 ? "s" : ""} use{nFlagged > 1 ? "" : "s"} the ticker of a
           Robinhood-issued token at a different contract address. Not counted in the total.
         </div>
@@ -387,7 +387,7 @@ export default function RhTokenTable({ address, onQuickSell, hideDust, hideAmoun
           holder of nothing but tokenized equities reads "No tokens on Robinhood
           Chain" with no explanation of where they went. */}
       {resp?.status === "ok" && resp.equitiesHidden > 0 && (
-        <div className="mt-2 font-mono text-[9px] text-slate-600 leading-relaxed">
+        <div className="mt-2 font-mono text-[12px] text-slate-600 leading-relaxed">
           {resp.equitiesHidden} tokenized {resp.equitiesHidden > 1 ? "equities are" : "equity is"} held
           here too — shown in Stocks below, not counted twice.
         </div>

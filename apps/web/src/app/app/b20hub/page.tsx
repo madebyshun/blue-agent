@@ -26,7 +26,7 @@ function HeroBlock() {
   return (
     <section className="grid md:grid-cols-2 gap-6 items-start">
       <div>
-        <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase mb-3">
+        <p className="font-mono text-[12px] text-slate-600 tracking-widest uppercase mb-3">
           launch a real b20 · on base
         </p>
         <h1 className="font-mono text-3xl md:text-4xl font-bold leading-tight mb-3">
@@ -67,7 +67,7 @@ function StatsPanel() {
   // live inside FeedGrid + token-detail pages.
   return (
     <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-5 space-y-4">
-      <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase">
+      <p className="font-mono text-[12px] text-slate-600 tracking-widest uppercase">
         protocol constants
       </p>
       <StatRow label="Supply per launch" value="100,000,000,000 tokens" />
@@ -95,14 +95,14 @@ function StatRow({
 }) {
   return (
     <div className="flex items-start justify-between gap-3">
-      <span className="font-mono text-[10px] text-slate-600 tracking-wider uppercase mt-0.5">
+      <span className="font-mono text-[13px] text-slate-600 tracking-wider uppercase mt-0.5">
         {label}
       </span>
       <div className="text-right">
         <div className="font-mono text-xs font-bold" style={{ color: accent ?? "#e2e8f0" }}>
           {value}
         </div>
-        {hint && <div className="font-mono text-[9px] text-slate-600">{hint}</div>}
+        {hint && <div className="font-mono text-[12px] text-slate-600">{hint}</div>}
       </div>
     </div>
   );

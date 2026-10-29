@@ -46,7 +46,7 @@ function StockSellControl({ h, onQuickSell }: { h: StockHolding; onQuickSell: (h
       aria-label={`Sell ${h.symbol}`}
       defaultValue=""
       onChange={e => { const p = Number(e.target.value); e.currentTarget.selectedIndex = 0; if (p > 0) onQuickSell(h, p); }}
-      className="justify-self-end bg-[#050508] border border-[#1A1A2E] rounded-lg pl-1.5 pr-0.5 py-1 font-mono text-[9px] text-[#4FC3F7] outline-none cursor-pointer hover:border-[#4FC3F7]/40">
+      className="justify-self-end bg-[#050508] border border-[#1A1A2E] rounded-lg pl-1.5 pr-0.5 py-1 font-mono text-[12px] text-[#4FC3F7] outline-none cursor-pointer hover:border-[#4FC3F7]/40">
       <option value="">Sell ▾</option>
       <option value="25">25%</option>
       <option value="50">50%</option>
@@ -72,36 +72,36 @@ function Row({ h, isLast, hideAmounts, gridCls, sellCol, sell }: {
   return (
     <div className={`grid ${gridCls} gap-3 items-center px-1 py-2 hover:bg-[#0d0d12] transition-colors ${isLast ? "" : "border-b border-[#1A1A2E]"}`}>
       <a href={h.explorerUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 min-w-0">
-        <span className="w-6 h-6 rounded-full shrink-0 flex items-center justify-center font-mono text-[8px] text-slate-400"
+        <span className="w-6 h-6 rounded-full shrink-0 flex items-center justify-center font-mono text-[11px] text-slate-400"
           style={{ background: "#1A1A2E" }}>{h.ticker.slice(0, 4)}</span>
         <div className="min-w-0">
           <div className="flex items-center gap-1.5">
             {/* The on-chain SYMBOL, not the bare ticker — "NVDAc" is the Base
                 token and "NVDA" is the RH one, and the difference is the point. */}
-            <span className="font-mono text-[11px] font-bold text-slate-200 truncate">{h.symbol}</span>
-            {h.kind === "etf" && <span className="font-mono text-[8px] px-1 rounded text-slate-500 shrink-0"
+            <span className="font-mono text-[14px] font-bold text-slate-200 truncate">{h.symbol}</span>
+            {h.kind === "etf" && <span className="font-mono text-[11px] px-1 rounded text-slate-500 shrink-0"
               style={{ border: "1px solid #1A1A2E" }}>ETF</span>}
           </div>
-          <div className="font-mono text-[9px] text-slate-600 truncate">{h.name}</div>
+          <div className="font-mono text-[12px] text-slate-600 truncate">{h.name}</div>
         </div>
       </a>
       {/* Share count is masked too — shares × a public quote is the dollar
           figure back again, so hiding one column and not the other hides
           nothing. */}
-      <span className="font-mono text-[10px] text-slate-300 text-right tabular-nums">
+      <span className="font-mono text-[13px] text-slate-300 text-right tabular-nums">
         {maskFigure(fmtAmount(h.amount), hideAmounts)}
       </span>
       <div className="text-right">
-        <div className="font-mono text-[10px] text-slate-300 tabular-nums">
+        <div className="font-mono text-[13px] text-slate-300 tabular-nums">
           {h.valueUsd == null ? "—" : maskFigure(fmtUsd(h.valueUsd), hideAmounts)}
         </div>
         {/* Why the value is blank, spelled out rather than left as a dash the
             user has to interpret as either zero or unknown. Left UNMASKED: the
             eye toggle hides amounts, and this line is a reason, not an amount. */}
         {h.valueUsd == null
-          ? <div className="font-mono text-[8px] text-slate-600 leading-tight">{h.unpricedReason ?? "unknown"}</div>
+          ? <div className="font-mono text-[11px] text-slate-600 leading-tight">{h.unpricedReason ?? "unknown"}</div>
           : h.priceSource === "dex-spot"
-            ? <div className="font-mono text-[8px] text-slate-600 leading-tight">pool price</div>
+            ? <div className="font-mono text-[11px] text-slate-600 leading-tight">pool price</div>
             : null}
       </div>
       {/* Sell — drawn ONLY where a pool was measured for this exact contract.
@@ -113,11 +113,11 @@ function Row({ h, isLast, hideAmounts, gridCls, sellCol, sell }: {
           their position. */}
       {sellCol && (
         !sell
-          ? <span className="justify-self-end font-mono text-[9px] text-slate-700"
+          ? <span className="justify-self-end font-mono text-[12px] text-slate-700"
               title="Selling tokenized shares is offered on Robinhood Chain only — this row is on another venue">—</span>
         : canSellRow(sell.state)
           ? <StockSellControl h={h} onQuickSell={sell.onQuickSell} />
-          : <span className="justify-self-end font-mono text-[9px] text-slate-700"
+          : <span className="justify-self-end font-mono text-[12px] text-slate-700"
               title={sellDashTitle(sell.state)}>—</span>
       )}
     </div>
@@ -183,16 +183,16 @@ function Leg({ leg, hideDust, hideAmounts, onShowDust, gridCls, sellCol, onQuick
     <div className="mb-3 last:mb-0">
       <div className="flex items-center justify-between mb-1.5">
         <div className="flex items-center gap-2">
-          <span className="font-mono text-[9px] px-1.5 py-0.5 rounded text-[#4FC3F7]"
+          <span className="font-mono text-[12px] px-1.5 py-0.5 rounded text-[#4FC3F7]"
             style={{ border: "1px solid #4FC3F730", background: "#4FC3F710" }}>{leg.label}</span>
-          <span className="font-mono text-[8px] text-slate-600">{leg.chainId}</span>
+          <span className="font-mono text-[11px] text-slate-600">{leg.chainId}</span>
         </div>
         {/* Only totals what it could actually price — an unpriced holding is
             excluded from the sum and said so, never counted as $0. The "≥" is
             the OTHER caveat: rows that were never read at all cannot be in this
             sum either, and unlike the unpriced ones they cannot be counted. */}
         {priced.length > 0 && (
-          <span className="font-mono text-[10px] text-slate-400 tabular-nums"
+          <span className="font-mono text-[13px] text-slate-400 tabular-nums"
             title={read.totalIsFloor ? `${leg.unread} balance read(s) failed — at least this much` : undefined}>
             {read.totalIsFloor ? "≥ " : ""}{maskFigure(fmtUsd(total), hideAmounts)}
             {priced.length < leg.holdings.length && (
@@ -203,7 +203,7 @@ function Leg({ leg, hideDust, hideAmounts, onShowDust, gridCls, sellCol, onQuick
       </div>
 
       {read.body === "failed" ? (
-        <div className="rounded-lg px-3 py-2.5 font-mono text-[9px] leading-relaxed text-amber-500/80"
+        <div className="rounded-lg px-3 py-2.5 font-mono text-[12px] leading-relaxed text-amber-500/80"
           style={{ border: "1px solid #F59E0B30", background: "#F59E0B08" }}>
           {leg.note ?? "Could not reach this chain."} Your holdings are unknown here — this is not an empty portfolio.
         </div>
@@ -213,7 +213,7 @@ function Leg({ leg, hideDust, hideAmounts, onShowDust, gridCls, sellCol, onQuick
         // what did. That is not "you hold no stock tokens here". `leg.note`
         // already carries the count — it was being rendered UNDERNEATH the
         // sentence it contradicts.
-        <div className="rounded-lg px-3 py-2.5 font-mono text-[9px] leading-relaxed text-amber-500/80"
+        <div className="rounded-lg px-3 py-2.5 font-mono text-[12px] leading-relaxed text-amber-500/80"
           style={{ border: "1px solid #F59E0B30", background: "#F59E0B08" }}>
           {leg.note ?? `${leg.unread} balance read(s) failed.`} Nothing was found in the rest —
           but this leg is incomplete, not empty.
@@ -222,14 +222,14 @@ function Leg({ leg, hideDust, hideAmounts, onShowDust, gridCls, sellCol, onQuick
         // Only from a complete leg, so `scanned` is now a count of rows that
         // were actually read. It used to print here on a partial leg too, where
         // it overstated the work by exactly `leg.unread`.
-        <div className="py-3 text-center font-mono text-[9px] text-slate-600">
+        <div className="py-3 text-center font-mono text-[12px] text-slate-600">
           No {leg.label} stock tokens · {leg.scanned} checked
         </div>
       ) : shown.length === 0 ? (
         // The leg holds equities; the filter hid all of them. Kept apart from
         // the "empty" branch above, which claims the venue holds nothing and
         // prints a scan count — a claim the filter has no business making.
-        <div className="py-3 text-center font-mono text-[9px] text-slate-600">
+        <div className="py-3 text-center font-mono text-[12px] text-slate-600">
           All {leg.holdings.length} position{leg.holdings.length > 1 ? "s" : ""} here are{" "}
           {hid.dust > 0 && hid.unpriced > 0
             ? `under $${DUST_USD} or unpriced`
@@ -253,14 +253,14 @@ function Leg({ leg, hideDust, hideAmounts, onShowDust, gridCls, sellCol, onQuick
           there are rows to qualify — `footnote` is true only in that case, so
           the two can never both be on screen. */}
       {read.footnote && leg.note && (
-        <div className="mt-1.5 font-mono text-[9px] text-amber-500/80">{leg.note}</div>
+        <div className="mt-1.5 font-mono text-[12px] text-amber-500/80">{leg.note}</div>
       )}
 
       {/* Per LEG, not per table: the two venues hide different numbers of rows
           and a single combined count would not tell the user which chain their
           missing position is on. */}
       {note && shown.length > 0 && (
-        <div className="mt-1.5 font-mono text-[9px] text-slate-600 leading-relaxed">
+        <div className="mt-1.5 font-mono text-[12px] text-slate-600 leading-relaxed">
           {note}{" "}
           {onShowDust && (
             <button type="button" onClick={onShowDust}
@@ -356,16 +356,16 @@ export default function StockTable({ address, venue, hideDust, hideAmounts, onSh
   return (
     <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4 mb-3">
       <div className="flex items-center justify-between mb-3">
-        <span className="font-mono text-[9px] text-slate-500 tracking-widest">STOCKS</span>
-        <span className="font-mono text-[8px] text-slate-600">tokenized equities</span>
+        <span className="font-mono text-[12px] text-slate-500 tracking-widest">STOCKS</span>
+        <span className="font-mono text-[11px] text-slate-600">tokenized equities</span>
       </div>
 
       {read.body === "pending" ? (
-        <div className="py-6 text-center font-mono text-[10px] text-slate-600">
+        <div className="py-6 text-center font-mono text-[13px] text-slate-600">
           reading {venue == null ? "both chains" : venue === "base" ? "Base" : "Robinhood Chain"}…
         </div>
       ) : read.body === "failed" ? (
-        <div className="py-6 text-center font-mono text-[10px] text-amber-500/80">
+        <div className="py-6 text-center font-mono text-[13px] text-amber-500/80">
           Couldn&apos;t load stock holdings — {data?.error}
         </div>
       ) : read.body === "empty" || read.body === "partial" ? (
@@ -375,13 +375,13 @@ export default function StockTable({ address, venue, hideDust, hideAmounts, onSh
         // the one leg being asked for. Either way it is worded as a gap in OUR
         // answer rather than as a fact about the wallet, because "No data" read
         // as if the user held nothing.
-        <div className="py-6 text-center font-mono text-[10px] text-slate-600">
+        <div className="py-6 text-center font-mono text-[13px] text-slate-600">
           {venue == null ? "No venues were checked" : "This venue was not in the response"} —
           this says nothing about what you hold.
         </div>
       ) : (
         <>
-          <div className={`grid ${gridCls} gap-3 px-1 pb-1.5 font-mono text-[9px] text-slate-600 border-b border-[#1A1A2E] mb-2`}>
+          <div className={`grid ${gridCls} gap-3 px-1 pb-1.5 font-mono text-[12px] text-slate-600 border-b border-[#1A1A2E] mb-2`}>
             <span>Token</span>
             <span className="text-right">Shares</span>
             <span className="text-right">Value</span>
@@ -395,7 +395,7 @@ export default function StockTable({ address, venue, hideDust, hideAmounts, onSh
               onQuickSell={l.venue === "robinhood" ? onQuickSell : undefined} />
           ))}
           {!anyHeld && legs.every(l => l.status === "ok") && (
-            <div className="mt-1 font-mono text-[9px] text-slate-600 leading-relaxed">
+            <div className="mt-1 font-mono text-[12px] text-slate-600 leading-relaxed">
               Only tokens from the verified registries are checked — a share token at any
               other address is not counted here, and shows up in Tokens above instead.
             </div>

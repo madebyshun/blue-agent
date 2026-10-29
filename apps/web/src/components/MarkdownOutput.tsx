@@ -59,7 +59,7 @@ export default function MarkdownOutput({ content, className = "" }: Props) {
       nodes.push(
         <div key={i} className="my-3 rounded-xl overflow-hidden border border-[#2A2A4E]">
           {lang && (
-            <div className="px-4 py-1.5 bg-[#1A1A2E] border-b border-[#2A2A4E] font-mono text-[10px] text-slate-500 tracking-widest">
+            <div className="px-4 py-1.5 bg-[#1A1A2E] border-b border-[#2A2A4E] font-mono text-[13px] text-slate-500 tracking-widest">
               {lang.toUpperCase()}
             </div>
           )}

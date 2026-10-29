@@ -72,7 +72,7 @@ export default function FeedGrid() {
       <div className="flex items-baseline justify-between mb-4 flex-wrap gap-2">
         <h2 className="font-mono text-sm font-bold">Feed</h2>
         {data && (
-          <div className="flex items-center gap-3 font-mono text-[10px] text-slate-600">
+          <div className="flex items-center gap-3 font-mono text-[13px] text-slate-600">
             <span><span className="text-slate-400">{data.count}</span> launched</span>
             <span><span className="text-slate-400">{fmtUsdCompact(data.stats.totalMarketCap)}</span> total mcap</span>
             <span><span className="text-slate-400">{fmtUsdCompact(data.stats.totalVolume24h)}</span> 24h vol</span>
@@ -93,7 +93,7 @@ export default function FeedGrid() {
             <button
               key={k}
               onClick={() => setSort(k)}
-              className="px-3 py-1.5 font-mono text-[10px] transition-all"
+              className="px-3 py-1.5 font-mono text-[13px] transition-all"
               style={sort === k
                 ? { background: "#4FC3F715", color: "#4FC3F7", borderRight: i < 3 ? "1px solid #1A1A2E" : undefined }
                 : { color: "#475569", borderRight: i < 3 ? "1px solid #1A1A2E" : undefined }}
@@ -110,7 +110,7 @@ export default function FeedGrid() {
       {loading && (
         <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] py-16 text-center">
           <div className="inline-block w-2 h-2 rounded-full bg-[#4FC3F7] animate-pulse" />
-          <p className="font-mono text-[10px] text-slate-600 mt-3">Loading feed…</p>
+          <p className="font-mono text-[13px] text-slate-600 mt-3">Loading feed…</p>
         </div>
       )}
 
@@ -167,7 +167,7 @@ function TokenCard({ t }: { t: Token }) {
         )}
         <div className="min-w-0 flex-1">
           <div className="font-mono text-sm font-bold truncate">{t.tokenName || sym}</div>
-          <div className="font-mono text-[10px] text-slate-500">
+          <div className="font-mono text-[13px] text-slate-500">
             ${sym}/ETH
           </div>
           <div className="flex gap-1 mt-1.5">
@@ -184,7 +184,7 @@ function TokenCard({ t }: { t: Token }) {
         <Stat label="24H %"      value={fmtPct(t.market?.change24h)} color={changeColor} />
       </div>
 
-      <div className="mt-3 pt-3 border-t border-[#1A1A2E] flex items-center justify-between font-mono text-[9px] text-slate-600">
+      <div className="mt-3 pt-3 border-t border-[#1A1A2E] flex items-center justify-between font-mono text-[12px] text-slate-600">
         <span>⌚ {fmtAge(t.launchedAt)}</span>
         <span className="tracking-wider">{t.tokenAddress.slice(0, 6)}…{t.tokenAddress.slice(-4)}</span>
       </div>
@@ -195,7 +195,7 @@ function TokenCard({ t }: { t: Token }) {
 function Stat({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
     <div>
-      <div className="font-mono text-[9px] text-slate-600 tracking-widest uppercase">{label}</div>
+      <div className="font-mono text-[12px] text-slate-600 tracking-widest uppercase">{label}</div>
       <div
         className="font-mono text-xs font-bold tabular-nums"
         style={{ color: color ?? "#e2e8f0" }}
@@ -209,7 +209,7 @@ function Stat({ label, value, color }: { label: string; value: string; color?: s
 function Badge({ label, color }: { label: string; color: string }) {
   return (
     <span
-      className="font-mono text-[8px] tracking-wider uppercase px-1.5 py-0.5 rounded"
+      className="font-mono text-[11px] tracking-wider uppercase px-1.5 py-0.5 rounded"
       style={{ background: `${color}15`, color, border: `1px solid ${color}40` }}
     >
       {label}
@@ -222,7 +222,7 @@ function EmptyState() {
     <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] py-12 text-center">
       <div className="text-2xl mb-2">🔷</div>
       <p className="font-mono text-sm text-slate-300 mb-1">No launches yet</p>
-      <p className="font-mono text-[11px] text-slate-500 mb-4">
+      <p className="font-mono text-[14px] text-slate-500 mb-4">
         Be the first to launch a B20HUB token.
       </p>
       <Link

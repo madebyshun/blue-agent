@@ -30,9 +30,9 @@ interface AppStatProps {
 export function AppStat({ label, value, sub, color = "#fff" }: AppStatProps) {
   return (
     <div className="rounded-xl bg-[#0a0a0f] border border-[#1A1A2E] p-4">
-      <div className="font-mono text-[10px] text-slate-600 tracking-widest mb-2">{label}</div>
+      <div className="font-mono text-[13px] text-slate-600 tracking-widest mb-2">{label}</div>
       <div className="font-mono text-2xl font-bold" style={{ color }}>{value}</div>
-      {sub && <div className="font-mono text-[10px] text-slate-600 mt-1">{sub}</div>}
+      {sub && <div className="font-mono text-[13px] text-slate-600 mt-1">{sub}</div>}
     </div>
   );
 }
@@ -41,6 +41,6 @@ export function AppStat({ label, value, sub, color = "#fff" }: AppStatProps) {
 
 export function AppSectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="font-mono text-[10px] text-slate-600 tracking-widest mb-3">{children}</p>
+    <p className="font-mono text-[13px] text-slate-600 tracking-widest mb-3">{children}</p>
   );
 }

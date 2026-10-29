@@ -341,19 +341,19 @@ function Rail({ label, value, unit, sub, accent, unavailable }: {
 }) {
   return (
     <div className="rounded-xl border border-[#1A1A2E] bg-[#0d0d12] p-3.5">
-      <div className="font-mono text-[9px] text-slate-600 tracking-widest uppercase">{label}</div>
+      <div className="font-mono text-[12px] text-slate-600 tracking-widest uppercase">{label}</div>
       {unavailable ? (
         <>
-          <div className="font-mono text-[15px] font-bold text-slate-600 mt-1.5">—</div>
-          <div className="font-mono text-[9px] text-[#F59E0B] mt-0.5">store unreachable</div>
+          <div className="font-mono text-[18px] font-bold text-slate-600 mt-1.5">—</div>
+          <div className="font-mono text-[12px] text-[#F59E0B] mt-0.5">store unreachable</div>
         </>
       ) : (
         <>
           <div className="font-mono text-xl font-bold mt-1" style={{ color: accent }}>
             {value}
-            {unit && <span className="text-[10px] font-normal text-slate-500 ml-1">{unit}</span>}
+            {unit && <span className="text-[13px] font-normal text-slate-500 ml-1">{unit}</span>}
           </div>
-          {sub && <div className="font-mono text-[9px] text-slate-600 mt-0.5">{sub}</div>}
+          {sub && <div className="font-mono text-[12px] text-slate-600 mt-0.5">{sub}</div>}
         </>
       )}
     </div>
@@ -405,23 +405,23 @@ export default function SpendConsole({
   const inner =
     load.s === "disconnected" ? (
       chartOnly ? null : (
-        <div className="font-mono text-[10px] text-slate-600 py-8 text-center leading-relaxed">
+        <div className="font-mono text-[13px] text-slate-600 py-8 text-center leading-relaxed">
           Connect a wallet to see what it has spent.<br />
           <span className="text-slate-700">Receipts are per address — there is nothing to look up yet.</span>
         </div>
       )
     ) : load.s === "signed-out" ? (
       chartOnly ? null : (
-        <div className="font-mono text-[10px] text-slate-500 py-8 text-center leading-relaxed">
+        <div className="font-mono text-[13px] text-slate-500 py-8 text-center leading-relaxed">
           Spending is private to the wallet.<br />
           <button onClick={load.signIn} className="mt-2 underline text-[#4FC3F7]">Sign in with your wallet to see it</button>
           <span className="block text-slate-700 mt-1">One signature — no transaction.</span>
         </div>
       )
     ) : load.s === "loading" ? (
-      <div className="font-mono text-[10px] text-slate-600 py-8 text-center">Loading…</div>
+      <div className="font-mono text-[13px] text-slate-600 py-8 text-center">Loading…</div>
     ) : load.s === "failed" ? (
-      <div className="font-mono text-[10px] text-[#F59E0B] py-8 text-center leading-relaxed">
+      <div className="font-mono text-[13px] text-[#F59E0B] py-8 text-center leading-relaxed">
         {chartOnly
           ? "Couldn't load activity — a read failure, not a zero."
           : "Couldn't load spending. This is a read failure, not a zero — your history is intact."}
@@ -438,10 +438,10 @@ export default function SpendConsole({
   return (
     <div className="rounded-2xl border border-[#1A1A2E] bg-[#0A0A12] p-4 sm:p-5">
       <div className="flex items-baseline justify-between mb-1">
-        <div className="font-mono text-[9px] text-slate-500 tracking-widest">AGENT SPEND</div>
-        {scope && <div className="font-mono text-[9px] text-slate-700">{scope}</div>}
+        <div className="font-mono text-[12px] text-slate-500 tracking-widest">AGENT SPEND</div>
+        {scope && <div className="font-mono text-[12px] text-slate-700">{scope}</div>}
       </div>
-      <p className="font-mono text-[9px] text-slate-600 mb-4 leading-relaxed">
+      <p className="font-mono text-[12px] text-slate-600 mb-4 leading-relaxed">
         What your payments actually bought — the part no block explorer can see.
       </p>
       {inner}
@@ -462,10 +462,10 @@ function CallsChart({ d, maxCalls }: { d: SpendSummaryDTO; maxCalls: number }) {
   return (
     <>
       <div className="flex items-baseline justify-between mb-3">
-        <span className="font-mono text-[9.5px] text-slate-500 tracking-[0.14em] uppercase">
+        <span className="font-mono text-[12px] text-slate-500 tracking-[0.14em] uppercase">
           Calls per day · last {d.days.length} days
         </span>
-        <span className="font-mono text-[10px] text-slate-600">peak {maxCalls}/day</span>
+        <span className="font-mono text-[13px] text-slate-600">peak {maxCalls}/day</span>
       </div>
       <div className="flex items-end gap-[3px] h-[88px]">
         {d.days.map(day => (
@@ -483,7 +483,7 @@ function CallsChart({ d, maxCalls }: { d: SpendSummaryDTO; maxCalls: number }) {
           />
         ))}
       </div>
-      <div className="flex justify-between font-mono text-[9.5px] text-slate-600 mt-2">
+      <div className="flex justify-between font-mono text-[12px] text-slate-600 mt-2">
         <span>{relDay(d.days[0].day)}</span>
         <span>{relDay(d.days[d.days.length - 1].day)}</span>
       </div>
@@ -517,7 +517,7 @@ function Body({ d, only }: { d: SpendSummaryDTO; only?: "chart" | "rails" }) {
     // rails sibling's story to tell. Here, stay honest and brief.
     if (bothDown) {
       return (
-        <p className="font-mono text-[10px] text-[#F59E0B] py-6 text-center leading-relaxed">
+        <p className="font-mono text-[13px] text-[#F59E0B] py-6 text-center leading-relaxed">
           Activity is unreadable right now — that is not the same as zero.
         </p>
       );
@@ -525,7 +525,7 @@ function Body({ d, only }: { d: SpendSummaryDTO; only?: "chart" | "rails" }) {
     return anyActivity ? (
       <CallsChart d={d} maxCalls={maxCalls} />
     ) : (
-      <p className="font-mono text-[10px] text-slate-600 py-6 text-center">
+      <p className="font-mono text-[13px] text-slate-600 py-6 text-center">
         No calls recorded in the last {d.days.length} days.
       </p>
     );
@@ -533,7 +533,7 @@ function Body({ d, only }: { d: SpendSummaryDTO; only?: "chart" | "rails" }) {
 
   if (bothDown) {
     return (
-      <div className="font-mono text-[10px] text-[#F59E0B] py-8 text-center leading-relaxed">
+      <div className="font-mono text-[13px] text-[#F59E0B] py-8 text-center leading-relaxed">
         Both spend stores are unreachable right now.<br />
         <span className="text-slate-600">
           That is not the same as zero — nothing has been lost, retry in a moment.
@@ -567,19 +567,19 @@ function Body({ d, only }: { d: SpendSummaryDTO; only?: "chart" | "rails" }) {
           lifetime aggregate. Hidden at zero rather than printing "$0.00 of
           credits were paid for", which reads like a claim about the window. */}
       {!crDown && d.credits.paidAllTime > 0 && (
-        <p className="font-mono text-[9px] text-slate-600 mt-2">
+        <p className="font-mono text-[12px] text-slate-600 mt-2">
           Of your credits ever spent, {nf(d.credits.paidAllTime)} came from paid top-ups
           {" "}(≈ ${paidUsd.toFixed(2)}). The rest came from the free daily allowance.
         </p>
       )}
 
       {empty === "none" ? (
-        <p className="font-mono text-[10px] text-slate-600 py-8 text-center leading-relaxed">
+        <p className="font-mono text-[13px] text-slate-600 py-8 text-center leading-relaxed">
           No agent spending recorded yet.<br />
           <span className="text-slate-700">Hub tool calls and chat runs show up here.</span>
         </p>
       ) : empty === "unreadable" ? (
-        <p className="font-mono text-[10px] text-[#F59E0B] py-8 text-center leading-relaxed">
+        <p className="font-mono text-[13px] text-[#F59E0B] py-8 text-center leading-relaxed">
           Nothing on the rail we can read — and the other one is unreachable.<br />
           <span className="text-slate-600">Half the picture, not an empty wallet.</span>
         </p>
@@ -595,7 +595,7 @@ function Body({ d, only }: { d: SpendSummaryDTO; only?: "chart" | "rails" }) {
           {/* ── Per tool ───────────────────────────────────────────────────── */}
           {d.tools.length > 0 && (
             <div className="mt-5">
-              <div className="font-mono text-[9px] text-slate-600 tracking-widest uppercase mb-2">
+              <div className="font-mono text-[12px] text-slate-600 tracking-widest uppercase mb-2">
                 By tool
               </div>
               <div className="rounded-xl border border-[#1A1A2E] bg-[#0d0d12] overflow-hidden">
@@ -609,12 +609,12 @@ function Body({ d, only }: { d: SpendSummaryDTO; only?: "chart" | "rails" }) {
                         {/* A tool with no catalog entry prints its raw id. It
                             never borrows a name, and a community slug never
                             resolves against the first-party catalog at all. */}
-                        <span className="font-mono text-[11px] text-slate-300 truncate">
+                        <span className="font-mono text-[14px] text-slate-300 truncate">
                           {t.name ?? t.tool}
                         </span>
                         {t.src === "community" && (
                           <span
-                            className="font-mono text-[8px] px-1 py-px rounded shrink-0"
+                            className="font-mono text-[11px] px-1 py-px rounded shrink-0"
                             style={{ background: "#A78BFA15", color: "#A78BFA" }}
                           >
                             community
@@ -622,10 +622,10 @@ function Body({ d, only }: { d: SpendSummaryDTO; only?: "chart" | "rails" }) {
                         )}
                       </div>
                       {t.name && (
-                        <div className="font-mono text-[9px] text-slate-700 truncate">{t.tool}</div>
+                        <div className="font-mono text-[12px] text-slate-700 truncate">{t.tool}</div>
                       )}
                     </div>
-                    <div className="flex items-center gap-3 shrink-0 font-mono text-[10px]">
+                    <div className="flex items-center gap-3 shrink-0 font-mono text-[13px]">
                       {t.usdcUnits > 0 && (
                         <span className="text-[#4FC3F7]" title={`${t.usdcCalls} x402 call(s)`}>
                           {usdc(t.usdcUnits)}
@@ -647,8 +647,8 @@ function Body({ d, only }: { d: SpendSummaryDTO; only?: "chart" | "rails" }) {
               table rather than posing as one row among the Hub tools. */}
           {d.chat.calls > 0 && (
             <div className="flex items-center justify-between mt-2 px-3.5 py-2 rounded-xl border border-[#1A1A2E] bg-[#0d0d12]">
-              <span className="font-mono text-[11px] text-slate-400">Blue Chat</span>
-              <span className="font-mono text-[10px] text-[#A78BFA]">
+              <span className="font-mono text-[14px] text-slate-400">Blue Chat</span>
+              <span className="font-mono text-[13px] text-[#A78BFA]">
                 {nf(d.chat.credits)} cr
                 <span className="text-slate-700"> · {nf(d.chat.calls)} msg</span>
               </span>
@@ -661,11 +661,11 @@ function Body({ d, only }: { d: SpendSummaryDTO; only?: "chart" | "rails" }) {
               headline, which is a worse lie than admitting the gap. */}
           {other.calls > 0 && (
             <div className="flex items-center justify-between mt-2 px-3.5 py-2 rounded-xl border border-[#1A1A2E] bg-[#0d0d12]">
-              <span className="font-mono text-[11px] text-slate-500">
+              <span className="font-mono text-[14px] text-slate-500">
                 Unattributed
                 <span className="text-slate-700"> · spent, but not tagged to a tool</span>
               </span>
-              <span className="font-mono text-[10px] text-[#A78BFA]">
+              <span className="font-mono text-[13px] text-[#A78BFA]">
                 {nf(other.credits)} cr
                 <span className="text-slate-700"> · {nf(other.calls)} call{other.calls === 1 ? "" : "s"}</span>
               </span>
@@ -677,21 +677,21 @@ function Body({ d, only }: { d: SpendSummaryDTO; only?: "chart" | "rails" }) {
       {/* ── Caveats. Each is a fact about the data, not boilerplate. ───────── */}
       <div className="mt-4 pt-3 border-t border-[#12121c] space-y-1">
         {usdcDown && (
-          <p className="font-mono text-[9px] text-[#F59E0B]">
+          <p className="font-mono text-[12px] text-[#F59E0B]">
             USDC receipts unreachable — the credits column below is complete, the USDC one is missing entirely.
           </p>
         )}
         {crDown && (
-          <p className="font-mono text-[9px] text-[#F59E0B]">
+          <p className="font-mono text-[12px] text-[#F59E0B]">
             Credit ledger unreachable — the USDC column is complete, the credits one is missing entirely.
           </p>
         )}
         {d.credits.truncated && (
-          <p className="font-mono text-[9px] text-slate-600 leading-relaxed">
+          <p className="font-mono text-[12px] text-slate-600 leading-relaxed">
             Your credit history is at its stored limit, so the per-tool credit figures are a floor — older calls have aged out.
           </p>
         )}
-        <p className="font-mono text-[9px] text-slate-700 leading-relaxed">
+        <p className="font-mono text-[12px] text-slate-700 leading-relaxed">
           USDC is settled on Base and exact. Credits are metered units, part free daily allowance and part paid — so the two columns are never added together.
         </p>
       </div>

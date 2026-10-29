@@ -121,7 +121,7 @@ function ScoreBar({ score, color }: { score: number; color: string }) {
       <div className="flex-1 h-1 rounded-full bg-[#1A1A2E] overflow-hidden">
         <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: color }} />
       </div>
-      <span className="font-mono text-[10px] shrink-0" style={{ color }}>{pct}</span>
+      <span className="font-mono text-[13px] shrink-0" style={{ color }}>{pct}</span>
     </div>
   );
 }
@@ -135,7 +135,7 @@ function VerdictBadge({
   const s = colorMap[verdict] ?? { bg: "#1E1E32", text: "#94a3b8", icon: "·" };
   return (
     <span
-      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-mono text-[11px] font-bold"
+      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-mono text-[14px] font-bold"
       style={{ background: s.bg, color: s.text }}
     >
       <span>{s.icon}</span>
@@ -150,8 +150,8 @@ function FlagList({ flags, color }: { flags: string[]; color: string }) {
     <div className="flex flex-col gap-1">
       {flags.slice(0, 4).map((f, i) => (
         <div key={i} className="flex items-start gap-1.5">
-          <span style={{ color }} className="mt-0.5 shrink-0 text-[10px]">›</span>
-          <span className="font-mono text-[11px] text-slate-400 leading-snug">{f}</span>
+          <span style={{ color }} className="mt-0.5 shrink-0 text-[13px]">›</span>
+          <span className="font-mono text-[14px] text-slate-400 leading-snug">{f}</span>
         </div>
       ))}
     </div>
@@ -239,12 +239,12 @@ export function HoneypotCard({ result }: { result: HoneypotResult }) {
       <CardHeader accentColor={accentColor}>
         <div className="flex items-center gap-3">
           <span className="text-sm">🛡</span>
-          <span className="font-mono text-[11px] text-slate-500 tracking-widest uppercase">Honeypot Check</span>
+          <span className="font-mono text-[14px] text-slate-500 tracking-widest uppercase">Honeypot Check</span>
         </div>
         <div className="flex items-center gap-2">
           <VerdictBadge verdict={verdict} colorMap={HONEYPOT_COLORS} />
           {result.confidence !== undefined && (
-            <span className="font-mono text-[10px] text-slate-600">{result.confidence}% confidence</span>
+            <span className="font-mono text-[13px] text-slate-600">{result.confidence}% confidence</span>
           )}
         </div>
       </CardHeader>
@@ -252,12 +252,12 @@ export function HoneypotCard({ result }: { result: HoneypotResult }) {
         {/* Token info */}
         {result.token?.name && (
           <div className="flex items-center gap-2">
-            <span className="font-mono text-[11px] text-slate-400">
+            <span className="font-mono text-[14px] text-slate-400">
               {result.token.symbol && <span style={{ color: accentColor }} className="font-bold">${result.token.symbol}</span>}
               {result.token.name && ` · ${result.token.name}`}
             </span>
             {result.address && (
-              <span className="font-mono text-[10px] text-slate-600">{truncAddr(result.address)}</span>
+              <span className="font-mono text-[13px] text-slate-600">{truncAddr(result.address)}</span>
             )}
           </div>
         )}
@@ -265,7 +265,7 @@ export function HoneypotCard({ result }: { result: HoneypotResult }) {
         {/* Tax row. Three distinct states, and the unread one is VISIBLE —
             hiding it is what made a capped scan look like a clean one. */}
         {result.tax_read === "not_applicable" ? null : taxWasRead ? (
-          <div className="flex flex-wrap gap-x-4 gap-y-1 font-mono text-[11px]">
+          <div className="flex flex-wrap gap-x-4 gap-y-1 font-mono text-[14px]">
             <span>Buy tax: <span className="text-slate-300">{result.buy_tax_estimate}</span></span>
             <span>Sell tax: <span style={{ color: result.sell_tax_estimate === "0%" ? "#4ade80" : "#fb923c" }}>
               {result.sell_tax_estimate}
@@ -278,7 +278,7 @@ export function HoneypotCard({ result }: { result: HoneypotResult }) {
             )}
           </div>
         ) : (
-          <div className="font-mono text-[11px]" style={{ color: "#fb923c" }}>
+          <div className="font-mono text-[14px]" style={{ color: "#fb923c" }}>
             Buy/sell tax: not read — this contract does not expose the tax selectors.
             {result.confidence_capped && <span className="text-slate-600"> Confidence capped.</span>}
           </div>
@@ -290,7 +290,7 @@ export function HoneypotCard({ result }: { result: HoneypotResult }) {
 
         {/* Assessment */}
         {result.assessment && (
-          <p className="font-mono text-[11px] text-slate-500 leading-relaxed border-t pt-2" style={{ borderColor: `${accentColor}15` }}>
+          <p className="font-mono text-[14px] text-slate-500 leading-relaxed border-t pt-2" style={{ borderColor: `${accentColor}15` }}>
             {result.assessment}
           </p>
         )}
@@ -300,7 +300,7 @@ export function HoneypotCard({ result }: { result: HoneypotResult }) {
         {result.hint?.explorer && (
           <div className="flex pt-1">
             <a href={result.hint.explorer} target="_blank" rel="noopener noreferrer"
-              className="font-mono text-[10px] hover:underline transition-colors"
+              className="font-mono text-[13px] hover:underline transition-colors"
               style={{ color: "#60a5fa" }}>
               Has bytecode on Robinhood Chain {result.hint.found_on_chain ?? 4663} — view there ↗
             </a>
@@ -311,7 +311,7 @@ export function HoneypotCard({ result }: { result: HoneypotResult }) {
         {url && (
           <div className="flex pt-1">
             <a href={url} target="_blank" rel="noopener noreferrer"
-              className="font-mono text-[10px] hover:underline transition-colors"
+              className="font-mono text-[13px] hover:underline transition-colors"
               style={{ color: accentColor }}>
               View on Basescan ↗
             </a>
@@ -359,13 +359,13 @@ export function RiskGateCard({ result }: { result: RiskGateResult }) {
       <CardHeader accentColor={accentColor}>
         <div className="flex items-center gap-3">
           <span className="text-sm">⚠️</span>
-          <span className="font-mono text-[11px] text-slate-500 tracking-widest uppercase">Risk Gate</span>
+          <span className="font-mono text-[14px] text-slate-500 tracking-widest uppercase">Risk Gate</span>
         </div>
         <VerdictBadge verdict={verdict} colorMap={RISKGATE_COLORS} />
       </CardHeader>
       <CardBody>
         {/* Transaction info */}
-        <div className="flex flex-wrap gap-3 font-mono text-[11px]">
+        <div className="flex flex-wrap gap-3 font-mono text-[14px]">
           {result.transaction?.action && (
             <span className="text-slate-400">Action: <span className="text-slate-200 capitalize">{result.transaction.action}</span></span>
           )}
@@ -380,7 +380,7 @@ export function RiskGateCard({ result }: { result: RiskGateResult }) {
         {/* Risk level — a bucket of the measured verdict; no bar when nothing
             was measured, because a middling bar would read as a measurement. */}
         <div className="space-y-1">
-          <div className="flex justify-between font-mono text-[10px] text-slate-600">
+          <div className="flex justify-between font-mono text-[13px] text-slate-600">
             <span>Risk</span>
             <span style={{ color: accentColor }}>{result.risk_level ?? "unknown"}</span>
           </div>
@@ -398,14 +398,14 @@ export function RiskGateCard({ result }: { result: RiskGateResult }) {
 
         {/* Assessment */}
         {result.assessment && (
-          <p className="font-mono text-[11px] text-slate-500 leading-relaxed border-t pt-2" style={{ borderColor: `${accentColor}15` }}>
+          <p className="font-mono text-[14px] text-slate-500 leading-relaxed border-t pt-2" style={{ borderColor: `${accentColor}15` }}>
             {result.assessment}
           </p>
         )}
 
         {url && (
           <a href={url} target="_blank" rel="noopener noreferrer"
-            className="font-mono text-[10px] hover:underline" style={{ color: accentColor }}>
+            className="font-mono text-[13px] hover:underline" style={{ color: accentColor }}>
             View on Basescan ↗
           </a>
         )}
@@ -453,20 +453,20 @@ export function DeepAnalysisCard({ result }: { result: DeepAnalysisResult }) {
         <CardHeader accentColor="#64748b">
           <div className="flex items-center gap-3">
             <span className="text-sm">🔬</span>
-            <span className="font-mono text-[11px] text-slate-500 tracking-widest uppercase">Deep Analysis</span>
+            <span className="font-mono text-[14px] text-slate-500 tracking-widest uppercase">Deep Analysis</span>
           </div>
-          <span className="font-mono text-[10px] px-2 py-0.5 rounded-full bg-slate-800/60 text-slate-400 border border-slate-700/50">{chip}</span>
+          <span className="font-mono text-[13px] px-2 py-0.5 rounded-full bg-slate-800/60 text-slate-400 border border-slate-700/50">{chip}</span>
         </CardHeader>
         <CardBody>
           {result.token?.contractName && (
-            <div className="font-mono text-[11px] text-slate-300">{result.token.contractName}{result.token?.verified ? " · verified ✓" : ""}</div>
+            <div className="font-mono text-[14px] text-slate-300">{result.token.contractName}{result.token?.verified ? " · verified ✓" : ""}</div>
           )}
-          <p className="font-mono text-[11px] text-slate-400 leading-relaxed">
+          <p className="font-mono text-[14px] text-slate-400 leading-relaxed">
             {result.security?.summary ?? fallback}
           </p>
           {url && (
             <a href={url} target="_blank" rel="noopener noreferrer"
-              className="font-mono text-[10px] hover:underline text-slate-400">
+              className="font-mono text-[13px] hover:underline text-slate-400">
               View on Basescan ↗
             </a>
           )}
@@ -489,9 +489,9 @@ export function DeepAnalysisCard({ result }: { result: DeepAnalysisResult }) {
         <div className="flex items-center gap-3">
           <span className="text-sm">🔬</span>
           <div className="flex flex-col">
-            <span className="font-mono text-[11px] text-slate-500 tracking-widest uppercase">Deep Analysis</span>
+            <span className="font-mono text-[14px] text-slate-500 tracking-widest uppercase">Deep Analysis</span>
             {result.token?.symbol && (
-              <span className="font-mono text-[12px] font-bold" style={{ color: accentColor }}>
+              <span className="font-mono text-[15px] font-bold" style={{ color: accentColor }}>
                 ${result.token.symbol}
                 {result.token?.name ? ` · ${result.token.name}` : ""}
               </span>
@@ -500,26 +500,26 @@ export function DeepAnalysisCard({ result }: { result: DeepAnalysisResult }) {
         </div>
         <div className="flex flex-col items-end gap-1">
           <VerdictBadge verdict={verdict} colorMap={DEEP_VERDICT_COLORS} />
-          <span className="font-mono text-[10px] text-slate-600">Score {composite}/100</span>
+          <span className="font-mono text-[13px] text-slate-600">Score {composite}/100</span>
         </div>
       </CardHeader>
       <CardBody>
         {/* Score bars */}
         <div className="space-y-2">
           <div className="space-y-1">
-            <div className="flex justify-between font-mono text-[10px] text-slate-600">
+            <div className="flex justify-between font-mono text-[13px] text-slate-600">
               <span>Security</span>
             </div>
             <ScoreBar score={secScore} color={secScore >= 70 ? "#4ade80" : secScore >= 45 ? "#fb923c" : "#f87171"} />
           </div>
           <div className="space-y-1">
-            <div className="flex justify-between font-mono text-[10px] text-slate-600">
+            <div className="flex justify-between font-mono text-[13px] text-slate-600">
               <span>Market</span>
             </div>
             <ScoreBar score={mktScore} color={mktScore >= 70 ? "#4ade80" : mktScore >= 45 ? "#fb923c" : "#f87171"} />
           </div>
           <div className="space-y-1">
-            <div className="flex justify-between font-mono text-[10px] text-slate-600">
+            <div className="flex justify-between font-mono text-[13px] text-slate-600">
               <span>Onchain</span>
             </div>
             <ScoreBar score={fundScore} color={fundScore >= 70 ? "#4ade80" : fundScore >= 45 ? "#fb923c" : "#f87171"} />
@@ -529,18 +529,18 @@ export function DeepAnalysisCard({ result }: { result: DeepAnalysisResult }) {
         {/* Tags row */}
         <div className="flex flex-wrap gap-1.5">
           {result.token?.verified && (
-            <span className="font-mono text-[10px] px-2 py-0.5 rounded-full bg-green-950/40 text-green-400 border border-green-900/40">Verified</span>
+            <span className="font-mono text-[13px] px-2 py-0.5 rounded-full bg-green-950/40 text-green-400 border border-green-900/40">Verified</span>
           )}
           {result.token?.isProxy && (
-            <span className="font-mono text-[10px] px-2 py-0.5 rounded-full bg-yellow-950/40 text-yellow-400 border border-yellow-900/40">Proxy</span>
+            <span className="font-mono text-[13px] px-2 py-0.5 rounded-full bg-yellow-950/40 text-yellow-400 border border-yellow-900/40">Proxy</span>
           )}
           {result.market?.narrative && result.market.narrative !== "unknown" && (
-            <span className="font-mono text-[10px] px-2 py-0.5 rounded-full border" style={{ borderColor: `${accentColor}30`, color: accentColor, background: `${accentColor}10` }}>
+            <span className="font-mono text-[13px] px-2 py-0.5 rounded-full border" style={{ borderColor: `${accentColor}30`, color: accentColor, background: `${accentColor}10` }}>
               {result.market.narrative}
             </span>
           )}
           {result.fundamentals?.activity_level && result.fundamentals.activity_level !== "unknown" && (
-            <span className="font-mono text-[10px] px-2 py-0.5 rounded-full border border-slate-700/50 text-slate-500">
+            <span className="font-mono text-[13px] px-2 py-0.5 rounded-full border border-slate-700/50 text-slate-500">
               activity: {result.fundamentals.activity_level}
             </span>
           )}
@@ -553,14 +553,14 @@ export function DeepAnalysisCard({ result }: { result: DeepAnalysisResult }) {
 
         {/* Security summary */}
         {result.security?.summary && (
-          <p className="font-mono text-[11px] text-slate-500 leading-relaxed border-t pt-2" style={{ borderColor: `${accentColor}15` }}>
+          <p className="font-mono text-[14px] text-slate-500 leading-relaxed border-t pt-2" style={{ borderColor: `${accentColor}15` }}>
             {result.security.summary}
           </p>
         )}
 
         {url && (
           <a href={url} target="_blank" rel="noopener noreferrer"
-            className="font-mono text-[10px] hover:underline" style={{ color: accentColor }}>
+            className="font-mono text-[13px] hover:underline" style={{ color: accentColor }}>
             View on Basescan ↗
           </a>
         )}
@@ -599,22 +599,22 @@ export function TokenPickCard({ result }: { result: TokenPickResult }) {
         <div className="flex items-center gap-3">
           <span className="text-sm">📊</span>
           <div>
-            <span className="font-mono text-[11px] text-slate-500 tracking-widest uppercase">Top by quality score · Base</span>
-            {p?.token && <p className="font-mono text-[13px] font-bold" style={{ color: accentColor }}>${p.token}</p>}
+            <span className="font-mono text-[14px] text-slate-500 tracking-widest uppercase">Top by quality score · Base</span>
+            {p?.token && <p className="font-mono text-[16px] font-bold" style={{ color: accentColor }}>${p.token}</p>}
           </div>
         </div>
         {typeof p?.score === "number" && (
-          <span className="font-mono text-[10px] px-2.5 py-1 rounded-full border" style={{ color: accentColor, borderColor: `${accentColor}40` }}>
+          <span className="font-mono text-[13px] px-2.5 py-1 rounded-full border" style={{ color: accentColor, borderColor: `${accentColor}40` }}>
             score {p.score}/100
           </span>
         )}
       </CardHeader>
       <CardBody>
         {result.no_pick || !p ? (
-          <p className="font-mono text-[11px] text-slate-500 leading-relaxed">{result.note ?? "No Base token passes the quality filters right now."}</p>
+          <p className="font-mono text-[14px] text-slate-500 leading-relaxed">{result.note ?? "No Base token passes the quality filters right now."}</p>
         ) : (
           <>
-            <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 font-mono text-[11px]">
+            <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 font-mono text-[14px]">
               {p.price && <div><span className="text-slate-600">Price</span> <span className="text-slate-300">{p.price}</span></div>}
               {p.change_24h && <div><span className="text-slate-600">24h</span> <span className="text-slate-300">{p.change_24h}</span></div>}
               {p.market_cap && <div><span className="text-slate-600">Mcap</span> <span className="text-slate-300">{p.market_cap}{p.cap_tier ? ` · ${p.cap_tier}` : ""}</span></div>}
@@ -624,18 +624,18 @@ export function TokenPickCard({ result }: { result: TokenPickResult }) {
             </div>
             {!!p.caution?.length && <FlagList flags={p.caution} color="#fb923c" />}
             {!!result.near_misses?.length && (
-              <p className="font-mono text-[10px] text-slate-500">
+              <p className="font-mono text-[13px] text-slate-500">
                 Next: {result.near_misses.map(n => `${n.token} (${n.score})`).join(" · ")}
               </p>
             )}
             {p.url && (
-              <a href={p.url} target="_blank" rel="noopener noreferrer" className="font-mono text-[10px] hover:underline" style={{ color: accentColor }}>
+              <a href={p.url} target="_blank" rel="noopener noreferrer" className="font-mono text-[13px] hover:underline" style={{ color: accentColor }}>
                 Pool ↗
               </a>
             )}
           </>
         )}
-        <p className="font-mono text-[9px] text-slate-600">Facts from live Base pools — not a recommendation to buy or sell.</p>
+        <p className="font-mono text-[12px] text-slate-600">Facts from live Base pools — not a recommendation to buy or sell.</p>
       </CardBody>
     </Card>
   );
@@ -676,22 +676,22 @@ export function ContractTrustCard({ result }: { result: ContractTrustResult }) {
         <div className="flex items-center gap-3">
           <span className="text-sm">🔐</span>
           <div>
-            <span className="font-mono text-[11px] text-slate-500 tracking-widest uppercase">Contract Trust</span>
+            <span className="font-mono text-[14px] text-slate-500 tracking-widest uppercase">Contract Trust</span>
             {result.basescan?.contractName && (
-              <p className="font-mono text-[12px] font-bold text-slate-200">{result.basescan.contractName}</p>
+              <p className="font-mono text-[15px] font-bold text-slate-200">{result.basescan.contractName}</p>
             )}
           </div>
         </div>
         <div className="flex flex-col items-end gap-1">
           <VerdictBadge verdict={verdict} colorMap={TRUST_COLORS} />
           {typeof result.confidence === "number" && (
-            <span className="font-mono text-[10px] text-slate-600">{result.confidence}% confidence</span>
+            <span className="font-mono text-[13px] text-slate-600">{result.confidence}% confidence</span>
           )}
         </div>
       </CardHeader>
       <CardBody>
         {result.headline && (
-          <p className="font-mono text-[12px] text-slate-200 font-medium">{result.headline}</p>
+          <p className="font-mono text-[15px] text-slate-200 font-medium">{result.headline}</p>
         )}
 
         {/* Why — the measured facts behind the verdict (W0-19). The model's
@@ -702,13 +702,13 @@ export function ContractTrustCard({ result }: { result: ContractTrustResult }) {
         {/* Tags */}
         <div className="flex flex-wrap gap-1.5">
           {result.basescan?.verified && (
-            <span className="font-mono text-[10px] px-2 py-0.5 rounded-full bg-green-950/40 text-green-400 border border-green-900/40">Verified</span>
+            <span className="font-mono text-[13px] px-2 py-0.5 rounded-full bg-green-950/40 text-green-400 border border-green-900/40">Verified</span>
           )}
           {result.basescan?.isProxy && (
-            <span className="font-mono text-[10px] px-2 py-0.5 rounded-full bg-yellow-950/40 text-yellow-400 border border-yellow-900/40">Proxy</span>
+            <span className="font-mono text-[13px] px-2 py-0.5 rounded-full bg-yellow-950/40 text-yellow-400 border border-yellow-900/40">Proxy</span>
           )}
           {result.community?.recognition && result.community.recognition !== "unknown" && (
-            <span className="font-mono text-[10px] px-2 py-0.5 rounded-full border border-slate-700/50 text-slate-500">
+            <span className="font-mono text-[13px] px-2 py-0.5 rounded-full border border-slate-700/50 text-slate-500">
               {result.community.recognition.replace(/_/g, " ")}
             </span>
           )}
@@ -720,7 +720,7 @@ export function ContractTrustCard({ result }: { result: ContractTrustResult }) {
 
         {/* Summary */}
         {result.summary && (
-          <p className="font-mono text-[11px] text-slate-500 leading-relaxed border-t pt-2" style={{ borderColor: `${accentColor}15` }}>
+          <p className="font-mono text-[14px] text-slate-500 leading-relaxed border-t pt-2" style={{ borderColor: `${accentColor}15` }}>
             {result.summary}
           </p>
         )}
@@ -728,14 +728,14 @@ export function ContractTrustCard({ result }: { result: ContractTrustResult }) {
         {/* Checklist */}
         {!!result.checklist?.length && (
           <div className="space-y-1">
-            <span className="font-mono text-[10px] text-slate-600 uppercase tracking-wider">Before interacting</span>
+            <span className="font-mono text-[13px] text-slate-600 uppercase tracking-wider">Before interacting</span>
             <FlagList flags={result.checklist.slice(0, 3)} color="#94a3b8" />
           </div>
         )}
 
         {url && (
           <a href={url} target="_blank" rel="noopener noreferrer"
-            className="font-mono text-[10px] hover:underline" style={{ color: accentColor }}>
+            className="font-mono text-[13px] hover:underline" style={{ color: accentColor }}>
             View on Basescan ↗
           </a>
         )}
@@ -762,10 +762,10 @@ function MarketFitCard({ result }: { result: Record<string, unknown> }) {
   return (
     <Card accentColor={color}>
       <CardHeader accentColor={color}>
-        <span className="font-mono text-[11px] font-bold text-slate-300">Market Fit</span>
+        <span className="font-mono text-[14px] font-bold text-slate-300">Market Fit</span>
         <div className="flex items-center gap-2">
           <VerdictBadge verdict={verdict || "—"} colorMap={VERDICT_COLORS} />
-          {score > 0 && <span className="font-mono text-[10px]" style={{ color }}>{score}/100</span>}
+          {score > 0 && <span className="font-mono text-[13px]" style={{ color }}>{score}/100</span>}
         </div>
       </CardHeader>
       <CardBody>
@@ -774,14 +774,14 @@ function MarketFitCard({ result }: { result: Record<string, unknown> }) {
           <div className="grid grid-cols-1 gap-1.5">
             {Object.entries(brief).slice(0, 3).map(([k, v]) => (
               <div key={k}>
-                <p className="font-mono text-[9px] text-slate-600 uppercase tracking-wider">{k}</p>
-                <p className="font-mono text-[11px] text-slate-300 leading-snug">{v}</p>
+                <p className="font-mono text-[12px] text-slate-600 uppercase tracking-wider">{k}</p>
+                <p className="font-mono text-[14px] text-slate-300 leading-snug">{v}</p>
               </div>
             ))}
           </div>
         )}
         {risks.length > 0 && <FlagList flags={risks} color="#fb923c" />}
-        {summary && <p className="font-mono text-[11px] text-slate-400 leading-snug">{summary}</p>}
+        {summary && <p className="font-mono text-[14px] text-slate-400 leading-snug">{summary}</p>}
       </CardBody>
     </Card>
   );
@@ -820,22 +820,22 @@ function KeyExposureCard({ result }: { result: Record<string, unknown> }) {
       <CardHeader accentColor={color}>
         <div className="flex items-center gap-3">
           <span className="text-sm">🔑</span>
-          <span className="font-mono text-[11px] text-slate-500 tracking-widest uppercase">Key Exposure</span>
+          <span className="font-mono text-[14px] text-slate-500 tracking-widest uppercase">Key Exposure</span>
         </div>
-        {verdict && <span className="font-mono text-[11px] font-bold" style={{ color }}>{verdict}</span>}
+        {verdict && <span className="font-mono text-[14px] font-bold" style={{ color }}>{verdict}</span>}
       </CardHeader>
       <CardBody>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <p className="font-mono text-[9px] text-slate-600 uppercase">Public key exposed</p>
-            <p className="font-mono text-[12px]" style={{ color }}>
+            <p className="font-mono text-[12px] text-slate-600 uppercase">Public key exposed</p>
+            <p className="font-mono text-[15px]" style={{ color }}>
               {exposed === undefined ? "unknown" : exposed ? "Yes" : "No"}
             </p>
           </div>
           {txCount !== null && (
             <div>
-              <p className="font-mono text-[9px] text-slate-600 uppercase">Transactions sent</p>
-              <p className="font-mono text-[12px] text-slate-300">{txCount}</p>
+              <p className="font-mono text-[12px] text-slate-600 uppercase">Transactions sent</p>
+              <p className="font-mono text-[15px] text-slate-300">{txCount}</p>
             </div>
           )}
         </div>
@@ -844,23 +844,23 @@ function KeyExposureCard({ result }: { result: Record<string, unknown> }) {
           <div className="grid grid-cols-2 gap-3">
             {firstAt && (
               <div>
-                <p className="font-mono text-[9px] text-slate-600 uppercase">First send</p>
-                <p className="font-mono text-[11px] text-slate-300">{firstAt}</p>
+                <p className="font-mono text-[12px] text-slate-600 uppercase">First send</p>
+                <p className="font-mono text-[14px] text-slate-300">{firstAt}</p>
               </div>
             )}
             {urgency && (
               <div>
-                <p className="font-mono text-[9px] text-slate-600 uppercase">Migration</p>
-                <p className="font-mono text-[11px] text-slate-300">{urgency.replace(/_/g, " ").toLowerCase()}</p>
+                <p className="font-mono text-[12px] text-slate-600 uppercase">Migration</p>
+                <p className="font-mono text-[14px] text-slate-300">{urgency.replace(/_/g, " ").toLowerCase()}</p>
               </div>
             )}
           </div>
         )}
 
-        {explain && <p className="font-mono text-[11px] text-slate-400 leading-snug">{explain}</p>}
+        {explain && <p className="font-mono text-[14px] text-slate-400 leading-snug">{explain}</p>}
         {recommend && <FlagList flags={[recommend]} color={color} />}
         {disclaimer && (
-          <p className="font-mono text-[9px] text-slate-600 leading-snug border-t border-slate-800 pt-2">{disclaimer}</p>
+          <p className="font-mono text-[12px] text-slate-600 leading-snug border-t border-slate-800 pt-2">{disclaimer}</p>
         )}
       </CardBody>
     </Card>
@@ -890,12 +890,12 @@ function BlueStreamCard({ result }: { result: Record<string, unknown> }) {
         className="flex items-center justify-between py-1.5 border-b border-slate-800 last:border-0 hover:bg-slate-800/30 -mx-1 px-1 rounded"
       >
         <div className="min-w-0">
-          <p className="font-mono text-[11px] text-slate-200 truncate">{String(p.token ?? "")}</p>
-          <p className="font-mono text-[9px] text-slate-600 truncate">{String(p.pool ?? "")}</p>
+          <p className="font-mono text-[14px] text-slate-200 truncate">{String(p.token ?? "")}</p>
+          <p className="font-mono text-[12px] text-slate-600 truncate">{String(p.pool ?? "")}</p>
         </div>
         <div className="text-right shrink-0 pl-2">
-          <p className="font-mono text-[11px] text-slate-300">{p.price_usd != null ? `$${p.price_usd}` : ""}</p>
-          <p className={`font-mono text-[10px] ${isUp ? "text-[#34D399]" : isDown ? "text-red-400" : "text-slate-500"}`}>
+          <p className="font-mono text-[14px] text-slate-300">{p.price_usd != null ? `$${p.price_usd}` : ""}</p>
+          <p className={`font-mono text-[13px] ${isUp ? "text-[#34D399]" : isDown ? "text-red-400" : "text-slate-500"}`}>
             {change || "—"}
           </p>
         </div>
@@ -906,31 +906,31 @@ function BlueStreamCard({ result }: { result: Record<string, unknown> }) {
   return (
     <Card accentColor={isRobinhood ? "#34D399" : "#4FC3F7"}>
       <CardHeader accentColor={isRobinhood ? "#34D399" : "#4FC3F7"}>
-        <span className="font-mono text-[11px] font-bold text-slate-300">
+        <span className="font-mono text-[14px] font-bold text-slate-300">
           {isRobinhood ? "🟢 Robinhood Chain Stream" : "🔵 Base Stream"}
         </span>
         {tvl?.usd != null && (
-          <span className="font-mono text-[10px] text-slate-500">
+          <span className="font-mono text-[13px] text-slate-500">
             TVL ${Number(tvl.usd).toLocaleString()} {tvl.change_1d ? `(${tvl.change_1d} 1d)` : ""}
           </span>
         )}
       </CardHeader>
       <CardBody>
-        {errorMsg && <p className="font-mono text-[11px] text-slate-400">{errorMsg}</p>}
+        {errorMsg && <p className="font-mono text-[14px] text-slate-400">{errorMsg}</p>}
         {trending.length > 0 && (
           <div className="mb-2">
-            <p className="font-mono text-[9px] text-slate-600 uppercase mb-1">Trending</p>
+            <p className="font-mono text-[12px] text-slate-600 uppercase mb-1">Trending</p>
             {trending.slice(0, 5).map(renderRow)}
           </div>
         )}
         {newPools.length > 0 && (
           <div>
-            <p className="font-mono text-[9px] text-slate-600 uppercase mb-1">New Pools</p>
+            <p className="font-mono text-[12px] text-slate-600 uppercase mb-1">New Pools</p>
             {newPools.slice(0, 5).map(renderRow)}
           </div>
         )}
         {!errorMsg && trending.length === 0 && newPools.length === 0 && (
-          <p className="font-mono text-[11px] text-slate-500">No live data right now.</p>
+          <p className="font-mono text-[14px] text-slate-500">No live data right now.</p>
         )}
       </CardBody>
     </Card>
@@ -992,7 +992,7 @@ function PortfolioCard() {
 
   if (!isConnected || !address) {
     return (
-      <div className="mt-2 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3 font-mono text-[11px] text-slate-500">
+      <div className="mt-2 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3 font-mono text-[14px] text-slate-500">
         Connect a wallet to see your Base portfolio.
       </div>
     );
@@ -1018,8 +1018,8 @@ function PortfolioCard() {
   return (
     <div className="mt-2 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3.5">
       <div className="flex items-center justify-between mb-3">
-        <span className="font-mono text-[10px] text-slate-500 tracking-widest font-bold">PORTFOLIO · BASE</span>
-        <span className="font-mono text-[9px] text-slate-700">{truncAddr(address)}</span>
+        <span className="font-mono text-[13px] text-slate-500 tracking-widest font-bold">PORTFOLIO · BASE</span>
+        <span className="font-mono text-[12px] text-slate-700">{truncAddr(address)}</span>
       </div>
       <div className="grid grid-cols-3 gap-2">
         {rows.map(t => {
@@ -1030,15 +1030,15 @@ function PortfolioCard() {
           return (
             <div key={t.sym}
               className={`rounded-lg border p-2 ${isZero ? "border-[#1A1A2E]/40 bg-[#0a0a0f]/40 opacity-50" : "border-[#1A1A2E] bg-[#0d0d12]"}`}>
-              <div className="font-mono text-[9px] tracking-widest font-bold mb-0.5" style={{ color: t.color }}>{t.sym}</div>
-              <div className="font-mono text-[12px] font-bold text-white leading-none truncate">
+              <div className="font-mono text-[12px] tracking-widest font-bold mb-0.5" style={{ color: t.color }}>{t.sym}</div>
+              <div className="font-mono text-[15px] font-bold text-white leading-none truncate">
                 {reading && t.amt === null ? "…" : t.amt === null ? "—" : fmtTokenAmt(t.amt, t.decimals)}
               </div>
             </div>
           );
         })}
       </div>
-      <p className="font-mono text-[9px] text-slate-700 mt-2.5">
+      <p className="font-mono text-[12px] text-slate-700 mt-2.5">
         {reading
           ? "Reading on-chain balances…"
           : unread > 0
@@ -1084,11 +1084,11 @@ function MemoResultCard({ result }: { result: MemoResultData }) {
         <>
           <div className="flex items-center gap-2">
             <span className="text-base leading-none">🔖</span>
-            <span className="font-mono text-[10px] text-slate-500 tracking-widest font-bold">MEMO</span>
-            <span className="font-mono text-[13px] text-[#4FC3F7] break-all">{result.memo}</span>
+            <span className="font-mono text-[13px] text-slate-500 tracking-widest font-bold">MEMO</span>
+            <span className="font-mono text-[16px] text-[#4FC3F7] break-all">{result.memo}</span>
           </div>
           {caller && (
-            <div className="font-mono text-[11px] text-slate-500 mt-1.5">
+            <div className="font-mono text-[14px] text-slate-500 mt-1.5">
               Caller {caller.slice(0, 6)}…{caller.slice(-4)}
             </div>
           )}
@@ -1097,7 +1097,7 @@ function MemoResultCard({ result }: { result: MemoResultData }) {
               href={txUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-block font-mono text-[11px] text-slate-400 hover:text-[#4FC3F7] mt-1.5"
+              className="inline-block font-mono text-[14px] text-slate-400 hover:text-[#4FC3F7] mt-1.5"
             >
               View tx ↗
             </a>
@@ -1112,7 +1112,7 @@ function MemoResultCard({ result }: { result: MemoResultData }) {
               href={txUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="font-mono text-[11px] text-slate-500 hover:text-[#4FC3F7]"
+              className="font-mono text-[14px] text-slate-500 hover:text-[#4FC3F7]"
             >
               tx ↗
             </a>
@@ -1157,14 +1157,14 @@ function AuthorizationResultCard({ result }: { result: AuthorizationResultData }
       style={{ borderColor: `${accent}35` }}>
       <div className="flex items-center gap-2 flex-wrap">
         <span className="font-mono text-sm font-bold shrink-0" style={{ color: accent }}>{icon}</span>
-        <span className="font-mono text-[13px] font-bold" style={{ color: accent }}>{headline}</span>
+        <span className="font-mono text-[16px] font-bold" style={{ color: accent }}>{headline}</span>
         {result.scopeLabel && (
-          <span className="font-mono text-[10px] px-1.5 py-0.5 rounded-full border text-slate-400 border-[#1A1A2E]">
+          <span className="font-mono text-[13px] px-1.5 py-0.5 rounded-full border text-slate-400 border-[#1A1A2E]">
             {result.scopeLabel}
           </span>
         )}
         {result.policyKind && result.policyKind !== "unknown" && (
-          <span className="font-mono text-[10px] text-slate-500">
+          <span className="font-mono text-[13px] text-slate-500">
             {result.policyKind === "open" ? "ALWAYS_ALLOW"
               : result.policyKind === "blocked" ? "ALWAYS_BLOCK"
               : `policy #${result.policyId ?? "?"}`}
@@ -1172,7 +1172,7 @@ function AuthorizationResultCard({ result }: { result: AuthorizationResultData }
         )}
       </div>
       {acctShort && (
-        <div className="font-mono text-[11px] text-slate-400 mt-1.5 break-all">
+        <div className="font-mono text-[14px] text-slate-400 mt-1.5 break-all">
           {acctShort}
           {result.resolvedFromBasename && result.accountInput && (
             <span className="text-slate-600"> · {result.accountInput}</span>
@@ -1180,11 +1180,11 @@ function AuthorizationResultCard({ result }: { result: AuthorizationResultData }
         </div>
       )}
       {result.message && (
-        <p className="font-mono text-[11px] text-slate-500 leading-relaxed mt-1.5">{result.message}</p>
+        <p className="font-mono text-[14px] text-slate-500 leading-relaxed mt-1.5">{result.message}</p>
       )}
       {result.explorerUrl && result.status !== "invalid_token" && (
         <a href={result.explorerUrl} target="_blank" rel="noopener noreferrer"
-          className="inline-block font-mono text-[11px] text-slate-400 hover:text-[#4FC3F7] mt-1.5">
+          className="inline-block font-mono text-[14px] text-slate-400 hover:text-[#4FC3F7] mt-1.5">
           Token on Basescan ↗
         </a>
       )}
@@ -1291,10 +1291,10 @@ function WalletCard({ result }: { result: WalletResultData }) {
   function renderHolding(h: WalletHoldingView, i: number) {
     const usd = fmtUsdSmall(h.usdValue);
     const sym = (
-      <span className="font-mono text-[11px] text-slate-300 flex items-center gap-1">
+      <span className="font-mono text-[14px] text-slate-300 flex items-center gap-1">
         {h.symbol}
         {h.isB20 && (
-          <span className="text-[9px] px-1 py-px rounded bg-[#4FC3F715] text-[#4FC3F7] border border-[#4FC3F730]">🟦 B20</span>
+          <span className="text-[12px] px-1 py-px rounded bg-[#4FC3F715] text-[#4FC3F7] border border-[#4FC3F730]">🟦 B20</span>
         )}
       </span>
     );
@@ -1303,8 +1303,8 @@ function WalletCard({ result }: { result: WalletResultData }) {
         {h.isB20 && h.address ? (
           <a href={`/app/b20?address=${h.address}`} className="hover:opacity-80">{sym}</a>
         ) : sym}
-        <span className="font-mono text-[13px] text-slate-200 flex items-baseline gap-2">
-          {usd && <span className="text-[9px] text-slate-600">{usd}</span>}
+        <span className="font-mono text-[16px] text-slate-200 flex items-baseline gap-2">
+          {usd && <span className="text-[12px] text-slate-600">{usd}</span>}
           {h.amount}
         </span>
       </div>
@@ -1316,12 +1316,12 @@ function WalletCard({ result }: { result: WalletResultData }) {
       <div className="flex items-center gap-2 mb-2">
         <span className="text-base leading-none">💰</span>
         {addr && (
-          <span className="font-mono text-[11px] text-slate-400">{addr.slice(0, 6)}…{addr.slice(-4)}</span>
+          <span className="font-mono text-[14px] text-slate-400">{addr.slice(0, 6)}…{addr.slice(-4)}</span>
         )}
         {hiddenCount > 0 && (
           <button
             onClick={() => setShowAll(v => !v)}
-            className="ml-auto font-mono text-[9px] text-slate-500 hover:text-slate-300 underline decoration-dotted underline-offset-2"
+            className="ml-auto font-mono text-[12px] text-slate-500 hover:text-slate-300 underline decoration-dotted underline-offset-2"
           >
             {showAll ? `Hide dust (<$${DUST_USD_THRESHOLD})` : `Show ${hiddenCount} more`}
           </button>
@@ -1331,11 +1331,11 @@ function WalletCard({ result }: { result: WalletResultData }) {
       {/* Base chain leg */}
       <div className="flex items-center gap-1.5 mb-1">
         <span className="w-1.5 h-1.5 rounded-full bg-[#0052FF]" />
-        <span className="font-mono text-[10px] text-slate-500">{baseLabel}</span>
-        <span className="font-mono text-[9px] text-slate-700">· {baseHoldings.length} token{baseHoldings.length === 1 ? "" : "s"}</span>
+        <span className="font-mono text-[13px] text-slate-500">{baseLabel}</span>
+        <span className="font-mono text-[12px] text-slate-700">· {baseHoldings.length} token{baseHoldings.length === 1 ? "" : "s"}</span>
       </div>
       {visibleBase.length === 0 ? (
-        <div className="font-mono text-[10px] text-slate-600 py-0.5 mb-2">
+        <div className="font-mono text-[13px] text-slate-600 py-0.5 mb-2">
           {baseHoldings.length === 0 ? `No tokens on ${baseLabel}.` : `All ${baseHoldings.length} token(s) filtered as dust.`}
         </div>
       ) : (
@@ -1347,11 +1347,11 @@ function WalletCard({ result }: { result: WalletResultData }) {
       {/* Robinhood Chain leg */}
       <div className="flex items-center gap-1.5 mb-1">
         <span className="w-1.5 h-1.5 rounded-full bg-[#34D399]" />
-        <span className="font-mono text-[10px] text-slate-500">Robinhood Chain</span>
-        <span className="font-mono text-[9px] text-slate-700">· {rhHoldings.length} token{rhHoldings.length === 1 ? "" : "s"}</span>
+        <span className="font-mono text-[13px] text-slate-500">Robinhood Chain</span>
+        <span className="font-mono text-[12px] text-slate-700">· {rhHoldings.length} token{rhHoldings.length === 1 ? "" : "s"}</span>
       </div>
       {visibleRh.length === 0 ? (
-        <div className="font-mono text-[10px] text-slate-600 py-0.5">
+        <div className="font-mono text-[13px] text-slate-600 py-0.5">
           {rhHoldings.length === 0 ? "No tokens on Robinhood Chain." : `All ${rhHoldings.length} token(s) filtered as dust.`}
         </div>
       ) : (
@@ -1361,7 +1361,7 @@ function WalletCard({ result }: { result: WalletResultData }) {
       )}
 
       {result.partial && (
-        <p className="font-mono text-[9px] text-slate-600 mt-2">
+        <p className="font-mono text-[12px] text-slate-600 mt-2">
           Base: {result.partialReason ?? "this list may be incomplete — other tokens may be held here."}
         </p>
       )}
@@ -1371,7 +1371,7 @@ function WalletCard({ result }: { result: WalletResultData }) {
             href={result.addressUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-block font-mono text-[10px] text-slate-500 hover:text-[#4FC3F7]"
+            className="inline-block font-mono text-[13px] text-slate-500 hover:text-[#4FC3F7]"
           >
             Base ↗
           </a>
@@ -1380,7 +1380,7 @@ function WalletCard({ result }: { result: WalletResultData }) {
               href={`https://robinhoodchain.blockscout.com/address/${addr}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-block font-mono text-[10px] text-slate-500 hover:text-[#34D399]"
+              className="inline-block font-mono text-[13px] text-slate-500 hover:text-[#34D399]"
             >
               Robinhood ↗
             </a>
@@ -1422,10 +1422,10 @@ function B20ManageCard({ result }: { result: B20ManageResult }) {
 
   return (
     <div className="mt-2 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3.5">
-      <div className="font-mono text-[10px] text-slate-500 tracking-widest font-bold mb-2">
+      <div className="font-mono text-[13px] text-slate-500 tracking-widest font-bold mb-2">
         B20 MANAGE · {netLabel}
       </div>
-      <div className="font-mono text-[11px] text-slate-400 mb-3 break-all">
+      <div className="font-mono text-[14px] text-slate-400 mb-3 break-all">
         {validToken ? token : <span className="text-[#EF4444]">No token address provided</span>}
       </div>
 
@@ -1451,7 +1451,7 @@ function B20ManageCard({ result }: { result: B20ManageResult }) {
       {validToken && address && error && !loading && (
         <div className="rounded-xl border border-[#EF444430] bg-[#EF444408] px-4 py-3">
           <p className="font-mono text-xs text-[#EF4444]">{error}</p>
-          <button onClick={load} className="font-mono text-[10px] text-slate-500 hover:text-slate-300 mt-2 transition-colors">
+          <button onClick={load} className="font-mono text-[13px] text-slate-500 hover:text-slate-300 mt-2 transition-colors">
             Retry
           </button>
         </div>
@@ -1676,13 +1676,13 @@ export function MoveToYieldCard({ result, account, withdrawOnly = false }: { res
       : "Withdraw submitted — USDC is returning to your wallet.";
     return (
       <div className="mt-2 rounded-xl border p-3.5" style={{ borderColor: "#22C55E40", background: "#22C55E08" }}>
-        <div className="font-mono text-[11px] font-bold mb-1" style={{ color: "#22C55E" }}>
+        <div className="font-mono text-[14px] font-bold mb-1" style={{ color: "#22C55E" }}>
           ✓ {action === "supply" ? "Supply" : "Withdraw"} submitted · {vcfg.short} · {net.short}
         </div>
-        <div className="font-mono text-[10px] text-slate-400 mb-2">{msg}</div>
+        <div className="font-mono text-[13px] text-slate-400 mb-2">{msg}</div>
         {txHash && (
           <a href={`${net.explorer}/tx/${txHash}`} target="_blank" rel="noopener noreferrer"
-             className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#4FC3F730] text-[#4FC3F7]">
+             className="font-mono text-[13px] px-2.5 py-1 rounded-lg border border-[#4FC3F730] text-[#4FC3F7]">
             View tx ↗
           </a>
         )}
@@ -1696,12 +1696,12 @@ export function MoveToYieldCard({ result, account, withdrawOnly = false }: { res
 
   return (
     <div className="mt-2 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3.5">
-      <div className="font-mono text-[10px] text-slate-500 tracking-widest font-bold mb-3">
+      <div className="font-mono text-[13px] text-slate-500 tracking-widest font-bold mb-3">
         {withdrawOnly ? "WITHDRAW FROM YIELD · BASE" : "MOVE TO YIELD · BASE"}
       </div>
 
       {/* Network risk banner */}
-      <div className="rounded-lg px-2.5 py-1.5 mb-3 font-mono text-[10px] leading-relaxed"
+      <div className="rounded-lg px-2.5 py-1.5 mb-3 font-mono text-[13px] leading-relaxed"
            style={net.testnet
              ? { background: "#F59E0B0a", border: "1px solid #F59E0B30", color: "#fcd9a3" }
              : { background: "#EF44440a", border: "1px solid #EF444440", color: "#fca5a5" }}>
@@ -1712,21 +1712,21 @@ export function MoveToYieldCard({ result, account, withdrawOnly = false }: { res
 
       {/* Account identity — Basename if set */}
       {address && (
-        <div className="font-mono text-[9px] text-slate-600 mb-3">
+        <div className="font-mono text-[12px] text-slate-600 mb-3">
           ACCOUNT <span className="text-slate-300">{fromName || truncAddr(address)}</span>
         </div>
       )}
 
       {/* Venue selector — the router */}
       <div className="mb-3">
-        <div className="font-mono text-[9px] text-slate-600 mb-1.5">VENUE</div>
+        <div className="font-mono text-[12px] text-slate-600 mb-1.5">VENUE</div>
         <div className="flex gap-1">
           {VENUE_LIST.map(v => {
             const active = venue === v.id;
             const vr = rates?.find(r => r.project === v.llamaProject)?.apy ?? null;
             return (
               <button key={v.id} onClick={() => pickVenue(v.id)}
-                className="flex-1 font-mono text-[10px] py-1.5 rounded-md transition-colors"
+                className="flex-1 font-mono text-[13px] py-1.5 rounded-md transition-colors"
                 style={active
                   ? { background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }
                   : { color: "#64748b", border: "1px solid #1A1A2E" }}>
@@ -1735,13 +1735,13 @@ export function MoveToYieldCard({ result, account, withdrawOnly = false }: { res
             );
           })}
         </div>
-        <div className="font-mono text-[9px] text-slate-700 mt-1">
+        <div className="font-mono text-[12px] text-slate-700 mt-1">
           {vcfg.label}{!isAave && " · mainnet only"}
         </div>
       </div>
 
       {/* #1 Position + #2 live APY — real on-chain reads (per venue) */}
-      <div className="flex items-center justify-between mb-3 px-2.5 py-2 rounded-lg border border-[#1A1A2E] bg-[#0d0d12] font-mono text-[10px]">
+      <div className="flex items-center justify-between mb-3 px-2.5 py-2 rounded-lg border border-[#1A1A2E] bg-[#0d0d12] font-mono text-[13px]">
         <div>
           <div className="text-slate-600 mb-0.5">YOUR POSITION</div>
           <div className="text-slate-200">{position != null ? `${position.toFixed(2)} USDC` : (isConnected ? (vnet ? "—" : "—") : "connect to view")}</div>
@@ -1756,11 +1756,11 @@ export function MoveToYieldCard({ result, account, withdrawOnly = false }: { res
       {rates && rates.length > 0 && (
         <div className="mb-3 rounded-lg border border-[#1A1A2E] bg-[#0d0d12] p-2.5">
           <div className="flex items-center justify-between mb-1.5">
-            <span className="font-mono text-[9px] text-slate-600">BEST USDC RATE · BASE</span>
-            <span className="font-mono text-[9px] text-slate-700">live · DefiLlama</span>
+            <span className="font-mono text-[12px] text-slate-600">BEST USDC RATE · BASE</span>
+            <span className="font-mono text-[12px] text-slate-700">live · DefiLlama</span>
           </div>
           {rates.slice(0, 4).map((r, i) => (
-            <div key={r.project} className="flex items-center justify-between py-[2px] font-mono text-[10px]">
+            <div key={r.project} className="flex items-center justify-between py-[2px] font-mono text-[13px]">
               <span className={i === 0 ? "text-[#22C55E]" : "text-slate-400"}>
                 {i === 0 ? "★ " : "  "}{r.label}
                 {!r.executable && <span className="text-slate-700"> · view-only</span>}
@@ -1779,7 +1779,7 @@ export function MoveToYieldCard({ result, account, withdrawOnly = false }: { res
             const active = action === a;
             return (
               <button key={a} onClick={() => setAction(a)}
-                className="flex-1 font-mono text-[11px] py-1.5 rounded-md transition-colors"
+                className="flex-1 font-mono text-[14px] py-1.5 rounded-md transition-colors"
                 style={active
                   ? { background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }
                   : { color: "#64748b", border: "1px solid #1A1A2E" }}>
@@ -1792,9 +1792,9 @@ export function MoveToYieldCard({ result, account, withdrawOnly = false }: { res
 
       {/* Network */}
       <label className="block mb-3">
-        <span className="font-mono text-[9px] text-slate-600 block mb-1">NETWORK</span>
+        <span className="font-mono text-[12px] text-slate-600 block mb-1">NETWORK</span>
         <select value={network} onChange={e => setNetwork(e.target.value as YieldNetwork)}
-          className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-slate-200 outline-none">
+          className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[14px] text-slate-200 outline-none">
           <option value="baseSepolia" disabled={!VENUES[venue].nets.baseSepolia}>Base Sepolia (testnet)</option>
           <option value="base">Base mainnet</option>
         </select>
@@ -1803,9 +1803,9 @@ export function MoveToYieldCard({ result, account, withdrawOnly = false }: { res
       {/* Amount + balance-aware Max */}
       <label className="block mb-2">
         <div className="flex items-center justify-between mb-1">
-          <span className="font-mono text-[9px] text-slate-600">AMOUNT (USDC)</span>
+          <span className="font-mono text-[12px] text-slate-600">AMOUNT (USDC)</span>
           {maxFor != null && !withdrawAll && (
-            <span className="font-mono text-[9px] text-slate-600">
+            <span className="font-mono text-[12px] text-slate-600">
               {action === "supply" ? "Wallet" : "Position"} {maxFor.toFixed(2)}
               <button type="button" onClick={setMax} className="text-[#4FC3F7] ml-1">Max</button>
             </span>
@@ -1813,24 +1813,24 @@ export function MoveToYieldCard({ result, account, withdrawOnly = false }: { res
         </div>
         <input type="number" min="0" step="0.01" value={amount} disabled={withdrawAll}
           onChange={e => setAmount(e.target.value)} placeholder="e.g. 5"
-          className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors disabled:opacity-40" />
-        {overMax && <span className="font-mono text-[9px] text-red-500 mt-1 block">{action === "supply" ? "Exceeds your wallet USDC" : "Exceeds your position"}</span>}
+          className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[14px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors disabled:opacity-40" />
+        {overMax && <span className="font-mono text-[12px] text-red-500 mt-1 block">{action === "supply" ? "Exceeds your wallet USDC" : "Exceeds your position"}</span>}
       </label>
 
       {action === "withdraw" && (
-        <label className="flex items-center gap-2 mb-2 font-mono text-[10px] text-slate-500 cursor-pointer">
+        <label className="flex items-center gap-2 mb-2 font-mono text-[13px] text-slate-500 cursor-pointer">
           <input type="checkbox" checked={all} onChange={e => setAll(e.target.checked)} className="w-auto" />
           Withdraw all (full position)
         </label>
       )}
 
-      <p className="font-mono text-[9px] text-slate-600 mb-2 leading-relaxed">
+      <p className="font-mono text-[12px] text-slate-600 mb-2 leading-relaxed">
         {action === "supply"
           ? <>Supplies USDC into <span className="text-slate-400">{vcfg.label}</span> — you sign {isAave ? "approve + supply" : "approve + deposit"} and hold a yield-bearing receipt. Non-custodial; funds stay in your control.</>
           : <>Pulls USDC back out of <span className="text-slate-400">{vcfg.short}</span> to your wallet — you sign one {isAave ? "withdraw" : withdrawAll ? "redeem" : "withdraw"} call.</>}
       </p>
 
-      {step === "error" && <p className="font-mono text-[10px] text-amber-400 mb-2">{err}</p>}
+      {step === "error" && <p className="font-mono text-[13px] text-amber-400 mb-2">{err}</p>}
 
       {/* Names the side that actually failed — the wallet on a supply, the
           position on a withdraw — and retries exactly that read. */}
@@ -1842,7 +1842,7 @@ export function MoveToYieldCard({ result, account, withdrawOnly = false }: { res
       )}
 
       <button onClick={run} disabled={busy || !valid || !isConnected}
-        className="w-full font-mono text-[12px] font-bold py-2 rounded-lg transition-all disabled:opacity-50"
+        className="w-full font-mono text-[15px] font-bold py-2 rounded-lg transition-all disabled:opacity-50"
         style={action === "supply"
           ? { background: "#F59E0B15", color: "#F59E0B", border: "1px solid #F59E0B40" }
           : { background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
@@ -1850,7 +1850,7 @@ export function MoveToYieldCard({ result, account, withdrawOnly = false }: { res
           : !busy && gate === "unverified" ? "Balance unread — held"
           : btnLabel}
       </button>
-      <p className="font-mono text-[9px] text-slate-700 mt-1.5">
+      <p className="font-mono text-[12px] text-slate-700 mt-1.5">
         {vcfg.label} · {net.label} · you sign every transaction · withdraw anytime.
       </p>
     </div>
@@ -2060,15 +2060,15 @@ export function SendCard({ result, account }: { result: SendResult; account?: `0
   if (step === "done") {
     return (
       <div className="mt-2 rounded-xl border p-3.5" style={{ borderColor: "#22C55E40", background: "#22C55E08" }}>
-        <div className="font-mono text-[11px] font-bold mb-1" style={{ color: "#22C55E" }}>
+        <div className="font-mono text-[14px] font-bold mb-1" style={{ color: "#22C55E" }}>
           ✓ Sent {amt} {asset} · {net.short}
         </div>
-        <div className="font-mono text-[10px] text-slate-400 mb-2 break-all">
+        <div className="font-mono text-[13px] text-slate-400 mb-2 break-all">
           to {revName || (recipIsName ? recip : truncAddr(toAddress ?? ""))}
         </div>
         {txHash && (
           <a href={`${net.explorer}/tx/${txHash}`} target="_blank" rel="noopener noreferrer"
-             className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#4FC3F730] text-[#4FC3F7]">
+             className="font-mono text-[13px] px-2.5 py-1 rounded-lg border border-[#4FC3F730] text-[#4FC3F7]">
             View tx ↗
           </a>
         )}
@@ -2090,16 +2090,16 @@ export function SendCard({ result, account }: { result: SendResult; account?: `0
   return (
     <div className="mt-2 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3.5">
       <div className="flex items-center justify-between mb-3">
-        <span className="font-mono text-[10px] text-slate-500 tracking-widest font-bold">SEND / PAY · BASE</span>
+        <span className="font-mono text-[13px] text-slate-500 tracking-widest font-bold">SEND / PAY · BASE</span>
         {gaslessSupported && (
-          <span className="font-mono text-[9px] px-2 py-0.5 rounded-full" style={{ background: "#A78BFA15", color: "#A78BFA", border: "1px solid #A78BFA40" }}>
+          <span className="font-mono text-[12px] px-2 py-0.5 rounded-full" style={{ background: "#A78BFA15", color: "#A78BFA", border: "1px solid #A78BFA40" }}>
             ⚡ Gasless
           </span>
         )}
       </div>
 
       {/* Network risk banner */}
-      <div className="rounded-lg px-2.5 py-1.5 mb-3 font-mono text-[10px] leading-relaxed"
+      <div className="rounded-lg px-2.5 py-1.5 mb-3 font-mono text-[13px] leading-relaxed"
            style={net.testnet
              ? { background: "#F59E0B0a", border: "1px solid #F59E0B30", color: "#fcd9a3" }
              : { background: "#EF44440a", border: "1px solid #EF444440", color: "#fca5a5" }}>
@@ -2110,7 +2110,7 @@ export function SendCard({ result, account }: { result: SendResult; account?: `0
 
       {/* Account identity — Basename if set */}
       {fromAddr && (
-        <div className="font-mono text-[9px] text-slate-600 mb-3">
+        <div className="font-mono text-[12px] text-slate-600 mb-3">
           FROM <span className="text-slate-300">{fromName || truncAddr(fromAddr)}</span>
         </div>
       )}
@@ -2121,7 +2121,7 @@ export function SendCard({ result, account }: { result: SendResult; account?: `0
           const active = asset === a;
           return (
             <button key={a} onClick={() => pickAsset(a)}
-              className="flex-1 font-mono text-[11px] py-1.5 rounded-md transition-colors"
+              className="flex-1 font-mono text-[14px] py-1.5 rounded-md transition-colors"
               style={active
                 ? { background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }
                 : { color: "#64748b", border: "1px solid #1A1A2E" }}>
@@ -2133,19 +2133,19 @@ export function SendCard({ result, account }: { result: SendResult; account?: `0
 
       {/* Recipient */}
       <label className="block mb-1">
-        <span className="font-mono text-[9px] text-slate-600 block mb-1">RECIPIENT</span>
+        <span className="font-mono text-[12px] text-slate-600 block mb-1">RECIPIENT</span>
         <input value={recipient} onChange={e => setRecipient(e.target.value)}
           placeholder="0x… or name.base"
-          className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors" />
+          className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[14px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors" />
       </label>
-      <div className="font-mono text-[9px] mb-3 h-3">{resolveLine}</div>
+      <div className="font-mono text-[12px] mb-3 h-3">{resolveLine}</div>
 
       {/* Amount + balance-aware Max */}
       <label className="block mb-3">
         <div className="flex items-center justify-between mb-1">
-          <span className="font-mono text-[9px] text-slate-600">AMOUNT ({asset})</span>
+          <span className="font-mono text-[12px] text-slate-600">AMOUNT ({asset})</span>
           {balance != null && (
-            <span className="font-mono text-[9px] text-slate-600">
+            <span className="font-mono text-[12px] text-slate-600">
               Bal {balance.toFixed(asset === "ETH" ? 4 : 2)}
               <button type="button" onClick={setMax} className="text-[#4FC3F7] ml-1">Max</button>
             </span>
@@ -2153,23 +2153,23 @@ export function SendCard({ result, account }: { result: SendResult; account?: `0
         </div>
         <input type="number" min="0" step={asset === "ETH" ? "0.0001" : "0.01"} value={amount}
           onChange={e => setAmount(e.target.value)} placeholder={asset === "ETH" ? "e.g. 0.01" : "e.g. 5"}
-          className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors" />
-        {overBalance && <span className="font-mono text-[9px] text-red-500 mt-1 block">Amount exceeds your {asset} balance</span>}
+          className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[14px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors" />
+        {overBalance && <span className="font-mono text-[12px] text-red-500 mt-1 block">Amount exceeds your {asset} balance</span>}
       </label>
 
       {/* Memo (B20 native only — transferWithMemo attaches a bytes32 reference) */}
       {isB20Asset && (
         <label className="block mb-3">
           <div className="flex items-center justify-between mb-1">
-            <span className="font-mono text-[9px] text-slate-600">MEMO (OPTIONAL)</span>
-            <span className={`font-mono text-[9px] ${memoTooLong ? "text-red-500" : "text-slate-600"}`}>
+            <span className="font-mono text-[12px] text-slate-600">MEMO (OPTIONAL)</span>
+            <span className={`font-mono text-[12px] ${memoTooLong ? "text-red-500" : "text-slate-600"}`}>
               {memo.trim().length}/{MEMO_MAX_CHARS}
             </span>
           </div>
           <input value={memo} onChange={e => setMemo(e.target.value)}
             placeholder="INV-2026-001"
-            className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors" />
-          <span className="font-mono text-[9px] text-slate-600 mt-1 block">
+            className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[14px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors" />
+          <span className="font-mono text-[12px] text-slate-600 mt-1 block">
             Attached onchain — order ID / payment ref. {memoTooLong && <span className="text-red-500">Max {MEMO_MAX_CHARS} chars.</span>}
           </span>
         </label>
@@ -2177,20 +2177,20 @@ export function SendCard({ result, account }: { result: SendResult; account?: `0
 
       {/* Network */}
       <label className="block mb-3">
-        <span className="font-mono text-[9px] text-slate-600 block mb-1">NETWORK</span>
+        <span className="font-mono text-[12px] text-slate-600 block mb-1">NETWORK</span>
         <select value={network} onChange={e => setNetwork(e.target.value as YieldNetwork)}
-          className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-slate-200 outline-none">
+          className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[14px] text-slate-200 outline-none">
           <option value="baseSepolia">Base Sepolia (testnet)</option>
           <option value="base">Base mainnet</option>
         </select>
       </label>
 
-      <p className="font-mono text-[9px] text-slate-600 mb-2 leading-relaxed">
+      <p className="font-mono text-[12px] text-slate-600 mb-2 leading-relaxed">
         Sends {asset} directly from your wallet — you sign one {asset === "USDC" ? "transfer" : "send"}. Non-custodial; Blue Agent never touches the funds.
         {gaslessSupported && <span className="text-[#A78BFA]"> Gas is sponsored — no ETH needed.</span>}
       </p>
 
-      {step === "error" && <p className="font-mono text-[10px] text-amber-400 mb-2">{err}</p>}
+      {step === "error" && <p className="font-mono text-[13px] text-amber-400 mb-2">{err}</p>}
 
       {/* The read failed — say so, and hand back the way out. Rendered only once
           there IS a wallet, since a disconnected card has nothing to read yet. */}
@@ -2199,18 +2199,18 @@ export function SendCard({ result, account }: { result: SendResult; account?: `0
       )}
 
       <button onClick={send} disabled={busy || !valid || !isConnected}
-        className="w-full font-mono text-[12px] font-bold py-2 rounded-lg transition-all disabled:opacity-50"
+        className="w-full font-mono text-[15px] font-bold py-2 rounded-lg transition-all disabled:opacity-50"
         style={{ background: "#34D39915", color: "#34D399", border: "1px solid #34D39940" }}>
         {!isConnected ? "Connect your wallet to continue"
           : !busy && gate === "unverified" ? "Balance unread — held"
           : btnLabel}
       </button>
-      <p className="font-mono text-[9px] text-slate-700 mt-1.5">
+      <p className="font-mono text-[12px] text-slate-700 mt-1.5">
         {net.label} · you sign every transaction · sends are final.
       </p>
       {/* Notice when falling back to EOA — builder code requires Smart Wallet */}
       {(!walletCapabilities || isEoa) && (
-        <p className="font-mono text-[9px] text-slate-600 mt-1">
+        <p className="font-mono text-[12px] text-slate-600 mt-1">
           💡 Builder attribution requires Coinbase Smart Wallet
         </p>
       )}

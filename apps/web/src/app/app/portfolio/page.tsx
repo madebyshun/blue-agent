@@ -12,8 +12,8 @@ export default function PortfolioPage() {
       <MarketsHeader active="portfolio" chip="read from both chains" />
       <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="px-5 py-[18px] w-full">
-          <h1 className="text-[15px] font-semibold text-[#E2E8F0]">Portfolio</h1>
-          <p className="mt-1.5 mb-4 max-w-[900px] text-[11px] leading-[1.7] text-[#94A3B8]">
+          <h1 className="text-[18px] font-semibold text-[#E2E8F0]">Portfolio</h1>
+          <p className="mt-1.5 mb-4 max-w-[900px] text-[14px] leading-[1.7] text-[#94A3B8]">
             What this wallet holds on Base and Robinhood Chain: ETH, the dollar stable on each chain, and every stock token in Blue Agent&apos;s verified registries. Balances are read from each chain; prices from GeckoTerminal.
           </p>
           <PortfolioClient />

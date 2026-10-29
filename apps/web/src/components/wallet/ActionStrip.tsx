@@ -172,7 +172,7 @@ export function ActionStrip({
 
   return (
     <div className="mt-2">
-      <div className="flex items-center gap-2 flex-wrap font-mono text-[11px] rounded-lg border border-[#1A1A2E] bg-[#0a0a0f] px-3 py-2">
+      <div className="flex items-center gap-2 flex-wrap font-mono text-[14px] rounded-lg border border-[#1A1A2E] bg-[#0a0a0f] px-3 py-2">
         <span className="text-slate-200">{summary}</span>
         {chainLabel && <span className="text-slate-500">· {chainLabel}</span>}
         {usable && <VerdictChip pt={pt} />}

@@ -26,7 +26,7 @@ export default function ArrowBriefBlock({
   hasBrief: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-2 text-[12px]">
+    <div className="flex flex-col gap-2 text-[15px]">
       {hasBrief ? (
         <>
           <div className="font-mono text-white leading-relaxed">
@@ -40,21 +40,21 @@ export default function ArrowBriefBlock({
           {a.brief!.warnings.length > 0 && (
             <ul className="mt-1 space-y-1">
               {a.brief!.warnings.map((w, i) => (
-                <li key={i} className="font-mono text-[11px]" style={{ color: AMBER }}>
+                <li key={i} className="font-mono text-[14px]" style={{ color: AMBER }}>
                   ⚠ {w}
                 </li>
               ))}
             </ul>
           )}
           <FactsAtFire brief={a.brief!} />
-          <div className="pt-1 font-mono text-[10px]" style={{ color: MUTED }}>
+          <div className="pt-1 font-mono text-[13px]" style={{ color: MUTED }}>
             brief · {a.brief!.llm_provider ?? "no LLM"} · chain{" "}
             {a.brief!.llm_attempts.map((att) => `${att.provider}:${att.status}`).join("→") || "n/a"}
             {" "}· {formatRelTime(a.brief!.fetched_at)}
           </div>
         </>
       ) : a.brief_status === "pending" ? (
-        <div className="font-mono text-[11px] flex items-center gap-2" style={{ color: MUTED }}>
+        <div className="font-mono text-[14px] flex items-center gap-2" style={{ color: MUTED }}>
           <span
             className="w-1.5 h-1.5 rounded-full animate-pulse"
             style={{ backgroundColor: AMBER, boxShadow: `0 0 6px ${AMBER}80` }}
@@ -63,7 +63,7 @@ export default function ArrowBriefBlock({
           brief attaching… (async worker runs every minute — refresh in a moment)
         </div>
       ) : a.brief_status === "failed" ? (
-        <div className="hood-prose text-[13px] leading-relaxed" style={{ color: MUTED }}>
+        <div className="hood-prose text-[16px] leading-relaxed" style={{ color: MUTED }}>
           Brief unavailable — A4 chain failed for this arrow. Numbers still stand on their own.
         </div>
       ) : (
@@ -71,13 +71,13 @@ export default function ArrowBriefBlock({
         // branch covers both "seeded arrow, brief skipped on purpose" and "Base
         // arrow, A4 is Robinhood-only" — and the old copy asserted "A4 was
         // unavailable", which is untrue of both.
-        <div className="hood-prose text-[13px] leading-relaxed" style={{ color: MUTED }}>
+        <div className="hood-prose text-[16px] leading-relaxed" style={{ color: MUTED }}>
           No brief attached to this arrow. Numbers still stand on their own.
         </div>
       )}
       {a.outcome_detail && (
         <div
-          className="mt-2 rounded border px-2 py-1.5 font-mono text-[11px]"
+          className="mt-2 rounded border px-2 py-1.5 font-mono text-[14px]"
           style={{ borderColor: BORDER, color: "#E7E9EE" }}
         >
           <span style={{ color: MUTED }}>outcome · </span>{a.outcome_detail}
@@ -105,10 +105,10 @@ function FactsAtFire({ brief }: { brief: ArrowBrief }) {
   ];
   return (
     <div
-      className="mt-2 rounded border px-2 py-1.5 font-mono text-[11px]"
+      className="mt-2 rounded border px-2 py-1.5 font-mono text-[14px]"
       style={{ borderColor: BORDER, backgroundColor: "#0a0c11", color: "#9aa1ac" }}
     >
-      <div className="mb-1 font-mono text-[9px] uppercase tracking-widest" style={{ color: MUTED }}>
+      <div className="mb-1 font-mono text-[12px] uppercase tracking-widest" style={{ color: MUTED }}>
         facts at fire · anything in the brief above should reconcile against these
       </div>
       <div className="flex flex-wrap gap-x-4 gap-y-0.5">

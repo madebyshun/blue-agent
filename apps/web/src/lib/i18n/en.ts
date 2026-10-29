@@ -173,6 +173,8 @@ export const en = {
     markets: "Markets",
     portfolio: "Portfolio",
     launch_token: "Launch token",
+    create: "Create",
+    my_account: "My account",
     create_agent: "Create agent",
     stocks: "Stocks",
     group_exchange: "Exchange",

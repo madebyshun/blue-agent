@@ -65,14 +65,14 @@ export default async function MarketsPage() {
               ["24H VOLUME · ROBINHOOD", volRead("robinhood") ? usd(vol("robinhood")) : "—", "stock tokens, DEX pools"],
             ].map(([l, v, s]) => (
               <div key={l} className={`${card} p-[14px]`}>
-                <p className="text-[9.5px] tracking-[0.12em] text-[#64748B]">{l}</p>
-                <p className="mt-1.5 text-[18px] font-semibold text-[#E2E8F0] tabular-nums">{v}</p>
-                <p className="mt-0.5 text-[9.5px] text-[#475569]">{s}</p>
+                <p className="text-[12px] tracking-[0.12em] text-[#64748B]">{l}</p>
+                <p className="mt-1.5 text-[22px] font-semibold text-[#E2E8F0] tabular-nums">{v}</p>
+                <p className="mt-0.5 text-[12px] text-[#64748B]">{s}</p>
               </div>
             ))}
           </div>
           <MarketsTable rows={rows} readAt={stocks.readAt} />
-          <p className="text-[9.5px] text-[#475569] mt-4 leading-relaxed">
+          <p className="text-[12px] text-[#64748B] mt-4 leading-relaxed">
             Stock tokens come from Blue Agent&apos;s verified registries, matched by contract on each chain. Trending crypto is GeckoTerminal&apos;s list as-is, <span className="text-[#F59E0B]">unchecked</span>: no tax or honeypot test runs here, and tokens using a major&apos;s symbol (BTC, ETH, USDC…) are left out.
             Prices, change, market cap, liquidity, volume and charts are read from each token&apos;s DEX pools (Aerodrome / Uniswap on Base, Uniswap v4 on Robinhood Chain) through GeckoTerminal, every 5 minutes. A stock token tracks a share; it is not the share. Not financial advice.
           </p>

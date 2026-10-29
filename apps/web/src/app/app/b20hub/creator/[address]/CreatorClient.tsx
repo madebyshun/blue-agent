@@ -37,34 +37,34 @@ export default function CreatorClient({ address }: { address: `0x${string}` }) {
           {address.slice(2, 4).toUpperCase()}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase mb-1">
+          <p className="font-mono text-[12px] text-slate-600 tracking-widest uppercase mb-1">
             b20hub creator
           </p>
           <h1 className="font-mono text-xl font-bold break-all">
             {address.slice(0, 10)}…{address.slice(-8)}
           </h1>
           <a href={`https://basescan.org/address/${address}`} target="_blank" rel="noopener noreferrer"
-            className="font-mono text-[10px] text-[#4FC3F7] hover:underline">
+            className="font-mono text-[13px] text-[#4FC3F7] hover:underline">
             Basescan ↗
           </a>
         </div>
         <div className="text-right">
           <div className="font-mono text-2xl font-bold">{mine.length}</div>
-          <div className="font-mono text-[9px] text-slate-600 tracking-widest uppercase">launches</div>
+          <div className="font-mono text-[12px] text-slate-600 tracking-widest uppercase">launches</div>
         </div>
       </div>
 
       {loading && (
         <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] py-12 text-center">
           <div className="inline-block w-2 h-2 rounded-full bg-[#4FC3F7] animate-pulse" />
-          <p className="font-mono text-[10px] text-slate-600 mt-3">Loading launches…</p>
+          <p className="font-mono text-[13px] text-slate-600 mt-3">Loading launches…</p>
         </div>
       )}
 
       {!loading && mine.length === 0 && (
         <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] py-12 text-center">
           <p className="font-mono text-sm text-slate-300 mb-1">No B20HUB launches yet</p>
-          <p className="font-mono text-[11px] text-slate-500 mb-4">
+          <p className="font-mono text-[14px] text-slate-500 mb-4">
             This wallet hasn&apos;t deployed anything through B20HUB — or its
             launches haven&apos;t been indexed yet.
           </p>
@@ -82,8 +82,8 @@ export default function CreatorClient({ address }: { address: `0x${string}` }) {
             <Link key={t.tokenAddress} href={`/app/b20hub/token/${t.tokenAddress}`}
               className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4 hover:border-[#4FC3F7]/40 transition-colors block">
               <div className="font-mono text-sm font-bold mb-1">{t.tokenName || t.tokenSymbol}</div>
-              <div className="font-mono text-[10px] text-slate-500 mb-3">${t.tokenSymbol}</div>
-              <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
+              <div className="font-mono text-[13px] text-slate-500 mb-3">${t.tokenSymbol}</div>
+              <div className="grid grid-cols-2 gap-2 text-[13px] font-mono">
                 <div>
                   <div className="text-slate-600 tracking-wider uppercase">MCap</div>
                   <div className="text-slate-200 font-bold">

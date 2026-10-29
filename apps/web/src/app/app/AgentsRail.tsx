@@ -29,15 +29,15 @@ export default function AgentsRail() {
     <aside className="hidden 2xl:flex w-[290px] shrink-0 flex-col gap-3 overflow-y-auto border-l border-[#1A1A2E] bg-[#050508] p-3 font-mono">
       <div className={card}>
         <div className="flex items-baseline">
-          <p className="text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">TRENDING SELLERS · 7D</p>
-          <Link href="/exchange" className="ml-auto text-[9.5px] text-[#4FC3F7]">all →</Link>
+          <p className="text-[12px] font-medium tracking-[0.14em] text-[#64748B]">TRENDING SELLERS · 7D</p>
+          <Link href="/exchange" className="ml-auto text-[12px] text-[#4FC3F7]">all →</Link>
         </div>
-        {!s ? <p className="mt-2 text-[10px] text-[#64748B]">Loading…</p> : s.trending.length === 0 ? <p className="mt-2 text-[10px] text-[#64748B]">Indexing.</p> : (
+        {!s ? <p className="mt-2 text-[13px] text-[#64748B]">Loading…</p> : s.trending.length === 0 ? <p className="mt-2 text-[13px] text-[#64748B]">Indexing.</p> : (
           <ol className="mt-2 grid gap-1.5">
             {s.trending.map((t, i) => (
               <li key={t.payTo}>
-                <Link href={`/exchange/${t.payTo}`} className="flex items-center gap-2 text-[10.5px] hover:text-[#4FC3F7]">
-                  <span className="w-4 text-[#475569] tabular-nums">{i + 1}</span>
+                <Link href={`/exchange/${t.payTo}`} className="flex items-center gap-2 text-[13px] hover:text-[#4FC3F7]">
+                  <span className="w-4 text-[#64748B] tabular-nums">{i + 1}</span>
                   <span className="min-w-0 flex-1 truncate text-[#E2E8F0]">{t.host ?? `${t.payTo.slice(0, 8)}…`}</span>
                   <span className="text-[#94A3B8] tabular-nums">{usd(t.usd7)}</span>
                 </Link>
@@ -48,9 +48,9 @@ export default function AgentsRail() {
       </div>
 
       <div className={card}>
-        <p className="text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">X402 VOLUME · BASE</p>
-        <p className="mt-1.5 text-[20px] font-semibold text-[#E2E8F0] tabular-nums">{s ? usd(range === "7d" ? s.usd7 : s.usdAll) : "—"}</p>
-        <p className="text-[9px] text-[#475569]">measured, settled on Base{s ? ` · ${range === "7d" ? "7 days" : `${s.window_days} days`}` : ""}</p>
+        <p className="text-[12px] font-medium tracking-[0.14em] text-[#64748B]">X402 VOLUME · BASE</p>
+        <p className="mt-1.5 text-[24px] font-semibold text-[#E2E8F0] tabular-nums">{s ? usd(range === "7d" ? s.usd7 : s.usdAll) : "—"}</p>
+        <p className="text-[12px] text-[#64748B]">measured, settled on Base{s ? ` · ${range === "7d" ? "7 days" : `${s.window_days} days`}` : ""}</p>
         {series.length > 1 && (
           <svg viewBox="0 0 100 42" preserveAspectRatio="none" className="mt-2 h-12 w-full">
             <polyline points={pts} fill="none" stroke="#4FC3F7" strokeWidth="1.2" vectorEffect="non-scaling-stroke" />
@@ -58,30 +58,30 @@ export default function AgentsRail() {
         )}
         <div className="mt-2 flex gap-1">
           {(["7d", "all"] as const).map((r) => (
-            <button key={r} type="button" onClick={() => setRange(r)} className="flex-1 rounded-full border px-2 py-[3px] text-[9px]"
+            <button key={r} type="button" onClick={() => setRange(r)} className="flex-1 rounded-full border px-2 py-[3px] text-[12px]"
               style={range === r ? { color: "#050508", background: "#4FC3F7", borderColor: "#4FC3F7", fontWeight: 600 } : { color: "#94A3B8", borderColor: "#1A1A2E" }}>
               {r === "7d" ? "7D" : "ALL"}
             </button>
           ))}
         </div>
-        {s && <p className="mt-2 text-[9.5px] text-[#64748B]">{s.calls7.toLocaleString("en-US")} paid calls in 7 days</p>}
+        {s && <p className="mt-2 text-[12px] text-[#64748B]">{s.calls7.toLocaleString("en-US")} paid calls in 7 days</p>}
       </div>
 
       <div className={card}>
         <div className="flex items-baseline">
-          <p className="text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">OPEN JOBS</p>
-          <Link href="/jobs" className="ml-auto text-[9.5px] text-[#4FC3F7]">all →</Link>
+          <p className="text-[12px] font-medium tracking-[0.14em] text-[#64748B]">OPEN JOBS</p>
+          <Link href="/jobs" className="ml-auto text-[12px] text-[#4FC3F7]">all →</Link>
         </div>
         {!s ? null : s.jobs.length === 0 ? (
-          <p className="mt-2 text-[10px] leading-[1.6] text-[#64748B]">No open jobs. <Link className="text-[#4FC3F7]" href="/jobs">Post the first one →</Link></p>
+          <p className="mt-2 text-[13px] leading-[1.6] text-[#64748B]">No open jobs. <Link className="text-[#4FC3F7]" href="/jobs">Post the first one →</Link></p>
         ) : s.jobs.map((j) => (
-          <Link key={j.id} href={`/jobs/${j.id}`} className="mt-2 block text-[10.5px] text-[#E2E8F0] hover:text-[#4FC3F7]">
+          <Link key={j.id} href={`/jobs/${j.id}`} className="mt-2 block text-[13px] text-[#E2E8F0] hover:text-[#4FC3F7]">
             {j.title} <span className="text-[#64748B]">· up to ${j.budget.toFixed(2)}</span>
           </Link>
         ))}
       </div>
 
-      <p className="px-1 text-[9.5px] italic leading-relaxed text-[#475569]">
+      <p className="px-1 text-[12px] italic leading-relaxed text-[#64748B]">
         &ldquo;Receipts, not reviews.&rdquo; Every figure here is read from settled payments on Base.
       </p>
     </aside>

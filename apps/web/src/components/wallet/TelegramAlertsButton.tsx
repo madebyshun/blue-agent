@@ -53,7 +53,7 @@ export function TelegramAlertsButton({ address }: { address: string }) {
         : signedIn ? "Get alerts on Telegram →" : "Sign in for Telegram alerts →";
   return (
     <button type="button" onClick={onClick} disabled={state === "busy"}
-      className="font-mono text-[10px] underline disabled:opacity-60"
+      className="font-mono text-[13px] underline disabled:opacity-60"
       style={{ color: state === "error" ? "#94a3b8" : "#4FC3F7" }}
       title="Link this wallet to the Blue Agent Telegram bot — fired alerts are sent there; /alerts off stops them">
       {label}

@@ -284,7 +284,7 @@ export default function TickerChart({
             type="button"
             onClick={() => setDays(r.days)}
             aria-pressed={on}
-            className="rounded-md px-2 py-[3px] font-mono text-[9.5px] tracking-[0.14em] transition-colors"
+            className="rounded-md px-2 py-[3px] font-mono text-[12px] tracking-[0.14em] transition-colors"
             style={{
               color: on ? DEX : INK_4,
               backgroundColor: on ? "rgba(79,195,247,0.10)" : "transparent",
@@ -304,12 +304,12 @@ export default function TickerChart({
     return (
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between gap-2">
-          <span className="font-mono text-[10px] tracking-[0.16em]" style={{ color: INK_4 }}>
+          <span className="font-mono text-[13px] tracking-[0.16em]" style={{ color: INK_4 }}>
             {ticker} · {chain} desk
           </span>
           {rangeChips}
         </div>
-        <p className="font-mono text-[11px] leading-relaxed" style={{ color: DRIFT }}>
+        <p className="font-mono text-[14px] leading-relaxed" style={{ color: DRIFT }}>
           history unavailable · {err}
         </p>
       </div>
@@ -320,7 +320,7 @@ export default function TickerChart({
     return (
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between gap-2">
-          <span className="font-mono text-[10px] tracking-[0.16em]" style={{ color: INK_4 }}>
+          <span className="font-mono text-[13px] tracking-[0.16em]" style={{ color: INK_4 }}>
             {ticker} · {chain} desk
           </span>
           {rangeChips}
@@ -339,12 +339,12 @@ export default function TickerChart({
     return (
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between gap-2">
-          <span className="font-mono text-[10px] tracking-[0.16em]" style={{ color: INK_4 }}>
+          <span className="font-mono text-[13px] tracking-[0.16em]" style={{ color: INK_4 }}>
             {ticker} · {chain} desk
           </span>
           {rangeChips}
         </div>
-        <p className="font-mono text-[11px] leading-relaxed" style={{ color: INK_3 }}>
+        <p className="font-mono text-[14px] leading-relaxed" style={{ color: INK_3 }}>
           {note ?? "Nothing on record for this window."}
         </p>
       </div>
@@ -445,14 +445,14 @@ export default function TickerChart({
             </span>
             {last.drift_pct !== null && (
               <span
-                className="font-mono text-[11px] font-medium"
+                className="font-mono text-[14px] font-medium"
                 style={{ color: last.drift_pct >= 0 ? SUCCESS : ERROR }}
               >
                 {fmtPct(last.drift_pct)} vs oracle
               </span>
             )}
           </div>
-          <span className="font-mono text-[9.5px] tracking-[0.14em]" style={{ color: INK_4 }}>
+          <span className="font-mono text-[12px] tracking-[0.14em]" style={{ color: INK_4 }}>
             {/* Never "current". See the header note on the fourth deviation. */}
             LAST RECORDED {fmtWhen(last.at)} · {ticker} ON {chain.toUpperCase()}
           </span>
@@ -460,7 +460,7 @@ export default function TickerChart({
         <div className="flex flex-col items-end gap-1">
           {rangeChips}
           {dexHi !== null && dexLo !== null && (
-            <span className="font-mono text-[9.5px]" style={{ color: INK_4 }}>
+            <span className="font-mono text-[12px]" style={{ color: INK_4 }}>
               dex hi {fmtUsd(dexHi)} · lo {fmtUsd(dexLo)}
             </span>
           )}
@@ -641,28 +641,28 @@ export default function TickerChart({
           >
             {hover.kind === "gap" ? (
               <>
-                <div className="font-mono text-[9.5px] tracking-[0.14em]" style={{ color: INK_4 }}>
+                <div className="font-mono text-[12px] tracking-[0.14em]" style={{ color: INK_4 }}>
                   {GAP_STYLE[hover.reason].label.toUpperCase()}
                 </div>
-                <div className="mt-0.5 font-mono text-[10px]" style={{ color: INK_2 }}>
+                <div className="mt-0.5 font-mono text-[13px]" style={{ color: INK_2 }}>
                   {hover.hours}h with no reading
                 </div>
               </>
             ) : (
               hoverPt && (
                 <>
-                  <div className="font-mono text-[9.5px] tracking-[0.14em]" style={{ color: INK_4 }}>
+                  <div className="font-mono text-[12px] tracking-[0.14em]" style={{ color: INK_4 }}>
                     {fmtWhen(hoverPt.at)} · {hoverPt.is_open ? "OPEN" : "CLOSED"}
                   </div>
-                  <div className="mt-1 flex items-center justify-between gap-3 font-mono text-[10px]">
+                  <div className="mt-1 flex items-center justify-between gap-3 font-mono text-[13px]">
                     <span style={{ color: DEX }}>dex</span>
                     <span style={{ color: "#E2E8F0" }}>{fmtUsd(hoverPt.dex_usd)}</span>
                   </div>
-                  <div className="flex items-center justify-between gap-3 font-mono text-[10px]">
+                  <div className="flex items-center justify-between gap-3 font-mono text-[13px]">
                     <span style={{ color: ORACLE }}>oracle</span>
                     <span style={{ color: "#E2E8F0" }}>{fmtUsd(hoverPt.oracle_usd)}</span>
                   </div>
-                  <div className="flex items-center justify-between gap-3 font-mono text-[10px]">
+                  <div className="flex items-center justify-between gap-3 font-mono text-[13px]">
                     <span style={{ color: DRIFT }}>drift</span>
                     <span style={{ color: driftInk }}>{fmtPct(hoverPt.drift_pct)}</span>
                   </div>
@@ -675,7 +675,7 @@ export default function TickerChart({
 
       {/* ── legend + footer facts ─────────────────────────────────────────── */}
       <div
-        className="flex flex-wrap items-center gap-x-3 gap-y-0.5 font-mono text-[9px]"
+        className="flex flex-wrap items-center gap-x-3 gap-y-0.5 font-mono text-[12px]"
         style={{ color: INK_4 }}
       >
         <span style={{ color: ORACLE }}>┄┄ oracle</span>
@@ -699,36 +699,36 @@ export default function TickerChart({
           rendered only when it is TRUE — a permanently-visible disclaimer is a
           disclaimer nobody reads, which is how the honest ones get cheaper. */}
       {note && (
-        <p className="font-mono text-[10px] leading-relaxed" style={{ color: INK_3 }}>
+        <p className="font-mono text-[13px] leading-relaxed" style={{ color: INK_3 }}>
           {note}
         </p>
       )}
       {/* F6 — the empty DEX / drift lines and the "—" price above are a
           withholding, not a quiet market; say so, in the quarantine's words. */}
       {data.provenance === "quarantined" && (
-        <p className="font-mono text-[10px] leading-relaxed" style={{ color: DRIFT }}>
+        <p className="font-mono text-[13px] leading-relaxed" style={{ color: DRIFT }}>
           DEX price and drift withheld on hours recorded before the price-source fix. {data.provenance_note ?? ""}
         </p>
       )}
       {!data.complete && (
-        <p className="font-mono text-[10px] leading-relaxed" style={{ color: DRIFT }}>
+        <p className="font-mono text-[13px] leading-relaxed" style={{ color: DRIFT }}>
           Part of this window could not be read. Its contents are unknown — not empty.
         </p>
       )}
       {series.counts.trailing_hours > 0 && (
-        <p className="font-mono text-[10px] leading-relaxed" style={{ color: DRIFT }}>
+        <p className="font-mono text-[13px] leading-relaxed" style={{ color: DRIFT }}>
           No observation in the last {series.counts.trailing_hours}h — the price above is that old,
           and the line ends before the window does.
         </p>
       )}
       {series.dating.supported && series.dating.predates_field > 0 && (
-        <p className="font-mono text-[10px] leading-relaxed" style={{ color: INK_3 }}>
+        <p className="font-mono text-[13px] leading-relaxed" style={{ color: INK_3 }}>
           {series.dating.predates_field} of {series.counts.plotted} points predate the oracle-round
           field, so their drift cannot be separated from a stale feed.
         </p>
       )}
       {!series.dating.supported && (
-        <p className="font-mono text-[10px] leading-relaxed" style={{ color: INK_3 }}>
+        <p className="font-mono text-[13px] leading-relaxed" style={{ color: INK_3 }}>
           This desk does not record oracle rounds, so no reading here can be dated against the feed.
         </p>
       )}

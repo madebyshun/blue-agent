@@ -329,7 +329,7 @@ export default function HoodClient() {
           <div className="mb-4 flex flex-wrap items-center gap-2">
             <FilterPills value={filter} onChange={setFilter} buckets={buckets} />
             <ChainToggle value={chainFilter} onChange={setChainFilter} counts={chainCounts} />
-            <div className="ml-auto flex items-center gap-2 text-[10px] uppercase tracking-widest" style={{ color: MUTED }}>
+            <div className="ml-auto flex items-center gap-2 text-[13px] uppercase tracking-widest" style={{ color: MUTED }}>
               <span>sort</span>
               <SortToggle value={sort} onChange={setSort} />
             </div>
@@ -338,10 +338,10 @@ export default function HoodClient() {
           <BaseDeskNote desk={baseDesk} marketOpen={snap?.metrics.market_is_open ?? false} />
           {rhDesk?.provenance === "quarantined" && chainFilter !== "base" && (
             <div
-              className="mb-3 rounded border px-3 py-2 text-[11px] leading-relaxed"
+              className="mb-3 rounded border px-3 py-2 text-[14px] leading-relaxed"
               style={{ borderColor: BORDER, backgroundColor: SURFACE, color: "#9aa1ac" }}
             >
-              <span className="mr-2 font-mono text-[10px] uppercase tracking-widest" style={{ color: AMBER }}>
+              <span className="mr-2 font-mono text-[13px] uppercase tracking-widest" style={{ color: AMBER }}>
                 robinhood desk
               </span>
               {rhDesk.note ?? "DEX price and drift are withheld on readings recorded before the price-source fix."}
@@ -356,12 +356,12 @@ export default function HoodClient() {
             <>
               <div className="h-10" />
               <div className="mb-3 flex items-center justify-between">
-                <div className="font-mono text-[10px] uppercase tracking-widest" style={{ color: MUTED }}>
+                <div className="font-mono text-[13px] uppercase tracking-widest" style={{ color: MUTED }}>
                   // HOOD · ARROWS FEED
                 </div>
                 <Link
                   href="/hood/arrows"
-                  className="font-mono text-[11px] hover:text-white"
+                  className="font-mono text-[14px] hover:text-white"
                   style={{ color: RH_GREEN }}
                 >
                   Track record →
@@ -418,12 +418,12 @@ function Header({
           is the only nav to Inbox/Track/alerts while the BLUEHOOD sidebar is
           lg-only. */}
       <span
-        className="hidden lg:inline font-mono font-semibold text-[11px] tracking-[0.16em]"
+        className="hidden lg:inline font-mono font-semibold text-[14px] tracking-[0.16em]"
         style={{ color: "#E2E8F0" }}
       >
         // HOOD
       </span>
-      <span className="hidden lg:inline font-mono text-[10.5px]" style={{ color: "#64748B" }}>
+      <span className="hidden lg:inline font-mono text-[13px]" style={{ color: "#64748B" }}>
         {ARROWS_FROZEN ? "oracle-vs-DEX drift, live" : "oracle-vs-DEX drift, graded in public"}
       </span>
       {/* Right chip group — Inbox/Track links (they double as mobile nav,
@@ -431,7 +431,7 @@ function Header({
           deep-link (or "alerts paused" while arrows are frozen), the live
           market badge, and the real snapshot-age pulse. Mirrors the
           InboxClient + TrackRecordClient headers. */}
-      <div className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-2 font-mono text-[11px]">
+      <div className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-2 font-mono text-[14px]">
         <Link
           href="/hood/inbox"
           className="hover:text-white"
@@ -644,12 +644,12 @@ function MetricStrip({
           {/* T-V1 sizes — label 11px caps, number 20px, sub 11px — all
               mono. Sublabel was falling through to app-shell sans; now
               explicit `font-mono` so the metric card reads as ONE voice. */}
-          <div className="mb-1 text-[11px] uppercase" style={{ color: MUTED, letterSpacing: "0.08em" }}>
+          <div className="mb-1 text-[14px] uppercase" style={{ color: MUTED, letterSpacing: "0.08em" }}>
             {it.label}
           </div>
-          <div className="text-[20px] font-medium text-white tabular-nums">{it.value}</div>
+          <div className="text-[24px] font-medium text-white tabular-nums">{it.value}</div>
           {it.sub && (
-            <div className="mt-1 text-[11px] tabular-nums" style={{ color: MUTED }}>{it.sub}</div>
+            <div className="mt-1 text-[14px] tabular-nums" style={{ color: MUTED }}>{it.sub}</div>
           )}
         </div>
       ))}
@@ -730,7 +730,7 @@ function ChainToggle({
   ];
   return (
     <div className="flex items-center gap-1">
-      <span className="mr-1 font-mono text-[10px] uppercase tracking-widest" style={{ color: MUTED }}>chain</span>
+      <span className="mr-1 font-mono text-[13px] uppercase tracking-widest" style={{ color: MUTED }}>chain</span>
       {opts.map((o) => {
         const active = o.key === value;
         const empty = o.count === 0;
@@ -824,10 +824,10 @@ function BaseDeskNote({
 
   return (
     <div
-      className="mb-3 rounded border px-3 py-2 text-[11px] leading-relaxed"
+      className="mb-3 rounded border px-3 py-2 text-[14px] leading-relaxed"
       style={{ borderColor: BORDER, backgroundColor: SURFACE, color: "#9aa1ac" }}
     >
-      <span className="mr-2 font-mono text-[10px] uppercase tracking-widest" style={{ color: accent }}>
+      <span className="mr-2 font-mono text-[13px] uppercase tracking-widest" style={{ color: accent }}>
         base desk
       </span>
       {body}
@@ -849,7 +849,7 @@ function SortToggle({ value, onChange }: { value: SortKey; onChange: (v: SortKey
           <button
             key={o.key}
             onClick={() => onChange(o.key)}
-            className="rounded border px-2 py-1 text-[11px] font-medium transition-colors"
+            className="rounded border px-2 py-1 text-[14px] font-medium transition-colors"
             style={{ borderColor: active ? "#3f4550" : BORDER, color: active ? "#E7E9EE" : MUTED }}
           >
             {o.label}
@@ -892,7 +892,7 @@ function DriftBoard({
   return (
     <div className="overflow-x-auto rounded border" style={{ borderColor: BORDER, backgroundColor: SURFACE }}>
       <table className="w-full text-sm">
-        <thead className="font-mono text-[9px] uppercase tracking-widest" style={{ color: MUTED }}>
+        <thead className="font-mono text-[12px] uppercase tracking-widest" style={{ color: MUTED }}>
           <tr className="border-b" style={{ borderColor: BORDER }}>
             {/* T-V4 — column widths explicit so 24H sparkline gets a
                 proper 200px cell (was cramped in a 100px auto slot),
@@ -909,7 +909,7 @@ function DriftBoard({
             <th className="px-3 py-2 text-right w-[120px]">Verdict</th>
           </tr>
         </thead>
-        <tbody className="font-mono text-[13px]">
+        <tbody className="font-mono text-[16px]">
           {rows.map((r) => {
             // Base P1 — the open-arrow lookup MUST match on chain too. Arrows
             // carry `chain` (absent ⟹ robinhood, see chainOf), and a bare
@@ -1052,7 +1052,7 @@ function DriftRow({
           <ChainTag chain={chainOf(r)} />
           {isHeld && (
             <span
-              className="ml-2 font-mono text-[9px] uppercase tracking-widest"
+              className="ml-2 font-mono text-[12px] uppercase tracking-widest"
               style={{ color: RH_GREEN }}
               title="You hold this token"
             >
@@ -1069,7 +1069,7 @@ function DriftRow({
         <td className="px-3 py-2 text-right text-slate-600">—</td>
         <td className="px-3 py-2 text-left">
           <span
-            className="rounded px-2 py-0.5 font-mono text-[10px] font-semibold tracking-wider"
+            className="rounded px-2 py-0.5 font-mono text-[13px] font-semibold tracking-wider"
             style={{ color: "#6b7280", backgroundColor: "#0f1218" }}
             title={r.error ?? (r.no_data_reason === "fetch_failed"
               ? "GT fetch failed (rate-limit / timeout). Retry next cycle."
@@ -1098,7 +1098,7 @@ function DriftRow({
   // F6 — the DEX and drift cells of a withheld row say so, rather than "—"
   // (which reads as "nothing there") or a 0.00% (which reads as "aligned").
   const withheldCell = (
-    <span className="font-mono text-[11px] italic" style={{ color: MUTED }} title={r.provenance_note}>
+    <span className="font-mono text-[14px] italic" style={{ color: MUTED }} title={r.provenance_note}>
       withheld
     </span>
   );
@@ -1133,7 +1133,7 @@ function DriftRow({
           <ChainTag chain={chainOf(r)} />
           {isHeld && (
             <span
-              className="ml-2 font-mono text-[9px] uppercase tracking-widest"
+              className="ml-2 font-mono text-[12px] uppercase tracking-widest"
               style={{ color: RH_GREEN }}
               title="You hold this token"
             >
@@ -1183,7 +1183,7 @@ function DriftRow({
           <div className="leading-tight">
             <div>{formatUsd(rowTotalTvl(r))}</div>
             {r.total_tvl_usd !== null && r.tvl_usd !== null && r.total_tvl_usd !== r.tvl_usd ? (
-              <div className="text-[10px] font-mono" style={{ color: MUTED }}>
+              <div className="text-[13px] font-mono" style={{ color: MUTED }}>
                 {formatUsd(r.tvl_usd)} pri
               </div>
             ) : null}
@@ -1294,7 +1294,7 @@ function WatchToggle({ ticker, chain }: { ticker: string; chain: HoodChain }) {
   if (state === "disconnected") {
     return (
       <span
-        className="ml-2 cursor-default align-baseline text-[12px]"
+        className="ml-2 cursor-default align-baseline text-[15px]"
         style={{ color: "#3a3f4b", lineHeight: 1 }}
         title={title}
         onClick={(e) => e.stopPropagation()}
@@ -1327,7 +1327,7 @@ function WatchToggle({ ticker, chain }: { ticker: string; chain: HoodChain }) {
         type="button"
         onClick={onClick}
         disabled={busy || state === "at-cap" || (state === "unknown" && loading)}
-        className="ml-2 align-baseline text-[12px] transition-opacity disabled:cursor-not-allowed"
+        className="ml-2 align-baseline text-[15px] transition-opacity disabled:cursor-not-allowed"
         style={{
           color: state === "watching" ? RH_GREEN : state === "watchable" ? MUTED : "#3a3f4b",
           opacity: busy ? 0.5 : 1,
@@ -1347,7 +1347,7 @@ function WatchToggle({ ticker, chain }: { ticker: string; chain: HoodChain }) {
       {err && (
         <span
           role="alert"
-          className="ml-1 inline-block max-w-[16ch] truncate align-baseline font-mono text-[9px]"
+          className="ml-1 inline-block max-w-[16ch] truncate align-baseline font-mono text-[12px]"
           style={{ color: RED }}
           title={err}
           onClick={(e) => e.stopPropagation()}
@@ -1367,7 +1367,7 @@ function ChainTag({ chain }: { chain: HoodChain }) {
   const isBase = chain === "base";
   return (
     <span
-      className="ml-2 rounded px-1.5 py-0.5 align-middle font-mono text-[9px] font-semibold uppercase tracking-wider"
+      className="ml-2 rounded px-1.5 py-0.5 align-middle font-mono text-[12px] font-semibold uppercase tracking-wider"
       style={{
         color: isBase ? BASE_BLUE_TEXT : RH_GREEN,
         backgroundColor: isBase ? "rgba(0,82,255,0.16)" : "rgba(52,211,153,0.12)",
@@ -1385,7 +1385,7 @@ function ChainTag({ chain }: { chain: HoodChain }) {
 function DustBadge() {
   return (
     <span
-      className="rounded px-2 py-0.5 font-mono text-[10px] font-semibold tracking-wider"
+      className="rounded px-2 py-0.5 font-mono text-[13px] font-semibold tracking-wider"
       style={{ color: "#6b7280", backgroundColor: "#0f1218" }}
       title="Pool TVL below $5k floor — the engine won't fire arrows off this row"
     >
@@ -1401,7 +1401,7 @@ function DustBadge() {
 function WithheldBadge({ note }: { note?: string }) {
   return (
     <span
-      className="rounded px-2 py-0.5 font-mono text-[10px] font-semibold tracking-wider"
+      className="rounded px-2 py-0.5 font-mono text-[13px] font-semibold tracking-wider"
       style={{ color: AMBER, backgroundColor: "rgba(245,179,66,0.10)" }}
       title={note ?? "DEX price and drift withheld: recorded before the price-source fix"}
     >
@@ -1459,7 +1459,7 @@ function VerdictBadge({
   return (
     <span
       title={title}
-      className="rounded px-2 py-0.5 font-mono text-[10px] font-semibold tracking-wider"
+      className="rounded px-2 py-0.5 font-mono text-[13px] font-semibold tracking-wider"
       style={{ color: s.color, backgroundColor: s.bg }}
     >
       {s.label}
@@ -1489,7 +1489,7 @@ function ArrowsFeed({ data }: { data: Extract<ArrowsRes, { ok: true }> | null })
   return (
     <div className="overflow-x-auto rounded border" style={{ borderColor: BORDER, backgroundColor: SURFACE }}>
       <table className="w-full text-sm">
-        <thead className="font-mono text-[9px] uppercase tracking-widest" style={{ color: MUTED }}>
+        <thead className="font-mono text-[12px] uppercase tracking-widest" style={{ color: MUTED }}>
           <tr className="border-b" style={{ borderColor: BORDER }}>
             <th className="px-3 py-2 text-left">Serial</th>
             <th className="px-3 py-2 text-left">Ticker</th>
@@ -1499,7 +1499,7 @@ function ArrowsFeed({ data }: { data: Extract<ArrowsRes, { ok: true }> | null })
             <th className="px-3 py-2 text-left">Outcome</th>
           </tr>
         </thead>
-        <tbody className="font-mono text-[13px]">
+        <tbody className="font-mono text-[16px]">
           {data.arrows.map((a) => <ArrowRow key={a.id} a={a} />)}
         </tbody>
       </table>
@@ -1543,7 +1543,7 @@ function ArrowRow({ a }: { a: Arrow }) {
         <td className="px-3 py-2 text-left" style={{ color: "#E7E9EE" }}>${a.reference_price.toFixed(2)}</td>
         <td className="px-3 py-2 text-left">
           <span
-            className="rounded px-2 py-0.5 font-mono text-[10px] font-semibold tracking-wider"
+            className="rounded px-2 py-0.5 font-mono text-[13px] font-semibold tracking-wider"
             style={{ color: outcome.color, backgroundColor: `${outcome.color}18` }}
             title={a.outcome_detail ?? undefined}
           >
@@ -1601,7 +1601,7 @@ function ArrowFeedTradeRow({ arrow }: { arrow: Arrow }) {
           type="button"
           onClick={(e) => { e.stopPropagation(); setOpen(true); }}
           disabled={!arrowOpen}
-          className="rounded border px-3 py-1.5 font-mono text-[11px] font-semibold hover:bg-black/40 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="rounded border px-3 py-1.5 font-mono text-[14px] font-semibold hover:bg-black/40 disabled:opacity-50 disabled:cursor-not-allowed"
           style={{ borderColor: RH_GREEN, color: RH_GREEN }}
           title={arrowOpen ? "Open the trade panel" : "Signal closed — read-only"}
         >
@@ -1658,7 +1658,7 @@ function YouTradedBadge({
       : a.status === "reverted" ? "#f87171"
       : "#facc15";
     return (
-      <span className="flex items-center gap-1 font-mono text-[10px]" style={{ color }}>
+      <span className="flex items-center gap-1 font-mono text-[13px]" style={{ color }}>
         <span style={{ color: MUTED }}>you traded ·</span>
         <a
           href={`${RH_EXPLORER}/tx/${a.tx_hash}`}
@@ -1680,7 +1680,7 @@ function YouTradedBadge({
     (sorted.length > 3 ? `, +${sorted.length - 3} more` : "");
   return (
     <span
-      className="flex items-center gap-1 font-mono text-[10px]"
+      className="flex items-center gap-1 font-mono text-[13px]"
       title={tooltip}
     >
       <span style={{ color: MUTED }}>you traded ·</span>
@@ -1693,7 +1693,7 @@ function YouTradedBadge({
 
 function SectionHeader({ label }: { label: string }) {
   return (
-    <div className="mb-3 font-mono text-[10px] uppercase tracking-widest" style={{ color: MUTED }}>
+    <div className="mb-3 font-mono text-[13px] uppercase tracking-widest" style={{ color: MUTED }}>
       {label}
     </div>
   );
@@ -1701,7 +1701,7 @@ function SectionHeader({ label }: { label: string }) {
 
 function Footer() {
   return (
-    <footer className="mt-12 border-t pt-6 text-[11px]" style={{ borderColor: BORDER, color: MUTED }}>
+    <footer className="mt-12 border-t pt-6 text-[14px]" style={{ borderColor: BORDER, color: MUTED }}>
       <div className="flex flex-wrap gap-x-6 gap-y-2">
         <span>Oracle: Chainlink AggregatorV3 (RH) + B20 share price (Base)</span>
         <span>DEX: GeckoTerminal (Uniswap V3/V4 · Aerodrome)</span>

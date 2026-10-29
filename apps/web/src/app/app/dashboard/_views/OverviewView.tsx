@@ -68,7 +68,7 @@ function fmtAmt(n: number, decimals: number): string {
 // Big ledger/score values can overrun a narrow mini-cell; step the font down
 // past 9 chars and always truncate with a tooltip as the final guard.
 function valSize(v: string): string {
-  return v.length > 12 ? "text-[13px]" : v.length > 9 ? "text-[16px]" : "text-[20px]";
+  return v.length > 12 ? "text-[16px]" : v.length > 9 ? "text-[19px]" : "text-[24px]";
 }
 
 // ── localStorage data ─────────────────────────────────────────────────────────
@@ -236,11 +236,11 @@ export default function OverviewView() {
           (see AppShell) already prints the surface title ("Overview"), so
           rendering this too would duplicate it. */}
       <div className="hidden lg:flex items-center gap-3.5 flex-wrap shrink-0 min-h-[56px] px-5 py-2 border-b border-[#1A1A2E]">
-        <span className="font-mono text-[11px] font-semibold tracking-[0.16em] text-[#E2E8F0]">// OVERVIEW</span>
-        <span className="font-mono text-[10.5px] text-[#64748B]">wallet · balances · agent activity</span>
+        <span className="font-mono text-[14px] font-semibold tracking-[0.16em] text-[#E2E8F0]">// OVERVIEW</span>
+        <span className="font-mono text-[13px] text-[#64748B]">wallet · balances · agent activity</span>
         {isConnected && address && (
           <a href={`https://basescan.org/address/${address}`} target="_blank" rel="noopener noreferrer"
-             className="ml-auto font-mono text-[10.5px] text-[#4FC3F7] border border-[rgba(79,195,247,0.3)] rounded-[7px] px-2.5 py-[5px] hover:bg-[rgba(79,195,247,0.08)] transition-colors">
+             className="ml-auto font-mono text-[13px] text-[#4FC3F7] border border-[rgba(79,195,247,0.3)] rounded-[7px] px-2.5 py-[5px] hover:bg-[rgba(79,195,247,0.08)] transition-colors">
             Basescan ↗
           </a>
         )}
@@ -274,7 +274,7 @@ export default function OverviewView() {
                 <div className="flex gap-4 items-start">
                   {/* Avatar — address initials, not the score (the score has its
                       own cell + pill; showing initials keeps the null case clean). */}
-                  <div className="w-14 h-14 shrink-0 rounded-[14px] flex items-center justify-center font-mono text-[18px] font-bold"
+                  <div className="w-14 h-14 shrink-0 rounded-[14px] flex items-center justify-center font-mono text-[22px] font-bold"
                        style={{ background: "rgba(79,195,247,0.10)", boxShadow: "inset 0 0 0 1px rgba(79,195,247,0.25)", color: ACCENT }}>
                     {address?.slice(2, 4).toUpperCase()}
                   </div>
@@ -282,20 +282,20 @@ export default function OverviewView() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start gap-2">
                       <button onClick={copyAddress} className="flex items-center gap-2 min-w-0 hover:opacity-80 transition-opacity">
-                        <span className="font-mono text-[15px] text-[#E2E8F0] truncate">
+                        <span className="font-mono text-[18px] text-[#E2E8F0] truncate">
                           {basename ?? `${address?.slice(0, 6)}…${address?.slice(-4)}`}
                         </span>
-                        <span className="font-mono text-[9.5px] text-[#64748B] shrink-0">{copied ? "✓" : "copy"}</span>
+                        <span className="font-mono text-[12px] text-[#64748B] shrink-0">{copied ? "✓" : "copy"}</span>
                       </button>
                       <div className="ml-auto flex flex-col items-end gap-1.5 shrink-0">
                         {builderScore !== null && !scoreLoading && (
-                          <span className="font-mono text-[9.5px] px-2 py-[3px] rounded-full whitespace-nowrap"
+                          <span className="font-mono text-[12px] px-2 py-[3px] rounded-full whitespace-nowrap"
                                 style={{ color: scoreColor, border: `1px solid ${scoreColor}40` }}>
                             BUILDER · {builderScore}
                           </span>
                         )}
                         <button onClick={() => disconnect()}
-                          className="font-mono text-[9px] text-slate-600 hover:text-red-400 underline-offset-2 hover:underline transition-colors">
+                          className="font-mono text-[12px] text-slate-600 hover:text-red-400 underline-offset-2 hover:underline transition-colors">
                           disconnect
                         </button>
                       </div>
@@ -303,17 +303,17 @@ export default function OverviewView() {
 
                     {/* Privy prose is always true; the member-since clause only
                         appears once there's a first-chat timestamp to show. */}
-                    <div className="font-mono text-[10.5px] text-[#64748B] mt-1.5">
+                    <div className="font-mono text-[13px] text-[#64748B] mt-1.5">
                       {memberSince ? `since ${memberSince} · ` : ""}Privy embedded wallet · non-custodial
                     </div>
 
                     <div className="flex gap-2 mt-3.5">
                       {/* CREDITS — one ledger figure. See file header. */}
                       <div className="flex-1 rounded-xl border border-[#1A1A2E] px-3 py-2.5 min-w-0">
-                        <div className="font-mono text-[9px] tracking-[0.15em] text-[#64748B]">CREDITS</div>
+                        <div className="font-mono text-[12px] tracking-[0.15em] text-[#64748B]">CREDITS</div>
                         <div className={`font-mono font-bold leading-tight mt-1 truncate ${valSize(creditsValue)}`}
                              style={{ color: ACCENT }} title={creditsValue}>{creditsValue}</div>
-                        <div className="font-mono text-[9.5px] text-[#64748B] mt-1 truncate">
+                        <div className="font-mono text-[12px] text-[#64748B] mt-1 truncate">
                           {ledger?.dailyRemaining != null
                             ? `spendable now · ${ledger.dailyRemaining.toLocaleString()} free today`
                             : "spendable now"}
@@ -321,10 +321,10 @@ export default function OverviewView() {
                       </div>
                       {/* BUILDER SCORE — scoreColor tier band; sub is real chat activity. */}
                       <div className="flex-1 rounded-xl border border-[#1A1A2E] px-3 py-2.5 min-w-0">
-                        <div className="font-mono text-[9px] tracking-[0.15em] text-[#64748B]">BUILDER SCORE</div>
+                        <div className="font-mono text-[12px] tracking-[0.15em] text-[#64748B]">BUILDER SCORE</div>
                         <div className={`font-mono font-bold leading-tight mt-1 truncate ${valSize(scoreValue)}`}
                              style={{ color: builderScore !== null && !scoreLoading ? scoreColor : "#E2E8F0" }} title={scoreValue}>{scoreValue}</div>
-                        <div className="font-mono text-[9.5px] text-[#64748B] mt-1 truncate">
+                        <div className="font-mono text-[12px] text-[#64748B] mt-1 truncate">
                           {chatStats.totalSessions} sessions · {chatStats.totalMessages} responses
                         </div>
                       </div>
@@ -341,16 +341,16 @@ export default function OverviewView() {
                   proportion next to them would read as if it weren't. */}
               <div className={`${CARD} lg:col-span-2 p-[18px]`}>
                 <div className="flex items-center justify-between">
-                  <span className="font-mono text-[9.5px] tracking-[0.14em] text-[#64748B]">BALANCES · BASE</span>
-                  <span className="font-mono text-[10px] text-[#64748B]">5 tokens</span>
+                  <span className="font-mono text-[12px] tracking-[0.14em] text-[#64748B]">BALANCES · BASE</span>
+                  <span className="font-mono text-[13px] text-[#64748B]">5 tokens</span>
                 </div>
                 <div className="grid gap-2.5 mt-3.5" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(120px,1fr))" }}>
                   {balances.map(t => {
                     const isZero = !t.amount || t.amount === 0;
                     return (
                       <div key={t.sym} className={isZero ? "opacity-45" : ""}>
-                        <div className="font-mono text-[9.5px]" style={{ color: t.color }}>{t.sym}</div>
-                        <div className="font-mono text-[15px] font-semibold text-[#E2E8F0] mt-1 truncate">
+                        <div className="font-mono text-[12px]" style={{ color: t.color }}>{t.sym}</div>
+                        <div className="font-mono text-[18px] font-semibold text-[#E2E8F0] mt-1 truncate">
                           {t.amount === null ? "—" : fmtAmt(t.amount, t.decimals)}
                         </div>
                       </div>
@@ -365,7 +365,7 @@ export default function OverviewView() {
                   price feed would be invented, so the rows carry a plain chevron
                   affordance instead of a fake number. */}
               <div className={`${CARD} lg:col-span-1 p-4`}>
-                <div className="font-mono text-[9.5px] tracking-[0.14em] text-[#64748B]">QUICK ACTIONS</div>
+                <div className="font-mono text-[12px] tracking-[0.14em] text-[#64748B]">QUICK ACTIONS</div>
                 <div className="mt-3 space-y-2">
                   {[
                     { label: "CHAT",   href: "/chat",   d: IconChat },
@@ -375,8 +375,8 @@ export default function OverviewView() {
                     <Link key={a.label} href={a.href}
                       className="flex items-center gap-2.5 border border-[#1A1A2E] rounded-[10px] px-3 py-[11px] hover:border-[#2a2a3e] hover:bg-white/[0.02] transition-all group">
                       <Icon d={a.d} color={ACCENT} />
-                      <span className="font-mono text-[11px] font-semibold tracking-[0.1em] text-[#E2E8F0]">{a.label}</span>
-                      <span className="ml-auto font-mono text-[11px] text-slate-700 group-hover:text-slate-500 transition-colors">→</span>
+                      <span className="font-mono text-[14px] font-semibold tracking-[0.1em] text-[#E2E8F0]">{a.label}</span>
+                      <span className="ml-auto font-mono text-[14px] text-slate-700 group-hover:text-slate-500 transition-colors">→</span>
                     </Link>
                   ))}
                 </div>
@@ -385,9 +385,9 @@ export default function OverviewView() {
               {/* ─── Blue Chat activity (span 3) ──────────────────────────────── */}
               <div className={`${CARD} lg:col-span-3 p-4`}>
                 <div className="flex items-center justify-between">
-                  <span className="font-mono text-[9.5px] tracking-[0.14em] text-[#64748B]">BLUE CHAT ACTIVITY</span>
+                  <span className="font-mono text-[12px] tracking-[0.14em] text-[#64748B]">BLUE CHAT ACTIVITY</span>
                   {chatStats.totalSessions > 0 && (
-                    <Link href="/chat" className="font-mono text-[10px] text-[#4FC3F7] hover:underline">Open chat →</Link>
+                    <Link href="/chat" className="font-mono text-[13px] text-[#4FC3F7] hover:underline">Open chat →</Link>
                   )}
                 </div>
 
@@ -401,8 +401,8 @@ export default function OverviewView() {
                         { label: "CREDITS SPENT", value: chatStats.totalCreditsUsed, color: "#4FC3F7" },
                       ].map(s => (
                         <div key={s.label} className="border border-[#1A1A2E] rounded-[10px] px-3 py-2.5">
-                          <div className="font-mono text-[9px] tracking-[0.15em] text-[#64748B]">{s.label}</div>
-                          <div className="font-mono text-[18px] font-bold leading-none mt-1" style={{ color: s.color }}>
+                          <div className="font-mono text-[12px] tracking-[0.15em] text-[#64748B]">{s.label}</div>
+                          <div className="font-mono text-[22px] font-bold leading-none mt-1" style={{ color: s.color }}>
                             {s.value.toLocaleString()}
                           </div>
                         </div>
@@ -411,34 +411,34 @@ export default function OverviewView() {
 
                     {/* Top tools */}
                     <div className="min-w-0">
-                      <div className="font-mono text-[9.5px] text-[#64748B] mb-2.5">TOP TOOLS</div>
+                      <div className="font-mono text-[12px] text-[#64748B] mb-2.5">TOP TOOLS</div>
                       {chatStats.toolsUsed.length > 0 ? (
                         <div className="space-y-1.5">
                           {chatStats.toolsUsed.map(t => {
                             const maxCount = chatStats.toolsUsed[0].count;
                             return (
                               <div key={t.name} className="flex items-center gap-3">
-                                <span className="font-mono text-[10.5px] text-[#E2E8F0] w-28 sm:w-36 shrink-0 truncate">{t.name.replace(/_/g, " ")}</span>
+                                <span className="font-mono text-[13px] text-[#E2E8F0] w-28 sm:w-36 shrink-0 truncate">{t.name.replace(/_/g, " ")}</span>
                                 <span className="flex-1 h-[5px] bg-[#1A1A2E] rounded-[3px] overflow-hidden">
                                   <span className="block h-full rounded-[3px]"
                                         style={{ width: `${(t.count / maxCount) * 100}%`, background: ACCENT }} />
                                 </span>
-                                <span className="font-mono text-[10.5px] text-[#94A3B8] w-5 text-right shrink-0">{t.count}</span>
+                                <span className="font-mono text-[13px] text-[#94A3B8] w-5 text-right shrink-0">{t.count}</span>
                               </div>
                             );
                           })}
                         </div>
                       ) : (
-                        <div className="font-mono text-[10.5px] text-[#475569] pt-1">No tool calls yet</div>
+                        <div className="font-mono text-[13px] text-[#64748B] pt-1">No tool calls yet</div>
                       )}
                     </div>
                   </div>
                 ) : (
                   <div className="text-center py-6">
                     <p className="font-mono text-sm font-bold text-[#E2E8F0] mb-1">Start your first chat</p>
-                    <p className="font-mono text-[11px] text-[#64748B] mb-4">5 commands · pay per call in USDC</p>
+                    <p className="font-mono text-[14px] text-[#64748B] mb-4">5 commands · pay per call in USDC</p>
                     <Link href="/chat"
-                      className="inline-flex items-center justify-center gap-1.5 font-mono text-[11px] font-bold px-4 py-2 rounded-lg bg-[#4FC3F7] text-[#050508] hover:bg-[#29ABE2] transition-colors">
+                      className="inline-flex items-center justify-center gap-1.5 font-mono text-[14px] font-bold px-4 py-2 rounded-lg bg-[#4FC3F7] text-[#050508] hover:bg-[#29ABE2] transition-colors">
                       Open Blue Chat →
                     </Link>
                   </div>
@@ -451,14 +451,14 @@ export default function OverviewView() {
               <div className={`${CARD} lg:col-span-4 p-4`}>
                 <div className="flex flex-col md:flex-row md:items-start gap-4 md:gap-8">
                   <div className="flex-1 min-w-0">
-                    <div className="font-mono text-[9.5px] tracking-[0.14em] text-[#64748B]">AGENT STATUS</div>
+                    <div className="font-mono text-[12px] tracking-[0.14em] text-[#64748B]">AGENT STATUS</div>
                     {liveConnectors.length > 0 ? (
                       <>
-                        <div className="flex items-center gap-2 mt-3 font-mono text-[11px] font-medium text-[#34D399]">
+                        <div className="flex items-center gap-2 mt-3 font-mono text-[14px] font-medium text-[#34D399]">
                           <span className="w-[7px] h-[7px] rounded-full bg-[#34D399]" />
                           {liveConnectors.length} connector{liveConnectors.length === 1 ? "" : "s"} live
                         </div>
-                        <div className="font-mono text-[10.5px] text-[#94A3B8] leading-[1.7] mt-2.5">
+                        <div className="font-mono text-[13px] text-[#94A3B8] leading-[1.7] mt-2.5">
                           {liveConnectors.map(c => (
                             <div key={c.id}>{c.name} · {c.tools.length} tool{c.tools.length === 1 ? "" : "s"}</div>
                           ))}
@@ -466,11 +466,11 @@ export default function OverviewView() {
                       </>
                     ) : (
                       <>
-                        <div className="flex items-center gap-2 mt-3 font-mono text-[11px] font-medium text-[#64748B]">
+                        <div className="flex items-center gap-2 mt-3 font-mono text-[14px] font-medium text-[#64748B]">
                           <span className="w-[7px] h-[7px] rounded-full bg-[#475569]" />
                           No connectors attached
                         </div>
-                        <div className="font-mono text-[10.5px] text-[#64748B] leading-[1.7] mt-2.5">
+                        <div className="font-mono text-[13px] text-[#64748B] leading-[1.7] mt-2.5">
                           Attach an MCP server to extend the agent with third-party tools.
                         </div>
                       </>
@@ -478,11 +478,11 @@ export default function OverviewView() {
                   </div>
 
                   <div className="md:max-w-sm">
-                    <p className="font-prose text-[9.5px] text-[#64748B] leading-[1.6]">
+                    <p className="font-prose text-[12px] text-[#64748B] leading-[1.6]">
                       Wallet created with Privy — signing in with email or a social account mints it. Keys stay with you; BlueAgent never holds them.
                     </p>
                     <Link href="/connectors"
-                      className="mt-3 block text-center font-mono text-[10.5px] text-[#4FC3F7] border border-[rgba(79,195,247,0.3)] rounded-lg py-2 hover:bg-[rgba(79,195,247,0.08)] transition-colors">
+                      className="mt-3 block text-center font-mono text-[13px] text-[#4FC3F7] border border-[rgba(79,195,247,0.3)] rounded-lg py-2 hover:bg-[rgba(79,195,247,0.08)] transition-colors">
                       Manage connectors
                     </Link>
                   </div>

@@ -49,9 +49,9 @@ export default function ArtifactsPanel() {
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-[#1A1A2E] flex-shrink-0">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="font-mono text-[9px] text-slate-600 tracking-widest">ARTIFACTS</span>
+          <span className="font-mono text-[12px] text-slate-600 tracking-widest">ARTIFACTS</span>
           <span
-            className="font-mono text-[9px] px-1.5 py-0.5 rounded border"
+            className="font-mono text-[12px] px-1.5 py-0.5 rounded border"
             style={{ color: langColor, borderColor: `${langColor}40`, background: `${langColor}10` }}
           >
             {active.lang.toUpperCase()}
@@ -74,7 +74,7 @@ export default function ArtifactsPanel() {
             <button
               key={art.id}
               onClick={() => setActiveIdx(i)}
-              className="flex-shrink-0 font-mono text-[10px] px-2 py-1 rounded-lg border transition-all"
+              className="flex-shrink-0 font-mono text-[13px] px-2 py-1 rounded-lg border transition-all"
               style={i === activeIdx
                 ? { color: langColor, borderColor: `${langColor}40`, background: `${langColor}10` }
                 : { color: "#475569", borderColor: "transparent" }}
@@ -87,17 +87,17 @@ export default function ArtifactsPanel() {
 
       {/* Filename bar */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-[#0D0D14] flex-shrink-0">
-        <span className="font-mono text-[10px] text-slate-400 truncate">{active.filename}</span>
+        <span className="font-mono text-[13px] text-slate-400 truncate">{active.filename}</span>
         <div className="flex items-center gap-2 ml-2">
           <button
             onClick={handleCopy}
-            className="font-mono text-[9px] px-2 py-0.5 rounded border border-[#1A1A2E] text-slate-600 hover:text-[#4FC3F7] hover:border-[#4FC3F7]/30 transition-all"
+            className="font-mono text-[12px] px-2 py-0.5 rounded border border-[#1A1A2E] text-slate-600 hover:text-[#4FC3F7] hover:border-[#4FC3F7]/30 transition-all"
           >
             {copied ? "copied!" : "copy"}
           </button>
           <button
             onClick={handleDownload}
-            className="font-mono text-[9px] px-2 py-0.5 rounded border border-[#1A1A2E] text-slate-600 hover:text-[#4FC3F7] hover:border-[#4FC3F7]/30 transition-all"
+            className="font-mono text-[12px] px-2 py-0.5 rounded border border-[#1A1A2E] text-slate-600 hover:text-[#4FC3F7] hover:border-[#4FC3F7]/30 transition-all"
           >
             ↓ download
           </button>
@@ -106,7 +106,7 @@ export default function ArtifactsPanel() {
               href={`https://remix.ethereum.org/#code=${encodeURIComponent(active.code)}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="font-mono text-[9px] px-2 py-0.5 rounded border border-[#1A1A2E] text-[#627EEA] hover:border-[#627EEA]/40 hover:bg-[#627EEA]/5 transition-all"
+              className="font-mono text-[12px] px-2 py-0.5 rounded border border-[#1A1A2E] text-[#627EEA] hover:border-[#627EEA]/40 hover:bg-[#627EEA]/5 transition-all"
             >
               ⚡ remix
             </a>
@@ -116,17 +116,17 @@ export default function ArtifactsPanel() {
 
       {/* Code */}
       <div className="flex-1 overflow-auto">
-        <pre className="p-4 font-mono text-[11px] text-slate-300 leading-relaxed whitespace-pre">
+        <pre className="p-4 font-mono text-[14px] text-slate-300 leading-relaxed whitespace-pre">
           <code>{active.code}</code>
         </pre>
       </div>
 
       {/* Lines / chars footer */}
       <div className="px-4 py-2 border-t border-[#0D0D14] flex items-center gap-3 flex-shrink-0">
-        <span className="font-mono text-[9px] text-slate-700">
+        <span className="font-mono text-[12px] text-slate-700">
           {active.code.split("\n").length} lines
         </span>
-        <span className="font-mono text-[9px] text-slate-700">
+        <span className="font-mono text-[12px] text-slate-700">
           {active.code.length.toLocaleString()} chars
         </span>
       </div>

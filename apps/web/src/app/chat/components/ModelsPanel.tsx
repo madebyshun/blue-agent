@@ -182,14 +182,14 @@ export default function ModelsPanel({ onPick }: { onPick?: (id: string) => void 
              load-bearing Presets↔All switch, restyled to the handoff pill; its
              counts are live (`data`), never the prototype's hardcoded 8 / 312. ── */}
       <div className="flex items-center gap-3.5 flex-wrap shrink-0 min-h-[56px] px-5 py-2 border-b border-[#1A1A2E]">
-        <span className="font-mono text-[11px] font-semibold tracking-[0.16em] text-[#E2E8F0]">// MODELS</span>
-        <span className="font-mono text-[10.5px] text-[#64748B]">
+        <span className="font-mono text-[14px] font-semibold tracking-[0.16em] text-[#E2E8F0]">// MODELS</span>
+        <span className="font-mono text-[13px] text-[#64748B]">
           {presetCount} presets · {modelCount ?? "…"} models · routed through Virtuals + Venice · credits per message
         </span>
 
         <button
           onClick={() => setShowFilters(v => !v)}
-          className="lg:hidden font-mono text-[10.5px] px-2.5 py-1 rounded-md border border-[#1A1A2E] bg-[#0A0A12] text-slate-400"
+          className="lg:hidden font-mono text-[13px] px-2.5 py-1 rounded-md border border-[#1A1A2E] bg-[#0A0A12] text-slate-400"
         >
           {showFilters ? "Hide filters" : "Filters"}
         </button>
@@ -202,7 +202,7 @@ export default function ModelsPanel({ onPick }: { onPick?: (id: string) => void 
             <button
               key={t.id}
               onClick={() => switchTab(t.id)}
-              className="font-mono text-[10.5px] px-2.5 py-1 rounded-md transition-colors"
+              className="font-mono text-[13px] px-2.5 py-1 rounded-md transition-colors"
               style={tab === t.id
                 ? { background: "#4FC3F7", color: "#050508", fontWeight: 600 }
                 : { color: "#94A3B8" }}
@@ -219,7 +219,7 @@ export default function ModelsPanel({ onPick }: { onPick?: (id: string) => void 
              truth (the same defect as reading a KV outage as an empty set). ── */}
       {degraded.length > 0 && (
         <div className="px-5 py-2 border-b border-[#1A1A2E] bg-[#FBBF2408] shrink-0">
-          <p className="font-mono text-[10px] text-[#FBBF24]">
+          <p className="font-mono text-[13px] text-[#FBBF24]">
             {degraded.map(g => (g === "virtuals" ? "Virtuals" : "Venice")).join(" and ")} catalog unreachable —
             this list is incomplete. Missing models are not listed, not unavailable.
           </p>
@@ -236,9 +236,9 @@ export default function ModelsPanel({ onPick }: { onPick?: (id: string) => void 
               value={filters.query}
               onChange={e => setFilters(f => ({ ...f, query: e.target.value }))}
               placeholder="Search model or publisher…"
-              className="w-full font-mono text-[10.5px] px-2.5 py-2 rounded-lg border border-[#1A1A2E] bg-[#0D0D14] text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-[#4FC3F733]"
+              className="w-full font-mono text-[13px] px-2.5 py-2 rounded-lg border border-[#1A1A2E] bg-[#0D0D14] text-slate-200 placeholder:text-slate-600 focus:outline-none focus:border-[#4FC3F733]"
             />
-            <p className="font-mono text-[9px] text-slate-600 mt-1.5 px-0.5">
+            <p className="font-mono text-[12px] text-slate-600 mt-1.5 px-0.5">
               {shown.length}{shown.length !== allRows.length && ` of ${allRows.length}`} shown
             </p>
           </div>
@@ -273,7 +273,7 @@ export default function ModelsPanel({ onPick }: { onPick?: (id: string) => void 
                 <button
                   key={s.value}
                   onClick={() => setFilters(f => ({ ...f, minContext: s.value }))}
-                  className="font-mono text-[10px] px-2 py-1 rounded-md border transition-colors"
+                  className="font-mono text-[13px] px-2 py-1 rounded-md border transition-colors"
                   style={filters.minContext === s.value
                     ? { borderColor: "#4FC3F744", color: "#4FC3F7", background: "#4FC3F70d" }
                     : { borderColor: "#1A1A2E", color: "#64748b" }}
@@ -298,7 +298,7 @@ export default function ModelsPanel({ onPick }: { onPick?: (id: string) => void 
                 modality test, so the count of what got dropped for lack of
                 data is stated rather than left to read as "can't do it". */}
             {unknownModality > 0 && (
-              <p className="font-mono text-[9px] text-slate-600 leading-relaxed mt-1">
+              <p className="font-mono text-[12px] text-slate-600 leading-relaxed mt-1">
                 {unknownModality} model{unknownModality === 1 ? "" : "s"} publish no modality list — hidden by this
                 filter, not ruled out.
               </p>
@@ -308,7 +308,7 @@ export default function ModelsPanel({ onPick }: { onPick?: (id: string) => void 
           {isFiltered(filters) && (
             <button
               onClick={() => setFilters(EMPTY_FILTERS)}
-              className="font-mono text-[10px] text-slate-500 hover:text-slate-300 text-left transition-colors"
+              className="font-mono text-[13px] text-slate-500 hover:text-slate-300 text-left transition-colors"
             >
               ← Reset filters
             </button>
@@ -318,12 +318,12 @@ export default function ModelsPanel({ onPick }: { onPick?: (id: string) => void 
               each preset's live credit cost (see `budgetLine`). Shows "…" until
               a wallet resolves rather than a placeholder number. */}
           <div className="mt-1 p-3 rounded-xl border border-[#1A1A2E] bg-[#0D0D14]">
-            <p className="font-mono text-[9.5px] tracking-[0.14em] text-[#64748B]">TODAY&apos;S BUDGET</p>
-            <p className="font-mono text-[20px] font-bold text-[#E2E8F0] mt-1.5 leading-none">
+            <p className="font-mono text-[12px] tracking-[0.14em] text-[#64748B]">TODAY&apos;S BUDGET</p>
+            <p className="font-mono text-[24px] font-bold text-[#E2E8F0] mt-1.5 leading-none">
               {walletReady ? `${credits.toLocaleString()} cr` : "…"}
             </p>
             {budgetLine && (
-              <p className="font-prose text-[10px] leading-relaxed text-[#94A3B8] mt-2">{budgetLine}</p>
+              <p className="font-prose text-[13px] leading-relaxed text-[#94A3B8] mt-2">{budgetLine}</p>
             )}
           </div>
         </aside>
@@ -332,12 +332,12 @@ export default function ModelsPanel({ onPick }: { onPick?: (id: string) => void 
         <div className={`${showFilters ? "hidden" : "flex"} lg:flex flex-1 min-w-0 flex-col overflow-y-auto`}>
 
           {load.state === "loading" && (
-            <p className="font-mono text-[11px] text-slate-600 px-5 py-6">Reading the live catalogs…</p>
+            <p className="font-mono text-[14px] text-slate-600 px-5 py-6">Reading the live catalogs…</p>
           )}
 
           {load.state === "error" && (
             <div className="px-5 py-4 border-b border-[#1A1A2E] bg-[#F8717108]">
-              <p className="font-mono text-[10px] text-[#F87171] leading-relaxed">
+              <p className="font-mono text-[13px] text-[#F87171] leading-relaxed">
                 Could not reach /api/chat/models ({load.message}).
                 {isPresets
                   ? " Showing the built-in preset spec below — context sizes are the fallback figures and upstream prices are unavailable."
@@ -348,7 +348,7 @@ export default function ModelsPanel({ onPick }: { onPick?: (id: string) => void 
 
           {load.state !== "loading" && !isPresets && (
             <div className="px-5 pt-4">
-              <p className="font-mono text-[10px] text-slate-600 leading-relaxed">
+              <p className="font-mono text-[13px] text-slate-600 leading-relaxed">
                 Every model the two gateways publish. These are <span className="text-slate-400">browse-only</span> —
                 Blue Chat dispatches by preset, so the {data?.presets.length ?? 8} rows on the Presets tab are the ones
                 it can actually run.
@@ -357,7 +357,7 @@ export default function ModelsPanel({ onPick }: { onPick?: (id: string) => void 
           )}
 
           {shown.length === 0 && load.state === "ok" && (
-            <p className="font-mono text-[11px] text-slate-600 px-5 py-6">
+            <p className="font-mono text-[14px] text-slate-600 px-5 py-6">
               No model matches these filters.
             </p>
           )}
@@ -407,24 +407,24 @@ export default function ModelsPanel({ onPick }: { onPick?: (id: string) => void 
                           <ProviderMark modelId={row.modelId} name={row.title} size={28} />
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5">
-                              <span className={`font-mono text-[12px] truncate ${unusable ? "text-slate-500" : "text-white"}`}>
+                              <span className={`font-mono text-[15px] truncate ${unusable ? "text-slate-500" : "text-white"}`}>
                                 {row.title}
                               </span>
                               {isActive && (
                                 <span
-                                  className="font-mono text-[8px] px-1.5 py-0.5 rounded-full font-bold tracking-wider shrink-0"
+                                  className="font-mono text-[11px] px-1.5 py-0.5 rounded-full font-bold tracking-wider shrink-0"
                                   style={{ background: accent, color: "#050508" }}
                                 >
                                   ACTIVE
                                 </span>
                               )}
                               {unusable && (
-                                <span className="font-mono text-[8px] px-1.5 py-0.5 rounded-full shrink-0 bg-[#1A1A2E] text-slate-500">
+                                <span className="font-mono text-[11px] px-1.5 py-0.5 rounded-full shrink-0 bg-[#1A1A2E] text-slate-500">
                                   UNAVAILABLE
                                 </span>
                               )}
                             </div>
-                            <span className="font-mono text-[10px] text-slate-600 truncate block">
+                            <span className="font-mono text-[13px] text-slate-600 truncate block">
                               {isPresets ? `${row.publisher.label} · ${row.modelId}` : row.modelId}
                             </span>
                             {/* Below lg the capabilities column is hidden, so the
@@ -445,7 +445,7 @@ export default function ModelsPanel({ onPick }: { onPick?: (id: string) => void 
                       {isPresets ? (
                         <>
                           <td className="hidden xl:table-cell py-2.5 pr-3 align-middle">
-                            <span className="font-mono text-[10px] text-slate-500 leading-relaxed">{meta?.bestFor}</span>
+                            <span className="font-mono text-[13px] text-slate-500 leading-relaxed">{meta?.bestFor}</span>
                           </td>
                           <Td align="right">
                             {displayContext(row.contextTokens)}
@@ -470,7 +470,7 @@ export default function ModelsPanel({ onPick }: { onPick?: (id: string) => void 
                           </td>
                           <td className="pr-5 py-2.5 text-right whitespace-nowrap">
                             {selectable && (
-                              <span className="font-mono text-[10px]" style={{ color: isActive ? accent : "#475569" }}>
+                              <span className="font-mono text-[13px]" style={{ color: isActive ? accent : "#475569" }}>
                                 {isActive ? "in use" : "use →"}
                               </span>
                             )}
@@ -494,7 +494,7 @@ export default function ModelsPanel({ onPick }: { onPick?: (id: string) => void 
 
           {/* Two units live on this page and confusing them would misprice the
               product to the user's face, so both are named. */}
-          <p className="font-mono text-[10px] text-slate-700 px-5 py-4 leading-relaxed">
+          <p className="font-mono text-[13px] text-slate-700 px-5 py-4 leading-relaxed">
             {isPresets
               ? <>Credits are charged per <span className="text-slate-500">message</span>, not per token. 1 credit ≈ ${data?.pricing_basis.credit_usd ?? 0.0005}. Everyone gets a free daily bucket — connect any wallet for 500 credits/day, or top up with USDC on Base.</>
               : <>Prices are what the model&apos;s provider publishes per 1M tokens <span className="text-slate-500">upstream</span> — not what you pay. Blue Chat bills credits per message; see the Presets tab.</>}
@@ -510,7 +510,7 @@ export default function ModelsPanel({ onPick }: { onPick?: (id: string) => void 
 function FilterGroup({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <p className="font-mono text-[9px] text-slate-600 tracking-widest mb-2">{title.toUpperCase()}</p>
+      <p className="font-mono text-[12px] text-slate-600 tracking-widest mb-2">{title.toUpperCase()}</p>
       <div className="flex flex-col gap-0.5">{children}</div>
     </div>
   );
@@ -534,8 +534,8 @@ function FilterRow({ label, count, checked, onToggle }: { label: string; count: 
           </svg>
         )}
       </span>
-      <span className="font-mono text-[11px] truncate flex-1" style={{ color: checked ? "#cbd5e1" : "#64748b" }}>{label}</span>
-      <span className="font-mono text-[10px] text-slate-700">{count}</span>
+      <span className="font-mono text-[14px] truncate flex-1" style={{ color: checked ? "#cbd5e1" : "#64748b" }}>{label}</span>
+      <span className="font-mono text-[13px] text-slate-700">{count}</span>
     </button>
   );
 }
@@ -555,14 +555,14 @@ function Th({
       {onClick ? (
         <button
           onClick={onClick}
-          className="font-mono text-[9px] tracking-widest transition-colors"
+          className="font-mono text-[12px] tracking-widest transition-colors"
           style={{ color: active ? "#4FC3F7" : "#475569" }}
         >
           {typeof children === "string" ? children.toUpperCase() : children}
           <span className="ml-1">{active ? (dir === "asc" ? "↑" : "↓") : ""}</span>
         </button>
       ) : (
-        <span className="font-mono text-[9px] text-slate-600 tracking-widest">
+        <span className="font-mono text-[12px] text-slate-600 tracking-widest">
           {typeof children === "string" ? children.toUpperCase() : children}
         </span>
       )}
@@ -572,7 +572,7 @@ function Th({
 
 function Td({ children, align = "left", className = "" }: { children: React.ReactNode; align?: "left" | "right"; className?: string }) {
   return (
-    <td className={`py-2.5 pr-3 font-mono text-[11px] text-slate-400 whitespace-nowrap ${align === "right" ? "text-right" : ""} ${className}`}>
+    <td className={`py-2.5 pr-3 font-mono text-[14px] text-slate-400 whitespace-nowrap ${align === "right" ? "text-right" : ""} ${className}`}>
       {children}
     </td>
   );
@@ -580,7 +580,7 @@ function Td({ children, align = "left", className = "" }: { children: React.Reac
 
 function Chip({ label, color }: { label: string; color: string }) {
   return (
-    <span className="font-mono text-[9px] px-1.5 py-0.5 rounded-md" style={{ background: `${color}12`, color }}>
+    <span className="font-mono text-[12px] px-1.5 py-0.5 rounded-md" style={{ background: `${color}12`, color }}>
       {label}
     </span>
   );

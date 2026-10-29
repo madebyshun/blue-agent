@@ -137,7 +137,7 @@ export default function AccountMenu({
             </svg>
           </span>
           {!collapsed && (
-            <span className="font-mono text-[12px] tracking-wide text-slate-500 group-hover:text-slate-300 transition-colors">
+            <span className="font-mono text-[15px] tracking-wide text-slate-500 group-hover:text-slate-300 transition-colors">
               Sign in
             </span>
           )}
@@ -168,11 +168,11 @@ export default function AccountMenu({
         {!collapsed && (
           <>
             <span className="min-w-0 flex-1 text-left">
-              <span className="block font-mono text-[12px] text-slate-300 truncate group-hover:text-white transition-colors">
+              <span className="block font-mono text-[15px] text-slate-300 truncate group-hover:text-white transition-colors">
                 {identity.displayName ?? "Account"}
               </span>
               {identity.secondary && (
-                <span className="block font-mono text-[9px] text-slate-600 truncate">
+                <span className="block font-mono text-[12px] text-slate-600 truncate">
                   {identity.secondary}
                 </span>
               )}
@@ -215,10 +215,10 @@ export default function AccountMenu({
                 size={32}
               />
               <div className="min-w-0">
-                <p className="font-mono text-[12px] text-white truncate">
+                <p className="font-mono text-[15px] text-white truncate">
                   {identity.displayName ?? "Account"}
                 </p>
-                <p className="font-mono text-[9px] text-slate-600 truncate">
+                <p className="font-mono text-[12px] text-slate-600 truncate">
                   {identity.source ? SOURCE_LABEL[identity.source] : "Signed in"}
                   {identity.secondary ? ` · ${identity.secondary}` : ""}
                 </p>
@@ -234,8 +234,8 @@ export default function AccountMenu({
                   onClick={() => { close(); onNavigate?.(); }}
                   className="block px-3 py-2 hover:bg-[#1A1A2E] transition-colors"
                 >
-                  <span className="block font-mono text-[12px] text-slate-300">{it.label}</span>
-                  <span className="block font-mono text-[9px] text-slate-600">{it.hint}</span>
+                  <span className="block font-mono text-[15px] text-slate-300">{it.label}</span>
+                  <span className="block font-mono text-[12px] text-slate-600">{it.hint}</span>
                 </Link>
               ))}
             </div>
@@ -244,7 +244,7 @@ export default function AccountMenu({
               <button
                 role="menuitem"
                 onClick={signOut}
-                className="w-full text-left px-3 py-2.5 hover:bg-[#1A1A2E] transition-colors font-mono text-[12px] text-slate-500 hover:text-slate-300"
+                className="w-full text-left px-3 py-2.5 hover:bg-[#1A1A2E] transition-colors font-mono text-[15px] text-slate-500 hover:text-slate-300"
               >
                 Sign out
               </button>

@@ -37,8 +37,8 @@ export default async function AnalyticsPage() {
   const card = "rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] p-[14px]";
   const L = ({ t, s }: { t: string; s?: string }) => (
     <div className="flex items-baseline gap-2.5 mt-[24px] mb-3 flex-wrap">
-      <span className="text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">{t}</span>
-      {s && <span className="text-[10px] text-[#475569]">{s}</span>}
+      <span className="text-[12px] font-medium tracking-[0.14em] text-[#64748B]">{t}</span>
+      {s && <span className="text-[13px] text-[#64748B]">{s}</span>}
     </div>
   );
 
@@ -55,25 +55,25 @@ export default async function AnalyticsPage() {
               ["TOP 10 SHARE", `${share(top.reduce((a, r) => a + r.usd, 0))}%`, "of the volume"],
             ].map(([l, v, s]) => (
               <div key={l} className={card}>
-                <p className="text-[9.5px] tracking-[0.12em] text-[#64748B]">{l}</p>
-                <p className="mt-1.5 text-[18px] font-semibold text-[#E2E8F0] tabular-nums">{ex.readable && days.length ? v : "—"}</p>
-                <p className="mt-0.5 text-[9.5px] text-[#475569]">{s}</p>
+                <p className="text-[12px] tracking-[0.12em] text-[#64748B]">{l}</p>
+                <p className="mt-1.5 text-[22px] font-semibold text-[#E2E8F0] tabular-nums">{ex.readable && days.length ? v : "—"}</p>
+                <p className="mt-0.5 text-[12px] text-[#64748B]">{s}</p>
               </div>
             ))}
           </div>
 
-          {days.length === 0 ? <p className="mt-6 text-[10.5px] text-[#64748B]">{ex.readable ? "Indexing the first day of Base blocks." : "Index unreadable right now."}</p> : (
+          {days.length === 0 ? <p className="mt-6 text-[13px] text-[#64748B]">{ex.readable ? "Indexing the first day of Base blocks." : "Index unreadable right now."}</p> : (
             <>
               <L t="PER DAY" s="USDC settled on Base over x402 · pick a metric, hover a day" />
               <div className={card}><DailyChart days={days} /></div>
               <L t="TOP SELLERS" s={`share of the ${ex.daysCovered}-day volume · click for the seller's page`} />
               <div className={`${card} grid gap-0.5`}>
                 {top.map((r, i) => (
-                  <Link key={r.payTo} href={`/exchange/${r.payTo}`} className="group flex items-center gap-3 rounded-md px-1.5 py-1.5 text-[10.5px] hover:bg-[#0F121A]">
-                    <span className="w-5 text-[#475569] tabular-nums">{i + 1}</span>
+                  <Link key={r.payTo} href={`/exchange/${r.payTo}`} className="group flex items-center gap-3 rounded-md px-1.5 py-1.5 text-[13px] hover:bg-[#0F121A]">
+                    <span className="w-5 text-[#64748B] tabular-nums">{i + 1}</span>
                     <span className="w-[30%] min-w-0">
                       <span className="block truncate text-[#E2E8F0] group-hover:text-[#4FC3F7]">{r.hosts[0] ?? r.payTo.slice(0, 10)}</span>
-                      <span className="block truncate text-[9px] text-[#475569] font-prose">{r.title || "—"}</span>
+                      <span className="block truncate text-[12px] text-[#64748B] font-prose">{r.title || "—"}</span>
                     </span>
                     <span className="flex-1 h-1.5 rounded-full bg-[#1A1A2E] overflow-hidden"><span className="block h-full bg-[#1f6f93] group-hover:bg-[#4FC3F7]" style={{ width: `${share(r.usd)}%` }} /></span>
                     <span className="w-[52px] text-right text-[#64748B] tabular-nums">{share(r.usd)}%</span>
@@ -87,13 +87,13 @@ export default async function AnalyticsPage() {
               <div className="grid gap-2.5 md:grid-cols-2 2xl:grid-cols-4">
                 {boards.map((b) => (
                   <div key={b.t} className={card}>
-                    <p className="text-[9.5px] tracking-[0.12em] text-[#64748B]">{b.t} <span className="tracking-normal text-[#475569]">· {b.s}</span></p>
-                    {b.rows.length === 0 ? <p className="mt-2 text-[10.5px] text-[#64748B]">Not enough whole days indexed yet.</p> : (
+                    <p className="text-[12px] tracking-[0.12em] text-[#64748B]">{b.t} <span className="tracking-normal text-[#64748B]">· {b.s}</span></p>
+                    {b.rows.length === 0 ? <p className="mt-2 text-[13px] text-[#64748B]">Not enough whole days indexed yet.</p> : (
                       <ol className="mt-2 grid gap-1">
                         {b.rows.map(({ r, v }, i) => (
                           <li key={r.payTo}>
-                            <Link href={`/exchange/${r.payTo}`} className="flex items-center gap-2 text-[10.5px] hover:text-[#4FC3F7]">
-                              <span className="w-4 text-[#475569] tabular-nums">{i + 1}</span>
+                            <Link href={`/exchange/${r.payTo}`} className="flex items-center gap-2 text-[13px] hover:text-[#4FC3F7]">
+                              <span className="w-4 text-[#64748B] tabular-nums">{i + 1}</span>
                               <span className="flex-1 truncate text-[#E2E8F0]">{r.hosts[0] ?? `${r.payTo.slice(0, 6)}…${r.payTo.slice(-4)}`}</span>
                               <span className="text-[#94A3B8] tabular-nums">{v}</span>
                             </Link>
@@ -106,7 +106,7 @@ export default async function AnalyticsPage() {
               </div>
             </>
           )}
-          <p className="text-[9.5px] text-[#475569] mt-4 leading-relaxed">
+          <p className="text-[12px] text-[#64748B] mt-4 leading-relaxed">
             Same index as the seller list: USDC paid to a Bazaar seller&apos;s payTo in a transaction that used the payer&apos;s EIP-3009 authorization. Gross; plain transfers are not counted.
           </p>
         </div>

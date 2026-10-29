@@ -44,12 +44,12 @@ export default function HoodSwap({ ticker, chain, contract }: { ticker: string; 
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="rounded border px-3 py-1 font-mono text-[11px]"
+          className="rounded border px-3 py-1 font-mono text-[14px]"
           style={{ borderColor: "#334155", color: "#cbd5e1" }}
         >
           {open ? "Close swap" : `Swap ${ticker}`}
         </button>
-        <span className="font-mono text-[10px]" style={{ color: "#64748B" }}>{label}</span>
+        <span className="font-mono text-[13px]" style={{ color: "#64748B" }}>{label}</span>
       </div>
       {open && (
         <div className="mt-2 max-w-md">

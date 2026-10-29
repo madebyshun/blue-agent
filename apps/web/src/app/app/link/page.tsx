@@ -32,7 +32,7 @@ function grantLabel(d: Device): string {
 }
 
 const card = "rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-4";
-const btn = "font-mono text-[12px] font-bold px-3 py-1.5 rounded-lg disabled:opacity-40";
+const btn = "font-mono text-[15px] font-bold px-3 py-1.5 rounded-lg disabled:opacity-40";
 const accent = { background: "#4FC3F712", color: "#4FC3F7", border: "1px solid #4FC3F740" };
 
 function ago(ts: number) {
@@ -100,9 +100,9 @@ function LinkInner() {
   return (
     <div className="mx-auto w-full max-w-[560px] px-4 py-8 space-y-4">
       <div>
-        <p className="font-mono text-[11px] tracking-widest text-slate-500 uppercase">// Link a device</p>
+        <p className="font-mono text-[14px] tracking-widest text-slate-500 uppercase">// Link a device</p>
         <h1 className="text-[22px] font-bold text-slate-100 mt-1">Link a device to your wallet</h1>
-        <p className="text-[13px] text-slate-400 mt-1">
+        <p className="text-[16px] text-slate-400 mt-1">
           BlueBot is Blue Agent on your Mac: chat and alerts for this wallet. BlueCube is a desk screen that shows your
           trades, alerts and what your agent is doing. Neither needs a new wallet, neither holds a key, and neither can
           sign or move funds.
@@ -111,20 +111,20 @@ function LinkInner() {
 
       {!isConnected ? (
         <div className={card}>
-          <p className="text-[13px] text-slate-300 mb-3">Connect the wallet you use on Blue Agent. The device will use it, with no new wallet.</p>
+          <p className="text-[16px] text-slate-300 mb-3">Connect the wallet you use on Blue Agent. The device will use it, with no new wallet.</p>
           <ConnectButton label="Connect wallet" />
         </div>
       ) : (
         <>
           <div className={card}>
-            <label className="font-mono text-[11px] text-slate-500">Code shown on your device</label>
+            <label className="font-mono text-[14px] text-slate-500">Code shown on your device</label>
             <div className="flex gap-2 mt-1.5">
               <input
                 value={code}
                 onChange={(e) => setCode(e.target.value.toUpperCase())}
                 placeholder="BCDF-GH23"
                 maxLength={9}
-                className="flex-1 font-mono text-[16px] tracking-[0.2em] bg-[#050508] border border-[#1A1A2E] rounded-lg px-3 py-2 text-slate-100 outline-none focus:border-[#4FC3F7]"
+                className="flex-1 font-mono text-[19px] tracking-[0.2em] bg-[#050508] border border-[#1A1A2E] rounded-lg px-3 py-2 text-slate-100 outline-none focus:border-[#4FC3F7]"
               />
               <button className={btn} style={accent} disabled={busy || code.replace(/[^A-Z0-9]/gi, "").length !== 8} onClick={check}>
                 Continue
@@ -133,15 +133,15 @@ function LinkInner() {
 
             {pending && (
               <div className="mt-4 rounded-lg border border-[#4FC3F740] bg-[#4FC3F70A] p-3 space-y-2">
-                <p className="text-[13px] text-slate-200">
+                <p className="text-[16px] text-slate-200">
                   <b>{pending.name}</b> <span className="text-slate-500">({pending.kind === "mac" ? "Mac app" : pending.kind === "cube" ? "BlueCube desk screen" : "BlueBot device"}, asked {ago(pending.createdAt)})</span> wants to show
                   activity for <span className="font-mono">{address!.slice(0, 6)}…{address!.slice(-4)}</span>.
                 </p>
-                <div className="space-y-1.5 text-[13px] text-slate-300">
+                <div className="space-y-1.5 text-[16px] text-slate-300">
                   <label className="flex items-center gap-2"><input type="checkbox" checked disabled /> See your alerts and activity</label>
                   {pending.kind === "cube" ? (
                     // A cube is capped at read on the server too (lib/devices.ts KIND_MAX_SCOPES).
-                    <p className="text-[12px] text-slate-500">A BlueCube only shows things. It cannot chat or change alerts.</p>
+                    <p className="text-[15px] text-slate-500">A BlueCube only shows things. It cannot chat or change alerts.</p>
                   ) : (
                     <>
                       <label className="flex items-center gap-2"><input type="checkbox" checked={allowChat} onChange={(e) => setAllowChat(e.target.checked)} /> Chat with Blue Agent on your credits</label>
@@ -149,28 +149,28 @@ function LinkInner() {
                     </>
                   )}
                 </div>
-                <p className="text-[12px] text-amber-400">Only approve a code shown on your own screen. A linked device can never sign or move funds.</p>
+                <p className="text-[15px] text-amber-400">Only approve a code shown on your own screen. A linked device can never sign or move funds.</p>
                 <button className={btn} style={{ background: "#4FC3F7", color: "#050508", border: "1px solid #4FC3F7" }} disabled={busy} onClick={approve}>
                   Approve
                 </button>
               </div>
             )}
-            {msg && <p className={`mt-3 text-[12px] ${msg.tone === "ok" ? "text-emerald-400" : "text-amber-400"}`}>{msg.text}</p>}
+            {msg && <p className={`mt-3 text-[15px] ${msg.tone === "ok" ? "text-emerald-400" : "text-amber-400"}`}>{msg.text}</p>}
           </div>
 
           <div className={card}>
             <div className="flex items-center justify-between">
-              <p className="font-mono text-[11px] tracking-widest text-slate-500 uppercase">Linked devices</p>
+              <p className="font-mono text-[14px] tracking-widest text-slate-500 uppercase">Linked devices</p>
               {devices == null && <button className={btn} style={accent} disabled={busy} onClick={loadDevices}>Show</button>}
             </div>
             {devices != null && (devices.length === 0
-              ? <p className="text-[13px] text-slate-500 mt-2">No device linked yet.</p>
+              ? <p className="text-[16px] text-slate-500 mt-2">No device linked yet.</p>
               : <ul className="mt-2 space-y-2">
                   {devices.map((d) => (
                     <li key={d.id} className="flex items-center gap-3 rounded-lg border border-[#1A1A2E] px-3 py-2">
                       <div className="flex-1">
-                        <p className="text-[13px] text-slate-200">{d.name}</p>
-                        <p className="font-mono text-[10px] text-slate-500">{d.kind === "mac" ? "Mac app" : d.kind === "cube" ? "BlueCube" : "device"} · {grantLabel(d)} · linked {ago(d.createdAt)} · expires {new Date(d.expiresAt).toLocaleDateString()}</p>
+                        <p className="text-[16px] text-slate-200">{d.name}</p>
+                        <p className="font-mono text-[13px] text-slate-500">{d.kind === "mac" ? "Mac app" : d.kind === "cube" ? "BlueCube" : "device"} · {grantLabel(d)} · linked {ago(d.createdAt)} · expires {new Date(d.expiresAt).toLocaleDateString()}</p>
                       </div>
                       <button className={btn} style={{ color: "#F87171", border: "1px solid #F8717155", background: "transparent" }} disabled={busy} onClick={() => unlink(d.id)}>Unlink</button>
                     </li>

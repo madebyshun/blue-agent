@@ -30,7 +30,7 @@ export default function TaskList() {
       {/* Task list */}
       <div className="flex-1 overflow-y-auto px-2 space-y-0.5">
         {tasks.length === 0 ? (
-          <p className="font-mono text-[10px] text-slate-700 text-center py-4 px-3">
+          <p className="font-mono text-[13px] text-slate-700 text-center py-4 px-3">
             No tasks yet — start a conversation
           </p>
         ) : (
@@ -52,7 +52,7 @@ export default function TaskList() {
                     <p className={`font-mono text-xs truncate ${isActive ? "text-white" : "text-slate-400 group-hover:text-slate-200"}`}>
                       {task.title || <span className="italic text-slate-600">New conversation</span>}
                     </p>
-                    <p className="font-mono text-[9px] text-slate-700 mt-0.5">
+                    <p className="font-mono text-[12px] text-slate-700 mt-0.5">
                       {relativeTime(task.updatedAt)}
                       {task.messages.length > 0 && (
                         <span className="ml-1.5">{Math.floor(task.messages.length / 2)} msgs</span>

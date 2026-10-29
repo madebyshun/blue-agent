@@ -81,7 +81,7 @@ function SellControl({ h, onQuickSell }: { h: WalletHolding; onQuickSell: (h: Wa
       aria-label={`Sell ${h.symbol}`}
       defaultValue=""
       onChange={e => { const p = Number(e.target.value); e.currentTarget.selectedIndex = 0; if (p > 0) onQuickSell(h, p); }}
-      className="justify-self-end bg-[#050508] border border-[#1A1A2E] rounded-lg pl-1.5 pr-0.5 py-1 font-mono text-[9px] text-[#4FC3F7] outline-none cursor-pointer hover:border-[#4FC3F7]/40">
+      className="justify-self-end bg-[#050508] border border-[#1A1A2E] rounded-lg pl-1.5 pr-0.5 py-1 font-mono text-[12px] text-[#4FC3F7] outline-none cursor-pointer hover:border-[#4FC3F7]/40">
       <option value="">Sell ▾</option>
       <option value="25">25%</option>
       <option value="50">50%</option>
@@ -207,8 +207,8 @@ export default function TokenTable({ address, network, onQuickSell, hideDust, hi
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <span className="font-mono text-[9px] text-slate-500 tracking-widest">TOKENS</span>
-          <span className="font-mono text-[9px] px-1.5 py-0.5 rounded text-[#4FC3F7]"
+          <span className="font-mono text-[12px] text-slate-500 tracking-widest">TOKENS</span>
+          <span className="font-mono text-[12px] px-1.5 py-0.5 rounded text-[#4FC3F7]"
             style={{ border: "1px solid #4FC3F730", background: "#4FC3F710" }}>{chainLabel}</span>
         </div>
         {read.body === "rows" && (
@@ -225,7 +225,7 @@ export default function TokenTable({ address, network, onQuickSell, hideDust, hi
           // header printed a flat, confident "$8.24" summed over the 12 it could
           // price. `net-worth.ts:129` already made "some tokens have no price"
           // a floor for the headline figure; the per-table totals did not.
-          <span className="font-mono text-[10px] text-slate-400 tabular-nums"
+          <span className="font-mono text-[13px] text-slate-400 tabular-nums"
             title={
               read.totalIsFloor && unpricedInTotal ? "At least this much — the token list is incomplete AND some tokens have no price"
               : read.totalIsFloor ? "Partial read — at least this much; the full token list was not available"
@@ -242,7 +242,7 @@ export default function TokenTable({ address, network, onQuickSell, hideDust, hi
           "could not read" notice render as a table that failed rather than as
           the sentence it is. */}
       {(read.body === "pending" || read.body === "rows") && (
-        <div className={`grid ${gridCls} gap-3 px-1 pb-1.5 font-mono text-[9px] text-slate-600 border-b border-[#1A1A2E]`}>
+        <div className={`grid ${gridCls} gap-3 px-1 pb-1.5 font-mono text-[12px] text-slate-600 border-b border-[#1A1A2E]`}>
           <span>Token</span>
           <span className="text-right">Balance</span>
           <span className="text-right">Value</span>
@@ -261,9 +261,9 @@ export default function TokenTable({ address, network, onQuickSell, hideDust, hi
           suppresses the caveat that contradicts it — which is precisely what
           the old `partial && holdings.length > 0` did. */}
       {read.body === "pending" ? (
-        <div className="py-6 text-center font-mono text-[10px] text-slate-600">loading portfolio…</div>
+        <div className="py-6 text-center font-mono text-[13px] text-slate-600">loading portfolio…</div>
       ) : read.body === "failed" ? (
-        <div className="mt-2 rounded-lg px-3 py-2.5 font-mono text-[9px] leading-relaxed text-amber-500/80"
+        <div className="mt-2 rounded-lg px-3 py-2.5 font-mono text-[12px] leading-relaxed text-amber-500/80"
           style={{ border: "1px solid #F59E0B30", background: "#F59E0B08" }}>
           {chainLabel} holdings could not be read. What this wallet holds there is unknown —
           this is not an empty portfolio.{" "}
@@ -277,7 +277,7 @@ export default function TokenTable({ address, network, onQuickSell, hideDust, hi
         // nothing, whichever source cut the list short. The trailing clause is
         // this table's, because it is the part that is about the branch rather
         // than about the read.
-        <div className="mt-2 rounded-lg px-3 py-2.5 font-mono text-[9px] leading-relaxed text-amber-500/80"
+        <div className="mt-2 rounded-lg px-3 py-2.5 font-mono text-[12px] leading-relaxed text-amber-500/80"
           style={{ border: "1px solid #F59E0B30", background: "#F59E0B08" }}>
           {data?.partialReason ?? "This read is known to be incomplete."}{" "}
           Nothing was found in what could be checked — so anything else in this wallet is
@@ -290,7 +290,7 @@ export default function TokenTable({ address, network, onQuickSell, hideDust, hi
         // makes that a property of the type, not of the ordering of the
         // ternaries above it. This is the one branch entitled to speak about
         // the wallet itself.
-        <div className="py-6 text-center font-mono text-[10px] text-slate-600">No tokens on {chainLabel} yet</div>
+        <div className="py-6 text-center font-mono text-[13px] text-slate-600">No tokens on {chainLabel} yet</div>
       ) : shown.length === 0 ? (
         // Rows exist, the filter hid every one of them. NOT the "empty" branch —
         // that branch is a statement about the wallet ("No tokens on Base yet")
@@ -301,7 +301,7 @@ export default function TokenTable({ address, network, onQuickSell, hideDust, hi
         // line used to read "All N tokens here are under $1", which on the
         // measured wallet would have been false for 29 of the 41 rows it was
         // describing — they are not under a dollar, they have no price at all.
-        <div className="py-6 text-center font-mono text-[10px] text-slate-600">
+        <div className="py-6 text-center font-mono text-[13px] text-slate-600">
           All {holdings.length} token{holdings.length > 1 ? "s" : ""} here are{" "}
           {hid.dust > 0 && hid.unpriced > 0
             ? `under $${DUST_USD} or unpriced`
@@ -327,33 +327,33 @@ export default function TokenTable({ address, network, onQuickSell, hideDust, hi
                   ? // eslint-disable-next-line @next/next/no-img-element
                     <img src={h.logo} alt="" className="w-6 h-6 rounded-full shrink-0"
                       onError={e => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
-                  : <span className="w-6 h-6 rounded-full shrink-0 flex items-center justify-center font-mono text-[9px] text-slate-400"
+                  : <span className="w-6 h-6 rounded-full shrink-0 flex items-center justify-center font-mono text-[12px] text-slate-400"
                       style={{ background: "#1A1A2E" }}>{h.symbol.slice(0, 3).toUpperCase()}</span>}
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <span className="font-mono text-[11px] font-bold truncate"
+                    <span className="font-mono text-[14px] font-bold truncate"
                       style={{ color: impostor ? "#94a3b8" : "#e2e8f0" }}>{h.symbol}</span>
-                    {h.isB20 && <span className="font-mono text-[8px] px-1 rounded text-[#4FC3F7] shrink-0"
+                    {h.isB20 && <span className="font-mono text-[11px] px-1 rounded text-[#4FC3F7] shrink-0"
                       style={{ border: "1px solid #4FC3F730" }}>B20</span>}
-                    {h.isNative && <span className="font-mono text-[8px] px-1 rounded text-slate-500 shrink-0"
+                    {h.isNative && <span className="font-mono text-[11px] px-1 rounded text-slate-500 shrink-0"
                       style={{ border: "1px solid #1A1A2E" }}>native</span>}
-                    {badge && <span className="font-mono text-[8px] px-1 rounded shrink-0"
+                    {badge && <span className="font-mono text-[11px] px-1 rounded shrink-0"
                       style={{ color: badge.color, border: `1px solid ${badge.color}55` }}>{badge.label}</span>}
                   </div>
-                  {h.name && <div className="font-mono text-[9px] text-slate-600 truncate">{h.name}</div>}
+                  {h.name && <div className="font-mono text-[12px] text-slate-600 truncate">{h.name}</div>}
                 </div>
               </a>
               {/* Balance — masked too. A token quantity beside a public market
                   price is the same disclosure with one extra step, so hiding
                   only the dollar column would not hide anything. */}
-              <span className="font-mono text-[10px] text-slate-300 text-right tabular-nums">
+              <span className="font-mono text-[13px] text-slate-300 text-right tabular-nums">
                 {maskFigure(fmtAmount(h.amount), hideAmounts)}
               </span>
               {/* Value — an impostor's price is its own claim, so it isn't shown.
                   The mask wraps only the branch that prints a figure: "—" means
                   "we have no price", and a masked "—" would turn that absence
                   into a secret the user thinks they are keeping. */}
-              <span className="font-mono text-[10px] text-right tabular-nums"
+              <span className="font-mono text-[13px] text-right tabular-nums"
                 style={{ color: impostor ? "#64748b" : h.usdValue != null ? "#34D399" : "#64748b" }}>
                 {impostor || h.usdValue == null ? "—" : maskFigure(fmtUsd(h.usdValue), hideAmounts)}
               </span>
@@ -364,7 +364,7 @@ export default function TokenTable({ address, network, onQuickSell, hideDust, hi
                   aligned — the CONTROL is absent from the DOM, not hidden. */}
               {showSell && (canQuickSell(h.trust)
                 ? <SellControl h={h} onQuickSell={onQuickSell!} />
-                : <span className="justify-self-end font-mono text-[9px] text-slate-700" title="Name does not match this contract — trading disabled here">—</span>)}
+                : <span className="justify-self-end font-mono text-[12px] text-slate-700" title="Name does not match this contract — trading disabled here">—</span>)}
             </div>
             );
           })}
@@ -384,7 +384,7 @@ export default function TokenTable({ address, network, onQuickSell, hideDust, hi
           halves — "never a banner and a footnote at once", and "an incomplete
           read with rows always carries the footnote". */}
       {read.footnote && (
-        <div className="mt-2 font-mono text-[9px] text-amber-500/80 leading-relaxed">
+        <div className="mt-2 font-mono text-[12px] text-amber-500/80 leading-relaxed">
           {/* The caveat is the READER's sentence, not this table's. It used to be
               the literal string "Showing majors only — the full token list needs
               Moralis", which was true while `partial` had exactly one cause and
@@ -412,7 +412,7 @@ export default function TokenTable({ address, network, onQuickSell, hideDust, hi
           says this in full; two copies of the same sentence is not twice the
           honesty. */}
       {note && shown.length > 0 && (
-        <div className="mt-2 font-mono text-[9px] text-slate-600 leading-relaxed">
+        <div className="mt-2 font-mono text-[12px] text-slate-600 leading-relaxed">
           {note}{" "}
           {onShowDust && (
             <button type="button" onClick={onShowDust}
@@ -423,7 +423,7 @@ export default function TokenTable({ address, network, onQuickSell, hideDust, hi
 
       {/* Say WHY a row is flagged, once, instead of leaving the badge to be guessed at. */}
       {nFlagged > 0 && (
-        <div className="mt-2 font-mono text-[9px] text-red-400/80 leading-relaxed">
+        <div className="mt-2 font-mono text-[12px] text-red-400/80 leading-relaxed">
           {nFlagged} token{nFlagged > 1 ? "s" : ""} use{nFlagged > 1 ? "" : "s"} the name of a real
           asset at a different contract address. Not counted in the total, and not tradable here.
         </div>

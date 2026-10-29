@@ -66,10 +66,10 @@ export default function CandleChart({ chain, pool, side, initial, source }: { ch
       <div className="mb-3 flex items-center gap-2 flex-wrap">
         {TFS.map(([id, l]) => (
           <button key={id} type="button" onClick={() => { setTf(id); setHover(null); }}
-            className={`text-[10px] rounded-[6px] px-2.5 py-1 border ${tf === id ? "border-[#4FC3F7]/60 text-[#4FC3F7] bg-[#4FC3F7]/10" : "border-[#1A1A2E] text-[#94A3B8] hover:text-[#E2E8F0]"}`}>{l}</button>
+            className={`text-[13px] rounded-[6px] px-2.5 py-1 border ${tf === id ? "border-[#4FC3F7]/60 text-[#4FC3F7] bg-[#4FC3F7]/10" : "border-[#1A1A2E] text-[#94A3B8] hover:text-[#E2E8F0]"}`}>{l}</button>
         ))}
         {shown && (
-          <span className="ml-2 flex flex-wrap gap-x-3 text-[10px] tabular-nums">
+          <span className="ml-2 flex flex-wrap gap-x-3 text-[13px] tabular-nums">
             <span className="text-[#64748B]">{when(shown[0], tf)}</span>
             <span className="text-[#64748B]">O <span className="text-[#E2E8F0]">{fmt(shown[1])}</span></span>
             <span className="text-[#64748B]">H <span className="text-[#E2E8F0]">{fmt(shown[2])}</span></span>
@@ -79,21 +79,21 @@ export default function CandleChart({ chain, pool, side, initial, source }: { ch
             {chg !== null && <span style={{ color: chg >= 0 ? UP : DOWN }}>{chg >= 0 ? "+" : ""}{chg.toFixed(2)}% in view</span>}
           </span>
         )}
-        <span className="ml-auto text-[9.5px] text-[#475569]">{busy ? "loading…" : source}</span>
+        <span className="ml-auto text-[12px] text-[#64748B]">{busy ? "loading…" : source}</span>
       </div>
 
       <div ref={box} className="relative w-full select-none" style={{ height: H + VH + 22 }}>
         {candles === null ? (
-          <p className="pt-24 text-center text-[10.5px] text-[#64748B]">GeckoTerminal is rate-limiting right now; pick the timeframe again in a minute.</p>
+          <p className="pt-24 text-center text-[13px] text-[#64748B]">GeckoTerminal is rate-limiting right now; pick the timeframe again in a minute.</p>
         ) : !geo || !candles ? (
-          <p className="pt-24 text-center text-[10.5px] text-[#64748B]">{busy ? "Loading candles…" : "No candles for this pool and timeframe yet."}</p>
+          <p className="pt-24 text-center text-[13px] text-[#64748B]">{busy ? "Loading candles…" : "No candles for this pool and timeframe yet."}</p>
         ) : (
           <svg width={w} height={H + VH + 22}
             onMouseMove={(e) => { const x = e.clientX - e.currentTarget.getBoundingClientRect().left; const i = Math.floor(x / geo.step); setHover(i >= 0 && i < candles.length ? i : null); }}
             onMouseLeave={() => setHover(null)}>
             {[0, 0.25, 0.5, 0.75, 1].map((f) => {
               const v = geo.lo + geo.span * f, yy = geo.y(v);
-              return <g key={f}><line x1={0} x2={geo.plotW} y1={yy} y2={yy} stroke={GRID} strokeDasharray="2 4" /><text x={geo.plotW + 6} y={yy + 3} fill={AXIS} fontSize={9.5}>{fmt(v)}</text></g>;
+              return <g key={f}><line x1={0} x2={geo.plotW} y1={yy} y2={yy} stroke={GRID} strokeDasharray="2 4" /><text x={geo.plotW + 6} y={yy + 3} fill={AXIS} fontSize={11.5}>{fmt(v)}</text></g>;
             })}
             {candles.map((c, i) => {
               const x = i * geo.step + geo.step / 2, bw = Math.max(1, geo.step * 0.62);
@@ -112,15 +112,15 @@ export default function CandleChart({ chain, pool, side, initial, source }: { ch
               const last = candles[candles.length - 1], yy = geo.y(last[4]), col = last[4] >= last[1] ? UP : DOWN;
               return <g><line x1={0} x2={geo.plotW} y1={yy} y2={yy} stroke={col} strokeOpacity={0.5} strokeDasharray="3 3" />
                 <rect x={geo.plotW + 2} y={yy - 8} width={PAD_R - 4} height={16} rx={3} fill={col} />
-                <text x={geo.plotW + 6} y={yy + 3.5} fill="#050508" fontSize={9.5} fontWeight={600}>{fmt(last[4])}</text></g>;
+                <text x={geo.plotW + 6} y={yy + 3.5} fill="#050508" fontSize={11.5} fontWeight={600}>{fmt(last[4])}</text></g>;
             })()}
             {hover !== null && (() => {
               const c = candles[hover], x = hover * geo.step + geo.step / 2, yy = geo.y(c[4]);
               return <g pointerEvents="none"><line x1={x} x2={x} y1={0} y2={H + VH} stroke="#64748B" strokeDasharray="2 3" /><line x1={0} x2={geo.plotW} y1={yy} y2={yy} stroke="#64748B" strokeDasharray="2 3" /></g>;
             })()}
             <line x1={0} x2={geo.plotW} y1={H + 2} y2={H + 2} stroke={GRID} />
-            <text x={0} y={H + VH + 16} fill={AXIS} fontSize={9.5}>{when(candles[0][0], tf)}</text>
-            <text x={geo.plotW} y={H + VH + 16} fill={AXIS} fontSize={9.5} textAnchor="end">{when(candles[candles.length - 1][0], tf)}</text>
+            <text x={0} y={H + VH + 16} fill={AXIS} fontSize={11.5}>{when(candles[0][0], tf)}</text>
+            <text x={geo.plotW} y={H + VH + 16} fill={AXIS} fontSize={11.5} textAnchor="end">{when(candles[candles.length - 1][0], tf)}</text>
           </svg>
         )}
       </div>

@@ -94,8 +94,8 @@ export default function QrScanner({
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
       <div className="relative z-10 w-full max-w-sm rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] shadow-2xl p-4">
         <div className="flex items-center justify-between mb-3">
-          <span className="font-mono text-[10px] text-slate-500 tracking-widest">SCAN TO PAY · BASE</span>
-          <button onClick={onClose} className="w-7 h-7 rounded-md font-mono text-[13px] text-slate-500 hover:text-white hover:bg-[#1A1A2E]">✕</button>
+          <span className="font-mono text-[13px] text-slate-500 tracking-widest">SCAN TO PAY · BASE</span>
+          <button onClick={onClose} className="w-7 h-7 rounded-md font-mono text-[16px] text-slate-500 hover:text-white hover:bg-[#1A1A2E]">✕</button>
         </div>
 
         {/* Camera viewport */}
@@ -106,10 +106,10 @@ export default function QrScanner({
             <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
               <div className="w-2/3 h-2/3 rounded-xl border-2 border-[#4FC3F7]/70 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]" />
             </div>
-            {!ready && <div className="absolute inset-0 flex items-center justify-center font-mono text-[10px] text-slate-400">starting camera…</div>}
+            {!ready && <div className="absolute inset-0 flex items-center justify-center font-mono text-[13px] text-slate-400">starting camera…</div>}
           </div>
         )}
-        {err && <div className="font-mono text-[10px] text-amber-400 mb-3">{err}</div>}
+        {err && <div className="font-mono text-[13px] text-amber-400 mb-3">{err}</div>}
 
         {/* Manual fallback — paste address / payment link */}
         <div className="flex gap-1.5">
@@ -118,17 +118,17 @@ export default function QrScanner({
             onChange={e => { setManual(e.target.value); setNote(""); }}
             onKeyDown={e => { if (e.key === "Enter" && manual.trim()) submit(manual.trim()); }}
             placeholder="or paste 0x… / name.base / link"
-            className="flex-1 bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[10px] text-slate-200 placeholder:text-slate-700 outline-none" />
+            className="flex-1 bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[13px] text-slate-200 placeholder:text-slate-700 outline-none" />
           <button
             onClick={() => manual.trim() && submit(manual.trim())}
-            className="font-mono text-[10px] px-3 py-1.5 rounded-lg" style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
+            className="font-mono text-[13px] px-3 py-1.5 rounded-lg" style={{ background: "#4FC3F710", color: "#4FC3F7", border: "1px solid #4FC3F730" }}>
             Use
           </button>
         </div>
-        {note && <div className="font-mono text-[9px] text-red-500 mt-1.5">{note}</div>}
+        {note && <div className="font-mono text-[12px] text-red-500 mt-1.5">{note}</div>}
 
         <canvas ref={canvasRef} className="hidden" />
-        <p className="font-mono text-[9px] text-slate-600 mt-3 leading-relaxed">
+        <p className="font-mono text-[12px] text-slate-600 mt-3 leading-relaxed">
           Point at a BlueBank request QR or any wallet address. You&apos;ll confirm the amount and sign in your wallet — non-custodial.
         </p>
       </div>

@@ -53,18 +53,18 @@ function ThinkingBlock({ content, isStreaming = false }: { content: string; isSt
         onClick={() => !isStreaming && setOpen(o => !o)}
         className="w-full flex items-center gap-2.5 px-3.5 py-2.5 bg-[#0B0B16] hover:bg-[#0E0E1C] transition-colors text-left"
       >
-        <span className="text-[13px]">🧠</span>
-        <span className="font-mono text-[10px] text-slate-500 tracking-wide flex-1">
+        <span className="text-[16px]">🧠</span>
+        <span className="font-mono text-[13px] text-slate-500 tracking-wide flex-1">
           {isStreaming ? "Reasoning…" : `Thinking · ${lines} line${lines !== 1 ? "s" : ""}`}
         </span>
         {isStreaming
           ? <span className="flex gap-1 mr-1"><Dot delay={0} /><Dot delay={160} /><Dot delay={320} /></span>
-          : <span className="font-mono text-[10px] text-slate-700 select-none">{open ? "▲" : "▼"}</span>
+          : <span className="font-mono text-[13px] text-slate-700 select-none">{open ? "▲" : "▼"}</span>
         }
       </button>
       {(open || isStreaming) && content && (
         <div className="px-4 py-3.5 border-t border-[#1E1E30] bg-[#060610]">
-          <p className="font-mono text-[12px] text-slate-600 leading-relaxed whitespace-pre-wrap break-words">
+          <p className="font-mono text-[15px] text-slate-600 leading-relaxed whitespace-pre-wrap break-words">
             {content}
           </p>
         </div>
@@ -128,13 +128,13 @@ function WebSearchChip({ ws }: {
         disabled={!hasLinks}
         className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-white/[0.02] transition-colors disabled:cursor-default text-left">
         <span className="text-xs shrink-0">🌐</span>
-        <span className="font-mono text-[10px] font-semibold shrink-0" style={{ color: "#22C55E" }}>
+        <span className="font-mono text-[13px] font-semibold shrink-0" style={{ color: "#22C55E" }}>
           Web Search
         </span>
-        <span className="font-mono text-[10px] text-slate-500 flex-1 truncate capitalize">
+        <span className="font-mono text-[13px] text-slate-500 flex-1 truncate capitalize">
           {ws.provider}
         </span>
-        <span className="font-mono text-[9px] shrink-0" style={{ color: "#22C55E" }}>
+        <span className="font-mono text-[12px] shrink-0" style={{ color: "#22C55E" }}>
           ✓ {ws.sources} source{ws.sources === 1 ? "" : "s"}
         </span>
         {hasLinks && (
@@ -149,12 +149,12 @@ function WebSearchChip({ ws }: {
             return (
               <a key={i} href={s.url} target="_blank" rel="noopener noreferrer"
                  className="flex items-baseline gap-2 hover:bg-white/[0.02] rounded px-1.5 py-1 -mx-1.5 transition-colors group">
-                <span className="font-mono text-[9px] text-slate-700 shrink-0 w-4 text-right">{i + 1}.</span>
-                <span className="font-mono text-[11px] text-slate-300 truncate flex-1 group-hover:text-[#22C55E] transition-colors">
+                <span className="font-mono text-[12px] text-slate-700 shrink-0 w-4 text-right">{i + 1}.</span>
+                <span className="font-mono text-[14px] text-slate-300 truncate flex-1 group-hover:text-[#22C55E] transition-colors">
                   {s.title}
                 </span>
                 {host && (
-                  <span className="font-mono text-[9px] text-slate-700 shrink-0">{host}</span>
+                  <span className="font-mono text-[12px] text-slate-700 shrink-0">{host}</span>
                 )}
               </a>
             );
@@ -232,7 +232,7 @@ export function MarkdownRenderer({ content }: { content: string }) {
     }
     elems.push(
       <div key={`tbl-${i}`} className="my-4 overflow-x-auto rounded-xl border border-[#1E1E32]">
-        <table className="w-full font-mono text-[13px]">
+        <table className="w-full font-mono text-[16px]">
           <thead className="bg-[#0D0D18]">
             <tr>{headers.map((h, hi) => (
               <th key={hi} className="px-4 py-2.5 text-left text-slate-400 font-semibold border-b border-[#1E1E32] whitespace-nowrap">
@@ -274,14 +274,14 @@ export function MarkdownRenderer({ content }: { content: string }) {
         elems.push(
           <div key={`code-${i}`} className="my-4 rounded-xl overflow-hidden border border-[#1E1E32] group/code">
             <div className="flex items-center justify-between px-4 py-1.5 bg-[#0B0B16] border-b border-[#1E1E32]">
-              <span className="font-mono text-[10px] text-slate-500 tracking-widest uppercase">{lang || "code"}</span>
+              <span className="font-mono text-[13px] text-slate-500 tracking-widest uppercase">{lang || "code"}</span>
               <button onClick={() => navigator.clipboard?.writeText(codeStr)}
-                className="font-mono text-[10px] text-slate-700 hover:text-[#4FC3F7] transition-colors opacity-0 group-hover/code:opacity-100">
+                className="font-mono text-[13px] text-slate-700 hover:text-[#4FC3F7] transition-colors opacity-0 group-hover/code:opacity-100">
                 copy
               </button>
             </div>
             <pre className="px-4 py-4 overflow-x-auto bg-[#050510]">
-              <code className="font-mono text-[13px] text-slate-200 leading-relaxed">{codeStr}</code>
+              <code className="font-mono text-[16px] text-slate-200 leading-relaxed">{codeStr}</code>
             </pre>
           </div>
         );
@@ -300,16 +300,16 @@ export function MarkdownRenderer({ content }: { content: string }) {
     if (h1) {
       elems.push(<h1 key={i} className="text-[22px] font-bold text-white mt-6 mb-3 pb-2 border-b border-[#1A1A2E] leading-tight">{renderInline(h1[1])}</h1>);
     } else if (h2) {
-      elems.push(<h2 key={i} className="text-[18px] font-bold text-white mt-5 mb-2.5 leading-tight">{renderInline(h2[1])}</h2>);
+      elems.push(<h2 key={i} className="text-[22px] font-bold text-white mt-5 mb-2.5 leading-tight">{renderInline(h2[1])}</h2>);
     } else if (h3) {
-      elems.push(<h3 key={i} className="text-[15px] font-semibold text-slate-100 mt-4 mb-2 leading-tight">{renderInline(h3[1])}</h3>);
+      elems.push(<h3 key={i} className="text-[18px] font-semibold text-slate-100 mt-4 mb-2 leading-tight">{renderInline(h3[1])}</h3>);
     } else if (h4) {
-      elems.push(<h4 key={i} className="text-[12px] font-semibold text-slate-500 mt-3 mb-1.5 uppercase tracking-widest">{renderInline(h4[1])}</h4>);
+      elems.push(<h4 key={i} className="text-[15px] font-semibold text-slate-500 mt-3 mb-1.5 uppercase tracking-widest">{renderInline(h4[1])}</h4>);
     } else if (/^---+$/.test(line.trim())) {
       elems.push(<hr key={i} className="border-[#1E1E32] my-5" />);
     } else if (line.startsWith("> ")) {
       elems.push(
-        <blockquote key={i} className="my-3 pl-4 border-l-2 border-[#4FC3F740] text-slate-400 italic text-[14px] leading-relaxed">
+        <blockquote key={i} className="my-3 pl-4 border-l-2 border-[#4FC3F740] text-slate-400 italic text-[17px] leading-relaxed">
           {renderInline(line.slice(2))}
         </blockquote>
       );
@@ -317,7 +317,7 @@ export function MarkdownRenderer({ content }: { content: string }) {
       const text = line.match(/^[-*] (.+)/)![1];
       if (listType !== "ul") { flushList(); listType = "ul"; }
       listItems.push(
-        <li key={i} className="flex gap-2.5 text-slate-300 leading-relaxed text-[15px]">
+        <li key={i} className="flex gap-2.5 text-slate-300 leading-relaxed text-[18px]">
           <span className="text-slate-600 mt-[6px] shrink-0" style={{ fontSize: 8 }}>●</span>
           <span>{renderInline(text)}</span>
         </li>
@@ -326,7 +326,7 @@ export function MarkdownRenderer({ content }: { content: string }) {
       const text = line.match(/^  [-*] (.+)/)![1];
       if (listType !== "ul") { flushList(); listType = "ul"; }
       listItems.push(
-        <li key={i} className="flex gap-2.5 text-slate-400 leading-relaxed text-[14px] ml-5">
+        <li key={i} className="flex gap-2.5 text-slate-400 leading-relaxed text-[17px] ml-5">
           <span className="text-slate-700 mt-[6px] shrink-0" style={{ fontSize: 7 }}>○</span>
           <span>{renderInline(text)}</span>
         </li>
@@ -336,8 +336,8 @@ export function MarkdownRenderer({ content }: { content: string }) {
       const num  = line.match(/^(\d+)\./)![1];
       if (listType !== "ol") { flushList(); listType = "ol"; }
       listItems.push(
-        <li key={i} className="flex gap-2.5 text-slate-300 leading-relaxed text-[15px]">
-          <span className="text-slate-500 shrink-0 font-mono text-[12px] w-5 text-right mt-px">{num}.</span>
+        <li key={i} className="flex gap-2.5 text-slate-300 leading-relaxed text-[18px]">
+          <span className="text-slate-500 shrink-0 font-mono text-[15px] w-5 text-right mt-px">{num}.</span>
           <span>{renderInline(text)}</span>
         </li>
       );
@@ -346,7 +346,7 @@ export function MarkdownRenderer({ content }: { content: string }) {
     } else {
       flushList();
       elems.push(
-        <p key={i} className="text-[15px] text-slate-300 leading-[1.75]">{renderInline(line)}</p>
+        <p key={i} className="text-[18px] text-slate-300 leading-[1.75]">{renderInline(line)}</p>
       );
     }
     i++;
@@ -523,7 +523,7 @@ export default function ChatMessages() {
                       el.setSelectionRange(len, len);
                     });
                   }}
-                  className="font-mono text-[11px] font-medium text-[#94A3B8] border border-[#1A1A2E] rounded-[20px] px-[13px] py-1.5 transition-colors hover:border-[#4FC3F7]/40 hover:text-[#E2E8F0] disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="font-mono text-[14px] font-medium text-[#94A3B8] border border-[#1A1A2E] rounded-[20px] px-[13px] py-1.5 transition-colors hover:border-[#4FC3F7]/40 hover:text-[#E2E8F0] disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {c.label}
                 </button>
@@ -534,7 +534,7 @@ export default function ChatMessages() {
                 question, answered in 简体中文 by B20 Education Mode. */}
             {lang === "zh" && (
               <div className="w-full max-w-sm mt-8">
-                <p className="font-mono text-[10px] text-slate-600 mb-2 tracking-widest uppercase">
+                <p className="font-mono text-[13px] text-slate-600 mb-2 tracking-widest uppercase">
                   B20 学习
                 </p>
                 <div className="grid grid-cols-1 gap-2">
@@ -543,7 +543,7 @@ export default function ChatMessages() {
                       key={q}
                       onClick={() => !streaming && send(q)}
                       disabled={streaming || outOfCredits}
-                      className="w-full text-left font-mono text-[11px] px-3 py-2 rounded-xl text-slate-300 transition-colors disabled:opacity-40 hover:border-[#4FC3F7]/40"
+                      className="w-full text-left font-mono text-[14px] px-3 py-2 rounded-xl text-slate-300 transition-colors disabled:opacity-40 hover:border-[#4FC3F7]/40"
                       style={{ background: "#0d0d12", border: "1px solid #1A1A2E" }}
                     >
                       {q}
@@ -554,7 +554,7 @@ export default function ChatMessages() {
             )}
 
             {outOfCredits && (
-              <p className="font-mono text-[10px] text-red-400 mt-6">Out of credits — resets daily · connect a wallet for 500/day</p>
+              <p className="font-mono text-[13px] text-red-400 mt-6">Out of credits — resets daily · connect a wallet for 500/day</p>
             )}
           </div>
         </div>
@@ -568,7 +568,7 @@ export default function ChatMessages() {
               <button
                 onClick={shareConversation}
                 disabled={streaming || shareStatus === "loading"}
-                className="inline-flex items-center gap-1.5 font-mono text-[10px] px-2.5 py-1 rounded-lg border transition-all disabled:opacity-40"
+                className="inline-flex items-center gap-1.5 font-mono text-[13px] px-2.5 py-1 rounded-lg border transition-all disabled:opacity-40"
                 style={shareStatus === "copied"
                   ? { borderColor: "#34D39940", background: "#34D39910", color: "#34D399" }
                   : { borderColor: "#1A1A2E", background: "#08080F", color: "#64748b" }
@@ -616,11 +616,11 @@ export default function ChatMessages() {
                         className="rounded-md shrink-0"
                       />
                     )}
-                    <span className="font-mono text-[12px] font-bold text-white">
+                    <span className="font-mono text-[15px] font-bold text-white">
                       {isAssistant ? "Blue Agent" : "You"}
                     </span>
                     {msg.createdAt && (
-                      <span className="font-mono text-[10px] text-slate-700">
+                      <span className="font-mono text-[13px] text-slate-700">
                         {fmtTime(msg.createdAt)}
                       </span>
                     )}
@@ -685,7 +685,7 @@ export default function ChatMessages() {
                                 <div className="mt-3 flex flex-col gap-1.5">
                                   {followups.map((q, k) => (
                                     <button key={k} onClick={() => send(q)}
-                                      className="group/sg flex items-center gap-2 text-left font-mono text-[12px] text-slate-400 hover:text-[#4FC3F7] transition-colors">
+                                      className="group/sg flex items-center gap-2 text-left font-mono text-[15px] text-slate-400 hover:text-[#4FC3F7] transition-colors">
                                       <span className="text-slate-700 group-hover/sg:text-[#4FC3F7] transition-colors">↳</span>
                                       <span className="underline-offset-4 group-hover/sg:underline">{q}</span>
                                     </button>
@@ -699,7 +699,7 @@ export default function ChatMessages() {
                         <span className="flex gap-1.5 items-center mt-1">
                           <Dot delay={0} /><Dot delay={160} /><Dot delay={320} />
                           {streaming && elapsed > 0 && (
-                            <span className="font-mono text-[10px] text-slate-700 ml-1">{elapsed}s</span>
+                            <span className="font-mono text-[13px] text-slate-700 ml-1">{elapsed}s</span>
                           )}
                         </span>
                       ) : null}
@@ -709,17 +709,17 @@ export default function ChatMessages() {
                         <div className="flex items-center gap-2 mt-3 flex-wrap">
                           <span className="w-1.5 h-1.5 rounded-full shrink-0"
                             style={{ background: MODEL_COLORS[msg.modelUsed] ?? "#4FC3F7" }} />
-                          <span className="font-mono text-[10px] text-slate-700">
+                          <span className="font-mono text-[13px] text-slate-700">
                             {modelLabel(msg.modelUsed)}
                           </span>
-                          <span className="font-mono text-[10px] text-slate-800">·</span>
-                          <span className="font-mono text-[10px] text-slate-700">
+                          <span className="font-mono text-[13px] text-slate-800">·</span>
+                          <span className="font-mono text-[13px] text-slate-700">
                             {(msg.responseMs / 1000).toFixed(1)}s
                           </span>
                           {!!msg.toolLogs?.length && (
                             <>
-                              <span className="font-mono text-[10px] text-slate-800">·</span>
-                              <span className="font-mono text-[10px] text-slate-700">
+                              <span className="font-mono text-[13px] text-slate-800">·</span>
+                              <span className="font-mono text-[13px] text-slate-700">
                                 {msg.toolLogs.length} tool{msg.toolLogs.length > 1 ? "s" : ""}
                               </span>
                             </>
@@ -738,7 +738,7 @@ export default function ChatMessages() {
                             const showBreakdown = msgCr > 0 && toolCr > 0;
                             return (
                               <span
-                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-mono text-[9px] font-semibold"
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-mono text-[12px] font-semibold"
                                 style={{ background: "#4FC3F715", color: "#4FC3F7" }}
                                 title={showBreakdown ? `${msgCr} cr chat + ${toolCr} cr tools` : undefined}
                               >
@@ -765,10 +765,10 @@ export default function ChatMessages() {
                           <div className="flex items-start gap-2.5">
                             <span className="text-[#F59E0B] shrink-0 mt-0.5">⚡</span>
                             <div className="min-w-0 flex-1">
-                              <p className="font-mono text-[11px] text-[#F59E0B] font-bold tracking-widest mb-0.5">
+                              <p className="font-mono text-[14px] text-[#F59E0B] font-bold tracking-widest mb-0.5">
                                 {msg.insufficientCredits.kind === "tool" ? "TOOL CREDITS LOW" : "CHAT CREDITS LOW"}
                               </p>
-                              <p className="font-mono text-[11px] text-slate-300 leading-relaxed">
+                              <p className="font-mono text-[14px] text-slate-300 leading-relaxed">
                                 {msg.insufficientCredits.message ?? (
                                   // An unread balance shows as "—", not 0: the
                                   // wallet may hold 15 of the 20 it needs.
@@ -777,15 +777,15 @@ export default function ChatMessages() {
                               </p>
                               <div className="flex gap-2 mt-2 flex-wrap items-center">
                                 <button onClick={() => setTopUpOpen(true)}
-                                  className="inline-flex items-center gap-1 font-mono text-[10px] font-bold px-2.5 py-1 rounded-md border transition-opacity hover:opacity-90"
+                                  className="inline-flex items-center gap-1 font-mono text-[13px] font-bold px-2.5 py-1 rounded-md border transition-opacity hover:opacity-90"
                                   style={{ background: "#4FC3F7", color: "#050508", borderColor: "#4FC3F7" }}>
                                   Top up with USDC
                                 </button>
                                 <Link href="/docs/credits"
-                                  className="inline-flex items-center gap-1 font-mono text-[10px] font-bold px-2.5 py-1 rounded-md bg-[#F59E0B]/15 text-[#F59E0B] border border-[#F59E0B]/40 hover:bg-[#F59E0B]/25 transition-colors">
+                                  className="inline-flex items-center gap-1 font-mono text-[13px] font-bold px-2.5 py-1 rounded-md bg-[#F59E0B]/15 text-[#F59E0B] border border-[#F59E0B]/40 hover:bg-[#F59E0B]/25 transition-colors">
                                   How credits work →
                                 </Link>
-                                <span className="font-mono text-[10px] text-slate-700 self-center">
+                                <span className="font-mono text-[13px] text-slate-700 self-center">
                                   Resets daily · connect a wallet for 500/day
                                 </span>
                               </div>
@@ -798,7 +798,7 @@ export default function ChatMessages() {
                       {msg.content && (
                         <div className="flex gap-1 mt-1 opacity-0 group-hover/msg:opacity-100 transition-opacity">
                           <button onClick={() => navigator.clipboard?.writeText(msg.content)}
-                            className="font-mono text-[10px] text-slate-700 hover:text-slate-400 px-2 py-0.5 rounded border border-[#1A1A2E] bg-[#08080F] transition-colors">
+                            className="font-mono text-[13px] text-slate-700 hover:text-slate-400 px-2 py-0.5 rounded border border-[#1A1A2E] bg-[#08080F] transition-colors">
                             copy
                           </button>
                         </div>
@@ -811,7 +811,7 @@ export default function ChatMessages() {
                       {!!msg.attachments?.length && (
                         <div className="flex flex-wrap gap-1.5 mb-2 justify-end">
                           {msg.attachments.map((f, j) => (
-                            <div key={j} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border font-mono text-[10px]"
+                            <div key={j} className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border font-mono text-[13px]"
                               style={{ borderColor: "#4FC3F720", background: "#4FC3F708", color: "#64748b" }}>
                               <span>{f.mimeType.startsWith("image/") ? "🖼" : f.name.endsWith(".pdf") ? "📄" : "📎"}</span>
                               <span className="max-w-[140px] truncate">{f.name}</span>
@@ -821,7 +821,7 @@ export default function ChatMessages() {
                       )}
                       <div className="px-3.5 py-2.5 rounded-2xl rounded-tr-sm"
                         style={{ background: "#0F0F1E", border: "1px solid #1E1E32" }}>
-                        <p className="font-mono text-[13px] text-slate-200 leading-relaxed whitespace-pre-wrap">
+                        <p className="font-mono text-[16px] text-slate-200 leading-relaxed whitespace-pre-wrap">
                           {msg.content}
                         </p>
                       </div>

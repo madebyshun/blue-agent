@@ -273,7 +273,7 @@ export default function ChatInput() {
         {cmdMenu && filteredCmds.length > 0 && (
           <div className="absolute bottom-full mb-2 left-0 right-0 bg-[#0D0D14] border border-[#2A2A4E] rounded-xl overflow-hidden shadow-2xl z-20 max-h-72 overflow-y-auto">
             <div className="px-3 pt-2.5 pb-1.5 border-b border-[#1A1A2E]">
-              <span className="font-mono text-[10px] text-slate-600 tracking-widest">COMMANDS</span>
+              <span className="font-mono text-[13px] text-slate-600 tracking-widest">COMMANDS</span>
             </div>
             {filteredCmds.map((c) => (
               <button
@@ -287,9 +287,9 @@ export default function ChatInput() {
                     <span className="font-mono text-xs text-[#4FC3F7]">/{c.cmd}</span>
                     <span className="font-mono text-xs text-slate-400">{c.label}</span>
                   </div>
-                  <span className="font-mono text-[10px] text-slate-600 truncate block">{c.hint}</span>
+                  <span className="font-mono text-[13px] text-slate-600 truncate block">{c.hint}</span>
                 </div>
-                <span className="font-mono text-[10px] text-slate-700 group-hover:text-slate-500 shrink-0 hidden sm:block">{c.example}</span>
+                <span className="font-mono text-[13px] text-slate-700 group-hover:text-slate-500 shrink-0 hidden sm:block">{c.example}</span>
               </button>
             ))}
           </div>
@@ -299,7 +299,7 @@ export default function ChatInput() {
         {cmdOpen && (
           <div className="absolute bottom-full mb-2 left-0 bg-[#0D0D14] border border-[#2A2A4E] rounded-xl overflow-hidden shadow-2xl z-20 w-72 max-h-80 overflow-y-auto">
             <div className="px-3 pt-2.5 pb-1.5 border-b border-[#1A1A2E]">
-              <span className="font-mono text-[10px] text-slate-600 tracking-widest">COMMANDS</span>
+              <span className="font-mono text-[13px] text-slate-600 tracking-widest">COMMANDS</span>
             </div>
             {SLASH_COMMANDS.map((c) => (
               <button
@@ -309,8 +309,8 @@ export default function ChatInput() {
               >
                 <span className="text-sm w-5 text-center shrink-0">{c.icon}</span>
                 <div className="flex-1 min-w-0">
-                  <p className="font-mono text-[10px] text-slate-300 group-hover:text-white">/{c.cmd} · {c.label}</p>
-                  <p className="font-mono text-[9px] text-slate-600 truncate">{c.hint}</p>
+                  <p className="font-mono text-[13px] text-slate-300 group-hover:text-white">/{c.cmd} · {c.label}</p>
+                  <p className="font-mono text-[12px] text-slate-600 truncate">{c.hint}</p>
                 </div>
               </button>
             ))}
@@ -321,7 +321,7 @@ export default function ChatInput() {
         {modelOpen && (
           <div className="absolute bottom-full mb-2 left-0 bg-[#0D0D14] border border-[#2A2A4E] rounded-xl overflow-hidden shadow-2xl z-20 w-80 max-h-[520px] overflow-y-auto">
             <div className="px-3 pt-2.5 pb-1.5 border-b border-[#1A1A2E] sticky top-0 bg-[#0D0D14] z-10">
-              <span className="font-mono text-[10px] text-slate-600 tracking-widest">CHOOSE A MODE</span>
+              <span className="font-mono text-[13px] text-slate-600 tracking-widest">CHOOSE A MODE</span>
             </div>
 
             {/* V1 catalog-driven Virtuals presets. The list is filtered
@@ -347,7 +347,7 @@ export default function ChatInput() {
                     {showDividerBefore && (
                       <div className="px-3 py-1">
                         <div className="border-t border-[#1A1A2E]" />
-                        <p className="font-mono text-[9px] text-slate-700 pt-1">Optional</p>
+                        <p className="font-mono text-[12px] text-slate-700 pt-1">Optional</p>
                       </div>
                     )}
                     <button
@@ -366,25 +366,25 @@ export default function ChatInput() {
                       <ProviderMark modelId={p.model} size={22} className="!rounded-lg" />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-baseline gap-2">
-                          <span className="font-mono text-[12px] font-bold" style={{ color: isActive ? accent : "#e2e8f0" }}>
+                          <span className="font-mono text-[15px] font-bold" style={{ color: isActive ? accent : "#e2e8f0" }}>
                             {p.label}
                           </span>
-                          <span className="font-mono text-[10px] tracking-tighter" style={{ color: accent }}>{p.cost}</span>
-                          <span className="font-mono text-[9px] text-slate-600">{formatContextTokens(p.contextTokens)} ctx</span>
+                          <span className="font-mono text-[13px] tracking-tighter" style={{ color: accent }}>{p.cost}</span>
+                          <span className="font-mono text-[12px] text-slate-600">{formatContextTokens(p.contextTokens)} ctx</span>
                           {isActive && (
-                            <span className="font-mono text-[9px]" style={{ color: accent }}>✓</span>
+                            <span className="font-mono text-[12px]" style={{ color: accent }}>✓</span>
                           )}
                           {/* Said where the model is picked: a chat-only preset
                               cannot swap, send, bridge or look anything up, and a
                               user who learns that from a refusal has already
                               asked (seen in a shared chat, 2026-10-01). */}
                           {p.noTools && (
-                            <span className="font-mono text-[8.5px] text-slate-500 border border-[#1A1A2E] rounded px-1 py-px">chat only · no tools</span>
+                            <span className="font-mono text-[11px] text-slate-500 border border-[#1A1A2E] rounded px-1 py-px">chat only · no tools</span>
                           )}
                         </div>
-                        <p className="font-mono text-[10px] text-slate-500 leading-snug truncate">{p.desc}</p>
+                        <p className="font-mono text-[13px] text-slate-500 leading-snug truncate">{p.desc}</p>
                       </div>
-                      <span className="font-mono text-[10px] shrink-0" style={{ color: accent }}>
+                      <span className="font-mono text-[13px] shrink-0" style={{ color: accent }}>
                         {p.credits === 0
                           ? <span className="font-bold">Free</span>
                           : <>{p.credits}<span className="text-slate-700"> cr</span></>}
@@ -401,7 +401,7 @@ export default function ChatInput() {
                 `getVirtualsCatalog` in `_lib/llm.ts`). No hardcoded
                 lists downstream. */}
             <div className="px-3 py-1.5 border-t border-[#1A1A2E]">
-              <p className="font-mono text-[9px] text-slate-700 leading-relaxed">
+              <p className="font-mono text-[12px] text-slate-700 leading-relaxed">
                 {virtualsPresets.length}/{VIRTUALS_PRESETS_V1.length} presets live · Virtuals catalog-driven · ●=cheap ●●=mid ●●●=deep
               </p>
             </div>
@@ -414,7 +414,7 @@ export default function ChatInput() {
             {pendingFiles.map((f, i) => (
               <div
                 key={i}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border font-mono text-[10px]"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border font-mono text-[13px]"
                 style={{ borderColor: "#4FC3F730", background: "#4FC3F708", color: "#94A3B8" }}
               >
                 <span>{f.mimeType.startsWith("image/") ? "🖼" : f.name.endsWith(".pdf") ? "📄" : "📎"}</span>
@@ -429,10 +429,10 @@ export default function ChatInput() {
         {/* ── Active command badge ─────────────────────────────────────────── */}
         {activeCmdDef && !cmdMenu && (
           <div className="flex items-center gap-2 mb-2 px-1">
-            <span className="font-mono text-[10px] text-[#4FC3F7] border border-[#4FC3F7]/30 bg-[#4FC3F7]/5 px-2 py-0.5 rounded">
+            <span className="font-mono text-[13px] text-[#4FC3F7] border border-[#4FC3F7]/30 bg-[#4FC3F7]/5 px-2 py-0.5 rounded">
               {activeCmdDef.icon} /{activeCmdDef.cmd} · {activeCmdDef.label}
             </span>
-            <span className="font-mono text-[10px] text-slate-600">{activeCmdDef.hint}</span>
+            <span className="font-mono text-[13px] text-slate-600">{activeCmdDef.hint}</span>
           </div>
         )}
 
@@ -442,18 +442,18 @@ export default function ChatInput() {
             <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#F59E0B15]">
               <div className="flex items-center gap-2">
                 <span className="text-xs">⚡</span>
-                <span className="font-mono text-[11px] font-bold text-[#F59E0B]">Out of credits</span>
-                <span className="font-mono text-[10px] text-slate-600">
+                <span className="font-mono text-[14px] font-bold text-[#F59E0B]">Out of credits</span>
+                <span className="font-mono text-[13px] text-slate-600">
                   {credits} left · need {cost}/msg
                 </span>
               </div>
-              <span className="font-mono text-[10px] text-slate-500">resets daily</span>
+              <span className="font-mono text-[13px] text-slate-500">resets daily</span>
             </div>
             <div className="flex items-center gap-2 px-4 py-2">
               {/* Current daily allowance */}
               <span className="w-1.5 h-1.5 rounded-full" style={{ background: holderTier.color }} />
-              <span className="font-mono text-[10px]" style={{ color: holderTier.color }}>{holderTier.tier}</span>
-              <span className="font-mono text-[10px] text-slate-600">
+              <span className="font-mono text-[13px]" style={{ color: holderTier.color }}>{holderTier.tier}</span>
+              <span className="font-mono text-[13px] text-slate-600">
                 {holderTier.dailyCr.toLocaleString()} cr/day · USDC credit packs coming soon
               </span>
             </div>
@@ -537,7 +537,7 @@ export default function ChatInput() {
             {/* Model selector pill */}
             <button
               onMouseDown={(e) => { e.preventDefault(); setModelOpen(!modelOpen); setCmdOpen(false); }}
-              className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg border font-mono text-[11px] font-medium transition-all"
+              className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg border font-mono text-[14px] font-medium transition-all"
               style={{ color: activeTier.color, background: `${activeTier.color}10`, borderColor: `${activeTier.color}30` }}
             >
               {activeVirtualsPreset
@@ -549,7 +549,7 @@ export default function ChatInput() {
               {activeVirtualsPreset
                 ? <>{activeVirtualsPreset.label} <span className="opacity-70">{activeVirtualsPreset.cost}</span></>
                 : (activePreset?.label ?? activeTier.label)}
-              {activeTier.badge && <span className="text-[8px] opacity-60">{activeTier.badge}</span>}
+              {activeTier.badge && <span className="text-[11px] opacity-60">{activeTier.badge}</span>}
               <svg className="w-2.5 h-2.5 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
               </svg>
@@ -558,13 +558,13 @@ export default function ChatInput() {
             {/* Commands button */}
             <button
               onMouseDown={(e) => { e.preventDefault(); setCmdOpen(!cmdOpen); setModelOpen(false); }}
-              className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg border font-mono text-[11px] transition-all"
+              className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg border font-mono text-[14px] transition-all"
               style={cmdOpen
                 ? { color: "#4FC3F7", background: "#4FC3F710", borderColor: "#4FC3F730" }
                 : { color: "#475569", borderColor: "transparent" }}
               title="Commands"
             >
-              <span className="text-[11px]">/</span>
+              <span className="text-[14px]">/</span>
               <span className="hidden sm:inline">Cmds</span>
             </button>
 
@@ -592,13 +592,13 @@ export default function ChatInput() {
 
             <div className="flex-1" />
 
-            <span className="font-mono text-[10px] text-slate-700">{`${cost}cr/msg`}</span>
+            <span className="font-mono text-[13px] text-slate-700">{`${cost}cr/msg`}</span>
           </div>
 
           {/* Footer hint */}
           <div className="flex items-center justify-between px-3 pb-2.5">
-            <span className="hidden md:inline font-mono text-[10px] text-slate-700">Enter ↵ send · Shift+Enter newline</span>
-            <span className="font-mono text-[10px] text-slate-700">{`${credits} credits left`}</span>
+            <span className="hidden md:inline font-mono text-[13px] text-slate-700">Enter ↵ send · Shift+Enter newline</span>
+            <span className="font-mono text-[13px] text-slate-700">{`${credits} credits left`}</span>
           </div>
         </div>
       </div>

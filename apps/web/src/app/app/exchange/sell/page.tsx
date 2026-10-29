@@ -1,13 +1,14 @@
 // /exchange/sell — list an x402 service on Blue Agent (lib/hub/listings.ts).
 import type { Metadata } from "next";
 import PageFrame from "../_components/PageFrame";
+import { CREATE_TABS } from "../_components/SubTabs";
 import { SellView } from "../_components/AccountViews";
 
 export const metadata: Metadata = { title: "Sell services — Blue Agent", description: "List your x402 service on Base. Buyers pay you directly." };
 
 export default function SellPage() {
   return (
-    <PageFrame chip="sell services" title="Sell services"
+    <PageFrame tabs={{ list: CREATE_TABS, active: "/exchange/sell" }} chip="sell services" title="Sell services"
       lede="Already selling over x402 on Base? Prove you run it and you are listed on Agents with a verified badge. Buyers sign USDC straight to your payTo; Blue Agent never holds the money and takes no cut.">
       <SellView />
       <div className="mt-5 grid gap-2.5 md:grid-cols-3">
@@ -17,8 +18,8 @@ export default function SellPage() {
           ["Measured afterwards", "Your page shows volume, paid calls and paying wallets read from Base, the same way as every other seller."],
         ].map(([t, d]) => (
           <div key={t} className="rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] p-[14px]">
-            <p className="text-[11px] font-semibold text-[#E2E8F0]">{t}</p>
-            <p className="mt-1 text-[10.5px] leading-[1.6] text-[#94A3B8]">{d}</p>
+            <p className="text-[14px] font-semibold text-[#E2E8F0]">{t}</p>
+            <p className="mt-1 text-[13px] leading-[1.6] text-[#94A3B8]">{d}</p>
           </div>
         ))}
       </div>

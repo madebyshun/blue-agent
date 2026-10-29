@@ -84,24 +84,24 @@ export function ApprovalsPanel({ audit: initial }: { audit: AuditView }) {
   return (
     <div className="mt-2 rounded-xl border p-3.5" style={{ borderColor: "#4FC3F730", background: "#4FC3F706" }}>
       <div className="flex items-center justify-between mb-1">
-        <div className="font-mono text-[11px] font-bold text-slate-200">Open approvals · {chainName}</div>
-        <button onClick={refresh} disabled={!!busy} className="font-mono text-[10px] px-2 py-0.5 rounded border border-[#4FC3F730] text-[#4FC3F7] disabled:opacity-50">
+        <div className="font-mono text-[14px] font-bold text-slate-200">Open approvals · {chainName}</div>
+        <button onClick={refresh} disabled={!!busy} className="font-mono text-[13px] px-2 py-0.5 rounded border border-[#4FC3F730] text-[#4FC3F7] disabled:opacity-50">
           {busy === "refresh" ? "Reading…" : "Re-read"}
         </button>
       </div>
-      <div className="font-mono text-[10px] text-slate-400 mb-2">
+      <div className="font-mono text-[13px] text-slate-400 mb-2">
         {short(audit.wallet)} · {audit.counts.live} live
         {audit.counts.block ? ` · ${audit.counts.block} to revoke now` : ""}
         {audit.counts.warn ? ` · ${audit.counts.warn} to review` : ""}
         {audit.counts.closed_since ? ` · ${audit.counts.closed_since} already closed` : ""}
       </div>
       {audit.unread.length > 0 && (
-        <div className="font-mono text-[10px] mb-2" style={{ color: "#F59E0B" }}>
+        <div className="font-mono text-[13px] mb-2" style={{ color: "#F59E0B" }}>
           Incomplete — not read: {audit.unread.join("; ")}. Missing rows here are unknown, not clean.
         </div>
       )}
       {audit.grants.length === 0 && audit.unread.length === 0 && (
-        <div className="font-mono text-[10px] text-slate-400">No open approvals were found on {chainName}.</div>
+        <div className="font-mono text-[13px] text-slate-400">No open approvals were found on {chainName}.</div>
       )}
       <ul className="space-y-1.5">
         {audit.grants.map((g) => {
@@ -111,21 +111,21 @@ export function ApprovalsPanel({ audit: initial }: { audit: AuditView }) {
             <li key={id} className="rounded-lg border px-2.5 py-2" style={{ borderColor: `${COLOR[g.level]}40` }}>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <div className="font-mono text-[10px] font-bold" style={{ color: COLOR[g.level] }}>
+                  <div className="font-mono text-[13px] font-bold" style={{ color: COLOR[g.level] }}>
                     {LEVEL_WORD[g.level]} · {TYPE_LABEL[g.type]} · {g.symbol}
                   </div>
-                  <div className="font-mono text-[10px] text-slate-300 break-all">
+                  <div className="font-mono text-[13px] text-slate-300 break-all">
                     {g.allowance}{g.exposed && g.allowance !== g.exposed ? ` (exposed now: ${g.exposed})` : ""} → {short(g.spender)}
                     {g.spender_is_contract === false ? " (plain wallet)" : ""}{g.expires ? ` · until ${g.expires}` : ""}
                   </div>
-                  <div className="text-[9px] leading-relaxed text-slate-400">{g.why}</div>
+                  <div className="text-[12px] leading-relaxed text-slate-400">{g.why}</div>
                 </div>
                 {hash ? (
-                  <a href={`${explorer}/tx/${hash}`} target="_blank" rel="noopener noreferrer" className="shrink-0 font-mono text-[10px] px-2 py-1 rounded border border-[#22C55E40] text-[#22C55E]">Sent ↗</a>
+                  <a href={`${explorer}/tx/${hash}`} target="_blank" rel="noopener noreferrer" className="shrink-0 font-mono text-[13px] px-2 py-1 rounded border border-[#22C55E40] text-[#22C55E]">Sent ↗</a>
                 ) : (
                   <button onClick={() => revoke(g)} disabled={!owner || !!busy}
                     title={owner ? "Sign a revoke in your wallet" : "Connect the audited wallet to revoke"}
-                    className="shrink-0 font-mono text-[10px] px-2 py-1 rounded border disabled:opacity-40"
+                    className="shrink-0 font-mono text-[13px] px-2 py-1 rounded border disabled:opacity-40"
                     style={{ borderColor: `${COLOR[g.level]}60`, color: COLOR[g.level] }}>
                     {busy === id ? "Signing…" : "Revoke"}
                   </button>
@@ -135,12 +135,12 @@ export function ApprovalsPanel({ audit: initial }: { audit: AuditView }) {
           );
         })}
       </ul>
-      {audit.note && <div className="font-mono text-[9px] text-slate-500 mt-2">{audit.note}</div>}
+      {audit.note && <div className="font-mono text-[12px] text-slate-500 mt-2">{audit.note}</div>}
       {!owner && audit.grants.length > 0 && (
-        <div className="font-mono text-[9px] text-slate-500 mt-2">Revoking needs the audited wallet connected — you sign each revoke yourself.</div>
+        <div className="font-mono text-[12px] text-slate-500 mt-2">Revoking needs the audited wallet connected — you sign each revoke yourself.</div>
       )}
-      {Object.keys(done).length > 0 && <div className="font-mono text-[9px] text-slate-500 mt-1">After a revoke confirms, Re-read to see the updated list.</div>}
-      {err && <div className="font-mono text-[10px] mt-2" style={{ color: "#EF4444" }}>{err}</div>}
+      {Object.keys(done).length > 0 && <div className="font-mono text-[12px] text-slate-500 mt-1">After a revoke confirms, Re-read to see the updated list.</div>}
+      {err && <div className="font-mono text-[13px] mt-2" style={{ color: "#EF4444" }}>{err}</div>}
     </div>
   );
 }
@@ -168,19 +168,19 @@ export function ApprovalsView({ address }: { address?: string | null }) {
     return () => { live = false; };
   }, [address, chain, key]);
 
-  if (!address) return <div className="font-mono text-[11px] text-slate-400 p-4">Connect a wallet to see what it has approved.</div>;
+  if (!address) return <div className="font-mono text-[14px] text-slate-400 p-4">Connect a wallet to see what it has approved.</div>;
   return (
     <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-4 mb-3">
       <div className="flex gap-2 mb-2">
         {(["base", "robinhood"] as const).map((c) => (
-          <button key={c} onClick={() => setChain(c)} className="font-mono text-[10px] px-2.5 py-1 rounded-lg border"
+          <button key={c} onClick={() => setChain(c)} className="font-mono text-[13px] px-2.5 py-1 rounded-lg border"
             style={{ borderColor: chain === c ? "#4FC3F7" : "#1A1A2E", color: chain === c ? "#4FC3F7" : "#94a3b8" }}>
             {c === "base" ? "Base 8453" : "Robinhood Chain 4663"}
           </button>
         ))}
       </div>
-      {loading && <div className="font-mono text-[11px] text-slate-400">Reading approvals…</div>}
-      {!loading && state?.error && <div className="font-mono text-[11px]" style={{ color: "#F59E0B" }}>Could not read approvals: {state.error}</div>}
+      {loading && <div className="font-mono text-[14px] text-slate-400">Reading approvals…</div>}
+      {!loading && state?.error && <div className="font-mono text-[14px]" style={{ color: "#F59E0B" }}>Could not read approvals: {state.error}</div>}
       {!loading && state?.audit && <ApprovalsPanel key={state.key} audit={state.audit} />}
     </div>
   );

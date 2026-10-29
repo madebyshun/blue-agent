@@ -640,18 +640,18 @@ export default function WalletSendCard({
   if (step === "done") {
     return (
       <div className="mt-2 rounded-xl border p-3.5" style={{ borderColor: "#22C55E40", background: "#22C55E08" }}>
-        <div className="font-mono text-[11px] font-bold mb-1" style={{ color: "#22C55E" }}>
+        <div className="font-mono text-[14px] font-bold mb-1" style={{ color: "#22C55E" }}>
           ✓ Sent {fmt(amt)} {symbol} · {cfg.short}
         </div>
-        <div className="font-mono text-[10px] text-slate-400 mb-2 break-all">
+        <div className="font-mono text-[13px] text-slate-400 mb-2 break-all">
           to {recipIsName ? recip : truncAddr(toAddress ?? "")}
         </div>
         {txHash && (
           <a href={`${cfg.explorer}/tx/${txHash}`} target="_blank" rel="noopener noreferrer"
-             className="font-mono text-[10px] px-2.5 py-1 rounded-lg border border-[#4FC3F730] text-[#4FC3F7] inline-block mt-1">View tx ↗</a>
+             className="font-mono text-[13px] px-2.5 py-1 rounded-lg border border-[#4FC3F730] text-[#4FC3F7] inline-block mt-1">View tx ↗</a>
         )}
         <button onClick={() => { setStep("idle"); setAmount(""); setRecipient(""); setTxHash(""); setCallsId(""); setMemo(""); }}
-          className="font-mono text-[10px] text-slate-500 hover:text-slate-300 ml-3">Send again</button>
+          className="font-mono text-[13px] text-slate-500 hover:text-slate-300 ml-3">Send again</button>
       </div>
     );
   }
@@ -680,15 +680,15 @@ export default function WalletSendCard({
       <Picker label="ASSET" disabled={busy} onClose={() => setQuery("")}
         summary={
           <span className="flex items-center gap-2 min-w-0">
-            <span className="font-mono text-[12px] text-white truncate">{symbol}</span>
+            <span className="font-mono text-[15px] text-white truncate">{symbol}</span>
             {badge && (
-              <span className="font-mono text-[8px] px-1 py-0.5 rounded shrink-0"
+              <span className="font-mono text-[11px] px-1 py-0.5 rounded shrink-0"
                 style={{ color: badge.color, border: `1px solid ${badge.color}40` }}>{badge.label}</span>
             )}
             {asset.pinned && asset.address !== null && (
-              <span className="font-mono text-[9px] text-slate-600 shrink-0">{cfg.short} cash</span>
+              <span className="font-mono text-[12px] text-slate-600 shrink-0">{cfg.short} cash</span>
             )}
-            {isNative && <span className="font-mono text-[9px] text-slate-600 shrink-0">gas token</span>}
+            {isNative && <span className="font-mono text-[12px] text-slate-600 shrink-0">gas token</span>}
           </span>
         }>
         {close => (
@@ -701,7 +701,7 @@ export default function WalletSendCard({
                 value={query} onChange={e => setQuery(e.target.value)}
                 placeholder="Search symbol, or paste a token address"
                 spellCheck={false} autoCapitalize="none" autoCorrect="off"
-                className="w-full bg-[#050508] border border-[#1A1A2E] rounded-md px-2 py-1.5 font-mono text-[11px] text-white outline-none placeholder:text-slate-700 focus:border-[#4FC3F740]" />
+                className="w-full bg-[#050508] border border-[#1A1A2E] rounded-md px-2 py-1.5 font-mono text-[14px] text-white outline-none placeholder:text-slate-700 focus:border-[#4FC3F740]" />
             </div>
 
             <div className="max-h-56 overflow-y-auto">
@@ -714,10 +714,10 @@ export default function WalletSendCard({
                   second copy is how the two drift. */}
               {pastedAddr && !listed(pastedAddr) && (
                 <PickerRow onClick={() => { pickAsset(pasteAsset(pastedAddr)); close(); }}>
-                  <span className="font-mono text-[11px] text-[#4FC3F7] flex-1 truncate">
+                  <span className="font-mono text-[14px] text-[#4FC3F7] flex-1 truncate">
                     Use {truncAddr(pastedAddr)}
                   </span>
-                  <span className="font-mono text-[9px] text-slate-600">on {cfg.short}</span>
+                  <span className="font-mono text-[12px] text-slate-600">on {cfg.short}</span>
                 </PickerRow>
               )}
 
@@ -729,25 +729,25 @@ export default function WalletSendCard({
                   <PickerRow key={key} selected={sel} onClick={() => { pickAsset(a); close(); }}>
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-1.5">
-                        <span className="font-mono text-[12px] text-white truncate">
+                        <span className="font-mono text-[15px] text-white truncate">
                           {a.symbol || truncAddr(a.address ?? "")}
                         </span>
                         {b && (
-                          <span className="font-mono text-[8px] px-1 py-0.5 rounded shrink-0"
+                          <span className="font-mono text-[11px] px-1 py-0.5 rounded shrink-0"
                             style={{ color: b.color, border: `1px solid ${b.color}40` }}>{b.label}</span>
                         )}
                       </span>
-                      {a.name && <span className="block font-mono text-[9px] text-slate-600 truncate">{a.name}</span>}
+                      {a.name && <span className="block font-mono text-[12px] text-slate-600 truncate">{a.name}</span>}
                     </span>
                     <span className="text-right shrink-0">
                       {/* What the HOLDINGS read saw. Display only — the figure
                           the send is gated on is re-read on-chain below. A row
                           with no balance shows nothing, never a zero. */}
                       {a.amount != null && (
-                        <span className="block font-mono text-[10px] text-slate-300">{fmtAmt(a.amount)}</span>
+                        <span className="block font-mono text-[13px] text-slate-300">{fmtAmt(a.amount)}</span>
                       )}
                       {a.usdValue != null && (
-                        <span className="block font-mono text-[9px] text-slate-600">${a.usdValue.toFixed(2)}</span>
+                        <span className="block font-mono text-[12px] text-slate-600">${a.usdValue.toFixed(2)}</span>
                       )}
                     </span>
                   </PickerRow>
@@ -755,7 +755,7 @@ export default function WalletSendCard({
               })}
 
               {shown.length === 0 && !pastedAddr && (
-                <div className="px-2.5 py-3 font-mono text-[10px] text-slate-500">
+                <div className="px-2.5 py-3 font-mono text-[13px] text-slate-500">
                   Nothing matches “{query.trim()}”. Paste the token&apos;s address to send it anyway.
                 </div>
               )}
@@ -772,7 +772,7 @@ export default function WalletSendCard({
                 default branch would print "Your Base tokens" over two pins that
                 are just this file's defaults. That is a completeness claim about
                 a wallet nobody looked at. */}
-            <div className="px-2.5 py-1.5 border-t border-[#13131f] font-mono text-[9px] leading-relaxed">
+            <div className="px-2.5 py-1.5 border-t border-[#13131f] font-mono text-[12px] leading-relaxed">
               {!account ? (
                   <span className="text-slate-600">
                     Not connected — showing {cfg.stableSymbol} and ETH only, not your holdings.
@@ -804,13 +804,13 @@ export default function WalletSendCard({
           the warning has to be louder than the button. Same verdict, same
           function, as the portfolio table's badge (#145). */}
       {asset.trust === "impostor" && (
-        <div className="mb-3 rounded-lg border border-red-500/30 bg-red-500/5 px-2.5 py-2 font-mono text-[9px] text-red-400 leading-relaxed">
+        <div className="mb-3 rounded-lg border border-red-500/30 bg-red-500/5 px-2.5 py-2 font-mono text-[12px] text-red-400 leading-relaxed">
           ⚠ This token calls itself <strong>{asset.symbol}</strong> but its address is not the real{" "}
           {asset.symbol} on {cfg.short}. Sending it sends the impostor, not the asset it names.
         </div>
       )}
       {needsSymbol && (
-        <div className="mb-3 font-mono text-[9px] text-slate-500">
+        <div className="mb-3 font-mono text-[12px] text-slate-500">
           Reading {truncAddr(asset.address ?? "")} on {cfg.short}…
         </div>
       )}
@@ -820,7 +820,7 @@ export default function WalletSendCard({
           under a name the user did not say, which is a send card quietly
           choosing a different token than the one that was asked for. */}
       {assetHint && (
-        <div className="mb-3 rounded-lg border border-amber-500/25 bg-amber-500/5 px-2.5 py-2 font-mono text-[9px] text-amber-400 leading-relaxed">
+        <div className="mb-3 rounded-lg border border-amber-500/25 bg-amber-500/5 px-2.5 py-2 font-mono text-[12px] text-amber-400 leading-relaxed">
           Asked for <strong>{assetHint}</strong> — a ticker alone doesn&apos;t identify a token, so it wasn&apos;t armed.
           {" "}{symbol} is selected; pick <strong>{assetHint}</strong> in ASSET (or paste its address) to send that instead.
         </div>
@@ -829,12 +829,12 @@ export default function WalletSendCard({
       {/* Amount + balance-aware presets */}
       <Field label="YOU SEND"
         right={balance != null && (
-          <span className="font-mono text-[9px] text-slate-600">Bal {balance.toFixed(isNative ? 5 : 2)} {symbol}</span>
+          <span className="font-mono text-[12px] text-slate-600">Bal {balance.toFixed(isNative ? 5 : 2)} {symbol}</span>
         )}>
         <div className="flex items-center gap-2">
           <input type="number" min="0" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.0"
-            className="flex-1 bg-transparent font-mono text-[16px] text-white outline-none placeholder:text-slate-700 w-0" />
-          <span className="font-mono text-[11px] text-slate-300 px-2 py-1.5 rounded-lg border border-[#1A1A2E]">{symbol}</span>
+            className="flex-1 bg-transparent font-mono text-[19px] text-white outline-none placeholder:text-slate-700 w-0" />
+          <span className="font-mono text-[14px] text-slate-300 px-2 py-1.5 rounded-lg border border-[#1A1A2E]">{symbol}</span>
         </div>
         {/* 25 / 50 / 100% — shown only once a balance is actually established, so a
             preset can never be computed off an unread balance. */}
@@ -842,7 +842,7 @@ export default function WalletSendCard({
           <div className="flex gap-1.5 mt-2">
             {([["25%", 2500], ["50%", 5000], ["Max", 10000]] as const).map(([lbl, bps]) => (
               <button key={lbl} type="button" onClick={() => setPct(bps)}
-                className="flex-1 font-mono text-[9px] py-1 rounded-md border border-[#1A1A2E] text-slate-400 hover:text-[#4FC3F7] hover:border-[#4FC3F730] transition-colors">
+                className="flex-1 font-mono text-[12px] py-1 rounded-md border border-[#1A1A2E] text-slate-400 hover:text-[#4FC3F7] hover:border-[#4FC3F730] transition-colors">
                 {lbl}
               </button>
             ))}
@@ -852,11 +852,11 @@ export default function WalletSendCard({
             refers to. Shown rather than left blank, so an empty amount box
             reads as "being worked out" and not as "your instruction was lost". */}
         {pendingWord && (
-          <div className="font-mono text-[9px] text-slate-500 mt-1.5">
+          <div className="font-mono text-[12px] text-slate-500 mt-1.5">
             “{pendingWord}” — resolving against your {symbol} balance…
           </div>
         )}
-        {overBalance && <div className="font-mono text-[9px] text-red-500 mt-1.5">Exceeds your {symbol} balance</div>}
+        {overBalance && <div className="font-mono text-[12px] text-red-500 mt-1.5">Exceeds your {symbol} balance</div>}
       </Field>
 
       {/* Recipient */}
@@ -864,9 +864,9 @@ export default function WalletSendCard({
         <input value={recipient} onChange={e => setRecipient(e.target.value)}
           placeholder={namesAllowed ? "0x…, name.base or name.eth" : "0x… address"}
           spellCheck={false} autoCapitalize="none" autoCorrect="off"
-          className="w-full bg-transparent font-mono text-[12px] text-white outline-none placeholder:text-slate-700" />
+          className="w-full bg-transparent font-mono text-[15px] text-white outline-none placeholder:text-slate-700" />
         {/* Resolution status — honest about what actually resolves on this chain. */}
-        <div className="font-mono text-[9px] mt-1 h-3">
+        <div className="font-mono text-[12px] mt-1 h-3">
           {recipIsName && resolving ? <span className="text-slate-500">resolving {recip}…</span>
             : recipIsName && toAddress ? <span className="text-[#22C55E]">→ {truncAddr(toAddress)}</span>
             : recipIsName && recip.length > 3 ? <span className="text-red-500">name not found on Base</span>
@@ -887,14 +887,14 @@ export default function WalletSendCard({
       {memoAsset && (
         <Field label="MEMO (OPTIONAL)"
           right={
-            <span className={`font-mono text-[9px] ${memoTooLong ? "text-red-500" : "text-slate-600"}`}>
+            <span className={`font-mono text-[12px] ${memoTooLong ? "text-red-500" : "text-slate-600"}`}>
               {memo.trim().length}/{MEMO_MAX_CHARS}
             </span>
           }>
           <input value={memo} onChange={e => setMemo(e.target.value)} placeholder="INV-2026-001"
             spellCheck={false} autoCapitalize="none" autoCorrect="off"
-            className="w-full bg-transparent font-mono text-[12px] text-white outline-none placeholder:text-slate-700" />
-          <div className="font-mono text-[9px] mt-1 h-3">
+            className="w-full bg-transparent font-mono text-[15px] text-white outline-none placeholder:text-slate-700" />
+          <div className="font-mono text-[12px] mt-1 h-3">
             {memoTooLong
               ? <span className="text-red-500">Max {MEMO_MAX_CHARS} characters — a memo is one bytes32.</span>
               : <span className="text-slate-600">Attached on-chain — order id / payment reference.</span>}
@@ -905,8 +905,8 @@ export default function WalletSendCard({
       {gate === "unverified" && (
         <UnverifiedBalance symbol={symbol} onRetry={() => { void bal.refetch(); }} busy={bal.refetching} />
       )}
-      {step === "broadcasting" && <p className="font-mono text-[10px] text-slate-400 mb-2">Broadcasting… waiting for the block.</p>}
-      {step === "error" && <p className="font-mono text-[10px] text-amber-400 mb-2">{err}</p>}
+      {step === "broadcasting" && <p className="font-mono text-[13px] text-slate-400 mb-2">Broadcasting… waiting for the block.</p>}
+      {step === "error" && <p className="font-mono text-[13px] text-amber-400 mb-2">{err}</p>}
 
       <PreTradeBanner pt={pt} />
 

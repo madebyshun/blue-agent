@@ -101,11 +101,11 @@ export default function ClaimBanner() {
         <span className="text-base shrink-0">{showSuccess ? "✓" : "🎁"}</span>
         <div className="min-w-0 flex-1">
           {showSuccess ? (
-            <p className="font-mono text-[11px] text-[#34D399] truncate">
+            <p className="font-mono text-[14px] text-[#34D399] truncate">
               {msg || `${status.amount.toLocaleString()} free credits are in your account.`}
             </p>
           ) : (
-            <p className="font-mono text-[11px] text-slate-200 truncate">
+            <p className="font-mono text-[14px] text-slate-200 truncate">
               Claim <span className="text-[#4FC3F7] font-bold">{status.amount.toLocaleString()} free credits</span>
               <span className="text-slate-500"> · {status.remaining}/{status.total} left</span>
               {msg && <span className="text-amber-400"> · {msg}</span>}
@@ -115,14 +115,14 @@ export default function ClaimBanner() {
 
         {!showSuccess && (
           <button onClick={claim} disabled={busy}
-            className="shrink-0 font-mono text-[11px] font-bold px-3.5 py-1.5 rounded-lg disabled:opacity-60 transition-opacity hover:opacity-90"
+            className="shrink-0 font-mono text-[14px] font-bold px-3.5 py-1.5 rounded-lg disabled:opacity-60 transition-opacity hover:opacity-90"
             style={{ background: "#4FC3F7", color: "#050508" }}>
             {busy ? "…" : walletAddr ? "Claim" : "Connect & claim"}
           </button>
         )}
 
         <button onClick={dismiss} aria-label="Dismiss"
-          className="shrink-0 w-6 h-6 rounded-md font-mono text-[12px] text-slate-600 hover:text-slate-300 hover:bg-[#1A1A2E] transition-colors">
+          className="shrink-0 w-6 h-6 rounded-md font-mono text-[15px] text-slate-600 hover:text-slate-300 hover:bg-[#1A1A2E] transition-colors">
           ✕
         </button>
       </div>

@@ -266,7 +266,7 @@ function VariantBadge({ variant, currency }: { variant?: string; currency?: stri
     ? `STABLECOIN · ${currency}`
     : (variant ?? "UNKNOWN");
   return (
-    <span className="font-mono text-[10px] px-2 py-0.5 rounded-full border"
+    <span className="font-mono text-[13px] px-2 py-0.5 rounded-full border"
       style={{ background: c.bg, color: c.text, borderColor: c.border }}>
       {label}
     </span>
@@ -280,7 +280,7 @@ function StatusDot({ active, label }: { active: boolean; label: string }) {
       <span className="w-2 h-2 rounded-full shrink-0"
         style={{ background: active ? "#22C55E" : "#EF4444", boxShadow: active ? "0 0 5px #22C55E80" : "0 0 5px #EF444480" }} />
       <span className="font-mono text-xs font-medium" style={{ color: active ? "#22C55E" : "#EF4444" }}>{label}</span>
-      <span className="font-mono text-[9px] text-slate-700 ml-auto">{active ? "active" : "paused"}</span>
+      <span className="font-mono text-[12px] text-slate-700 ml-auto">{active ? "active" : "paused"}</span>
     </div>
   );
 }
@@ -290,13 +290,13 @@ function PolicyRow({ label, policy }: { label: string; policy: PolicyInfo }) {
     <div className="flex items-center justify-between py-2.5 border-b border-[#0d0d18] last:border-0">
       <span className="font-mono text-xs text-slate-400">{label}</span>
       {policy.kind === "blocked" ? (
-        <span className="font-mono text-[10px] px-2 py-0.5 rounded-full border"
+        <span className="font-mono text-[13px] px-2 py-0.5 rounded-full border"
           style={{ background: "#EF444418", color: "#EF4444", borderColor: "#EF444440" }}>
           ALWAYS_BLOCK ⛔
         </span>
       ) : policy.kind === "custom" ? (
         <div className="flex items-center gap-2">
-          <span className="font-mono text-[10px] px-2 py-0.5 rounded-full border"
+          <span className="font-mono text-[13px] px-2 py-0.5 rounded-full border"
             style={{ background: "#F59E0B15", color: "#F59E0B", borderColor: "#F59E0B30" }}>
             CUSTOM #{policy.policyId}
           </span>
@@ -309,12 +309,12 @@ function PolicyRow({ label, policy }: { label: string; policy: PolicyInfo }) {
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
-  return <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase mb-2">{children}</p>;
+  return <p className="font-mono text-[12px] text-slate-600 tracking-widest uppercase mb-2">{children}</p>;
 }
 
 function InfoChip({ children, color = "#4FC3F7" }: { children: React.ReactNode; color?: string }) {
   return (
-    <span className="font-mono text-[10px] px-2.5 py-0.5 rounded-full border"
+    <span className="font-mono text-[13px] px-2.5 py-0.5 rounded-full border"
       style={{ color, borderColor: `${color}35`, background: `${color}0a` }}>
       {children}
     </span>
@@ -325,7 +325,7 @@ function SideCard({ title, children }: { title: string; children: React.ReactNod
   return (
     <div className="rounded-2xl border border-[#1A1A2E] overflow-hidden">
       <div className="px-4 py-3 bg-[#0a0a0f] border-b border-[#1A1A2E]">
-        <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase">{title}</p>
+        <p className="font-mono text-[12px] text-slate-600 tracking-widest uppercase">{title}</p>
       </div>
       {children}
     </div>
@@ -371,15 +371,15 @@ function MethodologyMain({ onScan }: { onScan: () => void }) {
       <ol className="space-y-2 mb-7 mt-1">
         {METHOD_FLOW.map((step, i) => (
           <li key={i} className="flex gap-3 items-start">
-            <span className="font-mono text-[11px] text-[#4FC3F7] shrink-0 mt-px w-4">{i + 1}.</span>
-            <span className="font-mono text-[11px] text-slate-400 leading-relaxed">{step}</span>
+            <span className="font-mono text-[14px] text-[#4FC3F7] shrink-0 mt-px w-4">{i + 1}.</span>
+            <span className="font-mono text-[14px] text-slate-400 leading-relaxed">{step}</span>
           </li>
         ))}
       </ol>
 
       {/* Trust verdict */}
       <SectionLabel>Trust verdict — deterministic, not a score</SectionLabel>
-      <p className="font-mono text-[11px] text-slate-500 leading-relaxed mb-3 mt-1">
+      <p className="font-mono text-[14px] text-slate-500 leading-relaxed mb-3 mt-1">
         We surface concrete flags, never a single pass/fail number that would overstate certainty. The verdict
         is computed in code from the reads above, so the same on-chain state always yields the same flags.
       </p>
@@ -389,7 +389,7 @@ function MethodologyMain({ onScan }: { onScan: () => void }) {
             <span className="font-mono text-sm shrink-0 mt-px" style={{ color: kind === "warn" ? "#F59E0B" : "#22C55E" }}>
               {kind === "warn" ? "!" : "✓"}
             </span>
-            <span className="font-mono text-[11px] leading-relaxed" style={{ color: kind === "warn" ? "#FCD34D" : "#86efac" }}>
+            <span className="font-mono text-[14px] leading-relaxed" style={{ color: kind === "warn" ? "#FCD34D" : "#86efac" }}>
               {text}
             </span>
           </div>
@@ -401,8 +401,8 @@ function MethodologyMain({ onScan }: { onScan: () => void }) {
       <ul className="space-y-2 mb-7 mt-1">
         {METHOD_LIMITS.map((text, i) => (
           <li key={i} className="flex gap-3 items-start">
-            <span className="font-mono text-[11px] text-slate-600 shrink-0 mt-px">—</span>
-            <span className="font-mono text-[11px] text-slate-400 leading-relaxed">{text}</span>
+            <span className="font-mono text-[14px] text-slate-600 shrink-0 mt-px">—</span>
+            <span className="font-mono text-[14px] text-slate-400 leading-relaxed">{text}</span>
           </li>
         ))}
       </ul>
@@ -428,8 +428,8 @@ function MethodologySide() {
         <div className="divide-y divide-[#0d0d18]">
           {sources.map(s => (
             <div key={s.name} className="px-4 py-3">
-              <code className="font-mono text-[10px] text-[#4FC3F7] block mb-0.5">{s.name}</code>
-              <span className="font-mono text-[9px] text-slate-500 leading-relaxed break-words">{s.reads}</span>
+              <code className="font-mono text-[13px] text-[#4FC3F7] block mb-0.5">{s.name}</code>
+              <span className="font-mono text-[12px] text-slate-500 leading-relaxed break-words">{s.reads}</span>
             </div>
           ))}
         </div>
@@ -439,26 +439,26 @@ function MethodologySide() {
         <div className="px-4 py-3 space-y-2.5">
           <div className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-[#22C55E] shrink-0" style={{ boxShadow: "0 0 4px #22C55E60" }} />
-            <span className="font-mono text-[10px] text-slate-400">No LLM in the read path</span>
+            <span className="font-mono text-[13px] text-slate-400">No LLM in the read path</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-[#22C55E] shrink-0" style={{ boxShadow: "0 0 4px #22C55E60" }} />
-            <span className="font-mono text-[10px] text-slate-400">Same state → same verdict</span>
+            <span className="font-mono text-[13px] text-slate-400">Same state → same verdict</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-[#22C55E] shrink-0" style={{ boxShadow: "0 0 4px #22C55E60" }} />
-            <span className="font-mono text-[10px] text-slate-400">All reads on Base, on-chain</span>
+            <span className="font-mono text-[13px] text-slate-400">All reads on Base, on-chain</span>
           </div>
         </div>
       </SideCard>
 
       <SideCard title="Full Spec">
         <div className="px-4 py-3">
-          <p className="font-mono text-[10px] text-slate-500 leading-relaxed mb-2">
+          <p className="font-mono text-[13px] text-slate-500 leading-relaxed mb-2">
             Roles, policy system, variants, and key addresses in the Beryl / B20 docs.
           </p>
           <a href="/docs/beryl#methodology"
-            className="font-mono text-[10px] text-[#4FC3F7] hover:opacity-80 transition-opacity">
+            className="font-mono text-[13px] text-[#4FC3F7] hover:opacity-80 transition-opacity">
             Read the B20 docs ↗
           </a>
         </div>
@@ -488,7 +488,7 @@ function ResultCard({ info, renounce, onScanAnother, onHowItWorks }: { info: B20
           </div>
         </div>
         <div className="px-5 py-4">
-          <p className="font-mono text-[10px] text-slate-600 break-all mb-2">{info.address}</p>
+          <p className="font-mono text-[13px] text-slate-600 break-all mb-2">{info.address}</p>
           {info._note && <p className="font-mono text-xs text-slate-500 mb-4">{info._note}</p>}
           <div className="flex gap-2 flex-wrap">
             <a href={info.explorerUrl} target="_blank" rel="noopener noreferrer"
@@ -517,10 +517,10 @@ function ResultCard({ info, renounce, onScanAnother, onHowItWorks }: { info: B20
               {info.symbol && <span className="font-mono text-sm text-slate-400">${info.symbol}</span>}
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-mono text-[10px] px-2 py-0.5 rounded-full border"
+              <span className="font-mono text-[13px] px-2 py-0.5 rounded-full border"
                 style={{ background: "#22C55E18", color: "#22C55E", borderColor: "#22C55E30" }}>✓ B20</span>
               {info.initialized === false && (
-                <span className="font-mono text-[10px] px-2 py-0.5 rounded-full border"
+                <span className="font-mono text-[13px] px-2 py-0.5 rounded-full border"
                   style={{ background: "#F59E0B18", color: "#F59E0B", borderColor: "#F59E0B30" }}>⚠ Not initialized</span>
               )}
               <VariantBadge variant={info.variant} currency={info.currency} />
@@ -532,15 +532,15 @@ function ResultCard({ info, renounce, onScanAnother, onHowItWorks }: { info: B20
                   href={renounce.explorerUrl ?? info.explorerUrl}
                   target="_blank" rel="noopener noreferrer"
                   title="DEFAULT_ADMIN_ROLE was permanently renounced (renounceLastAdmin). Roles & policies can no longer be reassigned. Verified on-chain via LastAdminRenounced."
-                  className="font-mono text-[10px] px-2 py-0.5 rounded-full border transition-opacity hover:opacity-80"
+                  className="font-mono text-[13px] px-2 py-0.5 rounded-full border transition-opacity hover:opacity-80"
                   style={{ background: "#22C55E18", color: "#22C55E", borderColor: "#22C55E40" }}>
                   🔒 Admin renounced
                 </a>
               )}
-              <span className="font-mono text-[10px] text-slate-500">
+              <span className="font-mono text-[13px] text-slate-500">
                 {info.network === "mainnet" ? "Base Mainnet" : "Base Sepolia"}
               </span>
-              <span className="font-mono text-[9px] text-slate-600">
+              <span className="font-mono text-[12px] text-slate-600">
                 {(info.rpcLatencyMs / 1000).toFixed(2)}s
               </span>
             </div>
@@ -551,7 +551,7 @@ function ResultCard({ info, renounce, onScanAnother, onHowItWorks }: { info: B20
           </span>
         </div>
         <a href={info.explorerUrl} target="_blank" rel="noopener noreferrer"
-          className="font-mono text-[9px] text-slate-600 hover:text-[#4FC3F7] transition-colors break-all">
+          className="font-mono text-[12px] text-slate-600 hover:text-[#4FC3F7] transition-colors break-all">
           {info.address}
         </a>
       </div>
@@ -569,7 +569,7 @@ function ResultCard({ info, renounce, onScanAnother, onHowItWorks }: { info: B20
               <p className="font-mono text-sm font-semibold" style={{ color: "#22C55E" }}>
                 B20 Stablecoin{info.currency ? ` · pegged to ${info.currency}` : ""}
               </p>
-              <p className="font-mono text-[10px] text-slate-500 mt-0.5">
+              <p className="font-mono text-[13px] text-slate-500 mt-0.5">
                 {info.currency
                   ? `Issuer-declared currency peg: ${info.currency}. Backing & redemption are off-chain — verify with the issuer.`
                   : "Stablecoin variant — currency code not set on-chain."}
@@ -597,7 +597,7 @@ function ResultCard({ info, renounce, onScanAnother, onHowItWorks }: { info: B20
                 : [{ label: "Admin", value: t("scanner.unknown_admin") }]),
             ].map(({ label, value }) => (
               <div key={label} className="rounded-xl bg-[#0a0a12] border border-[#1A1A2E] px-3 py-2.5">
-                <p className="font-mono text-[9px] text-slate-600 mb-0.5">{label}</p>
+                <p className="font-mono text-[12px] text-slate-600 mb-0.5">{label}</p>
                 <p className="font-mono text-xs text-slate-200">{value}</p>
               </div>
             ))}
@@ -646,11 +646,11 @@ function ResultCard({ info, renounce, onScanAnother, onHowItWorks }: { info: B20
               );
             })}
             <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 pt-2 border-t border-[#1A1A2E]">
-              <p className="font-mono text-[9px] text-slate-600">
+              <p className="font-mono text-[12px] text-slate-600">
                 Reflects on-chain config at read time. Roles and policies can be changed by the issuer.
               </p>
               <button onClick={onHowItWorks}
-                className="font-mono text-[9px] text-[#4FC3F7] hover:opacity-80 transition-opacity shrink-0">
+                className="font-mono text-[12px] text-[#4FC3F7] hover:opacity-80 transition-opacity shrink-0">
                 How this works ↗
               </button>
             </div>
@@ -716,13 +716,13 @@ function LaunchMyTokens() {
       ) : myTokens.length === 0 ? (
         <div className="px-4 py-5 text-center">
           <p className="font-mono text-xs text-slate-600">No tokens deployed yet</p>
-          <p className="font-mono text-[9px] text-slate-700 mt-1">Deploy a B20 above to see it here</p>
+          <p className="font-mono text-[12px] text-slate-700 mt-1">Deploy a B20 above to see it here</p>
         </div>
       ) : (
         <div className="divide-y divide-[#0d0d18]">
           {myTokens.map(t => (
             <div key={t.address} className="flex items-center gap-3 px-4 py-3">
-              <div className="w-7 h-7 rounded-lg flex items-center justify-center font-mono text-[10px] font-bold shrink-0"
+              <div className="w-7 h-7 rounded-lg flex items-center justify-center font-mono text-[13px] font-bold shrink-0"
                 style={{ background: "#4FC3F715", border: "1px solid #4FC3F730", color: "#4FC3F7" }}>
                 {(t.symbol || t.name).slice(0, 2).toUpperCase()}
               </div>
@@ -731,7 +731,7 @@ function LaunchMyTokens() {
                   {t.name} <span className="text-slate-500">${t.symbol}</span>
                 </p>
                 <button onClick={() => copyAddr(t.address)} title={`Copy ${t.address}`}
-                  className="font-mono text-[9px] text-slate-700 hover:text-[#4FC3F7] transition-colors max-w-full truncate block text-left">
+                  className="font-mono text-[12px] text-slate-700 hover:text-[#4FC3F7] transition-colors max-w-full truncate block text-left">
                   {copiedAddr === t.address
                     ? "Copied full address ✓"
                     : `${t.address.slice(0, 14)}… · ${t.network === "mainnet" ? "Main" : "Sepolia"}`}
@@ -753,7 +753,7 @@ function LaunchMyTokens() {
                 </button>
                 <a href={`https://${t.network === "mainnet" ? "" : "sepolia."}basescan.org/token/${t.address}`}
                   target="_blank" rel="noopener noreferrer" title="View on Basescan"
-                  className="font-mono text-[9px] text-slate-600 hover:text-[#4FC3F7] transition-colors">
+                  className="font-mono text-[12px] text-slate-600 hover:text-[#4FC3F7] transition-colors">
                   ↗
                 </a>
               </div>
@@ -1024,14 +1024,14 @@ function LaunchTab({ onScanToken, network, setNetwork }: { onScanToken: (addr: s
         <div className="p-5 space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
+              <label className="font-mono text-[12px] text-slate-600 tracking-widest uppercase block mb-1.5">
                 {t("launch.token_name")} *
               </label>
               <input value={name} onChange={e => setName(e.target.value)}
                 placeholder="My Token" spellCheck={false} className={INPUT_CLS} />
             </div>
             <div>
-              <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
+              <label className="font-mono text-[12px] text-slate-600 tracking-widest uppercase block mb-1.5">
                 {t("launch.token_symbol")} *
               </label>
               <input value={symbol} onChange={e => setSymbol(e.target.value.toUpperCase())}
@@ -1041,7 +1041,7 @@ function LaunchTab({ onScanToken, network, setNetwork }: { onScanToken: (addr: s
 
           {/* Variant */}
           <div>
-            <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
+            <label className="font-mono text-[12px] text-slate-600 tracking-widest uppercase block mb-1.5">
               Variant
             </label>
             <div className="flex rounded-xl border border-[#1A1A2E] overflow-hidden">
@@ -1063,7 +1063,7 @@ function LaunchTab({ onScanToken, network, setNetwork }: { onScanToken: (addr: s
 
           <div className={autoPool ? "" : "grid grid-cols-2 gap-3"}>
             <div>
-              <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
+              <label className="font-mono text-[12px] text-slate-600 tracking-widest uppercase block mb-1.5">
                 {t("launch.decimals")} <span className="text-slate-700 font-normal normal-case">(6–18)</span>
               </label>
               <input type="number" min={6} max={18} value={decimals}
@@ -1077,7 +1077,7 @@ function LaunchTab({ onScanToken, network, setNetwork }: { onScanToken: (addr: s
                 liquidity. */}
             {!autoPool && (
               <div>
-                <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
+                <label className="font-mono text-[12px] text-slate-600 tracking-widest uppercase block mb-1.5">
                   Supply Cap <span className="text-slate-700 font-normal normal-case">(optional)</span>
                 </label>
                 <input value={supplyCap} onChange={e => setSupplyCap(e.target.value)}
@@ -1090,13 +1090,13 @@ function LaunchTab({ onScanToken, network, setNetwork }: { onScanToken: (addr: s
               same createB20 tx (deploy + grant MINT_ROLE + set cap + seed = 1 tx). */}
           {!autoPool && (
             <div>
-              <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
+              <label className="font-mono text-[12px] text-slate-600 tracking-widest uppercase block mb-1.5">
                 Initial Supply <span className="text-slate-700 font-normal normal-case">(optional · minted to you at deploy)</span>
               </label>
               <input value={initSupply} onChange={e => setInitSupply(e.target.value)}
                 placeholder="e.g. 1000000" spellCheck={false} className={INPUT_CLS} />
               {seedOverCap && (
-                <p className="font-mono text-[9px] text-[#EF4444] mt-1.5">
+                <p className="font-mono text-[12px] text-[#EF4444] mt-1.5">
                   Initial supply can&apos;t exceed the supply cap.
                 </p>
               )}
@@ -1105,7 +1105,7 @@ function LaunchTab({ onScanToken, network, setNetwork }: { onScanToken: (addr: s
 
           {variant === "stablecoin" && (
             <div>
-              <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
+              <label className="font-mono text-[12px] text-slate-600 tracking-widest uppercase block mb-1.5">
                 Currency Code
               </label>
               <input value={currCode} onChange={e => setCurrCode(e.target.value.toUpperCase())}
@@ -1125,7 +1125,7 @@ function LaunchTab({ onScanToken, network, setNetwork }: { onScanToken: (addr: s
                 <p className="font-mono text-xs text-slate-200 font-bold">
                   🔷 Auto-pool + $BLUE buyback flywheel
                 </p>
-                <p className="font-mono text-[10px] text-slate-500 mt-1 leading-relaxed">
+                <p className="font-mono text-[13px] text-slate-500 mt-1 leading-relaxed">
                   Deploy + init Uniswap V4 pool + lock LP in one signature.
                   Fixed <span className="text-slate-300">100B</span> supply,
                   all seeded into the pool. Every swap routes{" "}
@@ -1135,7 +1135,7 @@ function LaunchTab({ onScanToken, network, setNetwork }: { onScanToken: (addr: s
                   Admin renounced, LP permanent.
                 </p>
                 {network !== "mainnet" && (
-                  <p className="font-mono text-[9px] text-amber-400/70 mt-1.5">
+                  <p className="font-mono text-[12px] text-amber-400/70 mt-1.5">
                     Mainnet-only (Sepolia lacks BLUE/WETH pool).
                   </p>
                 )}
@@ -1145,13 +1145,13 @@ function LaunchTab({ onScanToken, network, setNetwork }: { onScanToken: (addr: s
             {autoPool && (
               <div className="space-y-3 pt-2 border-t border-[#4FC3F7]/10">
                 <div>
-                  <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
+                  <label className="font-mono text-[12px] text-slate-600 tracking-widest uppercase block mb-1.5">
                     Swap Fee Tier
                   </label>
                   <div className="flex rounded-xl border border-[#1A1A2E] overflow-hidden">
                     {(["MEDIUM", "HIGH", "3PCT"] as const).map((tier, i) => (
                       <button key={tier} onClick={() => setHubFeeTier(tier)}
-                        className="flex-1 py-2 font-mono text-[10px] transition-all"
+                        className="flex-1 py-2 font-mono text-[13px] transition-all"
                         style={hubFeeTier === tier
                           ? { background: "#4FC3F715", color: "#4FC3F7", borderRight: i < 2 ? "1px solid #1A1A2E" : undefined }
                           : { color: "#475569", borderRight: i < 2 ? "1px solid #1A1A2E" : undefined }}>
@@ -1161,14 +1161,14 @@ function LaunchTab({ onScanToken, network, setNetwork }: { onScanToken: (addr: s
                   </div>
                 </div>
                 <div>
-                  <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
+                  <label className="font-mono text-[12px] text-slate-600 tracking-widest uppercase block mb-1.5">
                     Opening Market Cap
                   </label>
                   <div className="rounded-xl border border-[#1A1A2E] bg-[#0a0a12] px-3 py-2.5 flex items-center justify-between">
                     <span className="font-mono text-sm text-slate-200">~$4K</span>
-                    <span className="font-mono text-[9px] text-slate-600">protocol-level constant</span>
+                    <span className="font-mono text-[12px] text-slate-600">protocol-level constant</span>
                   </div>
-                  <p className="font-mono text-[9px] text-slate-600 mt-1">
+                  <p className="font-mono text-[12px] text-slate-600 mt-1">
                     Every B20HUB launch opens at the same tick (pump.fun style).
                     USD figure floats with ETH price.
                   </p>
@@ -1221,7 +1221,7 @@ function LaunchTab({ onScanToken, network, setNetwork }: { onScanToken: (addr: s
               )}
 
               {network === "sepolia" && !notActivated && (
-                <p className="font-mono text-[9px] text-slate-600 mt-2 text-center">
+                <p className="font-mono text-[12px] text-slate-600 mt-2 text-center">
                   Sepolia testnet · free to test.{" "}
                   <a href="https://portal.cdp.coinbase.com/products/faucet"
                     target="_blank" rel="noopener noreferrer"
@@ -1229,7 +1229,7 @@ function LaunchTab({ onScanToken, network, setNetwork }: { onScanToken: (addr: s
                 </p>
               )}
               {network === "mainnet" && !notActivated && (
-                <p className="font-mono text-[9px] text-amber-400/70 mt-2 text-center">
+                <p className="font-mono text-[12px] text-amber-400/70 mt-2 text-center">
                   Beryl is live on Mainnet. Real ETH required for gas.
                 </p>
               )}
@@ -1240,7 +1240,7 @@ function LaunchTab({ onScanToken, network, setNetwork }: { onScanToken: (addr: s
                 </div>
               )}
               {deployTxHash && !deployedToken && (
-                <p className="font-mono text-[9px] text-slate-600 mt-2 text-center break-all">
+                <p className="font-mono text-[12px] text-slate-600 mt-2 text-center break-all">
                   tx: {deployTxHash.slice(0, 16)}…{deployTxHash.slice(-8)}
                 </p>
               )}
@@ -1270,7 +1270,7 @@ function LaunchTab({ onScanToken, network, setNetwork }: { onScanToken: (addr: s
       {/* After deployment guide */}
       <div className="rounded-2xl border border-[#1A1A2E] overflow-hidden">
         <div className="px-4 py-3 bg-[#0a0a0f] border-b border-[#1A1A2E]">
-          <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase">After Deployment</p>
+          <p className="font-mono text-[12px] text-slate-600 tracking-widest uppercase">After Deployment</p>
         </div>
         <div className="divide-y divide-[#0d0d18]">
           {[
@@ -1693,7 +1693,7 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
           <div className="flex rounded-lg border border-[#1A1A2E] overflow-hidden">
             {(["mainnet", "sepolia"] as const).map(n => (
               <button key={n} onClick={() => setNetwork(n)}
-                className="px-2.5 py-1 font-mono text-[8px] transition-colors"
+                className="px-2.5 py-1 font-mono text-[11px] transition-colors"
                 style={network === n ? { background: "#4FC3F715", color: "#4FC3F7" } : { color: "#334155" }}>
                 {n === "mainnet" ? "Main" : "Sepolia"}
               </button>
@@ -1718,12 +1718,12 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                 <span className="shrink-0" style={{ color: isActive ? "#4FC3F7" : "#64748b" }}>
                   {TabIcons[tab.id]}
                 </span>
-                <span className="font-mono text-[13px] flex-1 text-left"
+                <span className="font-mono text-[16px] flex-1 text-left"
                   style={{ color: isActive ? "#4FC3F7" : "#cbd5e1" }}>
                   {tab.label}
                 </span>
                 {tab.id === "registry" && registryResult && (
-                  <span className="font-mono text-[8px] text-slate-600">{registryResult.total}</span>
+                  <span className="font-mono text-[11px] text-slate-600">{registryResult.total}</span>
                 )}
                 {tab.id === "registry" && regPending && (
                   <span className="w-1 h-1 rounded-full bg-[#4FC3F7] animate-pulse shrink-0" />
@@ -1738,8 +1738,8 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "#ffffff08"; }}
             onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}>
             <span className="shrink-0 text-[#64748b]">{DocsIcon}</span>
-            <span className="font-mono text-[13px] flex-1 text-left text-[#cbd5e1]">Docs</span>
-            <span className="font-mono text-[8px] text-slate-600">↗</span>
+            <span className="font-mono text-[16px] flex-1 text-left text-[#cbd5e1]">Docs</span>
+            <span className="font-mono text-[11px] text-slate-600">↗</span>
           </a>
         </nav>
 
@@ -1750,7 +1750,7 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
               <span className="w-1.5 h-1.5 rounded-full shrink-0"
                 style={{ background: B20_TONE[b20Status.tone],
                          boxShadow:  `0 0 4px ${B20_TONE[b20Status.tone]}80` }} />
-              <span className="font-mono text-[9px]" style={{ color: B20_TONE[b20Status.tone] }}>
+              <span className="font-mono text-[12px]" style={{ color: B20_TONE[b20Status.tone] }}>
                 {b20Status.text}
               </span>
             </div>
@@ -1761,7 +1761,7 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
         {recentScans.length > 0 && (
           <div className="flex-1 overflow-hidden flex flex-col min-h-0 border-t border-[#1A1A2E] mt-1">
             <div className="px-5 pt-3 pb-1 shrink-0">
-              <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase">Recents</p>
+              <p className="font-mono text-[12px] text-slate-600 tracking-widest uppercase">Recents</p>
             </div>
             <div className="flex-1 overflow-y-auto pb-2">
               {recentScans.map(r => {
@@ -1773,12 +1773,12 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                     <span className="w-1.5 h-1.5 rounded-full shrink-0"
                       style={{ background: isActive ? "#4FC3F7" : "#334155" }} />
                     <div className="flex-1 min-w-0">
-                      <p className={`font-mono text-[12px] truncate ${isActive ? "text-white" : "text-slate-400"}`}>
+                      <p className={`font-mono text-[15px] truncate ${isActive ? "text-white" : "text-slate-400"}`}>
                         {r.name}{r.symbol ? ` $${r.symbol}` : ""}
                       </p>
-                      <p className="font-mono text-[8px] text-slate-700 truncate">{r.address.slice(0, 10)}…</p>
+                      <p className="font-mono text-[11px] text-slate-700 truncate">{r.address.slice(0, 10)}…</p>
                     </div>
-                    <span className="font-mono text-[8px] text-slate-700 shrink-0">
+                    <span className="font-mono text-[11px] text-slate-700 shrink-0">
                       {r.network === "mainnet" ? "M" : "S"}
                     </span>
                   </button>
@@ -1800,7 +1800,7 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
         <div className="lg:hidden flex items-center gap-1 px-3 py-2 border-b border-[#1A1A2E] overflow-x-auto shrink-0">
           {TABS.map(tab => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg font-mono text-[10px] shrink-0 transition-colors"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg font-mono text-[13px] shrink-0 transition-colors"
               style={activeTab === tab.id
                 ? { background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F730" }
                 : { color: "#475569", border: "1px solid transparent" }}>
@@ -1809,7 +1809,7 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
             </button>
           ))}
           <a href="/docs/beryl"
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg font-mono text-[10px] shrink-0"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg font-mono text-[13px] shrink-0"
             style={{ color: "#475569", border: "1px solid transparent" }}>
             <span className="text-[#64748b]">{DocsIcon}</span>
             Docs ↗
@@ -1817,7 +1817,7 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
           <div className="ml-auto flex rounded-lg border border-[#1A1A2E] overflow-hidden shrink-0">
             {(["mainnet", "sepolia"] as const).map(n => (
               <button key={n} onClick={() => setNetwork(n)}
-                className="px-2 py-1 font-mono text-[8px] transition-colors"
+                className="px-2 py-1 font-mono text-[11px] transition-colors"
                 style={network === n ? { background: "#4FC3F715", color: "#4FC3F7" } : { color: "#334155" }}>
                 {n === "mainnet" ? "M" : "S"}
               </button>
@@ -1842,33 +1842,33 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
             )}
 
             {activeTab === "roles" && (
-              <span className="font-mono text-[9px] text-slate-600">7 roles · multicall in 2 rounds</span>
+              <span className="font-mono text-[12px] text-slate-600">7 roles · multicall in 2 rounds</span>
             )}
 
             {activeTab === "registry" && (
               <>
                 {registryResult ? (
                   <>
-                    <span className="font-mono text-[9px] text-slate-500">{registryResult.total} tokens</span>
+                    <span className="font-mono text-[12px] text-slate-500">{registryResult.total} tokens</span>
                     {regStats && (
                       <>
-                        <span className="font-mono text-[9px]" style={{ color: "#4FC3F7" }}>{regStats.assetCount} ASSET</span>
-                        <span className="font-mono text-[9px]" style={{ color: "#22C55E" }}>{regStats.stableCount} STABLECOIN</span>
+                        <span className="font-mono text-[12px]" style={{ color: "#4FC3F7" }}>{regStats.assetCount} ASSET</span>
+                        <span className="font-mono text-[12px]" style={{ color: "#22C55E" }}>{regStats.stableCount} STABLECOIN</span>
                       </>
                     )}
                   </>
                 ) : (
-                  <span className="font-mono text-[9px] text-slate-600">B20Factory event log</span>
+                  <span className="font-mono text-[12px] text-slate-600">B20Factory event log</span>
                 )}
                 <button onClick={doRegistry} disabled={regPending}
-                  className="font-mono text-[9px] text-slate-600 hover:text-slate-400 transition-colors">
+                  className="font-mono text-[12px] text-slate-600 hover:text-slate-400 transition-colors">
                   {regPending ? "Loading…" : "↻ Refresh"}
                 </button>
               </>
             )}
 
             {activeTab === "launch" && (
-              <span className="font-mono text-[9px] text-slate-600">connect wallet → sign tx → token live on Base</span>
+              <span className="font-mono text-[12px] text-slate-600">connect wallet → sign tx → token live on Base</span>
             )}
 
             {activeTab === "manage" && (
@@ -1901,7 +1901,7 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                 <span className="w-1.5 h-1.5 rounded-full shrink-0"
                   style={{ background: B20_TONE[b20Status.tone],
                            boxShadow:  `0 0 4px ${B20_TONE[b20Status.tone]}80` }} />
-                <span className="font-mono text-[9px]" style={{ color: B20_TONE[b20Status.tone] }}>
+                <span className="font-mono text-[12px]" style={{ color: B20_TONE[b20Status.tone] }}>
                   {b20Status.text}
                 </span>
               </div>
@@ -1995,16 +1995,16 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
 
                         {/* Role chips for context */}
                         <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="font-mono text-[9px] text-slate-600">Your roles:</span>
+                          <span className="font-mono text-[12px] text-slate-600">Your roles:</span>
                           {scanWalletRoles.roles.filter(r => r.held).map(r => (
                             <span key={r.roleKey}
-                              className="font-mono text-[8px] px-1.5 py-0.5 rounded bg-[#4FC3F710] text-[#4FC3F7] border border-[#4FC3F720]">
+                              className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-[#4FC3F710] text-[#4FC3F7] border border-[#4FC3F720]">
                               {r.roleKey.replace(/_ROLE$/, "")}
                             </span>
                           ))}
                         </div>
 
-                        <p className="font-mono text-[10px] text-slate-500 leading-relaxed">
+                        <p className="font-mono text-[13px] text-slate-500 leading-relaxed">
                           Mint, transfer, manage roles, policy, pause and more — all actions live on the Manage tab.
                         </p>
 
@@ -2043,14 +2043,14 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
 
                   <div className="space-y-3 mb-4">
                     <div>
-                      <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
+                      <label className="font-mono text-[12px] text-slate-600 tracking-widest uppercase block mb-1.5">
                         Token Address
                       </label>
                       <input value={roleToken} onChange={e => setRoleToken(e.target.value)}
                         placeholder="0x… B20 token address" spellCheck={false} className={INPUT_CLS} />
                     </div>
                     <div>
-                      <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
+                      <label className="font-mono text-[12px] text-slate-600 tracking-widest uppercase block mb-1.5">
                         Wallet to Check
                       </label>
                       <input value={roleWallet} onChange={e => setRoleWallet(e.target.value)}
@@ -2095,7 +2095,7 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                             <div>
                               <span className="font-mono text-sm text-slate-200">{role.name}</span>
                               {role.hash && (
-                                <span className="font-mono text-[9px] text-slate-700 ml-3 hidden sm:inline">
+                                <span className="font-mono text-[12px] text-slate-700 ml-3 hidden sm:inline">
                                   {role.hash.slice(0, 14)}…
                                 </span>
                               )}
@@ -2112,7 +2112,7 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                         ))}
                       </div>
                       <div className="px-4 py-2.5 bg-[#0a0a0f] border-t border-[#1A1A2E]">
-                        <p className="font-mono text-[9px] text-slate-700">
+                        <p className="font-mono text-[12px] text-slate-700">
                           Checked {new Date(rolesResult.checkedAt).toLocaleTimeString()} via multicall (2 rounds).
                         </p>
                       </div>
@@ -2137,7 +2137,7 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                   <div className="flex items-center gap-2 flex-wrap mb-4">
                     {(["all", "asset", "stablecoin"] as const).map(f => (
                       <button key={f} onClick={() => setRegFilter(f)}
-                        className="font-mono text-[10px] px-2.5 py-1 rounded-full border transition-colors"
+                        className="font-mono text-[13px] px-2.5 py-1 rounded-full border transition-colors"
                         style={regFilter === f
                           ? f === "asset"
                             ? { background: "#4FC3F715", color: "#4FC3F7", borderColor: "#4FC3F740" }
@@ -2156,7 +2156,7 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                     <div className="flex rounded-lg border border-[#1A1A2E] overflow-hidden shrink-0">
                       {(["newest", "oldest"] as const).map(s => (
                         <button key={s} onClick={() => setRegSort(s)}
-                          className="px-2.5 py-1 font-mono text-[9px] transition-colors capitalize"
+                          className="px-2.5 py-1 font-mono text-[12px] transition-colors capitalize"
                           style={regSort === s ? { background: "#4FC3F715", color: "#4FC3F7" } : { color: "#475569" }}>
                           {s}
                         </button>
@@ -2227,7 +2227,7 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                           <button key={`${entry.token}-${entry.blockNumber}`}
                             onClick={() => handleRegistrySelect(entry.token)}
                             className="flex items-center gap-3 rounded-2xl border border-[#1A1A2E] px-3 py-3 hover:bg-[#0d0d18] transition-colors text-left w-full">
-                            <div className="w-9 h-9 rounded-xl flex items-center justify-center font-mono text-[11px] font-bold shrink-0"
+                            <div className="w-9 h-9 rounded-xl flex items-center justify-center font-mono text-[14px] font-bold shrink-0"
                               style={{
                                 background: entry.variant === 0 ? "#4FC3F715" : "#22C55E15",
                                 border:     `1px solid ${entry.variant === 0 ? "#4FC3F730" : "#22C55E30"}`,
@@ -2241,7 +2241,7 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                                   {entry.name || "—"}
                                 </span>
                                 {entry.symbol && (
-                                  <span className="font-mono text-[9px] text-slate-500">${entry.symbol}</span>
+                                  <span className="font-mono text-[12px] text-slate-500">${entry.symbol}</span>
                                 )}
                               </div>
                               <div className="flex items-center gap-1.5">
@@ -2249,22 +2249,22 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                               </div>
                             </div>
                             <div className="flex flex-col items-end gap-1 shrink-0">
-                              <span className="font-mono text-[9px] text-slate-600">
+                              <span className="font-mono text-[12px] text-slate-600">
                                 #{Number(entry.blockNumber).toLocaleString()}
                               </span>
-                              <span className="font-mono text-[9px] text-[#4FC3F7]">Inspect →</span>
+                              <span className="font-mono text-[12px] text-[#4FC3F7]">Inspect →</span>
                             </div>
                           </button>
                         ))}
                       </div>
                       <div className="flex items-center justify-between px-1">
-                        <p className="font-mono text-[9px] text-slate-700">
+                        <p className="font-mono text-[12px] text-slate-700">
                           {filteredEntries.length} of {registryResult?.total ?? 0} tokens
                           {registryResult?.capped ? " (capped at 100)" : ""}
                         </p>
                         <a href={`https://${network === "mainnet" ? "" : "sepolia."}basescan.org/address/0xb20f000000000000000000000000000000000000#events`}
                           target="_blank" rel="noopener noreferrer"
-                          className="font-mono text-[9px] text-slate-600 hover:text-slate-400 transition-colors">
+                          className="font-mono text-[12px] text-slate-600 hover:text-slate-400 transition-colors">
                           All events ↗
                         </a>
                       </div>
@@ -2275,24 +2275,24 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                   <div className="mt-6 pt-5 border-t border-[#1A1A2E]">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="font-mono text-xs font-semibold text-white">{t("activity.title")}</span>
-                      <span className="font-mono text-[9px] text-slate-600">{t("activity.control_events")}</span>
+                      <span className="font-mono text-[12px] text-slate-600">{t("activity.control_events")}</span>
                       {activityResult && !activityResult.unavailable && activityResult.events.length > 0 && (
-                        <span className="font-mono text-[9px] text-slate-700">· {activityResult.total} total</span>
+                        <span className="font-mono text-[12px] text-slate-700">· {activityResult.total} total</span>
                       )}
                       <button onClick={doActivity} disabled={activityPending}
-                        className="ml-auto font-mono text-[9px] text-slate-600 hover:text-slate-400 transition-colors">
+                        className="ml-auto font-mono text-[12px] text-slate-600 hover:text-slate-400 transition-colors">
                         {activityPending ? "Loading…" : `↻ ${t("activity.refresh")}`}
                       </button>
                       {activityResult && !activityResult.unavailable && activityResult.events.length > 0 && (
                         <button onClick={() => downloadActivityCsv(activityResult)}
                           title="Export the loaded control events as a CSV compliance report"
-                          className="font-mono text-[9px] px-2 py-0.5 rounded-md border transition-colors"
+                          className="font-mono text-[12px] px-2 py-0.5 rounded-md border transition-colors"
                           style={{ color: "#22C55E", borderColor: "#22C55E30", background: "#22C55E0a" }}>
                           ↓ Export CSV
                         </button>
                       )}
                     </div>
-                    <p className="font-mono text-[9px] text-slate-700 mb-3 leading-relaxed">
+                    <p className="font-mono text-[12px] text-slate-700 mb-3 leading-relaxed">
                       Pause · policy · supply-cap · freeze-seize · role — operator actions on live B20 tokens.
                       Berry &amp; Charon don&apos;t surface these.
                     </p>
@@ -2310,7 +2310,7 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                       <div className="rounded-2xl border border-[#1A1A2E] px-4 py-4 text-center">
                         <p className="font-mono text-xs text-slate-500">{t("activity.unavailable")}</p>
                         <button onClick={doActivity}
-                          className="font-mono text-[10px] text-slate-600 hover:text-slate-400 mt-1 transition-colors">
+                          className="font-mono text-[13px] text-slate-600 hover:text-slate-400 mt-1 transition-colors">
                           Retry
                         </button>
                       </div>
@@ -2337,18 +2337,18 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                               className="flex items-center gap-2.5 rounded-xl border border-[#1A1A2E] px-3 py-2 hover:bg-[#0d0d18] transition-colors">
                               <span className="w-1.5 h-1.5 rounded-full shrink-0"
                                 style={{ background: color, boxShadow: `0 0 5px ${color}80` }} />
-                              <span className="font-mono text-[8px] px-1.5 py-0.5 rounded shrink-0 hidden sm:inline"
+                              <span className="font-mono text-[11px] px-1.5 py-0.5 rounded shrink-0 hidden sm:inline"
                                 style={{ background: `${color}15`, color, border: `1px solid ${color}30` }}>
                                 {ACTIVITY_LABEL[ev.category]}
                               </span>
                               <button onClick={() => handleRegistrySelect(ev.token)}
                                 title="Inspect this token"
-                                className="flex-1 min-w-0 font-mono text-[11px] text-slate-200 hover:text-white transition-colors text-left truncate">
+                                className="flex-1 min-w-0 font-mono text-[14px] text-slate-200 hover:text-white transition-colors text-left truncate">
                                 {ev.text}
                               </button>
-                              <span className="font-mono text-[9px] text-slate-600 shrink-0">{timeAgo(ev.timestamp)}</span>
+                              <span className="font-mono text-[12px] text-slate-600 shrink-0">{timeAgo(ev.timestamp)}</span>
                               <a href={ev.explorerUrl} target="_blank" rel="noopener noreferrer"
-                                className="font-mono text-[9px] text-slate-600 hover:text-[#4FC3F7] transition-colors shrink-0">
+                                className="font-mono text-[12px] text-slate-600 hover:text-[#4FC3F7] transition-colors shrink-0">
                                 tx ↗
                               </a>
                             </div>
@@ -2378,7 +2378,7 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                     <>
                       {/* Token input */}
                       <div className="mb-2">
-                        <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1.5">
+                        <label className="font-mono text-[12px] text-slate-600 tracking-widest uppercase block mb-1.5">
                           Token Address
                         </label>
                         <div className="flex gap-2">
@@ -2492,9 +2492,9 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                                 <p className={`font-mono text-xs truncate ${isActive ? "text-white" : "text-slate-400"}`}>
                                   {r.name}{r.symbol ? ` $${r.symbol}` : ""}
                                 </p>
-                                <p className="font-mono text-[8px] text-slate-700">{r.address.slice(0, 14)}…</p>
+                                <p className="font-mono text-[11px] text-slate-700">{r.address.slice(0, 14)}…</p>
                               </div>
-                              <span className="font-mono text-[8px] text-slate-700 shrink-0">
+                              <span className="font-mono text-[11px] text-slate-700 shrink-0">
                                 {r.network === "mainnet" ? "Main" : "Sepolia"}
                               </span>
                             </button>
@@ -2514,7 +2514,7 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                         <button key={addr} onClick={() => { setScanAddr(addr); doScan(addr); }}
                           className="w-full text-left rounded-xl border border-[#1A1A2E] px-3 py-2.5 hover:bg-[#0d0d18] transition-colors">
                           <p className="font-mono text-xs text-slate-300">{label}</p>
-                          <p className="font-mono text-[8px] text-slate-700 mt-0.5">{desc}</p>
+                          <p className="font-mono text-[11px] text-slate-700 mt-0.5">{desc}</p>
                         </button>
                       ))}
                       {registryResult?.entries.slice(0, 2).map(e => (
@@ -2524,7 +2524,7 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                             <p className="font-mono text-xs text-slate-300">{e.name || e.symbol}</p>
                             <VariantBadge variant={e.variantLabel} />
                           </div>
-                          <p className="font-mono text-[8px] text-slate-700">{e.token.slice(0, 18)}…</p>
+                          <p className="font-mono text-[11px] text-slate-700">{e.token.slice(0, 18)}…</p>
                         </button>
                       ))}
                     </div>
@@ -2543,13 +2543,13 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                           <span className="text-sm w-5 shrink-0 text-center leading-relaxed">{icon}</span>
                           <div>
                             <p className="font-mono text-xs text-slate-300">{label}</p>
-                            <p className="font-mono text-[9px] text-slate-600 mt-0.5 leading-relaxed">{desc}</p>
+                            <p className="font-mono text-[12px] text-slate-600 mt-0.5 leading-relaxed">{desc}</p>
                           </div>
                         </div>
                       ))}
                     </div>
                     <div className="px-4 py-3 border-t border-[#1A1A2E]">
-                      <p className="font-mono text-[9px] text-slate-700 leading-relaxed">
+                      <p className="font-mono text-[12px] text-slate-700 leading-relaxed">
                         Zero LLM — all data is read directly from Base via multicall. Results reflect on-chain state at read time.
                       </p>
                     </div>
@@ -2572,8 +2572,8 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                         { r: "METADATA_ROLE",      d: "Update token name, symbol, and metadata" },
                       ].map(({ r, d }) => (
                         <div key={r} className="px-4 py-3">
-                          <code className="font-mono text-[9px] text-[#4FC3F7] block mb-0.5">{r}</code>
-                          <span className="font-mono text-[10px] text-slate-600 leading-relaxed">{d}</span>
+                          <code className="font-mono text-[12px] text-[#4FC3F7] block mb-0.5">{r}</code>
+                          <span className="font-mono text-[13px] text-slate-600 leading-relaxed">{d}</span>
                         </div>
                       ))}
                     </div>
@@ -2614,7 +2614,7 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                     </div>
                     {registryResult?.cached && (
                       <div className="px-4 py-2 border-t border-[#1A1A2E]">
-                        <p className="font-mono text-[9px] text-slate-700">KV cached · TTL 120s</p>
+                        <p className="font-mono text-[12px] text-slate-700">KV cached · TTL 120s</p>
                       </div>
                     )}
                   </SideCard>
@@ -2628,15 +2628,15 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                         { label: "Beryl required",    desc: "Factory only active after Beryl upgrade on each network" },
                       ].map(({ label, desc }) => (
                         <div key={label} className="flex items-start gap-3 px-4 py-3">
-                          <span className="font-mono text-[9px] text-[#4FC3F7] shrink-0 w-[100px] pt-0.5 leading-relaxed">{label}</span>
-                          <span className="font-mono text-[10px] text-slate-600 leading-relaxed">{desc}</span>
+                          <span className="font-mono text-[12px] text-[#4FC3F7] shrink-0 w-[100px] pt-0.5 leading-relaxed">{label}</span>
+                          <span className="font-mono text-[13px] text-slate-600 leading-relaxed">{desc}</span>
                         </div>
                       ))}
                     </div>
                     <div className="px-4 py-3 border-t border-[#1A1A2E]">
                       <a href={`https://${network === "mainnet" ? "" : "sepolia."}basescan.org/address/0xb20f000000000000000000000000000000000000#events`}
                         target="_blank" rel="noopener noreferrer"
-                        className="font-mono text-[9px] text-slate-600 hover:text-[#4FC3F7] transition-colors">
+                        className="font-mono text-[12px] text-slate-600 hover:text-[#4FC3F7] transition-colors">
                         All B20Created events on Basescan ↗
                       </a>
                     </div>
@@ -2650,9 +2650,9 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                   <SideCard title="Variant Comparison">
                     <div className="divide-y divide-[#0d0d18]">
                       <div className="grid grid-cols-3 gap-2 px-4 py-2.5">
-                        <span className="font-mono text-[9px] text-slate-700" />
-                        <span className="font-mono text-[9px] text-[#4FC3F7] font-semibold">ASSET</span>
-                        <span className="font-mono text-[9px] text-[#22C55E] font-semibold">STABLECOIN</span>
+                        <span className="font-mono text-[12px] text-slate-700" />
+                        <span className="font-mono text-[12px] text-[#4FC3F7] font-semibold">ASSET</span>
+                        <span className="font-mono text-[12px] text-[#22C55E] font-semibold">STABLECOIN</span>
                       </div>
                       {[
                         { prop: "variant id",   asset: "0",                    stable: "1"               },
@@ -2662,9 +2662,9 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                         { prop: "use case",     asset: "governance, utility",  stable: "dollar-pegged"   },
                       ].map(({ prop, asset, stable }) => (
                         <div key={prop} className="grid grid-cols-3 gap-2 px-4 py-2.5">
-                          <span className="font-mono text-[9px] text-slate-600">{prop}</span>
-                          <span className="font-mono text-[9px] text-[#4FC3F7]">{asset}</span>
-                          <span className="font-mono text-[9px] text-[#22C55E]">{stable}</span>
+                          <span className="font-mono text-[12px] text-slate-600">{prop}</span>
+                          <span className="font-mono text-[12px] text-[#4FC3F7]">{asset}</span>
+                          <span className="font-mono text-[12px] text-[#22C55E]">{stable}</span>
                         </div>
                       ))}
                     </div>
@@ -2683,8 +2683,8 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                         "Verify in Scanner tab after deployment to confirm config",
                       ].map((item, i) => (
                         <div key={i} className="flex items-start gap-3 px-4 py-2.5">
-                          <span className="font-mono text-[9px] text-slate-600 shrink-0 w-4 pt-0.5">{i + 1}.</span>
-                          <span className="font-mono text-[10px] text-slate-500 leading-relaxed">{item}</span>
+                          <span className="font-mono text-[12px] text-slate-600 shrink-0 w-4 pt-0.5">{i + 1}.</span>
+                          <span className="font-mono text-[13px] text-slate-500 leading-relaxed">{item}</span>
                         </div>
                       ))}
                     </div>
@@ -2699,10 +2699,10 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                     <div className="px-4 py-3">
                       {connectedAddress ? (
                         <div>
-                          <code className="font-mono text-[10px] text-[#4FC3F7] break-all">
+                          <code className="font-mono text-[13px] text-[#4FC3F7] break-all">
                             {truncAddr(connectedAddress, 8)}
                           </code>
-                          <p className="font-mono text-[9px] text-slate-700 mt-1 break-all">{connectedAddress}</p>
+                          <p className="font-mono text-[12px] text-slate-700 mt-1 break-all">{connectedAddress}</p>
                         </div>
                       ) : (
                         <p className="font-mono text-xs text-slate-600">No wallet connected</p>
@@ -2713,11 +2713,11 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                             <div key={r.roleKey} className="flex items-center gap-2">
                               <span className="w-1.5 h-1.5 rounded-full bg-[#22C55E] shrink-0"
                                 style={{ boxShadow: "0 0 4px #22C55E60" }} />
-                              <span className="font-mono text-[9px] text-[#22C55E]">{r.name}</span>
+                              <span className="font-mono text-[12px] text-[#22C55E]">{r.name}</span>
                             </div>
                           ))}
                           {manageData.roles.roles.every(r => !r.held) && (
-                            <p className="font-mono text-[9px] text-slate-600">No roles held on this token</p>
+                            <p className="font-mono text-[12px] text-slate-600">No roles held on this token</p>
                           )}
                         </div>
                       )}
@@ -2736,9 +2736,9 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                         { role: "METADATA_ROLE",      action: "updateName/Symbol/URI",     desc: "Update token metadata" },
                       ].map(({ role, action, desc }) => (
                         <div key={role} className="px-4 py-2.5">
-                          <code className="font-mono text-[8px] text-[#4FC3F7] block mb-0.5">{role}</code>
-                          <code className="font-mono text-[9px] text-slate-400 block mb-0.5">{action}</code>
-                          <span className="font-mono text-[9px] text-slate-600">{desc}</span>
+                          <code className="font-mono text-[11px] text-[#4FC3F7] block mb-0.5">{role}</code>
+                          <code className="font-mono text-[12px] text-slate-400 block mb-0.5">{action}</code>
+                          <span className="font-mono text-[12px] text-slate-600">{desc}</span>
                         </div>
                       ))}
                     </div>
@@ -2746,13 +2746,13 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
 
                   <SideCard title="Safety Notes">
                     <div className="px-4 py-3 space-y-2.5">
-                      <p className="font-mono text-[10px] text-[#EF4444] leading-relaxed">
+                      <p className="font-mono text-[13px] text-[#EF4444] leading-relaxed">
                         <span className="font-semibold">renounceLastAdmin</span> permanently removes DEFAULT_ADMIN_ROLE. Irreversible.
                       </p>
-                      <p className="font-mono text-[10px] text-[#F59E0B] leading-relaxed">
+                      <p className="font-mono text-[13px] text-[#F59E0B] leading-relaxed">
                         <span className="font-semibold">burnBlocked</span> forcibly confiscates a holder&apos;s tokens without consent.
                       </p>
-                      <p className="font-mono text-[10px] text-slate-600 leading-relaxed">
+                      <p className="font-mono text-[13px] text-slate-600 leading-relaxed">
                         Transactions are encoded client-side and signed by your wallet. No keys or tx data sent to Blue Agent servers.
                       </p>
                     </div>
@@ -2765,16 +2765,16 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                 <>
                   <SideCard title="How it works">
                     <div className="px-4 py-3 space-y-2.5">
-                      <p className="font-mono text-[10px] text-slate-400 leading-relaxed">
+                      <p className="font-mono text-[13px] text-slate-400 leading-relaxed">
                         Each watched token stores a <span className="text-[#4FC3F7]">baseline snapshot</span> of its
                         compliance-critical state — variant, pause flags, per-scope policies, and supply cap.
                       </p>
-                      <p className="font-mono text-[10px] text-slate-400 leading-relaxed">
+                      <p className="font-mono text-[13px] text-slate-400 leading-relaxed">
                         On every load we re-inspect each token live and <span className="text-[#4FC3F7]">diff</span> it
                         against the baseline. Detected changes surface as badges; press
                         <span className="text-[#4FC3F7]"> Acknowledge</span> to reset the baseline to the current state.
                       </p>
-                      <p className="font-mono text-[10px] text-slate-600 leading-relaxed">
+                      <p className="font-mono text-[13px] text-slate-600 leading-relaxed">
                         Pull-based — no cron, no push. Changes are evaluated the moment you open this tab.
                       </p>
                     </div>
@@ -2788,8 +2788,8 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
                         { k: "Supply cap", v: "cap raised, lowered, set, or removed" },
                       ].map(({ k, v }) => (
                         <div key={k} className="px-4 py-2.5">
-                          <code className="font-mono text-[9px] text-[#4FC3F7] block mb-0.5">{k}</code>
-                          <span className="font-mono text-[9px] text-slate-500">{v}</span>
+                          <code className="font-mono text-[12px] text-[#4FC3F7] block mb-0.5">{k}</code>
+                          <span className="font-mono text-[12px] text-slate-500">{v}</span>
                         </div>
                       ))}
                     </div>
@@ -2797,11 +2797,11 @@ export default function B20Client({ initialAddress = "", initialNetwork = "mainn
 
                   <SideCard title="Note">
                     <div className="px-4 py-3 space-y-2.5">
-                      <p className="font-mono text-[10px] text-slate-600 leading-relaxed">
+                      <p className="font-mono text-[13px] text-slate-600 leading-relaxed">
                         Raw <span className="text-slate-400">totalSupply</span> is shown for context but never diffed —
                         an active stablecoin mints/burns constantly, which would bury the real signal.
                       </p>
-                      <p className="font-mono text-[10px] text-slate-600 leading-relaxed">
+                      <p className="font-mono text-[13px] text-slate-600 leading-relaxed">
                         Watchlist is stored per connected wallet (max 25 tokens). Read-only monitoring — no signing required.
                       </p>
                     </div>

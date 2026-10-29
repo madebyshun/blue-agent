@@ -18,7 +18,7 @@ import {
 import { MEMO_EVENT_ABI, orderMemo, memoToOrderId } from "@/lib/b20/encode";
 
 const input =
-  "w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors";
+  "w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-2.5 py-1.5 font-mono text-[14px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors";
 
 // While the dashboard is open, poll Base for Memo events whose indexed memo matches
 // a pending order id and flip those orders to Paid. This is the cross-device
@@ -135,7 +135,7 @@ export default function OrdersPanel() {
       <div className="flex gap-1 mb-3">
         {(["order", "invoice"] as const).map((k) => (
           <button key={k} onClick={() => setKind(k)}
-            className="flex-1 font-mono text-[10px] py-1.5 rounded-md transition-colors"
+            className="flex-1 font-mono text-[13px] py-1.5 rounded-md transition-colors"
             style={kind === k ? { background: "#4FC3F712", color: "#4FC3F7", border: "1px solid #4FC3F730" } : { color: "#64748b", border: "1px solid #1A1A2E" }}>
             {k === "order" ? "Order" : "Invoice"}
           </button>
@@ -153,7 +153,7 @@ export default function OrdersPanel() {
           </>
         )}
         <button onClick={create} disabled={!(parseFloat(amount) > 0)}
-          className="font-mono text-[12px] font-bold py-2 rounded-lg disabled:opacity-50"
+          className="font-mono text-[15px] font-bold py-2 rounded-lg disabled:opacity-50"
           style={{ background: "#34D39915", color: "#34D399", border: "1px solid #34D39940" }}>
           + New {kind === "invoice" ? "Invoice" : "Order"}
         </button>
@@ -198,7 +198,7 @@ export default function OrdersPanel() {
           does not name a mechanism any more. */}
       {!B20_ENABLED && (
         <div className="rounded-lg px-2.5 py-2 mb-3" style={{ border: "1px solid #F59E0B30", background: "#F59E0B0d" }}>
-          <p className="font-mono text-[9px] text-[#F59E0B] leading-relaxed">
+          <p className="font-mono text-[12px] text-[#F59E0B] leading-relaxed">
             B20 USDC settlement is not enabled on this deployment, so orders
             stay Pending — nothing can mark one Paid. The request itself is
             still recorded — copy it and collect payment another way for now.
@@ -216,7 +216,7 @@ export default function OrdersPanel() {
               connected wallet actually does is get stamped onto the order as
               `payTo` at creation, and without it `copyRequest` omits the
               "Pay to:" line entirely and the payer gets no address at all. */}
-          <p className="font-mono text-[9px] text-[#4FC3F7] leading-relaxed">
+          <p className="font-mono text-[12px] text-[#4FC3F7] leading-relaxed">
             Connect your wallet so new requests carry a payout address —
             without one there is nothing for a payer to send to.
           </p>
@@ -225,26 +225,26 @@ export default function OrdersPanel() {
 
       {/* List */}
       <div className="flex items-center justify-between mb-1.5">
-        <span className="font-mono text-[9px] text-slate-600 tracking-widest">{orders.length} REQUEST{orders.length !== 1 ? "S" : ""}</span>
-        {orders.length > 0 && <button onClick={exportCsv} className="font-mono text-[9px] text-slate-500 hover:text-[#4FC3F7]">Export CSV ↓</button>}
+        <span className="font-mono text-[12px] text-slate-600 tracking-widest">{orders.length} REQUEST{orders.length !== 1 ? "S" : ""}</span>
+        {orders.length > 0 && <button onClick={exportCsv} className="font-mono text-[12px] text-slate-500 hover:text-[#4FC3F7]">Export CSV ↓</button>}
       </div>
       <div className="flex flex-col gap-1.5">
-        {orders.length === 0 && <p className="font-mono text-[10px] text-slate-700">No requests yet. Create an order or invoice above.</p>}
+        {orders.length === 0 && <p className="font-mono text-[13px] text-slate-700">No requests yet. Create an order or invoice above.</p>}
         {orders.map((o) => (
           <div key={o.id} className="rounded-lg border border-[#1A1A2E] bg-[#0d0d12] px-3 py-2">
             <div className="flex items-center gap-2">
-              <span className="font-mono text-[11px] text-slate-200 flex-1 truncate">#{o.id}</span>
-              <span className="font-mono text-[11px] text-slate-300">${o.amount.toLocaleString()} USDC</span>
-              <span className="font-mono text-[9px] px-1.5 py-0.5 rounded shrink-0"
+              <span className="font-mono text-[14px] text-slate-200 flex-1 truncate">#{o.id}</span>
+              <span className="font-mono text-[14px] text-slate-300">${o.amount.toLocaleString()} USDC</span>
+              <span className="font-mono text-[12px] px-1.5 py-0.5 rounded shrink-0"
                 style={o.status === "paid" ? { color: "#34D399", background: "#34D39915" } : { color: "#F59E0B", background: "#F59E0B15" }}>
                 {o.status === "paid" ? "✅ Paid" : "⏳ Pending"}
               </span>
             </div>
-            {o.description && <div className="font-mono text-[10px] text-slate-600 mt-0.5 truncate">{o.description}</div>}
+            {o.description && <div className="font-mono text-[13px] text-slate-600 mt-0.5 truncate">{o.description}</div>}
             <div className="flex items-center gap-3 mt-1">
-              <button onClick={() => copyRequest(o)} className="font-mono text-[9px] text-[#4FC3F7]">{copied === o.id ? "request copied ✓" : "copy request"}</button>
-              {o.txHash && <a href={`https://basescan.org/tx/${o.txHash}`} target="_blank" rel="noopener noreferrer" className="font-mono text-[9px] text-slate-500 hover:text-[#4FC3F7]">tx ↗</a>}
-              <button onClick={() => { removeOrder(o.id); refresh(); }} className="font-mono text-[9px] text-slate-700 hover:text-red-400 ml-auto">remove</button>
+              <button onClick={() => copyRequest(o)} className="font-mono text-[12px] text-[#4FC3F7]">{copied === o.id ? "request copied ✓" : "copy request"}</button>
+              {o.txHash && <a href={`https://basescan.org/tx/${o.txHash}`} target="_blank" rel="noopener noreferrer" className="font-mono text-[12px] text-slate-500 hover:text-[#4FC3F7]">tx ↗</a>}
+              <button onClick={() => { removeOrder(o.id); refresh(); }} className="font-mono text-[12px] text-slate-700 hover:text-red-400 ml-auto">remove</button>
             </div>
           </div>
         ))}

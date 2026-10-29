@@ -57,17 +57,17 @@ export function WalletPickerModal({
             <PrivyLoginButton onDone={onClose} />
             <div className="flex items-center gap-2 mt-3 mb-1">
               <div className="h-px flex-1 bg-[#1A1A2E]" />
-              <span className="font-mono text-[9px] text-slate-600 uppercase tracking-widest">or</span>
+              <span className="font-mono text-[12px] text-slate-600 uppercase tracking-widest">or</span>
               <div className="h-px flex-1 bg-[#1A1A2E]" />
             </div>
           </div>
         )}
-        <p className="font-mono text-[10px] text-slate-600 px-4 pt-4 pb-2 tracking-widest uppercase">
+        <p className="font-mono text-[13px] text-slate-600 px-4 pt-4 pb-2 tracking-widest uppercase">
           Select Wallet
         </p>
 
         {wallets.length === 0 && (
-          <p className="px-4 pb-3 font-mono text-[11px] text-slate-600 leading-relaxed">
+          <p className="px-4 pb-3 font-mono text-[14px] text-slate-600 leading-relaxed">
             No wallet detected. Install MetaMask, Rabby, or Coinbase Wallet, then reload.
           </p>
         )}
@@ -83,7 +83,7 @@ export function WalletPickerModal({
             </span>
             <div>
               <p className="font-mono text-xs text-white">{w.name}</p>
-              <p className="font-mono text-[10px] text-slate-600">{w.subtitle}</p>
+              <p className="font-mono text-[13px] text-slate-600">{w.subtitle}</p>
             </div>
           </button>
         ))}
@@ -99,13 +99,13 @@ export function WalletPickerModal({
           <Link
             href="/signup"
             onClick={onClose}
-            className="block text-center font-mono text-[10px] text-slate-600 hover:text-slate-400 py-2 transition-colors"
+            className="block text-center font-mono text-[13px] text-slate-600 hover:text-slate-400 py-2 transition-colors"
           >
             See all sign-in options →
           </Link>
           <button
             onClick={onClose}
-            className="w-full font-mono text-[10px] text-slate-600 hover:text-slate-400 py-2 transition-colors"
+            className="w-full font-mono text-[13px] text-slate-600 hover:text-slate-400 py-2 transition-colors"
           >
             Cancel
           </button>

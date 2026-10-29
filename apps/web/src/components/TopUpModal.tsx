@@ -167,17 +167,17 @@ export default function TopUpModal({
         {/* Header */}
         <div className="px-5 pt-5 pb-3 border-b border-[#1A1A2E]">
           <div className="flex items-center justify-between">
-            <p className="font-mono text-[13px] font-bold text-white">Top up credits</p>
+            <p className="font-mono text-[16px] font-bold text-white">Top up credits</p>
             <button
               onClick={close}
               disabled={busy}
               aria-label="Close"
-              className="w-6 h-6 rounded-md font-mono text-[12px] text-slate-600 hover:text-slate-300 hover:bg-[#1A1A2E] transition-colors disabled:opacity-40"
+              className="w-6 h-6 rounded-md font-mono text-[15px] text-slate-600 hover:text-slate-300 hover:bg-[#1A1A2E] transition-colors disabled:opacity-40"
             >
               ✕
             </button>
           </div>
-          <p className="font-mono text-[10px] text-slate-600 mt-1 leading-relaxed">
+          <p className="font-mono text-[13px] text-slate-600 mt-1 leading-relaxed">
             Pay with USDC on Base · non-custodial. 1 USDC = {CREDITS_PER_USDC.toLocaleString()} credits.
           </p>
         </div>
@@ -186,7 +186,7 @@ export default function TopUpModal({
         {phase === "done" ? (
           <div className="px-5 py-8 text-center">
             <div className="text-2xl mb-2">✓</div>
-            <p className="font-mono text-[13px] text-[#34D399] font-bold">
+            <p className="font-mono text-[16px] text-[#34D399] font-bold">
               {credited.toLocaleString()} credits added
             </p>
             {txHash && (
@@ -194,14 +194,14 @@ export default function TopUpModal({
                 href={`https://basescan.org/tx/${txHash}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="block font-mono text-[10px] text-slate-600 hover:text-slate-400 mt-2"
+                className="block font-mono text-[13px] text-slate-600 hover:text-slate-400 mt-2"
               >
                 view transaction ↗
               </a>
             )}
             <button
               onClick={close}
-              className="mt-5 w-full font-mono text-[12px] font-bold py-2.5 rounded-xl hover:opacity-90 transition-opacity"
+              className="mt-5 w-full font-mono text-[15px] font-bold py-2.5 rounded-xl hover:opacity-90 transition-opacity"
               style={{ background: "#34D399", color: "#050508" }}
             >
               Done
@@ -222,15 +222,15 @@ export default function TopUpModal({
                   >
                     {pack.popular && (
                       <span
-                        className="absolute -top-2 right-2 font-mono text-[8px] font-bold px-1.5 py-0.5 rounded"
+                        className="absolute -top-2 right-2 font-mono text-[11px] font-bold px-1.5 py-0.5 rounded"
                         style={{ background: "#4FC3F7", color: "#050508" }}
                       >
                         POPULAR
                       </span>
                     )}
-                    <div className="font-mono text-[10px] text-slate-500">{pack.label}</div>
+                    <div className="font-mono text-[13px] text-slate-500">{pack.label}</div>
                     <div className="font-mono text-lg font-bold text-white mt-0.5">${pack.usdc}</div>
-                    <div className="font-mono text-[10px] text-[#4FC3F7] mt-0.5">
+                    <div className="font-mono text-[13px] text-[#4FC3F7] mt-0.5">
                       {inFlight ? "confirm in wallet…" : `${pack.credits.toLocaleString()} cr`}
                     </div>
                   </button>
@@ -241,7 +241,7 @@ export default function TopUpModal({
             {/* ── Status line ───────────────────────────────────────── */}
             <div className="px-5 pb-4">
               {phase === "verifying" && (
-                <p className="font-mono text-[10px] text-amber-400 leading-relaxed">
+                <p className="font-mono text-[13px] text-amber-400 leading-relaxed">
                   Verifying payment on Base…
                   {txHash && (
                     <a href={`https://basescan.org/tx/${txHash}`} target="_blank" rel="noopener noreferrer" className="text-slate-500 hover:text-slate-300"> tx ↗</a>
@@ -250,11 +250,11 @@ export default function TopUpModal({
               )}
               {phase === "error" && (
                 <div className="space-y-2">
-                  <p className="font-mono text-[10px] text-red-400 leading-relaxed">{err}</p>
+                  <p className="font-mono text-[13px] text-red-400 leading-relaxed">{err}</p>
                   {txHash && (
                     <button
                       onClick={checkAgain}
-                      className="w-full font-mono text-[11px] font-semibold py-2 rounded-lg border border-[#1A1A2E] text-slate-300 hover:border-slate-600 transition-colors"
+                      className="w-full font-mono text-[14px] font-semibold py-2 rounded-lg border border-[#1A1A2E] text-slate-300 hover:border-slate-600 transition-colors"
                     >
                       Check again
                     </button>
@@ -262,7 +262,7 @@ export default function TopUpModal({
                 </div>
               )}
               {(phase === "idle" || phase === "confirming") && (
-                <p className="font-mono text-[9px] text-slate-700 leading-relaxed">
+                <p className="font-mono text-[12px] text-slate-700 leading-relaxed">
                   You sign the transfer from your own wallet. Credits are added once the
                   transaction settles on Base — usually a few seconds.
                 </p>

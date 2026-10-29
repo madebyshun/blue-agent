@@ -91,7 +91,7 @@ export function Picker({
 
   return (
     <div className={inline ? "relative shrink-0" : "relative mb-3"} ref={wrap}>
-      {label && !inline && <div className="font-mono text-[9px] text-slate-600 mb-1">{label}</div>}
+      {label && !inline && <div className="font-mono text-[12px] text-slate-600 mb-1">{label}</div>}
       <button
         type="button" disabled={disabled}
         onClick={() => setOpen(o => !o)}
@@ -99,7 +99,7 @@ export function Picker({
         className={`flex items-center justify-between gap-1.5 rounded-lg border border-[#1A1A2E] bg-[#050508] text-left transition-colors hover:border-[#4FC3F730] disabled:opacity-50 disabled:hover:border-[#1A1A2E] ${
           inline ? "px-2 py-1.5" : "w-full px-2.5 py-2"}`}>
         <span className={inline ? "min-w-0" : "min-w-0 flex-1"}>{summary}</span>
-        <span className={`font-mono text-[10px] text-slate-500 transition-transform ${open ? "rotate-180" : ""}`}>⌄</span>
+        <span className={`font-mono text-[13px] text-slate-500 transition-transform ${open ? "rotate-180" : ""}`}>⌄</span>
       </button>
       {open && (
         <div

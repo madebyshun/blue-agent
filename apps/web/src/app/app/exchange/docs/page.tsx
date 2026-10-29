@@ -7,13 +7,13 @@ import PageFrame from "../_components/PageFrame";
 export const metadata: Metadata = { title: "Agent Exchange docs — Blue Agent", description: "How Blue Agent measures, lists and hires x402 agents on Base." };
 
 const card = "rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] p-4";
-const code = "mt-2 rounded-lg border border-[#1A1A2E] bg-[#050508] p-3 text-[10.5px] text-[#cbd5e1] whitespace-pre-wrap break-all";
+const code = "mt-2 rounded-lg border border-[#1A1A2E] bg-[#050508] p-3 text-[13px] text-[#cbd5e1] whitespace-pre-wrap break-all";
 
 function S({ id, t, children }: { id: string; t: string; children: React.ReactNode }) {
   return (
     <section id={id} className={card}>
-      <h2 className="text-[12px] font-semibold text-[#E2E8F0]">{t}</h2>
-      <div className="mt-1.5 space-y-2 font-prose text-[11px] leading-[1.7] text-[#94A3B8]">{children}</div>
+      <h2 className="text-[15px] font-semibold text-[#E2E8F0]">{t}</h2>
+      <div className="mt-1.5 space-y-2 font-prose text-[14px] leading-[1.7] text-[#94A3B8]">{children}</div>
     </section>
   );
 }

@@ -152,8 +152,8 @@ export default function TickerDetailPanel({
   // carries its own age implicitly by being this cycle's snapshot.
   if (!plan.fetch) {
     return (
-      <div className="flex flex-col gap-4 text-[12px]">
-        <div className="flex items-center gap-3 font-mono text-[10px]" style={{ color: MUTED }}>
+      <div className="flex flex-col gap-4 text-[15px]">
+        <div className="flex items-center gap-3 font-mono text-[13px]" style={{ color: MUTED }}>
           <span>{chain} desk</span>
           <a
             href={explorerTokenUrl(chain, contract)}
@@ -176,13 +176,13 @@ export default function TickerDetailPanel({
           {plan.liquidity === "row" ? (
             <RowLiquidityBlock chain={chain} row={rowLiquidity} note={plan.liquidityNote} />
           ) : (
-            <p className="font-mono text-[11px] leading-relaxed" style={{ color: MUTED }}>
+            <p className="font-mono text-[14px] leading-relaxed" style={{ color: MUTED }}>
               {plan.liquidityNote}
             </p>
           )}
         </Section>
         <Section label="// HOLDERS">
-          <p className="font-mono text-[11px] leading-relaxed" style={{ color: MUTED }}>
+          <p className="font-mono text-[14px] leading-relaxed" style={{ color: MUTED }}>
             {plan.holdersNote}
           </p>
         </Section>
@@ -205,9 +205,9 @@ export default function TickerDetailPanel({
   const liq = detail.liquidity;
   const hol = detail.holders;
   return (
-    <div className="flex flex-col gap-4 text-[12px]">
+    <div className="flex flex-col gap-4 text-[15px]">
       {/* Provenance */}
-      <div className="flex items-center gap-3 font-mono text-[10px]" style={{ color: MUTED }}>
+      <div className="flex items-center gap-3 font-mono text-[13px]" style={{ color: MUTED }}>
         <span>{cache ? "cached" : "fresh"}</span>
         <span>·</span>
         <span>updated {relTime(detail.fetched_at)}</span>
@@ -229,10 +229,10 @@ export default function TickerDetailPanel({
       {/* LIQUIDITY */}
       <Section label="// LIQUIDITY">
         {liq?.error ? (
-          <p className="font-mono text-[11px]" style={{ color: MUTED }}>M3 error: {liq.error}</p>
+          <p className="font-mono text-[14px]" style={{ color: MUTED }}>M3 error: {liq.error}</p>
         ) : liq ? (
           <>
-            <div className="grid grid-cols-2 gap-x-6 gap-y-1 font-mono text-[12px]">
+            <div className="grid grid-cols-2 gap-x-6 gap-y-1 font-mono text-[15px]">
               <div><span style={{ color: MUTED }}>total tvl</span> {fmtUsd(liq.total_tvl_usd)}</div>
               <div><span style={{ color: MUTED }}>pool count</span> {liq.pool_count ?? "—"}</div>
               <div className="col-span-2">
@@ -248,10 +248,10 @@ export default function TickerDetailPanel({
             </div>
             {liq.pools && liq.pools.length > 0 && (
               <div className="mt-2">
-                <div className="mb-1 font-mono text-[9px] uppercase tracking-widest" style={{ color: MUTED }}>pools</div>
+                <div className="mb-1 font-mono text-[12px] uppercase tracking-widest" style={{ color: MUTED }}>pools</div>
                 <ul className="space-y-0.5">
                   {liq.pools.slice(0, 5).map((p, i) => (
-                    <li key={i} className="font-mono text-[11px] flex flex-wrap gap-x-3">
+                    <li key={i} className="font-mono text-[14px] flex flex-wrap gap-x-3">
                       <span className="text-white">{p.dex ?? "?"}</span>
                       <span style={{ color: MUTED }}>tvl {fmtUsd(p.reserve_usd)}</span>
                       <span style={{ color: MUTED }}>vol24 {fmtUsd(p.volume_24h_usd)}</span>
@@ -265,8 +265,8 @@ export default function TickerDetailPanel({
             )}
             {liq.slippage_upper_bound?.estimates && liq.slippage_upper_bound.estimates.length > 0 && (
               <div className="mt-2">
-                <div className="mb-1 font-mono text-[9px] uppercase tracking-widest" style={{ color: MUTED }}>slippage upper bound · xy=k</div>
-                <div className="flex flex-wrap gap-x-4 gap-y-1 font-mono text-[11px]">
+                <div className="mb-1 font-mono text-[12px] uppercase tracking-widest" style={{ color: MUTED }}>slippage upper bound · xy=k</div>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 font-mono text-[14px]">
                   {liq.slippage_upper_bound.estimates.map((e, i) => (
                     <span key={i}>
                       <span style={{ color: MUTED }}>${e.trade_size_usd?.toLocaleString()}</span>{" "}
@@ -277,28 +277,28 @@ export default function TickerDetailPanel({
                   ))}
                 </div>
                 {liq.slippage_upper_bound.note && (
-                  <p className="mt-1 font-mono text-[10px]" style={{ color: MUTED }}>{liq.slippage_upper_bound.note}</p>
+                  <p className="mt-1 font-mono text-[13px]" style={{ color: MUTED }}>{liq.slippage_upper_bound.note}</p>
                 )}
               </div>
             )}
             {liq.warnings && liq.warnings.length > 0 && (
-              <ul className="mt-2 space-y-0.5 font-mono text-[11px]" style={{ color: AMBER }}>
+              <ul className="mt-2 space-y-0.5 font-mono text-[14px]" style={{ color: AMBER }}>
                 {liq.warnings.map((w, i) => <li key={i}>⚠ {w}</li>)}
               </ul>
             )}
           </>
         ) : (
-          <p className="font-mono text-[11px]" style={{ color: MUTED }}>no data</p>
+          <p className="font-mono text-[14px]" style={{ color: MUTED }}>no data</p>
         )}
       </Section>
 
       {/* HOLDERS */}
       <Section label="// HOLDERS">
         {hol?.error ? (
-          <p className="font-mono text-[11px]" style={{ color: MUTED }}>D1 error: {hol.error}</p>
+          <p className="font-mono text-[14px]" style={{ color: MUTED }}>D1 error: {hol.error}</p>
         ) : hol ? (
           <>
-            <div className="grid grid-cols-3 gap-x-6 font-mono text-[12px]">
+            <div className="grid grid-cols-3 gap-x-6 font-mono text-[15px]">
               <div>
                 <span style={{ color: MUTED }}>top 1</span>{" "}
                 <span style={{ color: (hol.concentration?.top1_pct ?? 0) > 30 ? AMBER : "#E7E9EE" }}>
@@ -315,7 +315,7 @@ export default function TickerDetailPanel({
             {hol.holders && hol.holders.length > 0 && (
               <ul className="mt-2 space-y-0.5">
                 {hol.holders.slice(0, 5).map((h, i) => (
-                  <li key={h.address ?? i} className="font-mono text-[11px] flex items-center gap-3">
+                  <li key={h.address ?? i} className="font-mono text-[14px] flex items-center gap-3">
                     <span className="text-slate-500 tabular-nums">{i + 1}.</span>
                     <a
                       href={h.address ? explorerAddressUrl(chain, h.address) : "#"}
@@ -333,13 +333,13 @@ export default function TickerDetailPanel({
               </ul>
             )}
             {(hol.concentration?.top1_pct ?? 0) > 30 && (
-              <p className="mt-2 font-mono text-[11px]" style={{ color: AMBER }}>
+              <p className="mt-2 font-mono text-[14px]" style={{ color: AMBER }}>
                 ⚠ single holder controls &gt; 30% — watchable-but-illiquid caveat
               </p>
             )}
           </>
         ) : (
-          <p className="font-mono text-[11px]" style={{ color: MUTED }}>no data</p>
+          <p className="font-mono text-[14px]" style={{ color: MUTED }}>no data</p>
         )}
       </Section>
 
@@ -368,16 +368,16 @@ function OpenArrowSection({ openArrow }: { openArrow: Arrow | null }) {
           {openArrow.brief.one_line_context && (
             <div className="italic" style={{ color: "#cbd5e1" }}>&ldquo;{openArrow.brief.one_line_context}&rdquo;</div>
           )}
-          <div className="font-mono text-[10px]" style={{ color: MUTED }}>
+          <div className="font-mono text-[13px]" style={{ color: MUTED }}>
             brief · {openArrow.brief.llm_provider ?? "no LLM"} · {relTime(openArrow.brief.fetched_at)}
           </div>
         </div>
       ) : (
-        <div className="font-mono text-[11px]" style={{ color: MUTED }}>
+        <div className="font-mono text-[14px]" style={{ color: MUTED }}>
           open arrow · no brief attached (A4 unavailable at fire time)
         </div>
       )}
-      <div className="mt-1 font-mono text-[11px]" style={{ color: RH_GREEN }}>
+      <div className="mt-1 font-mono text-[14px]" style={{ color: RH_GREEN }}>
         {openArrow.type.toUpperCase()} {openArrow.expected_direction === "up" ? "↑" : openArrow.expected_direction === "down" ? "↓" : ""} · ref ${openArrow.reference_price.toFixed(2)} · grading window {openArrow.grading_window_h}h
       </div>
     </Section>
@@ -415,7 +415,7 @@ function RowLiquidityBlock({
   return (
     <>
       {view.measured ? (
-        <div className="grid grid-cols-2 gap-x-6 gap-y-1 font-mono text-[12px]">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-1 font-mono text-[15px]">
           <div><span style={{ color: MUTED }}>pool tvl</span> {fmtUsd(view.tvlUsd)}</div>
           <div><span style={{ color: MUTED }}>vol 24h</span> {fmtUsd(view.volume24hUsd)}</div>
           <div className="col-span-2">
@@ -432,12 +432,12 @@ function RowLiquidityBlock({
       ) : (
         // Amber, not muted grey: an absent reading changes what the number below
         // the row means, so it is a warning rather than a footnote.
-        <p className="font-mono text-[11px] leading-relaxed" style={{ color: AMBER }}>
+        <p className="font-mono text-[14px] leading-relaxed" style={{ color: AMBER }}>
           ⚠ {view.emptyNote}
         </p>
       )}
       {note && (
-        <p className="mt-2 font-mono text-[10px] leading-relaxed" style={{ color: MUTED }}>
+        <p className="mt-2 font-mono text-[13px] leading-relaxed" style={{ color: MUTED }}>
           {note}
         </p>
       )}
@@ -448,7 +448,7 @@ function RowLiquidityBlock({
 function Section({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="mb-1.5 font-mono text-[10px] uppercase tracking-widest" style={{ color: MUTED }}>
+      <div className="mb-1.5 font-mono text-[13px] uppercase tracking-widest" style={{ color: MUTED }}>
         {label}
       </div>
       <div className="rounded border px-3 py-2" style={{ borderColor: BORDER, backgroundColor: SURFACE }}>
@@ -464,7 +464,7 @@ function DetailSkeleton() {
       {[0, 1, 2].map((i) => (
         <div key={i} className="rounded border h-14 animate-pulse" style={{ borderColor: BORDER, backgroundColor: SURFACE, opacity: 0.7 }} />
       ))}
-      <p className="font-mono text-[10px]" style={{ color: MUTED }}>loading M3 + D1…</p>
+      <p className="font-mono text-[13px]" style={{ color: MUTED }}>loading M3 + D1…</p>
     </div>
   );
 }

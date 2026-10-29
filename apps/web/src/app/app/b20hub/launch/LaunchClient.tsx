@@ -145,11 +145,11 @@ export default function LaunchClient() {
   return (
     <div className="max-w-5xl mx-auto">
       <div className="mb-5">
-        <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase mb-1">
+        <p className="font-mono text-[12px] text-slate-600 tracking-widest uppercase mb-1">
           b20hub · launch
         </p>
         <h1 className="font-mono text-2xl md:text-3xl font-bold">Create a token</h1>
-        <p className="font-mono text-[11px] text-slate-500 mt-1.5 leading-relaxed">
+        <p className="font-mono text-[14px] text-slate-500 mt-1.5 leading-relaxed">
           100B fixed supply · ~$6K opening market cap · 80/15/5 fee split ·
           LP locked forever. One signature.{" "}
           <Link href="/app/b20hub/docs" className="text-[#4FC3F7] hover:underline">
@@ -172,14 +172,14 @@ export default function LaunchClient() {
           {/* Compact identity row — name + symbol side by side, saves ~40vh. */}
           <div className="grid grid-cols-[1fr_140px] gap-2">
             <div>
-              <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1">
+              <label className="font-mono text-[12px] text-slate-600 tracking-widest uppercase block mb-1">
                 Name *
               </label>
               <input value={name} onChange={(e) => setName(e.target.value)}
                 placeholder="Cool Token" spellCheck={false} className={INPUT_CLS} maxLength={40} />
             </div>
             <div>
-              <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1">
+              <label className="font-mono text-[12px] text-slate-600 tracking-widest uppercase block mb-1">
                 Ticker *
               </label>
               <input value={symbol} onChange={(e) => setSymbol(e.target.value.toUpperCase())}
@@ -188,7 +188,7 @@ export default function LaunchClient() {
           </div>
 
           <div>
-            <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-1">
+            <label className="font-mono text-[12px] text-slate-600 tracking-widest uppercase block mb-1">
               Fee tier
             </label>
             <div className="flex rounded-xl border border-[#1A1A2E] overflow-hidden">
@@ -202,7 +202,7 @@ export default function LaunchClient() {
                 </button>
               ))}
             </div>
-            <p className="font-mono text-[9px] text-slate-600 mt-1">
+            <p className="font-mono text-[12px] text-slate-600 mt-1">
               {TIER_HINT[tier]}
             </p>
           </div>
@@ -215,7 +215,7 @@ export default function LaunchClient() {
               + token detail pages render them immediately after deploy.
               All optional — omit any you don't have yet. */}
           <div className="pt-3 border-t border-[#1A1A2E] space-y-2.5">
-            <p className="font-mono text-[9px] text-slate-500 tracking-widest uppercase">
+            <p className="font-mono text-[12px] text-slate-500 tracking-widest uppercase">
               Metadata <span className="text-slate-700 lowercase font-normal">— off-chain, editable later</span>
             </p>
             <MetaField label="Image URL"
@@ -256,7 +256,7 @@ export default function LaunchClient() {
           )}
 
           {txHash && status !== "done" && (
-            <p className="font-mono text-[10px] text-slate-500 text-center break-all">
+            <p className="font-mono text-[13px] text-slate-500 text-center break-all">
               tx: <a href={`https://basescan.org/tx/${txHash}`} target="_blank" rel="noopener noreferrer" className="text-[#4FC3F7] hover:underline">
                 {txHash.slice(0, 16)}…{txHash.slice(-8)} ↗
               </a>
@@ -269,7 +269,7 @@ export default function LaunchClient() {
             feed grid post-launch. Matches o1.exchange / pump.fun pattern
             where "what am I about to ship" is always visible. */}
         <aside className="lg:sticky lg:top-20 space-y-3">
-          <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase">
+          <p className="font-mono text-[12px] text-slate-600 tracking-widest uppercase">
             live preview
           </p>
           <PreviewCard
@@ -279,7 +279,7 @@ export default function LaunchClient() {
             description={description}
             tier={tier}
           />
-          <p className="font-mono text-[9px] text-slate-600 leading-relaxed">
+          <p className="font-mono text-[12px] text-slate-600 leading-relaxed">
             How your token will look in the B20HUB feed. Metadata (image,
             description, socials) can be edited later — only the on-chain
             fields (name, symbol, fee tier, supply) are permanent.
@@ -315,7 +315,7 @@ function PreviewCard({
         )}
         <div className="min-w-0 flex-1">
           <div className="font-mono text-sm font-bold truncate">{displayName}</div>
-          <div className="font-mono text-[10px] text-slate-500">${sym}/ETH</div>
+          <div className="font-mono text-[13px] text-slate-500">${sym}/ETH</div>
           <div className="flex gap-1 mt-1.5 flex-wrap">
             <PreviewBadge label="ETH" color="#4FC3F7" />
             <PreviewBadge label={`V4 ${feeLabel}`} color="#FF007A" />
@@ -325,12 +325,12 @@ function PreviewCard({
       </div>
 
       {description.trim() && (
-        <p className="font-mono text-[10px] text-slate-400 leading-relaxed mb-3 line-clamp-2">
+        <p className="font-mono text-[13px] text-slate-400 leading-relaxed mb-3 line-clamp-2">
           {description.trim()}
         </p>
       )}
 
-      <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
+      <div className="grid grid-cols-2 gap-2 text-[13px] font-mono">
         <div>
           <div className="text-slate-600 tracking-wider uppercase">MARKET CAP</div>
           <div className="text-slate-200 font-bold">~$6K</div>
@@ -353,7 +353,7 @@ function PreviewCard({
 }
 function PreviewBadge({ label, color }: { label: string; color: string }) {
   return (
-    <span className="font-mono text-[8px] tracking-wider uppercase px-1.5 py-0.5 rounded"
+    <span className="font-mono text-[11px] tracking-wider uppercase px-1.5 py-0.5 rounded"
       style={{ background: `${color}15`, color, border: `1px solid ${color}40` }}>
       {label}
     </span>
@@ -373,16 +373,16 @@ function MetaField({
 }) {
   const showCount = maxLen != null;
   const inputCls = compact
-    ? "w-full bg-[#0a0a12] border border-[#1A1A2E] focus:border-[#4FC3F740] rounded-lg px-2.5 py-1.5 font-mono text-[11px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors"
+    ? "w-full bg-[#0a0a12] border border-[#1A1A2E] focus:border-[#4FC3F740] rounded-lg px-2.5 py-1.5 font-mono text-[14px] text-slate-200 placeholder:text-slate-700 outline-none transition-colors"
     : INPUT_CLS;
   return (
     <div>
       <div className="flex items-baseline justify-between mb-0.5">
-        <label className="font-mono text-[9px] text-slate-600 tracking-widest uppercase">
+        <label className="font-mono text-[12px] text-slate-600 tracking-widest uppercase">
           {label}
         </label>
         {showCount && (
-          <span className={"font-mono text-[9px] " + (value.length > maxLen! ? "text-red-400" : "text-slate-600")}>
+          <span className={"font-mono text-[12px] " + (value.length > maxLen! ? "text-red-400" : "text-slate-600")}>
             {value.length}/{maxLen}
           </span>
         )}
@@ -425,11 +425,11 @@ function ConstantsPanel() {
   ];
   return (
     <div className="rounded-xl border border-[#4FC3F7]/20 bg-[#4FC3F7]/[0.03] px-3 py-2 flex flex-wrap gap-3 items-center">
-      <span className="font-mono text-[9px] text-slate-500 tracking-widest uppercase">
+      <span className="font-mono text-[12px] text-slate-500 tracking-widest uppercase">
         Baked-in
       </span>
       {chips.map(({ l, v, c }) => (
-        <span key={l} className="font-mono text-[10px]">
+        <span key={l} className="font-mono text-[13px]">
           <span className="text-slate-500">{l}</span>{" "}
           <span className="font-bold" style={{ color: c ?? "#e2e8f0" }}>{v}</span>
         </span>
@@ -451,28 +451,28 @@ function SuccessCard({
     <div className="rounded-2xl border border-[#34D399]/40 bg-[#34D399]/5 p-6 text-center">
       <div className="text-4xl mb-3">🚀</div>
       <p className="font-mono text-lg font-bold text-[#34D399] mb-1">B20 Launched</p>
-      <p className="font-mono text-[11px] text-slate-400 break-all mb-4">{tokenAddr}</p>
+      <p className="font-mono text-[14px] text-slate-400 break-all mb-4">{tokenAddr}</p>
 
       <div className="flex flex-wrap gap-2 justify-center mb-4">
         <a href={`https://basescan.org/token/${tokenAddr}`}
           target="_blank" rel="noopener noreferrer"
-          className="font-mono text-[11px] px-3 py-1.5 rounded-lg border border-[#1A1A2E] text-slate-300 hover:text-white transition-colors">
+          className="font-mono text-[14px] px-3 py-1.5 rounded-lg border border-[#1A1A2E] text-slate-300 hover:text-white transition-colors">
           Basescan ↗
         </a>
         <Link href={`/app/b20hub/token/${tokenAddr}`}
-          className="font-mono text-[11px] px-3 py-1.5 rounded-lg border border-[#4FC3F740] text-[#4FC3F7]">
+          className="font-mono text-[14px] px-3 py-1.5 rounded-lg border border-[#4FC3F740] text-[#4FC3F7]">
           Token page →
         </Link>
         <a href={`https://app.uniswap.org/swap?chain=base&outputCurrency=${tokenAddr}`}
           target="_blank" rel="noopener noreferrer"
-          className="font-mono text-[11px] px-3 py-1.5 rounded-lg" style={{ background: "#FF007A15", color: "#FF007A", border: "1px solid #FF007A40" }}>
+          className="font-mono text-[14px] px-3 py-1.5 rounded-lg" style={{ background: "#FF007A15", color: "#FF007A", border: "1px solid #FF007A40" }}>
           Trade on Uniswap ↗
         </a>
       </div>
 
       {txHash && (
         <a href={`https://basescan.org/tx/${txHash}`} target="_blank" rel="noopener noreferrer"
-          className="font-mono text-[10px] text-slate-500 hover:text-slate-300 break-all block mb-4">
+          className="font-mono text-[13px] text-slate-500 hover:text-slate-300 break-all block mb-4">
           Deploy tx: {txHash.slice(0, 16)}…{txHash.slice(-8)}
         </a>
       )}

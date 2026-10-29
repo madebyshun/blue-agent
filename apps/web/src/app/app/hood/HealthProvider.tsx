@@ -155,8 +155,8 @@ export function HealthBanner() {
         <Banner tone="grey">
           warming up · no snapshot has been produced yet and no recent cron heartbeat — a cold start (or the
           schedule was never wired up). In dev, POST to{" "}
-          <code className="font-mono text-white text-[11px]">/api/cron/blue-hood/poll</code> with your{" "}
-          <code className="font-mono text-white text-[11px]">CRON_SECRET</code>.
+          <code className="font-mono text-white text-[14px]">/api/cron/blue-hood/poll</code> with your{" "}
+          <code className="font-mono text-white text-[14px]">CRON_SECRET</code>.
         </Banner>
       );
 
@@ -188,7 +188,7 @@ function Banner({ tone, children }: { tone: Tone; children: React.ReactNode }) {
   return (
     <div
       role="alert"
-      className="mb-6 rounded border px-3 py-2 text-[12px] hood-prose leading-relaxed"
+      className="mb-6 rounded border px-3 py-2 text-[15px] hood-prose leading-relaxed"
       style={{ borderColor: st.border, backgroundColor: st.bg, color: st.color }}
     >
       <span aria-hidden style={{ color: tone === "red" ? RED : tone === "amber" ? AMBER : MUTED }}>

@@ -66,14 +66,14 @@ export default async function SellerPage({ params }: { params: Promise<{ payTo: 
       <div className="flex-1 min-h-0 overflow-y-auto">
       <div className="px-5 py-[18px] grid gap-5 w-full">
         <div>
-          <Link href="/exchange" className="text-[10px] tracking-[.14em] text-[#64748B] hover:text-[#4FC3F7]">← AGENTS</Link>
+          <Link href="/exchange" className="text-[13px] tracking-[.14em] text-[#64748B] hover:text-[#4FC3F7]">← AGENTS</Link>
           <div className="mt-1 flex flex-wrap items-center gap-2.5">
-            <h1 className="text-[15px] font-semibold text-[#E2E8F0]">{listing?.name ?? name}</h1>
-            {listing && <span className="text-[8.5px] rounded-full border border-[#34D399]/30 px-[7px] py-[2px] text-[#34D399]" title={`Proved it runs ${listing.domain} and its 402 pays this wallet`}>✓ listed · operator verified</span>}
+            <h1 className="text-[18px] font-semibold text-[#E2E8F0]">{listing?.name ?? name}</h1>
+            {listing && <span className="text-[11px] rounded-full border border-[#34D399]/30 px-[7px] py-[2px] text-[#34D399]" title={`Proved it runs ${listing.domain} and its 402 pays this wallet`}>✓ listed · operator verified</span>}
             <FollowButton payTo={payTo} />
           </div>
-          {listing?.description && <p className="mt-1 max-w-[900px] font-prose text-[11px] text-[#94A3B8]">{listing.description}</p>}
-          <p className="mt-1 text-[11px] text-[#94A3B8]">
+          {listing?.description && <p className="mt-1 max-w-[900px] font-prose text-[14px] text-[#94A3B8]">{listing.description}</p>}
+          <p className="mt-1 text-[14px] text-[#94A3B8]">
             payTo <a className="text-[#4FC3F7]" href={`https://basescan.org/address/${payTo}`} target="_blank" rel="noreferrer">{payTo}</a> · Base 8453
             {payTo === X402_PAY_TO.toLowerCase() && <> · this is Blue Agent, see <Link className="text-[#4FC3F7]" href="/services">services</Link></>}
           </p>
@@ -91,16 +91,16 @@ export default async function SellerPage({ params }: { params: Promise<{ payTo: 
             ["Endpoints listed", detail ? String(detail.total) : "—", detail ? `Bazaar · ${detail.updatedAt.slice(0, 10)}` : "not on the Bazaar list"],
           ].map(([l, v, s]) => (
             <div key={l} className="rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] px-3.5 py-3">
-              <p className="text-[9.5px] uppercase tracking-[0.12em] text-[#64748B]">{l}</p>
-              <p className="mt-1.5 text-[18px] font-semibold text-[#E2E8F0] tabular-nums">{v}</p>
-              <p className="mt-1 text-[10.5px] text-[#64748B]">{s}</p>
+              <p className="text-[12px] uppercase tracking-[0.12em] text-[#64748B]">{l}</p>
+              <p className="mt-1.5 text-[22px] font-semibold text-[#E2E8F0] tabular-nums">{v}</p>
+              <p className="mt-1 text-[13px] text-[#64748B]">{s}</p>
             </div>
           ))}
         </div>
 
         <section className="rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] px-4 py-3.5">
-          <h2 className="text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">CHECKS</h2>
-          <ul className="mt-2 grid gap-1.5 text-[11px]">
+          <h2 className="text-[12px] font-medium tracking-[0.14em] text-[#64748B]">CHECKS</h2>
+          <ul className="mt-2 grid gap-1.5 text-[14px]">
             {[
               [probe?.result === "live", "Endpoint quotes USDC on Base 8453 to this payTo",
                 probe ? `${probe.result === "live" ? "passed" : probe.result.replace("_", " ")}${probe.status ? ` (HTTP ${probe.status})` : ""} · unpaid probe ${probe.at.slice(0, 10)}` : "not probed yet (a slice of sellers a day)"],
@@ -109,70 +109,70 @@ export default async function SellerPage({ params }: { params: Promise<{ payTo: 
               [false, "Operator proof (domain file, signed claim)", "not offered yet"],
             ].map(([ok, label, sub]) => (
               <li key={String(label)} className="flex items-baseline gap-2">
-                <span className={ok ? "text-[#34D399]" : "text-[#475569]"}>{ok ? "✓" : "·"}</span>
+                <span className={ok ? "text-[#34D399]" : "text-[#64748B]"}>{ok ? "✓" : "·"}</span>
                 <span className="text-[#E2E8F0]">{label}</span>
-                <span className="text-[10px] text-[#64748B]">{sub}</span>
+                <span className="text-[13px] text-[#64748B]">{sub}</span>
               </li>
             ))}
           </ul>
         </section>
 
         <section className="rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] overflow-hidden">
-          <h2 className="border-b border-[#1A1A2E] px-4 py-3 text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">LIVE ACTIVITY · LAST ~67 MIN · READ FROM BASE</h2>
-          {recent === null ? <p className="px-4 py-3 text-[11px] text-[#64748B]">The chain did not answer right now.</p>
-            : recent.length === 0 ? <p className="px-4 py-3 text-[11px] text-[#64748B]">No x402 settlements in the last ~2,000 blocks.</p>
+          <h2 className="border-b border-[#1A1A2E] px-4 py-3 text-[12px] font-medium tracking-[0.14em] text-[#64748B]">LIVE ACTIVITY · LAST ~67 MIN · READ FROM BASE</h2>
+          {recent === null ? <p className="px-4 py-3 text-[14px] text-[#64748B]">The chain did not answer right now.</p>
+            : recent.length === 0 ? <p className="px-4 py-3 text-[14px] text-[#64748B]">No x402 settlements in the last ~2,000 blocks.</p>
             : <ul>{recent.map((p) => (
-                <li key={p.tx + p.from} className="flex flex-wrap items-center gap-3 border-t border-[#1A1A2E] px-4 py-2 text-[10.5px] first:border-t-0">
+                <li key={p.tx + p.from} className="flex flex-wrap items-center gap-3 border-t border-[#1A1A2E] px-4 py-2 text-[13px] first:border-t-0">
                   <span className="text-[#34D399]">earned {usd(p.usd)}</span>
                   <span className="text-[#94A3B8]">from {short(p.from)}</span>
-                  <span className="text-[#475569]">block {Number(p.block).toLocaleString("en-US")}</span>
+                  <span className="text-[#64748B]">block {Number(p.block).toLocaleString("en-US")}</span>
                   <a className="ml-auto text-[#4FC3F7]" href={`https://basescan.org/tx/${p.tx}`} target="_blank" rel="noreferrer">{short(p.tx)} ↗</a>
                 </li>))}</ul>}
         </section>
 
         <section className="rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] px-4 py-3.5">
-          <h2 className="text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">X402 INFLOW BY DAY</h2>
+          <h2 className="text-[12px] font-medium tracking-[0.14em] text-[#64748B]">X402 INFLOW BY DAY</h2>
           {R && series.some((v) => v > 0) ? (
             <div className="mt-3 flex h-24 items-end gap-1">
               {series.map((v, i) => <div key={i} title={usd(v)} className="flex-1 bg-[#1f6f93]" style={{ height: `${Math.max(2, (v / peak) * 100)}%` }} />)}
             </div>
-          ) : <p className="mt-2 text-[11px] text-[#64748B]">No x402 settlements measured in the indexed window ({ex.daysCovered} days).</p>}
+          ) : <p className="mt-2 text-[14px] text-[#64748B]">No x402 settlements measured in the indexed window ({ex.daysCovered} days).</p>}
         </section>
 
         <section className="rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] overflow-hidden">
-          <h2 className="border-b border-[#1A1A2E] px-4 py-3 text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">ENDPOINTS (CDP BAZAAR)</h2>
-          {!detail ? <p className="px-4 py-3 text-[11px] text-[#64748B]">Not listed on the Bazaar.</p>
+          <h2 className="border-b border-[#1A1A2E] px-4 py-3 text-[12px] font-medium tracking-[0.14em] text-[#64748B]">ENDPOINTS (CDP BAZAAR)</h2>
+          {!detail ? <p className="px-4 py-3 text-[14px] text-[#64748B]">Not listed on the Bazaar.</p>
             : <ul>{detail.resources.map((r, i) => (
                 <li key={i} className="border-t border-[#1A1A2E] px-4 py-2.5 first:border-t-0">
-                  <div className="flex flex-wrap items-center gap-3 text-[11px]">
+                  <div className="flex flex-wrap items-center gap-3 text-[14px]">
                     <span className="break-all text-[#E2E8F0]">{r.url}</span>
-                    <span className="ml-auto rounded border border-[#16384a] px-1.5 py-px text-[10px] text-[#4FC3F7]">{r.priceUsd === null ? "price —" : `${usd(r.priceUsd)} / call`}</span>
+                    <span className="ml-auto rounded border border-[#16384a] px-1.5 py-px text-[13px] text-[#4FC3F7]">{r.priceUsd === null ? "price —" : `${usd(r.priceUsd)} / call`}</span>
                   </div>
-                  {r.description && <p className="mt-0.5 text-[10.5px] text-[#94A3B8]">{r.description}</p>}
+                  {r.description && <p className="mt-0.5 text-[13px] text-[#94A3B8]">{r.description}</p>}
                 </li>))}</ul>}
-          {detail && detail.total > detail.resources.length && <p className="border-t border-[#1A1A2E] px-4 py-2.5 text-[10.5px] text-[#64748B]">Showing {detail.resources.length} of {detail.total}.</p>}
+          {detail && detail.total > detail.resources.length && <p className="border-t border-[#1A1A2E] px-4 py-2.5 text-[13px] text-[#64748B]">Showing {detail.resources.length} of {detail.total}.</p>}
         </section>
 
         <section className="rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] px-4 py-3.5">
-          <h2 className="text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">ERC-8004 IDENTITY</h2>
+          <h2 className="text-[12px] font-medium tracking-[0.14em] text-[#64748B]">ERC-8004 IDENTITY</h2>
           {agentId ? (
-            <div className="mt-2 text-[11px] text-[#94A3B8]">
+            <div className="mt-2 text-[14px] text-[#94A3B8]">
               <p>This payTo owns agent <Link className="text-[#4FC3F7]" href={`/exchange/agent/${agentId}`}>#{agentId}</Link> in the Identity Registry on Base 8453.</p>
-              <p className="mt-1">Reputation: {!rep?.readable ? "—" : rep.average === null ? "no ratings yet" : `${Math.round(rep.average)}/100 from ${rep.count} rating${rep.count === 1 ? "" : "s"}`} <span className="text-[#475569]">(all raters; not filtered to payers)</span></p>
+              <p className="mt-1">Reputation: {!rep?.readable ? "—" : rep.average === null ? "no ratings yet" : `${Math.round(rep.average)}/100 from ${rep.count} rating${rep.count === 1 ? "" : "s"}`} <span className="text-[#64748B]">(all raters; not filtered to payers)</span></p>
             </div>
           ) : (
-            <p className="mt-2 text-[11px] text-[#64748B]">{ident ? `No agent identity owned by this payTo (checked ${ident.checkedAt.slice(0, 10)}).` : "Not checked yet: the identity walk covers a slice of sellers a day."}</p>
+            <p className="mt-2 text-[14px] text-[#64748B]">{ident ? `No agent identity owned by this payTo (checked ${ident.checkedAt.slice(0, 10)}).` : "Not checked yet: the identity walk covers a slice of sellers a day."}</p>
           )}
         </section>
 
         <section className="rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] px-4 py-3.5">
-          <h2 className="text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">VIRTUALS ACP</h2>
+          <h2 className="text-[12px] font-medium tracking-[0.14em] text-[#64748B]">VIRTUALS ACP</h2>
           {acp ? (
-            <div className="mt-2 text-[11px] text-[#94A3B8]">
+            <div className="mt-2 text-[14px] text-[#94A3B8]">
               <p>Same wallet is ACP agent <span className="text-[#E2E8F0]">{acp.name}</span> ({acp.id})</p>
               {acp.offerings.length > 0 && <p className="mt-1">Offerings: {acp.offerings.map((o) => `${o.name} (${o.priceValue} USDC)`).join(" · ")}</p>}
             </div>
-          ) : <p className="mt-2 text-[11px] text-[#64748B]">This wallet is not a Virtuals ACP agent, or the registry did not answer.</p>}
+          ) : <p className="mt-2 text-[14px] text-[#64748B]">This wallet is not a Virtuals ACP agent, or the registry did not answer.</p>}
         </section>
       </div>
       </div>

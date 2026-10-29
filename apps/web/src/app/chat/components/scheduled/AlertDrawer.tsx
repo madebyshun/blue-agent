@@ -120,28 +120,28 @@ export default function AlertDrawer({ open, onClose, create }: {
         {when === "continuous" && (
         <label className="flex items-center justify-between rounded-xl border border-[#1A1A2E] bg-[#050508] px-3 py-2.5 cursor-pointer">
           <span>
-            <span className="font-mono text-[11px] text-[#94A3B8] block">Repeat</span>
-            <span className="font-mono text-[9.5px] text-[#475569] block mt-0.5">Off: alert once, then stop. On: alert again after it re-crosses.</span>
+            <span className="font-mono text-[14px] text-[#94A3B8] block">Repeat</span>
+            <span className="font-mono text-[12px] text-[#64748B] block mt-0.5">Off: alert once, then stop. On: alert again after it re-crosses.</span>
           </span>
           <input type="checkbox" checked={repeat} onChange={(e) => setRepeat(e.target.checked)} className="accent-[#4FC3F7] w-4 h-4" />
         </label>
         )}
 
         <div className="rounded-xl border px-3 py-3" style={{ borderColor: preview ? "#4FC3F730" : C.line, background: preview ? "#4FC3F708" : "transparent" }}>
-          <p className="font-mono text-[9px] tracking-[0.12em] text-[#475569] mb-1">PREVIEW</p>
-          <p className="text-[13px]" style={{ color: preview ? C.text : C.faint }}>{preview ? `${preview.charAt(0).toUpperCase()}${preview.slice(1)}.` : "Fill in a token, a level and (for a trade) an amount."}</p>
-          <p className="font-mono text-[9.5px] text-[#475569] mt-1.5">
+          <p className="font-mono text-[12px] tracking-[0.12em] text-[#64748B] mb-1">PREVIEW</p>
+          <p className="text-[16px]" style={{ color: preview ? C.text : C.faint }}>{preview ? `${preview.charAt(0).toUpperCase()}${preview.slice(1)}.` : "Fill in a token, a level and (for a trade) an amount."}</p>
+          <p className="font-mono text-[12px] text-[#64748B] mt-1.5">
             {when === "scheduled" ? "Checked once at that time — every check lands in Activity, met or not." : "Checked every 5 minutes."} Free. Stock tokens use their Chainlink oracle, which does not move while the US market is closed.
             {trade ? " When it fires, the trade card waits in the Price alerts chat for your signature — nothing executes on its own." : ""}
           </p>
         </div>
 
         <button type="submit" disabled={!valid || busy}
-          className="w-full py-2.5 rounded-xl font-mono text-[13px] font-bold disabled:opacity-40" style={{ background: C.accent, color: C.page }}>
+          className="w-full py-2.5 rounded-xl font-mono text-[16px] font-bold disabled:opacity-40" style={{ background: C.accent, color: C.page }}>
           {busy ? "Arming…" : automation ? "Arm automation" : "Arm alert"}
         </button>
-        {msg && <p className="font-mono text-[11px]" style={{ color: msg.ok ? C.green : C.amber }}>{msg.text}</p>}
-        <p className="font-mono text-[9.5px] text-[#475569] leading-relaxed">Blue Agent never signs, holds keys or trades on its own — an automation only prepares the card. Tip: you can also just say it in chat, e.g. “every day at 9:00, if ETH on Base is below $2,500, buy $50”.</p>
+        {msg && <p className="font-mono text-[14px]" style={{ color: msg.ok ? C.green : C.amber }}>{msg.text}</p>}
+        <p className="font-mono text-[12px] text-[#64748B] leading-relaxed">Blue Agent never signs, holds keys or trades on its own — an automation only prepares the card. Tip: you can also just say it in chat, e.g. “every day at 9:00, if ETH on Base is below $2,500, buy $50”.</p>
       </form>
     </Drawer>
   );

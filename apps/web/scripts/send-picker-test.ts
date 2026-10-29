@@ -362,7 +362,7 @@ for (const state of ["loading", "failed", "partial"] as const) {
 // branch would print "Your Base tokens" over two rows that are this file's
 // own defaults — a completeness claim about a wallet nobody looked at. The
 // `!account` arm must come FIRST, or the three flags answer for it.
-const footAt = card.indexOf("border-t border-[#13131f] font-mono text-[9px]");
+const footAt = card.indexOf("border-t border-[#13131f] font-mono text-[12px]");
 ok("CONTROL the completeness footer is still there", footAt !== -1);
 const footer = card.slice(footAt, footAt + 1400);
 const noAccountAt = footer.indexOf("!account");

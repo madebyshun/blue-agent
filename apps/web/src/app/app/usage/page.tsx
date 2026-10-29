@@ -55,12 +55,12 @@ function Kpi({ label, value, sub, accent, last, bar }: {
 }) {
   return (
     <div className={`px-[18px] py-3.5 ${last ? "" : "border-r border-[#1A1A2E]"}`}>
-      <div className="font-mono text-[9px] tracking-[0.15em] text-[#64748B]">{label}</div>
+      <div className="font-mono text-[12px] tracking-[0.15em] text-[#64748B]">{label}</div>
       <div className="font-mono text-2xl font-bold mt-[5px]" style={{ color: accent ?? "#E2E8F0" }}>
         {value}
       </div>
       {bar}
-      {sub && <div className="font-mono text-[10px] text-[#64748B] mt-[3px]">{sub}</div>}
+      {sub && <div className="font-mono text-[13px] text-[#64748B] mt-[3px]">{sub}</div>}
     </div>
   );
 }
@@ -80,15 +80,15 @@ function ActivityRow({ ev, first }: { ev: LedgerEvent; first: boolean }) {
         borderTop: `1px solid ${first ? "#1A1A2E" : "rgba(26,26,46,.55)"}`,
       }}
     >
-      <span className="font-mono text-[11.5px] truncate" style={{ color: isIncoming ? "#34D399" : "#E2E8F0" }}>
+      <span className="font-mono text-[14px] truncate" style={{ color: isIncoming ? "#34D399" : "#E2E8F0" }}>
         {isRefund && <span className="text-[#64748B]">refund · </span>}
         {ev.reason || ev.kind}
       </span>
-      <span className="font-mono text-[10px] text-[#64748B]">
+      <span className="font-mono text-[13px] text-[#64748B]">
         {ago(ev.ts)} ago{isRefund ? " · no answer returned" : ""}
       </span>
       <span
-        className="font-mono text-[11.5px] font-semibold text-right"
+        className="font-mono text-[14px] font-semibold text-right"
         style={{ color: isIncoming ? "#34D399" : "#F87171" }}
       >
         {isIncoming ? "+" : "−"}{ev.amount.toLocaleString()}
@@ -168,21 +168,21 @@ export default function UsagePage() {
     <div className="flex flex-col h-full bg-[#050508] text-white overflow-hidden">
       {/* Header — desktop only; MobileTopBar prints "// USAGE" below lg. */}
       <div className="hidden lg:flex items-center gap-3.5 flex-wrap shrink-0 min-h-[56px] px-5 py-2 border-b border-[#1A1A2E]">
-        <span className="font-mono text-[11px] font-semibold tracking-[0.16em] text-[#E2E8F0]">// USAGE</span>
-        <span className="font-mono text-[10.5px] text-[#64748B]">
+        <span className="font-mono text-[14px] font-semibold tracking-[0.16em] text-[#E2E8F0]">// USAGE</span>
+        <span className="font-mono text-[13px] text-[#64748B]">
           credits &amp; agent spend · Coinbase x402{address ? ` · ${shortAddr(address)}` : ""}
         </span>
         {isConnected && (
           <span className="ml-auto flex items-center gap-2">
             <Link
               href="/plans"
-              className="font-mono text-[10px] text-[#94A3B8] border border-[#1A1A2E] rounded-[7px] px-2.5 py-[5px] hover:border-[#4FC3F7]/40 hover:text-[#E2E8F0] transition-colors"
+              className="font-mono text-[13px] text-[#94A3B8] border border-[#1A1A2E] rounded-[7px] px-2.5 py-[5px] hover:border-[#4FC3F7]/40 hover:text-[#E2E8F0] transition-colors"
             >
               View plans
             </Link>
             <button
               onClick={() => setTopup(true)}
-              className="font-mono text-[10.5px] font-semibold text-[#050508] bg-[#4FC3F7] rounded-[7px] px-[11px] py-[5px] hover:opacity-90 transition-opacity"
+              className="font-mono text-[13px] font-semibold text-[#050508] bg-[#4FC3F7] rounded-[7px] px-[11px] py-[5px] hover:opacity-90 transition-opacity"
             >
               Top up
             </button>
@@ -195,13 +195,13 @@ export default function UsagePage() {
         {!isConnected ? (
           // ── Connect gate ──────────────────────────────────────────────────
           <div className="max-w-sm mx-auto mt-16 sm:mt-24 px-5 text-center">
-            <p className="font-mono text-[13px] text-[#E2E8F0] font-bold">Connect a wallet</p>
-            <p className="font-prose text-[11px] text-[#64748B] mt-2 leading-relaxed">
+            <p className="font-mono text-[16px] text-[#E2E8F0] font-bold">Connect a wallet</p>
+            <p className="font-prose text-[14px] text-[#64748B] mt-2 leading-relaxed">
               Your credit balance and usage history are scoped to your connected wallet.
             </p>
             <button
               onClick={() => setPicker(true)}
-              className="mt-5 font-mono text-[12px] font-bold text-[#050508] bg-[#4FC3F7] rounded-xl px-5 py-2.5 hover:opacity-90 transition-opacity"
+              className="mt-5 font-mono text-[15px] font-bold text-[#050508] bg-[#4FC3F7] rounded-xl px-5 py-2.5 hover:opacity-90 transition-opacity"
             >
               Connect wallet
             </button>
@@ -209,7 +209,7 @@ export default function UsagePage() {
         ) : (
           <>
             {err && (
-              <p className="font-mono text-[11px] text-[#F87171] border border-[#F87171]/20 bg-[#F87171]/5 rounded-lg px-3 py-2 m-5 mb-0">
+              <p className="font-mono text-[14px] text-[#F87171] border border-[#F87171]/20 bg-[#F87171]/5 rounded-lg px-3 py-2 m-5 mb-0">
                 {err}
               </p>
             )}
@@ -246,24 +246,24 @@ export default function UsagePage() {
                 {/* Recent activity — the raw credit ledger */}
                 <div>
                   <div className="flex items-baseline justify-between">
-                    <span className="font-mono text-[9.5px] tracking-[0.14em] text-[#64748B] uppercase">
+                    <span className="font-mono text-[12px] tracking-[0.14em] text-[#64748B] uppercase">
                       Recent activity
                     </span>
-                    <span className="font-mono text-[10px] text-[#64748B]">credits · newest first</span>
+                    <span className="font-mono text-[13px] text-[#64748B]">credits · newest first</span>
                   </div>
                   <div className="mt-[11px]">
                     {loading && !data ? (
-                      <p className="font-mono text-[11px] text-[#64748B] px-4 py-6 text-center">Loading…</p>
+                      <p className="font-mono text-[14px] text-[#64748B] px-4 py-6 text-center">Loading…</p>
                     ) : signedIn === false ? (
-                      <p className="font-mono text-[11px] text-[#64748B] px-4 py-6 text-center">
+                      <p className="font-mono text-[14px] text-[#64748B] px-4 py-6 text-center">
                         Activity is private to the wallet.{" "}
                         <button onClick={signInForActivity} className="underline text-[#4FC3F7]">Sign in to see it</button>
                         {" "}— one signature, no transaction.
                       </p>
                     ) : !data ? (
-                      <p className="font-mono text-[11px] text-[#64748B] px-4 py-6 text-center">—</p>
+                      <p className="font-mono text-[14px] text-[#64748B] px-4 py-6 text-center">—</p>
                     ) : data.recent.length === 0 ? (
-                      <p className="font-mono text-[11px] text-[#64748B] px-4 py-6 text-center">
+                      <p className="font-mono text-[14px] text-[#64748B] px-4 py-6 text-center">
                         No activity yet. Credits spent on chat and tool runs show up here.
                       </p>
                     ) : (
@@ -283,14 +283,14 @@ export default function UsagePage() {
                   make: the tool id only ever existed in the paying request. */}
               <div className="w-full lg:w-[330px] lg:flex-none border-t lg:border-t-0 lg:border-l border-[#1A1A2E] p-[18px]">
                 <div className="flex items-baseline justify-between gap-2">
-                  <span className="font-mono text-[9.5px] tracking-[0.14em] text-[#64748B] uppercase">
+                  <span className="font-mono text-[12px] tracking-[0.14em] text-[#64748B] uppercase">
                     Agent spend · by tool · Coinbase x402
                   </span>
                   {spend.s === "ok" && scopeLabel(spend.d) && (
-                    <span className="font-mono text-[9px] text-[#475569] shrink-0">{scopeLabel(spend.d)}</span>
+                    <span className="font-mono text-[12px] text-[#64748B] shrink-0">{scopeLabel(spend.d)}</span>
                   )}
                 </div>
-                <p className="font-prose text-[10.5px] leading-[1.6] text-[#94A3B8] mt-2">
+                <p className="font-prose text-[13px] leading-[1.6] text-[#94A3B8] mt-2">
                   What your payments actually bought — the part no block explorer can see.
                 </p>
                 <div className="mt-3.5">

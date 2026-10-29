@@ -47,7 +47,7 @@ function HoodNavBadge() {
   const label = n > 99 ? "99+" : String(n);
   return (
     <span
-      className="absolute -top-1 -right-2 min-w-[14px] h-[14px] px-1 rounded-full flex items-center justify-center font-mono text-[9px] font-bold"
+      className="absolute -top-1 -right-2 min-w-[14px] h-[14px] px-1 rounded-full flex items-center justify-center font-mono text-[12px] font-bold"
       style={{ backgroundColor: "#ef4444", color: "#fff", boxShadow: "0 0 0 2px #050508" }}
       aria-label={`${n} unread`}
     >
@@ -81,7 +81,7 @@ function AlertsNavBadge() {
   if (!n) return null;
   return (
     <span
-      className="absolute -top-1 -right-2 min-w-[14px] h-[14px] px-1 rounded-full flex items-center justify-center font-mono text-[9px] font-bold"
+      className="absolute -top-1 -right-2 min-w-[14px] h-[14px] px-1 rounded-full flex items-center justify-center font-mono text-[12px] font-bold"
       style={{ backgroundColor: "#4FC3F7", color: "#050508", boxShadow: "0 0 0 2px #050508" }}
       aria-label={`${n} unread price alerts`}
     >
@@ -161,7 +161,8 @@ const IconHome = svg(<path strokeLinecap="round" strokeLinejoin="round" d="m2.25
 // That keeps the 1958-line catalog out of the client bundle and adds no fetch
 // — which matters here specifically, because anything mounted in this nav runs
 // on every /app page (see HoodNavBadge's warning above).
-type NavItem = { id: string; href: string; icon: ReactNode; badge?: "hood" | "alerts"; meta?: "hubCount" };
+/** `also`: sub-pages that light this item (a switch inside the page, not a nav entry). */
+type NavItem = { id: string; href: string; icon: ReactNode; badge?: "hood" | "alerts"; meta?: "hubCount"; also?: string[] };
 type NavGroup = { id: string; items: NavItem[] };
 
 // Three modes (ShunTr, 2026-10-28, after TOLLY's Trade | Agents): Chat stays
@@ -205,29 +206,15 @@ const MODES: Mode[] = [
     groups: [
       {
         id: "group_exchange",
-        // Every x402 seller on Base, measured on chain (Blue Hub v3, 2026-10-28).
+        // Five entries, one door each (ShunTr 2026-10-29: "simple, no overlapping
+        // features"). Discovered, Sell services, Following and Docs are switches or
+        // links inside these pages; their URLs still resolve and light the parent.
         items: [
-          { id: "agents", href: "/exchange", icon: IconAgents },
-          { id: "discovered", href: "/exchange/discovered", icon: IconExchange },
+          { id: "agents", href: "/exchange", icon: IconAgents, also: ["/exchange/discovered", "/exchange/docs", "/services"] },
           { id: "jobs", href: "/jobs", icon: IconJobs },
           { id: "analytics", href: "/exchange/analytics", icon: IconAnalytics },
-        ],
-      },
-      {
-        id: "group_build",
-        items: [
-          { id: "create_agent", href: "/exchange/create", icon: IconCreate },
-          { id: "sell_services", href: "/exchange/sell", icon: IconConnectors },
-          // What agents can pay Blue Agent for (MCP v2, 2026-10-22).
-          { id: "services", href: "/services", icon: IconServices },
-        ],
-      },
-      {
-        id: "group_account",
-        items: [
-          { id: "my_usage", href: "/exchange/usage", icon: IconUsage },
-          { id: "following", href: "/exchange/following", icon: IconSkills },
-          { id: "docs", href: "/exchange/docs", icon: IconDocs },
+          { id: "create", href: "/exchange/create", icon: IconCreate, also: ["/exchange/sell"] },
+          { id: "my_account", href: "/exchange/usage", icon: IconUsage, also: ["/exchange/following"] },
         ],
       },
     ],
@@ -266,9 +253,11 @@ function modeForPath(clean: string): Mode {
 /** The ONE active item: the longest href that prefixes the path (so /exchange/analytics
  *  lights Analytics, not Agents, while /exchange/agent/7 still lights Agents). */
 function activeHref(clean: string, items: NavItem[]): string | null {
-  let best: string | null = null;
+  let best: string | null = null, len = 0;
   for (const i of items) {
-    if ((clean === i.href || clean.startsWith(i.href + "/")) && (!best || i.href.length > best.length)) best = i.href;
+    for (const h of [i.href, ...(i.also ?? [])]) {
+      if ((clean === h || clean.startsWith(h + "/")) && h.length > len) { best = i.href; len = h.length; }
+    }
   }
   return best;
 }
@@ -282,7 +271,7 @@ function ModeSwitch({ mode, collapsed, onPick }: { mode: ModeId; collapsed?: boo
         const on = m.id === mode;
         return (
           <Link key={m.id} href={m.home} onClick={onPick} title={t(`nav.mode_${m.id}`)}
-            className="rounded-[7px] py-[5px] text-center font-mono text-[10px] font-semibold transition-colors"
+            className="rounded-[7px] py-[5px] text-center font-mono text-[13px] font-semibold transition-colors"
             style={on ? { background: "#4FC3F7", color: "#050508" } : { color: "#94A3B8" }}>
             {collapsed ? t(`nav.mode_${m.id}`).slice(0, 1) : t(`nav.mode_${m.id}`)}
           </Link>
@@ -389,13 +378,13 @@ function AppSideNav({ toolCount }: { toolCount: number }) {
         {!collapsed && (
           <>
             <span
-              className="font-mono text-[11.5px] font-medium truncate transition-colors flex-1 min-w-0"
+              className="font-mono text-[14px] font-medium truncate transition-colors flex-1 min-w-0"
               style={{ color: active ? "#4FC3F7" : "#E2E8F0" }}
             >
               {t(`nav.${item.id}`)}
             </span>
             {item.meta === "hubCount" && (
-              <span className="font-mono text-[9.5px] shrink-0 tabular-nums" style={{ color: META }}>
+              <span className="font-mono text-[12px] shrink-0 tabular-nums" style={{ color: META }}>
                 {toolCount}
               </span>
             )}
@@ -432,7 +421,7 @@ function AppSideNav({ toolCount }: { toolCount: number }) {
           />
           {!collapsed && (
             <span
-              className="font-mono text-[12px] font-bold truncate"
+              className="font-mono text-[15px] font-bold truncate"
               style={{ color: "#E2E8F0", letterSpacing: WORDMARK_TRACK }}
             >
               BLUE<span className="text-[#4FC3F7]">AGENT</span>
@@ -482,8 +471,8 @@ function AppSideNav({ toolCount }: { toolCount: number }) {
             </svg>
             {!collapsed && (
               <>
-                <span className="font-mono text-[11.5px] font-semibold text-[#050508] flex-1 text-left">New chat</span>
-                <span className="font-mono text-[9.5px] text-[#05050899]">⌘N</span>
+                <span className="font-mono text-[14px] font-semibold text-[#050508] flex-1 text-left">New chat</span>
+                <span className="font-mono text-[12px] text-[#05050899]">⌘N</span>
               </>
             )}
           </button>
@@ -505,7 +494,7 @@ function AppSideNav({ toolCount }: { toolCount: number }) {
               ? gi > 0 && <div className="mx-auto my-2 w-6 h-px bg-[#1A1A2E]" />
               : (
                 <p
-                  className="px-3 pt-4 pb-1 font-mono text-[9px] uppercase"
+                  className="px-3 pt-4 pb-1 font-mono text-[12px] uppercase"
                   style={{ color: META, letterSpacing: LABEL_TRACK }}
                 >
                   {t(`nav.${group.id}`)}
@@ -538,7 +527,7 @@ function AppSideNav({ toolCount }: { toolCount: number }) {
                   }}
                 >
                   {item.icon && <span className="w-[15px] text-center shrink-0 text-sm leading-none">{item.icon}</span>}
-                  <span className="font-mono text-[11.5px] font-medium" style={{ color: item.active ? "#4FC3F7" : "#E2E8F0" }}>
+                  <span className="font-mono text-[14px] font-medium" style={{ color: item.active ? "#4FC3F7" : "#E2E8F0" }}>
                     {item.label}
                   </span>
                 </button>
@@ -548,7 +537,7 @@ function AppSideNav({ toolCount }: { toolCount: number }) {
             {contextual.recents && contextual.recents.length > 0 && (
               <>
                 <p
-                  className="px-3 pt-4 pb-1 font-mono text-[9px] uppercase"
+                  className="px-3 pt-4 pb-1 font-mono text-[12px] uppercase"
                   style={{ color: META, letterSpacing: LABEL_TRACK }}
                 >
                   Recents
@@ -569,13 +558,13 @@ function AppSideNav({ toolCount }: { toolCount: number }) {
                         style={{ background: r.active ? "#4FC3F7" : "#334155" }}
                       />
                       <p
-                        className="font-mono text-[12px] flex-1 truncate leading-snug"
+                        className="font-mono text-[15px] flex-1 truncate leading-snug"
                         style={{ color: r.active ? "#ffffff" : "#94a3b8" }}
                       >
                         {r.title}
                       </p>
                       {r.meta && (
-                        <span className={`font-mono text-[9px] text-slate-700 shrink-0 ${r.onDelete ? "group-hover:hidden" : ""}`}>
+                        <span className={`font-mono text-[12px] text-slate-700 shrink-0 ${r.onDelete ? "group-hover:hidden" : ""}`}>
                           {r.meta}
                         </span>
                       )}
@@ -627,12 +616,12 @@ function AppSideNav({ toolCount }: { toolCount: number }) {
           <span className="shrink-0">{IconHome}</span>
           {!collapsed && (
             <>
-              <span className="font-mono text-[11.5px] font-medium text-slate-500 group-hover:text-slate-300 transition-colors flex-1 min-w-0">
+              <span className="font-mono text-[14px] font-medium text-slate-500 group-hover:text-slate-300 transition-colors flex-1 min-w-0">
                 {t("nav.home")}
               </span>
               {/* The handoff writes this row "Home ↗" — it leaves the app for
                   blueagent.dev, and it is the only row in the rail that does. */}
-              <span className="font-mono text-[9.5px] shrink-0" style={{ color: META }}>↗</span>
+              <span className="font-mono text-[12px] shrink-0" style={{ color: META }}>↗</span>
             </>
           )}
         </a>
@@ -659,7 +648,7 @@ function AppSideNav({ toolCount }: { toolCount: number }) {
             </svg>
           </span>
           {!collapsed && (
-            <span className="font-mono text-[11.5px] font-medium">Collapse</span>
+            <span className="font-mono text-[14px] font-medium">Collapse</span>
           )}
         </button>
       </div>
@@ -690,7 +679,7 @@ function MobileTopBar() {
           <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
         </svg>
       </button>
-      <span className="font-mono text-[11px] text-[#4FC3F7] tracking-widest truncate flex-1">
+      <span className="font-mono text-[14px] text-[#4FC3F7] tracking-widest truncate flex-1">
         // {title.toUpperCase()}
       </span>
       <LanguageToggle />
@@ -742,7 +731,7 @@ function MobileDrawer({ toolCount }: { toolCount: number }) {
           <div className="flex items-center gap-2">
             <img src="/logomark.svg" alt="" className="rounded-md" style={{ width: 22, height: 22 }} />
             <span
-              className="font-mono text-[12px] font-bold"
+              className="font-mono text-[15px] font-bold"
               style={{ color: "#E2E8F0", letterSpacing: WORDMARK_TRACK }}
             >
               BLUE<span className="text-[#4FC3F7]">AGENT</span>
@@ -771,7 +760,7 @@ function MobileDrawer({ toolCount }: { toolCount: number }) {
                 <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="#050508" strokeWidth={2.25}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                 </svg>
-                <span className="font-mono text-[13px] font-semibold text-[#050508]">New chat</span>
+                <span className="font-mono text-[16px] font-semibold text-[#050508]">New chat</span>
               </button>
             </div>
           )}
@@ -790,7 +779,7 @@ function MobileDrawer({ toolCount }: { toolCount: number }) {
                   }}
                 >
                   {item.icon && <span className="w-4 text-center shrink-0 text-sm leading-none">{item.icon}</span>}
-                  <span className="font-mono text-[13px]" style={{ color: item.active ? "#4FC3F7" : "#cbd5e1" }}>
+                  <span className="font-mono text-[16px]" style={{ color: item.active ? "#4FC3F7" : "#cbd5e1" }}>
                     {item.label}
                   </span>
                 </button>
@@ -798,7 +787,7 @@ function MobileDrawer({ toolCount }: { toolCount: number }) {
 
               {contextual!.recents && contextual!.recents.length > 0 && (
                 <>
-                  <p className="px-3 pt-3 pb-1 font-mono text-[9px] uppercase" style={{ color: META, letterSpacing: LABEL_TRACK }}>Recents</p>
+                  <p className="px-3 pt-3 pb-1 font-mono text-[12px] uppercase" style={{ color: META, letterSpacing: LABEL_TRACK }}>Recents</p>
                   {contextual!.recents.map((r) => (
                     <button
                       key={r.id}
@@ -806,7 +795,7 @@ function MobileDrawer({ toolCount }: { toolCount: number }) {
                       className="w-full text-left flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors hover:bg-[#ffffff06]"
                     >
                       <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: r.active ? "#4FC3F7" : "#334155" }} />
-                      <span className="font-mono text-[12px] truncate" style={{ color: r.active ? "#ffffff" : "#94a3b8" }}>
+                      <span className="font-mono text-[15px] truncate" style={{ color: r.active ? "#ffffff" : "#94a3b8" }}>
                         {r.title}
                       </span>
                     </button>
@@ -820,7 +809,7 @@ function MobileDrawer({ toolCount }: { toolCount: number }) {
           <div className="px-3 pt-2 pb-1"><ModeSwitch mode={mode.id} /></div>
           {mode.groups.map((group) => (
             <div key={group.id} className="px-2 pt-1 border-t border-[#13131f] mt-1">
-              <p className="px-3 pt-3 pb-1 font-mono text-[9px] uppercase" style={{ color: META, letterSpacing: LABEL_TRACK }}>
+              <p className="px-3 pt-3 pb-1 font-mono text-[12px] uppercase" style={{ color: META, letterSpacing: LABEL_TRACK }}>
                 {t(`nav.${group.id}`)}
               </p>
               {group.items.map((item) => {
@@ -840,11 +829,11 @@ function MobileDrawer({ toolCount }: { toolCount: number }) {
                       {item.icon}
                       {item.badge === "hood" && <HoodNavBadge />}{item.badge === "alerts" && <AlertsNavBadge />}
                     </span>
-                    <span className="font-mono text-[13px] flex-1 min-w-0 truncate" style={{ color: on ? "#4FC3F7" : "#E2E8F0" }}>
+                    <span className="font-mono text-[16px] flex-1 min-w-0 truncate" style={{ color: on ? "#4FC3F7" : "#E2E8F0" }}>
                       {t(`nav.${item.id}`)}
                     </span>
                     {item.meta === "hubCount" && (
-                      <span className="font-mono text-[10px] shrink-0 tabular-nums" style={{ color: META }}>
+                      <span className="font-mono text-[13px] shrink-0 tabular-nums" style={{ color: META }}>
                         {toolCount}
                       </span>
                     )}
@@ -862,8 +851,8 @@ function MobileDrawer({ toolCount }: { toolCount: number }) {
               style={{ borderRadius: ITEM_RADIUS }}
             >
               <span className="shrink-0">{IconHome}</span>
-              <span className="font-mono text-[13px] flex-1 min-w-0">{t("nav.home")}</span>
-              <span className="font-mono text-[10px] shrink-0" style={{ color: META }}>↗</span>
+              <span className="font-mono text-[16px] flex-1 min-w-0">{t("nav.home")}</span>
+              <span className="font-mono text-[13px] shrink-0" style={{ color: META }}>↗</span>
             </a>
           </div>
         </div>

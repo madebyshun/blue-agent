@@ -175,15 +175,15 @@ export default function ConnectorsPanel({ onPick }: { onPick?: () => void }) {
           The "N attached · M tools" chip + "+ Custom MCP" live here on desktop;
           the mobile "+ Custom" affordance rides in the gallery toolbar below. */}
       <div className="hidden lg:flex items-center gap-3.5 flex-wrap shrink-0 min-h-[56px] px-5 py-2 border-b border-[#1A1A2E]">
-        <span className="font-mono text-[11px] font-semibold tracking-[0.16em] text-[#E2E8F0]">// CONNECTORS</span>
-        <span className="font-mono text-[10.5px] text-[#64748B]">what Chat is plugged into · onchain built in · MCP servers you add</span>
+        <span className="font-mono text-[14px] font-semibold tracking-[0.16em] text-[#E2E8F0]">// CONNECTORS</span>
+        <span className="font-mono text-[13px] text-[#64748B]">what Chat is plugged into · onchain built in · MCP servers you add</span>
         <div className="ml-auto flex items-center gap-2">
-          <span className="font-mono text-[10px] text-[#94A3B8] border border-[#1A1A2E] rounded-[7px] px-2.5 py-[5px]">
+          <span className="font-mono text-[13px] text-[#94A3B8] border border-[#1A1A2E] rounded-[7px] px-2.5 py-[5px]">
             {connectors.length} attached · {toolCount} tools
           </span>
           <button
             onClick={openCustom}
-            className="font-mono text-[10.5px] font-semibold text-[#050508] bg-[#4FC3F7] hover:bg-[#29ABE2] rounded-[7px] px-2.5 py-[5px] transition-colors"
+            className="font-mono text-[13px] font-semibold text-[#050508] bg-[#4FC3F7] hover:bg-[#29ABE2] rounded-[7px] px-2.5 py-[5px] transition-colors"
           >
             + Custom MCP
           </button>
@@ -199,7 +199,7 @@ export default function ConnectorsPanel({ onPick }: { onPick?: () => void }) {
 
           {/* Connect more — the two that matter most, ahead of the gallery. */}
           <section>
-            <p className="font-mono text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">CONNECT MORE</p>
+            <p className="font-mono text-[12px] font-medium tracking-[0.14em] text-[#64748B]">CONNECT MORE</p>
             <div className="mt-3 grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))" }}>
               {github && (
                 <button
@@ -209,15 +209,15 @@ export default function ConnectorsPanel({ onPick }: { onPick?: () => void }) {
                 >
                   <div className="flex items-center gap-2.5">
                     <BrandMark brand={github.brand} size={24} />
-                    <span className="font-mono text-[12.5px] font-semibold text-[#E2E8F0]">GitHub MCP</span>
-                    <span className="ml-auto font-mono text-[8.5px] font-medium rounded-full px-[7px] py-[2px] border"
+                    <span className="font-mono text-[15px] font-semibold text-[#E2E8F0]">GitHub MCP</span>
+                    <span className="ml-auto font-mono text-[11px] font-medium rounded-full px-[7px] py-[2px] border"
                       style={isPresetAdded(connectors, github)
                         ? { color: "#34D399", borderColor: "rgba(52,211,153,.35)" }
                         : { color: "#F59E0B", borderColor: "rgba(245,158,11,.35)" }}>
                       {isPresetAdded(connectors, github) ? "CONNECTED" : "NEEDS KEY"}
                     </span>
                   </div>
-                  <p className="font-prose text-[10.5px] leading-[1.6] text-[#94A3B8] mt-2">
+                  <p className="font-prose text-[13px] leading-[1.6] text-[#94A3B8] mt-2">
                     Repos, issues, PRs and code from your own GitHub token. The token stays in this browser.
                   </p>
                 </button>
@@ -228,11 +228,11 @@ export default function ConnectorsPanel({ onPick }: { onPick?: () => void }) {
                 className="text-left rounded-[14px] border border-dashed border-[#1A1A2E] px-4 py-3.5 hover:border-[#4FC3F7]/45 transition-colors"
               >
                 <div className="flex items-center gap-2.5">
-                  <span className="w-6 h-6 rounded-md border border-[#1A1A2E] flex items-center justify-center font-mono text-[13px] text-[#4FC3F7]">+</span>
-                  <span className="font-mono text-[12.5px] font-semibold text-[#E2E8F0]">Custom remote MCP</span>
-                  <span className="ml-auto font-mono text-[8.5px] font-medium text-[#A78BFA] border border-[#A78BFA]/35 rounded-full px-[7px] py-[2px]">BETA</span>
+                  <span className="w-6 h-6 rounded-md border border-[#1A1A2E] flex items-center justify-center font-mono text-[16px] text-[#4FC3F7]">+</span>
+                  <span className="font-mono text-[15px] font-semibold text-[#E2E8F0]">Custom remote MCP</span>
+                  <span className="ml-auto font-mono text-[11px] font-medium text-[#A78BFA] border border-[#A78BFA]/35 rounded-full px-[7px] py-[2px]">BETA</span>
                 </div>
-                <p className="font-prose text-[10.5px] leading-[1.6] text-[#94A3B8] mt-2">
+                <p className="font-prose text-[13px] leading-[1.6] text-[#94A3B8] mt-2">
                   Any Streamable-HTTP MCP server by URL. Its tools are tested before they attach, and their output is treated as untrusted.
                 </p>
               </button>
@@ -242,7 +242,7 @@ export default function ConnectorsPanel({ onPick }: { onPick?: () => void }) {
           {/* Attached connectors */}
           {connectors.length > 0 && (
             <section>
-              <p className="font-mono text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">
+              <p className="font-mono text-[12px] font-medium tracking-[0.14em] text-[#64748B]">
                 ATTACHED · {connectors.length}
               </p>
               <div className="mt-3 space-y-[9px]">
@@ -262,12 +262,12 @@ export default function ConnectorsPanel({ onPick }: { onPick?: () => void }) {
                       <div className="flex items-center gap-3">
                         <BrandMark brand={brandForUrl(c.url)} size={26} />
                         <div className="min-w-0">
-                          <span className="block font-mono text-[12.5px] font-semibold text-[#E2E8F0] truncate">{c.name}</span>
-                          <span className="block font-mono text-[9.5px] text-[#64748B] truncate mt-0.5">{c.url}</span>
+                          <span className="block font-mono text-[15px] font-semibold text-[#E2E8F0] truncate">{c.name}</span>
+                          <span className="block font-mono text-[12px] text-[#64748B] truncate mt-0.5">{c.url}</span>
                         </div>
                         <div className="ml-auto flex items-center gap-2.5 shrink-0">
                           <span
-                            className="font-mono text-[9.5px] font-medium rounded-[5px] px-2 py-[3px]"
+                            className="font-mono text-[12px] font-medium rounded-[5px] px-2 py-[3px]"
                             style={{ color: ACCENT, background: "rgba(79,195,247,.12)" }}
                           >
                             {c.tools.length} tools
@@ -286,19 +286,19 @@ export default function ConnectorsPanel({ onPick }: { onPick?: () => void }) {
                           <button
                             onClick={() => remove(c)}
                             title="Remove"
-                            className="font-mono text-[12px] text-[#475569] hover:text-red-400 transition-colors"
+                            className="font-mono text-[15px] text-[#64748B] hover:text-red-400 transition-colors"
                           >✕</button>
                         </div>
                       </div>
                       {c.tools.length > 0 && (
                         <div className="flex flex-wrap gap-1.5 mt-2.5">
                           {c.tools.slice(0, 6).map(t => (
-                            <span key={t.name} className="font-mono text-[9.5px] text-[#94A3B8] border border-[#1A1A2E] rounded-[6px] px-2 py-[3px]">
+                            <span key={t.name} className="font-mono text-[12px] text-[#94A3B8] border border-[#1A1A2E] rounded-[6px] px-2 py-[3px]">
                               {t.name}
                             </span>
                           ))}
                           {c.tools.length > 6 && (
-                            <span className="font-mono text-[9.5px] text-[#475569] border border-[#1A1A2E] rounded-[6px] px-2 py-[3px]">
+                            <span className="font-mono text-[12px] text-[#64748B] border border-[#1A1A2E] rounded-[6px] px-2 py-[3px]">
                               +{c.tools.length - 6}
                             </span>
                           )}
@@ -315,23 +315,23 @@ export default function ConnectorsPanel({ onPick }: { onPick?: () => void }) {
           <section>
             {/* Toolbar — label · search · (mobile "+ Custom") · filter pills */}
             <div className="flex items-center gap-3 flex-wrap">
-              <span className="font-mono text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">GALLERY</span>
+              <span className="font-mono text-[12px] font-medium tracking-[0.14em] text-[#64748B]">GALLERY</span>
               <input
                 value={query}
                 onChange={e => setQuery(e.target.value)}
                 placeholder="Search connectors…"
-                className="flex-1 min-w-[160px] max-w-[420px] bg-[#0D0D14] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-[8px] px-2.5 py-[7px] font-mono text-[10.5px] text-white placeholder:text-[#64748B] outline-none"
+                className="flex-1 min-w-[160px] max-w-[420px] bg-[#0D0D14] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-[8px] px-2.5 py-[7px] font-mono text-[13px] text-white placeholder:text-[#64748B] outline-none"
               />
               <button
                 onClick={openCustom}
-                className="lg:hidden font-mono text-[10px] font-semibold text-[#050508] bg-[#4FC3F7] hover:bg-[#29ABE2] rounded-[8px] px-3 py-[7px] transition-colors shrink-0"
+                className="lg:hidden font-mono text-[13px] font-semibold text-[#050508] bg-[#4FC3F7] hover:bg-[#29ABE2] rounded-[8px] px-3 py-[7px] transition-colors shrink-0"
               >
                 + Custom
               </button>
               <div className="flex gap-1.5 flex-wrap">
                 {FILTERS.map(f => (
                   <button key={f.id} onClick={() => setFilter(f.id)}
-                    className="font-mono text-[9.5px] rounded-full px-2.5 py-1 border transition-colors"
+                    className="font-mono text-[12px] rounded-full px-2.5 py-1 border transition-colors"
                     style={filter === f.id
                       ? { color: "#050508", background: ACCENT, borderColor: ACCENT, fontWeight: 600 }
                       : { color: "#94A3B8", borderColor: "#1A1A2E" }}>
@@ -356,22 +356,22 @@ export default function ConnectorsPanel({ onPick }: { onPick?: () => void }) {
                   >
                     <div className="flex items-center gap-2">
                       <BrandMark brand={p.brand} size={22} />
-                      <span className="font-mono text-[11.5px] font-semibold text-[#E2E8F0] truncate">{p.name}</span>
+                      <span className="font-mono text-[14px] font-semibold text-[#E2E8F0] truncate">{p.name}</span>
                       <span
-                        className="ml-auto font-mono text-[8.5px] font-medium rounded-full px-[7px] py-[2px] shrink-0"
+                        className="ml-auto font-mono text-[11px] font-medium rounded-full px-[7px] py-[2px] shrink-0"
                         style={{ color: badge.color, border: `1px solid ${badge.color}4D` }}
                       >
                         {badge.label}
                       </span>
                     </div>
-                    <p className="font-prose text-[10px] leading-[1.6] text-[#94A3B8] mt-2.5 flex-1">{p.description}</p>
+                    <p className="font-prose text-[13px] leading-[1.6] text-[#94A3B8] mt-2.5 flex-1">{p.description}</p>
                     {flash?.id === p.id && (
-                      <p className="font-mono text-[8.5px] text-red-400 mt-2 leading-relaxed">{flash.msg}</p>
+                      <p className="font-mono text-[11px] text-red-400 mt-2 leading-relaxed">{flash.msg}</p>
                     )}
                     <button
                       onClick={() => onPresetClick(p, added)}
                       disabled={disabled}
-                      className="mt-3 w-full font-mono text-[10px] font-medium rounded-[8px] py-[7px] border text-center transition-colors disabled:cursor-default"
+                      className="mt-3 w-full font-mono text-[13px] font-medium rounded-[8px] py-[7px] border text-center transition-colors disabled:cursor-default"
                       style={
                         added
                           ? { color: "#34D399", borderColor: "rgba(52,211,153,.28)" }
@@ -388,7 +388,7 @@ export default function ConnectorsPanel({ onPick }: { onPick?: () => void }) {
                 );
               })}
               {visible.length === 0 && (
-                <p className="font-mono text-[10px] text-[#475569] col-span-full">No connectors match “{query}”.</p>
+                <p className="font-mono text-[13px] text-[#64748B] col-span-full">No connectors match “{query}”.</p>
               )}
             </div>
           </section>
@@ -403,49 +403,49 @@ export default function ConnectorsPanel({ onPick }: { onPick?: () => void }) {
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2.5 min-w-0">
                 {preset && <BrandMark brand={preset.brand} size={26} />}
-                <p className="font-mono text-[11px] tracking-widest truncate" style={{ color: ACCENT }}>
+                <p className="font-mono text-[14px] tracking-widest truncate" style={{ color: ACCENT }}>
                   {preset ? `// ADD ${preset.name.toUpperCase()}` : "// ADD CUSTOM MCP"}
                 </p>
               </div>
-              <button onClick={() => { setOpen(false); reset(); }} className="font-mono text-[13px] text-slate-500 hover:text-white">✕</button>
+              <button onClick={() => { setOpen(false); reset(); }} className="font-mono text-[16px] text-slate-500 hover:text-white">✕</button>
             </div>
 
             {preset?.docsUrl && (
               <a href={preset.docsUrl} target="_blank" rel="noopener noreferrer"
-                className="font-mono text-[9px] mb-3 inline-block hover:underline" style={{ color: ACCENT }}>
+                className="font-mono text-[12px] mb-3 inline-block hover:underline" style={{ color: ACCENT }}>
                 ↗ Where to get a token
               </a>
             )}
 
-            <label className="font-mono text-[9px] text-slate-600 tracking-widest">NAME</label>
+            <label className="font-mono text-[12px] text-slate-600 tracking-widest">NAME</label>
             <input value={name} onChange={e => setName(e.target.value)} placeholder="My MCP server"
-              className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-3 py-2 font-mono text-[12px] text-white placeholder:text-slate-700 outline-none mb-3 mt-1" />
+              className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-3 py-2 font-mono text-[15px] text-white placeholder:text-slate-700 outline-none mb-3 mt-1" />
 
-            <label className="font-mono text-[9px] text-slate-600 tracking-widest">MCP ENDPOINT URL</label>
+            <label className="font-mono text-[12px] text-slate-600 tracking-widest">MCP ENDPOINT URL</label>
             <input value={url} onChange={e => setUrl(e.target.value)} placeholder="https://example.com/mcp/"
-              className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-3 py-2 font-mono text-[12px] text-white placeholder:text-slate-700 outline-none mb-3 mt-1" />
+              className="w-full bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-3 py-2 font-mono text-[15px] text-white placeholder:text-slate-700 outline-none mb-3 mt-1" />
 
-            <label className="font-mono text-[9px] text-slate-600 tracking-widest">AUTH (optional)</label>
+            <label className="font-mono text-[12px] text-slate-600 tracking-widest">AUTH (optional)</label>
             <div className="flex gap-2 mt-1 mb-1">
               <input value={authHeader} onChange={e => setAuthHeader(e.target.value)} placeholder="Authorization"
-                className="w-1/3 bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-3 py-2 font-mono text-[12px] text-white placeholder:text-slate-700 outline-none" />
+                className="w-1/3 bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-3 py-2 font-mono text-[15px] text-white placeholder:text-slate-700 outline-none" />
               <input value={authValue} onChange={e => setAuthValue(e.target.value)} type="password"
                 placeholder={preset?.authPlaceholder ?? "Bearer token…"}
-                className="flex-1 bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-3 py-2 font-mono text-[12px] text-white placeholder:text-slate-700 outline-none" />
+                className="flex-1 bg-[#050508] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-3 py-2 font-mono text-[15px] text-white placeholder:text-slate-700 outline-none" />
             </div>
-            <p className="font-mono text-[9px] text-slate-700 mb-3">Token is stored locally in your browser and only sent to Blue Chat when a connector tool runs.</p>
+            <p className="font-mono text-[12px] text-slate-700 mb-3">Token is stored locally in your browser and only sent to Blue Chat when a connector tool runs.</p>
 
-            {error && <p className="font-mono text-[10px] text-red-400 mb-3 whitespace-pre-wrap leading-relaxed">{error}</p>}
+            {error && <p className="font-mono text-[13px] text-red-400 mb-3 whitespace-pre-wrap leading-relaxed">{error}</p>}
 
             {preview && (
               <div className="mb-3 rounded-lg border border-[#1A1A2E] bg-[#050508] p-3">
-                <p className="font-mono text-[9px] tracking-widest mb-2" style={{ color: "#34D399" }}>✓ {preview.length} TOOLS FOUND</p>
+                <p className="font-mono text-[12px] tracking-widest mb-2" style={{ color: "#34D399" }}>✓ {preview.length} TOOLS FOUND</p>
                 <div className="flex flex-wrap gap-1">
                   {preview.slice(0, 12).map(t => (
-                    <span key={t.name} className="font-mono text-[8px] px-1.5 py-0.5 rounded"
+                    <span key={t.name} className="font-mono text-[11px] px-1.5 py-0.5 rounded"
                       style={{ background: `${ACCENT}0A`, color: `${ACCENT}B0`, border: `1px solid ${ACCENT}20` }}>{t.name}</span>
                   ))}
-                  {preview.length > 12 && <span className="font-mono text-[8px] px-1.5 py-0.5 text-slate-600">+{preview.length - 12}</span>}
+                  {preview.length > 12 && <span className="font-mono text-[11px] px-1.5 py-0.5 text-slate-600">+{preview.length - 12}</span>}
                 </div>
               </div>
             )}
@@ -453,7 +453,7 @@ export default function ConnectorsPanel({ onPick }: { onPick?: () => void }) {
             <button
               onClick={testAndAdd}
               disabled={busy || !url.trim()}
-              className="w-full font-mono text-[12px] font-bold py-2 rounded-lg border transition-colors disabled:opacity-50"
+              className="w-full font-mono text-[15px] font-bold py-2 rounded-lg border transition-colors disabled:opacity-50"
               style={{ borderColor: `${ACCENT}40`, color: ACCENT }}
             >
               {busy ? "Testing…" : preview ? "Add connector" : "Test connection"}
@@ -488,49 +488,49 @@ const ACTIONS: { label: string; note: string }[] = [
 function BuiltInOnchain() {
   return (
     <section>
-      <p className="font-mono text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">BUILT IN · ALWAYS ON</p>
+      <p className="font-mono text-[12px] font-medium tracking-[0.14em] text-[#64748B]">BUILT IN · ALWAYS ON</p>
       <div className="mt-3 rounded-[14px] border px-4 py-4" style={{ borderColor: "rgba(79,195,247,.28)", background: "rgba(79,195,247,.04)" }}>
         <div className="flex items-center gap-3 flex-wrap">
           <BrandMark brand="blue-agent" size={28} />
           <div className="min-w-0">
-            <span className="block font-mono text-[13px] font-semibold text-[#E2E8F0]">Blue Agent onchain</span>
-            <span className="block font-mono text-[9.5px] text-[#64748B] mt-0.5">Base 8453 · Robinhood Chain 4663 · non-custodial</span>
+            <span className="block font-mono text-[16px] font-semibold text-[#E2E8F0]">Blue Agent onchain</span>
+            <span className="block font-mono text-[12px] text-[#64748B] mt-0.5">Base 8453 · Robinhood Chain 4663 · non-custodial</span>
           </div>
-          <span className="ml-auto font-mono text-[9px] font-semibold rounded-full px-2 py-[3px]" style={{ color: "#34D399", background: "rgba(52,211,153,.12)" }}>
+          <span className="ml-auto font-mono text-[12px] font-semibold rounded-full px-2 py-[3px]" style={{ color: "#34D399", background: "rgba(52,211,153,.12)" }}>
             ● CONNECTED
           </span>
         </div>
         <div className="grid gap-4 mt-4" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))" }}>
           <div>
-            <p className="font-mono text-[9px] tracking-[0.14em] text-[#64748B]">READS · NO SIGNATURE</p>
+            <p className="font-mono text-[12px] tracking-[0.14em] text-[#64748B]">READS · NO SIGNATURE</p>
             <ul className="mt-2 space-y-1.5">
               {READS.map((r) => (
-                <li key={r.label} className="flex items-baseline gap-2 font-mono text-[10.5px]">
+                <li key={r.label} className="flex items-baseline gap-2 font-mono text-[13px]">
                   <span className="text-[#34D399]">✓</span>
                   <span className="text-[#E2E8F0]">{r.label}</span>
-                  <span className="text-[#475569] truncate">{r.note}</span>
+                  <span className="text-[#64748B] truncate">{r.note}</span>
                 </li>
               ))}
             </ul>
           </div>
           <div>
-            <p className="font-mono text-[9px] tracking-[0.14em] text-[#64748B]">ACTIONS · YOU SIGN</p>
+            <p className="font-mono text-[12px] tracking-[0.14em] text-[#64748B]">ACTIONS · YOU SIGN</p>
             <ul className="mt-2 space-y-1.5">
               {ACTIONS.map((a) => (
-                <li key={a.label} className="flex items-baseline gap-2 font-mono text-[10.5px]">
+                <li key={a.label} className="flex items-baseline gap-2 font-mono text-[13px]">
                   <span className="text-[#4FC3F7]">✎</span>
                   <span className="text-[#E2E8F0]">{a.label}</span>
-                  <span className="text-[#475569] truncate">{a.note}</span>
+                  <span className="text-[#64748B] truncate">{a.note}</span>
                 </li>
               ))}
             </ul>
           </div>
         </div>
         <div className="flex items-center gap-3 mt-4 flex-wrap">
-          <p className="flex-1 min-w-[220px] font-prose text-[10.5px] leading-[1.6] text-[#94A3B8]">
+          <p className="flex-1 min-w-[220px] font-prose text-[13px] leading-[1.6] text-[#94A3B8]">
             Every action is a card with the quote and a pre-trade check. Blue Agent never holds a key: nothing moves until your own wallet signs.
           </p>
-          <a href="/skills" className="font-mono text-[10.5px] text-[#4FC3F7] hover:underline shrink-0">All skills →</a>
+          <a href="/skills" className="font-mono text-[13px] text-[#4FC3F7] hover:underline shrink-0">All skills →</a>
         </div>
       </div>
     </section>
@@ -551,18 +551,18 @@ const MODES = ["Always", "Ask", "You"] as const;
 function OnchainPolicy() {
   return (
     <section>
-      <p className="font-mono text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">ONCHAIN ACTIONS</p>
+      <p className="font-mono text-[12px] font-medium tracking-[0.14em] text-[#64748B]">ONCHAIN ACTIONS</p>
       <div className="mt-3 rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] divide-y divide-[#1A1A2E]">
         {POLICY.map((p) => (
           <div key={p.action} className="flex items-center gap-3 px-4 py-3 flex-wrap">
             <div className="flex-1 min-w-[200px]">
-              <span className="block font-mono text-[11.5px] text-[#E2E8F0]">{p.action}</span>
-              <span className="block font-prose text-[10px] text-[#64748B] mt-0.5">{p.detail}</span>
+              <span className="block font-mono text-[14px] text-[#E2E8F0]">{p.action}</span>
+              <span className="block font-prose text-[13px] text-[#64748B] mt-0.5">{p.detail}</span>
             </div>
             <div className="flex rounded-[8px] border border-[#1A1A2E] overflow-hidden shrink-0" aria-label={`${p.action}: ${p.mode}`}>
               {MODES.map((m) => (
                 <span key={m}
-                  className="font-mono text-[9.5px] px-2.5 py-1"
+                  className="font-mono text-[12px] px-2.5 py-1"
                   style={m === p.mode
                     ? { color: "#050508", background: m === "You" ? "#34D399" : ACCENT, fontWeight: 600 }
                     : { color: "#334155" }}>
@@ -573,8 +573,8 @@ function OnchainPolicy() {
           </div>
         ))}
         <div className="px-4 py-3">
-          <span className="font-mono text-[9px] tracking-[0.14em] text-[#64748B]">REFUSED ON EVIDENCE</span>
-          <p className="font-prose text-[10.5px] text-[#94A3B8] mt-1 leading-[1.6]">
+          <span className="font-mono text-[12px] tracking-[0.14em] text-[#64748B]">REFUSED ON EVIDENCE</span>
+          <p className="font-prose text-[13px] text-[#94A3B8] mt-1 leading-[1.6]">
             A token impersonating a registered one, a sell tax measured at 50% or more, a bridge whose measured cost is over 20% of the amount. Anything unmeasured is a warning you tick, never a silent pass.
           </p>
         </div>

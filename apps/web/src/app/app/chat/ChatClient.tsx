@@ -112,7 +112,7 @@ function ChatShell() {
           style={{ background: !walletReady ? "#1e293b" : credits <= 20 && !isUnlimited ? "#EF4444" : "#4FC3F7" }}
         />
         <span
-          className="font-mono text-[11px] flex-1 text-left"
+          className="font-mono text-[14px] flex-1 text-left"
           style={{ color: !walletReady ? "#475569" : credits <= 20 && !isUnlimited ? "#EF4444" : "#64748b" }}
         >
           {!walletReady ? "…"
@@ -120,7 +120,7 @@ function ChatShell() {
             : credits >= 10_000 ? `${(credits / 1000).toFixed(1)}k credits`
             : `${credits.toLocaleString()} credits`}
         </span>
-        <span className="font-mono text-[9px] text-slate-700 group-hover:text-slate-500 transition-colors">⚙</span>
+        <span className="font-mono text-[12px] text-slate-700 group-hover:text-slate-500 transition-colors">⚙</span>
       </button>
     );
 
@@ -161,8 +161,8 @@ function ChatShell() {
                   this too would duplicate it. Carries the brand line that used to
                   sit under the empty-state heading. */}
               <div className="hidden lg:flex items-center gap-3.5 flex-wrap shrink-0 min-h-[56px] px-5 py-2 border-b border-[#1A1A2E]">
-                <span className="font-mono text-[11px] font-semibold tracking-[0.16em] text-[#E2E8F0]">// CHAT</span>
-                <span className="font-mono text-[10.5px] text-[#64748B]">Build anything on Base</span>
+                <span className="font-mono text-[14px] font-semibold tracking-[0.16em] text-[#E2E8F0]">// CHAT</span>
+                <span className="font-mono text-[13px] text-[#64748B]">Build anything on Base</span>
               </div>
               <ClaimBanner />
               <ChatMessages />

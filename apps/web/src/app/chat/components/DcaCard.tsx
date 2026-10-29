@@ -157,8 +157,8 @@ export default function DcaCard({ data: _data }: { data: DcaResult }) {
 
   return (
     <div className="mt-2 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3.5">
-      <div className="font-mono text-[10px] text-slate-500 tracking-widest font-bold mb-2">RECURRING BUY · RETIRED</div>
-      <p className="font-mono text-[11px] text-slate-300 leading-relaxed mb-3">
+      <div className="font-mono text-[13px] text-slate-500 tracking-widest font-bold mb-2">RECURRING BUY · RETIRED</div>
+      <p className="font-mono text-[14px] text-slate-300 leading-relaxed mb-3">
         Recurring buys are no longer offered and no schedule will run. If you approved a keeper
         earlier, that approval is still live on Base — revoke it below.
       </p>
@@ -166,19 +166,19 @@ export default function DcaCard({ data: _data }: { data: DcaResult }) {
       {!isConnected || !address ? (
         <ConnectButton />
       ) : load.state === "loading" || load.state === "idle" ? (
-        <div className="font-mono text-[10px] text-slate-500">Reading your approvals…</div>
+        <div className="font-mono text-[13px] text-slate-500">Reading your approvals…</div>
       ) : load.state === "error" ? (
-        <div className="font-mono text-[10px] text-amber-400">
+        <div className="font-mono text-[13px] text-amber-400">
           Couldn&apos;t read your schedules — this is NOT the same as having none. {load.message}{" "}
           <button className="underline" onClick={() => void fetchGrants()}>Retry</button>
         </div>
       ) : rows.length === 0 ? (
-        <div className="font-mono text-[10px] text-slate-500">No recurring-buy approval found for this wallet.</div>
+        <div className="font-mono text-[13px] text-slate-500">No recurring-buy approval found for this wallet.</div>
       ) : (
         <div className="space-y-2">
           {rows.map(({ g, value, failed }) => (
             <div key={g.token + g.keeper} className="flex items-center gap-2 rounded-lg border border-[#1A1A2E] px-2.5 py-2">
-              <div className="flex-1 min-w-0 font-mono text-[10px]">
+              <div className="flex-1 min-w-0 font-mono text-[13px]">
                 <div className="text-slate-300">{g.symbol} → keeper {short(g.keeper)}</div>
                 <div className="text-slate-500">
                   {value === null
@@ -192,20 +192,20 @@ export default function DcaCard({ data: _data }: { data: DcaResult }) {
                 <button
                   onClick={() => void revoke(g)}
                   disabled={busy !== null}
-                  className="font-mono text-[10px] font-bold px-3 py-1.5 rounded-lg disabled:opacity-40"
+                  className="font-mono text-[13px] font-bold px-3 py-1.5 rounded-lg disabled:opacity-40"
                   style={{ background: "#EF444412", color: "#fca5a5", border: "1px solid #EF444440" }}
                 >
                   {busy === g.keeper + g.token ? "Confirm in wallet…" : "Revoke"}
                 </button>
               )}
               {failed && (
-                <button className="font-mono text-[10px] underline text-slate-400" onClick={() => void reads.refetch()}>Retry</button>
+                <button className="font-mono text-[13px] underline text-slate-400" onClick={() => void reads.refetch()}>Retry</button>
               )}
             </div>
           ))}
         </div>
       )}
-      {note && <div className="font-mono text-[10px] text-slate-400 mt-2">{note}</div>}
+      {note && <div className="font-mono text-[13px] text-slate-400 mt-2">{note}</div>}
     </div>
   );
 }

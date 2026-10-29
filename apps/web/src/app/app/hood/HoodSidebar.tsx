@@ -122,13 +122,13 @@ export default function HoodSidebar({
         style={{ borderColor: BORDER }}
       >
         <span
-          className="font-mono font-semibold text-[10.5px] tracking-[0.14em]"
+          className="font-mono font-semibold text-[13px] tracking-[0.14em]"
           style={{ color: INK1 }}
         >
           BLUE<span style={{ color: BLUE }}>HOOD</span>
         </span>
         <span
-          className="font-mono font-medium text-[8.5px] rounded-full px-[7px] py-0.5 whitespace-nowrap"
+          className="font-mono font-medium text-[11px] rounded-full px-[7px] py-0.5 whitespace-nowrap"
           style={{ color: marketColor, border: `1px solid ${alpha(marketColor, 0.3)}` }}
         >
           {marketLabel}
@@ -179,7 +179,7 @@ export default function HoodSidebar({
                     className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors hover:bg-[#ffffff06]"
                     style={{ color: MUTED }}
                   >
-                    <span className="font-mono text-[10px] tracking-widest">
+                    <span className="font-mono text-[13px] tracking-widest">
                       {dustOpen ? "▾" : "▸"} · {dust.length} DUST POOLS
                     </span>
                   </button>
@@ -214,7 +214,7 @@ export default function HoodSidebar({
                         className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors hover:bg-[#ffffff06]"
                         style={{ color: MUTED }}
                       >
-                        <span className="font-mono text-[10px] tracking-widest">
+                        <span className="font-mono text-[13px] tracking-widest">
                           {noDataOpen ? "▾" : "▸"} · {label}
                         </span>
                       </button>
@@ -266,17 +266,17 @@ export default function HoodSidebar({
                       title={tooltip}
                     >
                       <span
-                        className="font-mono text-[10px] tracking-wide shrink-0"
+                        className="font-mono text-[13px] tracking-wide shrink-0"
                         style={{ color: INK2 }}
                       >
                         {a.serial}
                       </span>
-                      <span className="font-mono text-[10px]" style={{ color: INK2 }}>{a.ticker}</span>
-                      <span className="font-mono text-[10px] uppercase" style={{ color: MUTED }}>
+                      <span className="font-mono text-[13px]" style={{ color: INK2 }}>{a.ticker}</span>
+                      <span className="font-mono text-[13px] uppercase" style={{ color: MUTED }}>
                         {a.type}
                       </span>
                       <span
-                        className="ml-auto font-mono text-[10px] tracking-wider"
+                        className="ml-auto font-mono text-[13px] tracking-wider"
                         style={outcomeStyle(a)}
                       >
                         {outcomeLabel(a)}
@@ -309,7 +309,7 @@ export default function HoodSidebar({
             boxShadow: snap ? `0 0 6px ${RH_GREEN}80` : undefined,
           }}
         />
-        <span className="font-mono text-[9.5px] flex-1 text-left" style={{ color: MUTED }}>
+        <span className="font-mono text-[12px] flex-1 text-left" style={{ color: MUTED }}>
           {/* Denominator is the feed-eligible pool, not the whole registry —
               the poller can't watch a row with no Chainlink feed. Matches the
               "TOKENS WATCHED" card in HoodClient; keep the two in step. */}
@@ -317,7 +317,7 @@ export default function HoodSidebar({
             ? `${snap.metrics.tokens_watched}/${snap.metrics.tokens_eligible ?? snap.metrics.registry_total} tokens · 30 Hub skills`
             : "warming up…"}
         </span>
-        <span className="font-mono text-[9px] text-slate-700 group-hover:text-slate-500 transition-colors">
+        <span className="font-mono text-[12px] text-slate-700 group-hover:text-slate-500 transition-colors">
           docs
         </span>
       </Link>
@@ -347,12 +347,12 @@ function HoodNavItem({
           : undefined
       }
     >
-      <span className="font-mono font-medium text-[11px]" style={{ color: INK1 }}>
+      <span className="font-mono font-medium text-[14px]" style={{ color: INK1 }}>
         {label}
       </span>
       {badge > 0 && (
         <span
-          className="ml-auto rounded-full px-1.5 py-0.5 font-mono text-[9px] font-semibold"
+          className="ml-auto rounded-full px-1.5 py-0.5 font-mono text-[12px] font-semibold"
           style={{ color: BG, backgroundColor: BLUE }}
         >
           {badge}
@@ -403,11 +403,11 @@ function WatchRow({
                 : r.verdict
           }
         />
-        <span className="font-mono text-[10.5px] tracking-wide" style={{ color: INK1 }}>
+        <span className="font-mono text-[13px] tracking-wide" style={{ color: INK1 }}>
           {r.ticker}
         </span>
         <span
-          className="font-mono text-[8.5px] font-medium tracking-wide"
+          className="font-mono text-[11px] font-medium tracking-wide"
           style={{ color: chain === "BASE" ? BLUE : MUTED }}
           title={chain === "BASE" ? "Coinbase B20 · Base 8453" : "Robinhood Chain 4663"}
         >
@@ -415,7 +415,7 @@ function WatchRow({
         </span>
         {kind === "dust" && (
           <span
-            className="font-mono text-[9px] uppercase tracking-widest ml-1"
+            className="font-mono text-[12px] uppercase tracking-widest ml-1"
             style={{ color: AMBER }}
             title={`Below $${DUST_TVL_USD.toLocaleString()} pool TVL — engine gate`}
           >
@@ -424,14 +424,14 @@ function WatchRow({
         )}
         {kind === "no_data" ? (
           <span
-            className="ml-auto font-mono text-[10.5px]"
+            className="ml-auto font-mono text-[13px]"
             style={{ color: MUTED }}
           >
             ·
           </span>
         ) : (
           <span
-            className="ml-auto font-mono text-[10.5px] tabular-nums"
+            className="ml-auto font-mono text-[13px] tabular-nums"
             style={{ color: driftColor(drift) }}
             title={isWithheld(r) ? "drift withheld" : undefined}
           >
@@ -446,7 +446,7 @@ function WatchRow({
 function SectionLabel({ label, count }: { label: string; count: number }) {
   return (
     <div
-      className="flex items-center justify-between px-3 pt-1 pb-1.5 font-mono font-medium text-[9px] tracking-[0.16em]"
+      className="flex items-center justify-between px-3 pt-1 pb-1.5 font-mono font-medium text-[12px] tracking-[0.16em]"
       style={{ color: MUTED }}
     >
       <span>{label}</span>
@@ -458,7 +458,7 @@ function SectionLabel({ label, count }: { label: string; count: number }) {
 function SidebarEmpty({ text }: { text: string }) {
   return (
     <p
-      className="px-3 py-2 font-mono text-[11px]"
+      className="px-3 py-2 font-mono text-[14px]"
       style={{ color: MUTED }}
     >
       {text}

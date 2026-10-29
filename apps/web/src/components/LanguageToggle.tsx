@@ -25,7 +25,7 @@ export default function LanguageToggle({
         onClick={() => setLang(value)}
         aria-pressed={active}
         className={`rounded-full font-mono leading-none transition-colors ${
-          vertical ? "px-2 py-1 text-[10px] w-full text-center" : "px-2 py-0.5 text-[11px]"
+          vertical ? "px-2 py-1 text-[13px] w-full text-center" : "px-2 py-0.5 text-[14px]"
         }`}
         style={
           active

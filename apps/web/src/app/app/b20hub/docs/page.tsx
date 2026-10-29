@@ -59,13 +59,13 @@ const Section = ({
 );
 
 const Code = ({ children }: { children: React.ReactNode }) => (
-  <code className="text-[#4FC3F7] bg-[#0a0a12] border border-[#1A1A2E] px-1.5 py-0.5 rounded text-[11px]">
+  <code className="text-[#4FC3F7] bg-[#0a0a12] border border-[#1A1A2E] px-1.5 py-0.5 rounded text-[14px]">
     {children}
   </code>
 );
 
 const Block = ({ children }: { children: React.ReactNode }) => (
-  <pre className="rounded-xl border border-[#1A1A2E] bg-[#0a0a12] p-4 overflow-x-auto font-mono text-[10px] text-slate-300 leading-relaxed">
+  <pre className="rounded-xl border border-[#1A1A2E] bg-[#0a0a12] p-4 overflow-x-auto font-mono text-[13px] text-slate-300 leading-relaxed">
     {children}
   </pre>
 );
@@ -82,10 +82,10 @@ const Warn = ({
   children: React.ReactNode;
 }) => (
   <div className="rounded-xl border border-amber-500/30 bg-amber-500/[0.06] p-4 my-4">
-    <p className="font-mono text-[11px] font-bold text-amber-300 tracking-wide uppercase mb-2">
+    <p className="font-mono text-[14px] font-bold text-amber-300 tracking-wide uppercase mb-2">
       ⚠ {title}
     </p>
-    <div className="font-mono text-[12px] text-slate-300 leading-relaxed">
+    <div className="font-mono text-[15px] text-slate-300 leading-relaxed">
       {children}
     </div>
   </div>
@@ -94,7 +94,7 @@ const Warn = ({
 export default function B20HUBDocsPage() {
   return (
     <div className="max-w-3xl mx-auto">
-      <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase mb-2">
+      <p className="font-mono text-[12px] text-slate-600 tracking-widest uppercase mb-2">
         docs · b20hub
       </p>
       <h1 className="font-mono text-3xl font-bold mb-3">How B20HUB works</h1>
@@ -268,7 +268,7 @@ uint16 public constant TREASURY_BPS =  500; //  5 %`}
       </Section>
 
       <Section id="contracts" title="Deployed contracts (Base mainnet)">
-        <p className="text-slate-400 text-[12px]">
+        <p className="text-slate-400 text-[15px]">
           Every launch touches these addresses. All verified source on
           Basescan — check them there rather than trusting this table.
         </p>
@@ -336,7 +336,7 @@ function TableOfContents() {
         <a
           key={id}
           href={`#${id}`}
-          className="font-mono text-[11px] text-slate-400 hover:text-[#4FC3F7] transition-colors"
+          className="font-mono text-[14px] text-slate-400 hover:text-[#4FC3F7] transition-colors"
         >
           → {title}
         </a>
@@ -350,13 +350,13 @@ function ContractRow({ label, hint, addr }: { label: string; hint: string; addr:
     <div className="flex items-center justify-between gap-3 rounded-lg border border-[#1A1A2E] bg-[#0a0a12] px-3 py-2.5">
       <div>
         <div className="font-mono text-xs text-slate-200 font-bold">{label}</div>
-        <div className="font-mono text-[9px] text-slate-500">{hint}</div>
+        <div className="font-mono text-[12px] text-slate-500">{hint}</div>
       </div>
       <a
         href={`https://basescan.org/address/${addr}`}
         target="_blank"
         rel="noopener noreferrer"
-        className="font-mono text-[10px] text-[#4FC3F7] hover:underline"
+        className="font-mono text-[13px] text-[#4FC3F7] hover:underline"
       >
         {addr.slice(0, 8)}…{addr.slice(-6)} ↗
       </a>

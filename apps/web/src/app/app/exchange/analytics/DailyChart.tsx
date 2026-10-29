@@ -31,9 +31,9 @@ export default function DailyChart({ days }: { days: Day[] }) {
       <div className="flex items-center gap-2 flex-wrap mb-3">
         {METRICS.map(([id, l]) => (
           <button key={id} type="button" onClick={() => setM(id)}
-            className={`text-[10px] rounded-[6px] px-2.5 py-1 border ${m === id ? "border-[#4FC3F7]/60 text-[#4FC3F7] bg-[#4FC3F7]/10" : "border-[#1A1A2E] text-[#94A3B8] hover:text-[#E2E8F0]"}`}>{l}</button>
+            className={`text-[13px] rounded-[6px] px-2.5 py-1 border ${m === id ? "border-[#4FC3F7]/60 text-[#4FC3F7] bg-[#4FC3F7]/10" : "border-[#1A1A2E] text-[#94A3B8] hover:text-[#E2E8F0]"}`}>{l}</button>
         ))}
-        <span className="ml-auto text-[10px] tabular-nums text-[#64748B]">
+        <span className="ml-auto text-[13px] tabular-nums text-[#64748B]">
           {h ? <>
             <span className="text-[#E2E8F0]">{ymd(h.day)}</span>{note(hover!) && <span className="text-[#F59E0B]"> ({note(hover!)})</span>}
             {" · "}<span className="text-[#E2E8F0]">{full("usd", h.usd)}</span> USDC · <span className="text-[#E2E8F0]">{h.calls.toLocaleString("en-US")}</span> paid calls · <span className="text-[#E2E8F0]">{h.sellers.toLocaleString("en-US")}</span> sellers paid
@@ -41,7 +41,7 @@ export default function DailyChart({ days }: { days: Day[] }) {
         </span>
       </div>
       <div className="flex gap-2">
-        <div className="relative w-[52px] shrink-0 h-[200px] text-[9px] text-[#475569] tabular-nums">
+        <div className="relative w-[52px] shrink-0 h-[200px] text-[12px] text-[#64748B] tabular-nums">
           {ticks.map((t) => <span key={t} className="absolute right-0 -translate-y-1/2" style={{ top: `${(1 - t) * 100}%` }}>{fmt(m, peak * t)}</span>)}
         </div>
         <div className="relative flex-1">
@@ -52,7 +52,7 @@ export default function DailyChart({ days }: { days: Day[] }) {
               const v = d[m], partial = note(i) !== null;
               return (
                 <div key={d.day} className="relative flex h-full flex-1 flex-col justify-end items-center cursor-default" onMouseEnter={() => setHover(i)}>
-                  <span className={`mb-1 text-[9.5px] tabular-nums ${hover === i ? "text-[#E2E8F0]" : "text-[#94A3B8]"}`}>{fmt(m, v)}</span>
+                  <span className={`mb-1 text-[12px] tabular-nums ${hover === i ? "text-[#E2E8F0]" : "text-[#94A3B8]"}`}>{fmt(m, v)}</span>
                   <span className="block w-full rounded-t-[3px] transition-colors"
                     style={{ height: `${Math.max(1, (v / peak) * 85)}%`, background: hover === i ? "#4FC3F7" : partial ? "rgba(31,111,147,.45)" : "#1f6f93" }} />
                 </div>
@@ -60,11 +60,11 @@ export default function DailyChart({ days }: { days: Day[] }) {
             })}
           </div>
           <div className="mt-1.5 flex gap-1.5">
-            {days.map((d, i) => <span key={d.day} className={`flex-1 text-center text-[9px] ${hover === i ? "text-[#E2E8F0]" : "text-[#475569]"}`}>{ymd(d.day)}{note(i) ? "*" : ""}</span>)}
+            {days.map((d, i) => <span key={d.day} className={`flex-1 text-center text-[12px] ${hover === i ? "text-[#E2E8F0]" : "text-[#64748B]"}`}>{ymd(d.day)}{note(i) ? "*" : ""}</span>)}
           </div>
         </div>
       </div>
-      <p className="mt-2 text-[9px] text-[#475569]">* first indexed day began mid-backfill; the last is today, partial. Orange line: average of whole days only.</p>
+      <p className="mt-2 text-[12px] text-[#64748B]">* first indexed day began mid-backfill; the last is today, partial. Orange line: average of whole days only.</p>
     </div>
   );
 }

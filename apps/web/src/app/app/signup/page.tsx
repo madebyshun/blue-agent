@@ -134,7 +134,7 @@ export default function SignUpPage() {
           <p className="font-mono text-xs tracking-widest truncate" style={{ color: ACCENT }}>
             // SIGN UP
           </p>
-          <p className="font-mono text-[10px] text-slate-700 mt-1 truncate">
+          <p className="font-mono text-[13px] text-slate-700 mt-1 truncate">
             One account for Blue Chat, the Hub and your wallet
           </p>
         </div>
@@ -154,7 +154,7 @@ export default function SignUpPage() {
               {/* Privy has ONE door: the same call signs in an existing account
                   and creates a new one (we do not pass `disableSignup`). Saying
                   so removes the "wait, do I have an account already?" pause. */}
-              <p className="font-mono text-[11px] text-slate-500 mt-2 leading-relaxed">
+              <p className="font-mono text-[14px] text-slate-500 mt-2 leading-relaxed">
                 New here or coming back — the same button does both. No password to pick,
                 nothing to remember.
               </p>
@@ -164,7 +164,7 @@ export default function SignUpPage() {
                 <form onSubmit={continueWithEmail} className="mt-6">
                   <label
                     htmlFor="signup-email"
-                    className="font-mono text-[9px] text-slate-600 tracking-widest uppercase block mb-2"
+                    className="font-mono text-[12px] text-slate-600 tracking-widest uppercase block mb-2"
                   >
                     Email
                   </label>
@@ -176,11 +176,11 @@ export default function SignUpPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="you@example.com"
-                    className="w-full rounded-lg border border-[#1A1A2E] bg-[#0A0A12] px-3 py-2.5 font-mono text-[12px] text-white placeholder:text-slate-700 outline-none focus:border-[#4FC3F7]/50 transition-colors"
+                    className="w-full rounded-lg border border-[#1A1A2E] bg-[#0A0A12] px-3 py-2.5 font-mono text-[15px] text-white placeholder:text-slate-700 outline-none focus:border-[#4FC3F7]/50 transition-colors"
                   />
                   <button
                     type="submit"
-                    className="mt-2 w-full rounded-lg px-3 py-2.5 font-mono text-[12px] font-bold transition-opacity hover:opacity-90"
+                    className="mt-2 w-full rounded-lg px-3 py-2.5 font-mono text-[15px] font-bold transition-opacity hover:opacity-90"
                     style={{ background: ACCENT, color: "#050508" }}
                   >
                     Continue with email
@@ -194,7 +194,7 @@ export default function SignUpPage() {
                   {hasEmail && (
                     <div className="flex items-center gap-2 my-5">
                       <div className="h-px flex-1 bg-[#1A1A2E]" />
-                      <span className="font-mono text-[9px] text-slate-700 uppercase tracking-widest">or</span>
+                      <span className="font-mono text-[12px] text-slate-700 uppercase tracking-widest">or</span>
                       <div className="h-px flex-1 bg-[#1A1A2E]" />
                     </div>
                   )}
@@ -203,7 +203,7 @@ export default function SignUpPage() {
                       <button
                         key={m}
                         onClick={() => privy?.login({ loginMethods: [m] })}
-                        className="w-full rounded-lg border border-[#1A1A2E] bg-[#0A0A12] px-3 py-2.5 text-left font-mono text-[12px] text-slate-300 transition-colors hover:border-slate-700 hover:text-white"
+                        className="w-full rounded-lg border border-[#1A1A2E] bg-[#0A0A12] px-3 py-2.5 text-left font-mono text-[15px] text-slate-300 transition-colors hover:border-slate-700 hover:text-white"
                       >
                         Continue with {loginMethodLabel(m)}
                       </button>
@@ -215,14 +215,14 @@ export default function SignUpPage() {
               {/* ── Wallet ─────────────────────────────────────────────────── */}
               <div className="flex items-center gap-2 my-5">
                 <div className="h-px flex-1 bg-[#1A1A2E]" />
-                <span className="font-mono text-[9px] text-slate-700 uppercase tracking-widest">
+                <span className="font-mono text-[12px] text-slate-700 uppercase tracking-widest">
                   {PRIVY_ENABLED ? "or" : "wallet"}
                 </span>
                 <div className="h-px flex-1 bg-[#1A1A2E]" />
               </div>
               <button
                 onClick={() => setPicker(true)}
-                className="w-full rounded-lg border border-[#1A1A2E] bg-[#0A0A12] px-3 py-2.5 text-left font-mono text-[12px] text-slate-300 transition-colors hover:border-slate-700 hover:text-white"
+                className="w-full rounded-lg border border-[#1A1A2E] bg-[#0A0A12] px-3 py-2.5 text-left font-mono text-[15px] text-slate-300 transition-colors hover:border-slate-700 hover:text-white"
               >
                 Continue with a wallet you already own
               </button>
@@ -231,14 +231,14 @@ export default function SignUpPage() {
                 // Not a "coming soon". This build genuinely has no email or
                 // social path — NEXT_PUBLIC_PRIVY_APP_ID is unset — and saying
                 // so beats rendering buttons that would throw on click.
-                <p className="font-mono text-[10px] text-slate-600 mt-3 leading-relaxed">
+                <p className="font-mono text-[13px] text-slate-600 mt-3 leading-relaxed">
                   Email and social sign-in are not enabled on this deployment, so a wallet is the
                   only way in here.
                 </p>
               )}
 
               {PRIVY_ENABLED && (
-                <p className="font-mono text-[10px] text-slate-600 mt-3 leading-relaxed">
+                <p className="font-mono text-[13px] text-slate-600 mt-3 leading-relaxed">
                   Signing in with email or a social account creates a wallet for you — no extension,
                   no seed phrase. You hold the keys; BlueAgent never does.
                 </p>
@@ -278,7 +278,7 @@ function SignedInCard({
   return (
     <div>
       <h1 className="font-mono text-xl font-bold text-white">You&apos;re signed in</h1>
-      <p className="font-mono text-[11px] text-slate-500 mt-2">
+      <p className="font-mono text-[14px] text-slate-500 mt-2">
         Nothing left to do here.
       </p>
 
@@ -290,10 +290,10 @@ function SignedInCard({
           size={44}
         />
         <div className="min-w-0">
-          <p className="font-mono text-[13px] text-white truncate">
+          <p className="font-mono text-[16px] text-white truncate">
             {identity.displayName ?? "Account"}
           </p>
-          <p className="font-mono text-[10px] text-slate-600 truncate">
+          <p className="font-mono text-[13px] text-slate-600 truncate">
             {viaSocial ? "Social account" : "Wallet"}
             {identity.secondary ? ` · ${identity.secondary}` : ""}
           </p>
@@ -306,7 +306,7 @@ function SignedInCard({
         <Row href="/usage" label="Usage" hint="Credits and agent spend" />
       </div>
 
-      <p className="font-mono text-[10px] text-slate-600 mt-4 leading-relaxed">
+      <p className="font-mono text-[13px] text-slate-600 mt-4 leading-relaxed">
         Sign out from the account menu at the bottom of the sidebar.
       </p>
     </div>
@@ -319,8 +319,8 @@ function Row({ href, label, hint }: { href: string; label: string; hint: string 
       href={href}
       className="block rounded-lg border border-[#1A1A2E] bg-[#0A0A12] px-3 py-2.5 transition-colors hover:border-slate-700"
     >
-      <span className="block font-mono text-[12px] text-slate-300">{label}</span>
-      <span className="block font-mono text-[10px] text-slate-600">{hint}</span>
+      <span className="block font-mono text-[15px] text-slate-300">{label}</span>
+      <span className="block font-mono text-[13px] text-slate-600">{hint}</span>
     </Link>
   );
 }
@@ -344,7 +344,7 @@ function WhatItChanges({
 }) {
   return (
     <div className="mt-8 rounded-2xl border border-[#1A1A2E] bg-[#0A0A12] p-4">
-      <p className="font-mono text-[9px] text-slate-600 tracking-widest uppercase mb-3">
+      <p className="font-mono text-[12px] text-slate-600 tracking-widest uppercase mb-3">
         What an account actually changes
       </p>
       <ul className="space-y-1.5">
@@ -384,7 +384,7 @@ function WhatItChanges({
  */
 function AvatarNote() {
   return (
-    <p className="font-mono text-[10px] text-slate-600 mt-4 leading-relaxed">
+    <p className="font-mono text-[13px] text-slate-600 mt-4 leading-relaxed">
       Your avatar is drawn from your name and your address — Blue Agent does not upload a photo
       anywhere. If your provider gives us a real profile picture we use it; Google, GitHub and
       Discord do not give one out, so those accounts get initials on a colour taken from your
@@ -395,7 +395,7 @@ function AvatarNote() {
 
 function Bullet({ children }: { children: React.ReactNode }) {
   return (
-    <li className="font-mono text-[10px] text-slate-500 flex gap-2 leading-relaxed">
+    <li className="font-mono text-[13px] text-slate-500 flex gap-2 leading-relaxed">
       <span className="text-slate-700">·</span>
       <span>{children}</span>
     </li>

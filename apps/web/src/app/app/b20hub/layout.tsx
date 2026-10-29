@@ -31,13 +31,13 @@ function B20HUBHeader() {
       <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
         <Link href="/app/b20hub" className="flex items-center gap-2">
           <span
-            className="w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-bold"
+            className="w-6 h-6 rounded-md flex items-center justify-center text-[13px] font-bold"
             style={{ background: "#4FC3F715", color: "#4FC3F7", border: "1px solid #4FC3F740" }}
           >
             B
           </span>
           <span className="font-mono text-sm font-bold">B20HUB</span>
-          <span className="font-mono text-[9px] text-slate-600 tracking-widest uppercase">
+          <span className="font-mono text-[12px] text-slate-600 tracking-widest uppercase">
             · by BlueAgent
           </span>
         </Link>
@@ -56,7 +56,7 @@ function NavLink({ href, children }: { href: string; children: ReactNode }) {
   return (
     <Link
       href={href}
-      className="font-mono text-[11px] text-slate-400 hover:text-white px-2.5 py-1 rounded-lg hover:bg-[#0d0d16] transition-colors"
+      className="font-mono text-[14px] text-slate-400 hover:text-white px-2.5 py-1 rounded-lg hover:bg-[#0d0d16] transition-colors"
     >
       {children}
     </Link>
@@ -66,7 +66,7 @@ function NavLink({ href, children }: { href: string; children: ReactNode }) {
 function B20HUBFooter() {
   return (
     <footer className="border-t border-[#1A1A2E] mt-16">
-      <div className="max-w-6xl mx-auto px-4 py-6 flex items-center justify-between font-mono text-[10px] text-slate-600">
+      <div className="max-w-6xl mx-auto px-4 py-6 flex items-center justify-between font-mono text-[13px] text-slate-600">
         <span>B20HUB · trustless launchpad · Base mainnet</span>
         <div className="flex items-center gap-3">
           <Link href="/app/b20hub/docs" className="hover:text-slate-400 transition-colors">

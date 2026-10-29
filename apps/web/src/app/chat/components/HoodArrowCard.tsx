@@ -64,10 +64,10 @@ export function HoodArrowCard({ result }: { result: HoodArrowResult }) {
     const onChain = result.reason === "no_arrow_on_chain" && result.query?.chainArg;
     return (
       <div
-        className="rounded border px-4 py-3 font-mono text-[12px]"
+        className="rounded border px-4 py-3 font-mono text-[15px]"
         style={{ borderColor: BORDER, backgroundColor: SURFACE, color: MUTED }}
       >
-        <div className="mb-1 text-[11px] uppercase" style={{ color: AMBER, letterSpacing: "0.08em" }}>
+        <div className="mb-1 text-[14px] uppercase" style={{ color: AMBER, letterSpacing: "0.08em" }}>
           // BLUE HOOD · {onChain ? "no arrow on this desk" : "not found"}
         </div>
         {onChain ? (
@@ -125,29 +125,29 @@ export function HoodArrowCard({ result }: { result: HoodArrowResult }) {
       {/* ── Header strip ────────────────────────────────────────────── */}
       <div className="flex items-center gap-3 px-3 py-2 border-b" style={{ borderColor: "#0f1218" }}>
         <div className="flex items-baseline gap-2 min-w-0">
-          <span className="text-[11px]" style={{ color: RH_GREEN }}>{a.serial}</span>
-          <span className="text-[14px] font-semibold text-white truncate">{a.ticker}</span>
+          <span className="text-[14px]" style={{ color: RH_GREEN }}>{a.serial}</span>
+          <span className="text-[17px] font-semibold text-white truncate">{a.ticker}</span>
           {/* #206 — NVDA/META/GOOGL exist on both desks, so ticker alone names
               nothing. The badge sits next to the ticker it qualifies. */}
           <span
-            className="rounded px-1.5 py-0.5 text-[9px] font-semibold tracking-wider shrink-0"
+            className="rounded px-1.5 py-0.5 text-[12px] font-semibold tracking-wider shrink-0"
             style={{ color: BLUE, backgroundColor: `${BLUE}18` }}
             title={`This arrow fired on ${CHAIN_LABEL[chain]} — the other desk's numbers are not interchangeable`}
           >
             {CHAIN_LABEL[chain]}
           </span>
-          <span className="text-[10px] uppercase" style={{ color: MUTED, letterSpacing: "0.08em" }}>
+          <span className="text-[13px] uppercase" style={{ color: MUTED, letterSpacing: "0.08em" }}>
             {result.signal ?? a.type}
           </span>
         </div>
         {/* Age, so a three-day-old graded arrow cannot read as "right now". */}
         {ageLabel && (
-          <span className="ml-auto text-[10px] shrink-0" style={{ color: MUTED }} title={`fired ${a.fired_at}`}>
+          <span className="ml-auto text-[13px] shrink-0" style={{ color: MUTED }} title={`fired ${a.fired_at}`}>
             {ageLabel}
           </span>
         )}
         <span
-          className={`${ageLabel ? "" : "ml-auto "}rounded px-2 py-0.5 text-[10px] font-semibold tracking-wider shrink-0`}
+          className={`${ageLabel ? "" : "ml-auto "}rounded px-2 py-0.5 text-[13px] font-semibold tracking-wider shrink-0`}
           style={{ color: outcome.color, backgroundColor: `${outcome.color}18` }}
         >
           {outcome.label}
@@ -155,7 +155,7 @@ export function HoodArrowCard({ result }: { result: HoodArrowResult }) {
       </div>
 
       {/* ── Verdict + context ───────────────────────────────────────── */}
-      <div className="px-3 py-3 space-y-1.5 text-[12px]">
+      <div className="px-3 py-3 space-y-1.5 text-[15px]">
         {brief?.verdict_note && (
           <div className="text-white leading-relaxed">{brief.verdict_note}</div>
         )}
@@ -165,7 +165,7 @@ export function HoodArrowCard({ result }: { result: HoodArrowResult }) {
           </div>
         )}
         {!brief?.verdict_note && a.brief_status === "pending" && (
-          <div className="text-[11px] flex items-center gap-2" style={{ color: MUTED }}>
+          <div className="text-[14px] flex items-center gap-2" style={{ color: MUTED }}>
             <span
               className="w-1.5 h-1.5 rounded-full animate-pulse"
               style={{ backgroundColor: AMBER, boxShadow: `0 0 6px ${AMBER}80` }}
@@ -175,7 +175,7 @@ export function HoodArrowCard({ result }: { result: HoodArrowResult }) {
           </div>
         )}
         {!brief?.verdict_note && a.brief_status !== "pending" && (
-          <div className="text-[11px]" style={{ color: MUTED }}>
+          <div className="text-[14px]" style={{ color: MUTED }}>
             Brief unavailable — verdict + numbers still stand on their own.
           </div>
         )}
@@ -184,10 +184,10 @@ export function HoodArrowCard({ result }: { result: HoodArrowResult }) {
       {/* ── Facts strip (mono, tabular) ─────────────────────────────── */}
       {facts && (
         <div
-          className="mx-3 mb-3 rounded border px-2 py-1.5 text-[11px]"
+          className="mx-3 mb-3 rounded border px-2 py-1.5 text-[14px]"
           style={{ borderColor: BORDER, backgroundColor: "#0a0c11", color: "#9aa1ac" }}
         >
-          <div className="mb-1 text-[9px] uppercase" style={{ color: MUTED, letterSpacing: "0.15em" }}>
+          <div className="mb-1 text-[12px] uppercase" style={{ color: MUTED, letterSpacing: "0.15em" }}>
             facts at fire
           </div>
           <div className="flex flex-wrap gap-x-4 gap-y-0.5 tabular-nums">
@@ -256,7 +256,7 @@ function ActionsRow({ arrow, deepLink }: { arrow: Arrow; deepLink?: { inbox: str
             type="button"
             onClick={() => setOpen(true)}
             disabled={!arrowOpen}
-            className="rounded border px-3 py-1.5 text-[11px] font-semibold hover:bg-black/40 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="rounded border px-3 py-1.5 text-[14px] font-semibold hover:bg-black/40 disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ borderColor: RH_GREEN, color: RH_GREEN }}
             title={arrowOpen ? "Open the trade panel" : "Signal closed — read-only"}
           >
@@ -266,7 +266,7 @@ function ActionsRow({ arrow, deepLink }: { arrow: Arrow; deepLink?: { inbox: str
         <button
           type="button"
           onClick={onShare}
-          className="rounded border px-3 py-1.5 text-[11px] hover:text-white"
+          className="rounded border px-3 py-1.5 text-[14px] hover:text-white"
           style={{ borderColor: copied ? RH_GREEN : BORDER, color: copied ? RH_GREEN : MUTED }}
           title="Copy the public share link for this signal"
         >
@@ -274,20 +274,20 @@ function ActionsRow({ arrow, deepLink }: { arrow: Arrow; deepLink?: { inbox: str
         </button>
         <Link
           href={deepLink?.inbox ?? `/hood/inbox#${arrow.id}`}
-          className="rounded border px-3 py-1.5 text-[11px] hover:text-white"
+          className="rounded border px-3 py-1.5 text-[14px] hover:text-white"
           style={{ borderColor: BORDER, color: MUTED }}
         >
           Open in inbox →
         </Link>
         {traded && (
-          <span className="text-[10px]" style={{ color: RH_GREEN }} title="A trade has been recorded on this arrow">
+          <span className="text-[13px]" style={{ color: RH_GREEN }} title="A trade has been recorded on this arrow">
             ● traded ({(arrow.user_actions ?? []).length})
           </span>
         )}
         {!ARROWS_FROZEN && (
           <Link
             href={deepLink?.track ?? "/hood/arrows"}
-            className="ml-auto text-[10px] hover:text-white"
+            className="ml-auto text-[13px] hover:text-white"
             style={{ color: MUTED }}
           >
             track record

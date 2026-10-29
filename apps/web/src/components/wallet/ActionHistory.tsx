@@ -104,25 +104,25 @@ export default function ActionHistory({ address, limit = 50, title = "Actions" }
   return (
     <div>
       <div className="flex items-baseline justify-between">
-        <span className="font-mono text-[9.5px] tracking-[0.14em] text-[#64748B] uppercase">{title}</span>
-        <span className="font-mono text-[10px] text-[#64748B]">swap · send · bridge · newest first</span>
+        <span className="font-mono text-[12px] tracking-[0.14em] text-[#64748B] uppercase">{title}</span>
+        <span className="font-mono text-[13px] text-[#64748B]">swap · send · bridge · newest first</span>
       </div>
       <div className="mt-[11px]">
         {load.s === "idle" || load.s === "loading" ? (
-          <p className="font-mono text-[11px] text-[#64748B] px-4 py-6 text-center">Loading…</p>
+          <p className="font-mono text-[14px] text-[#64748B] px-4 py-6 text-center">Loading…</p>
         ) : load.s === "signed-out" ? (
-          <p className="font-mono text-[11px] text-[#64748B] px-4 py-6 text-center">
+          <p className="font-mono text-[14px] text-[#64748B] px-4 py-6 text-center">
             Your actions are private to the wallet.{" "}
             <button onClick={signIn} className="underline text-[#4FC3F7]">Sign in to see them</button>
             {" "}— one signature, no transaction.
           </p>
         ) : load.s === "error" ? (
-          <p className="font-mono text-[11px] text-[#F87171] px-4 py-6 text-center">
+          <p className="font-mono text-[14px] text-[#F87171] px-4 py-6 text-center">
             {load.message}{" "}
             <button onClick={() => { void reload(); }} className="underline">Retry</button>
           </p>
         ) : load.rows.length === 0 ? (
-          <p className="font-mono text-[11px] text-[#64748B] px-4 py-6 text-center">
+          <p className="font-mono text-[14px] text-[#64748B] px-4 py-6 text-center">
             No actions yet. Swaps, sends and bridges you sign here show up with the check they passed.
           </p>
         ) : (
@@ -139,14 +139,14 @@ function ActionItem({ r, first }: { r: ActionRow; first: boolean }) {
   const verdict = r.check?.verdict;
   return (
     <div className={`px-1 py-2.5 ${first ? "" : "border-t border-[#1A1A2E]"}`}>
-      <div className="flex items-center gap-2 font-mono text-[10px]">
+      <div className="flex items-center gap-2 font-mono text-[13px]">
         <span className="font-bold tracking-widest text-[#E2E8F0]">{r.kind.toUpperCase()}</span>
         <span className="text-[#64748B]">{cfg ? `${cfg.short} ${cfg.chainId}` : r.chain}</span>
         {r.source === "mcp" && <span className="text-[#A78BFA]" title="Built by an agent over MCP">agent</span>}
         <span className="ml-auto font-bold" style={{ color: st.color }} title={st.title}>{st.text}</span>
       </div>
-      <div className="font-mono text-[11px] text-[#CBD5E1] mt-1 break-all">{actionSummary(r)}</div>
-      <div className="flex items-center gap-2 font-mono text-[9.5px] text-[#64748B] mt-1">
+      <div className="font-mono text-[14px] text-[#CBD5E1] mt-1 break-all">{actionSummary(r)}</div>
+      <div className="flex items-center gap-2 font-mono text-[12px] text-[#64748B] mt-1">
         <span>{ago(r.created_at)}</span>
         {verdict && verdict !== "PASS" && (
           // Plain words, and only when the check had something to say (2026-10-16).

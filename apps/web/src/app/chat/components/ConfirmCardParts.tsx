@@ -159,7 +159,7 @@ export function ConfirmPreview({
   return (
     <div className="rounded-lg border border-[#1A1A2E] bg-[#050508] p-3 mb-2 flex items-center gap-2">
       <PreviewCol side={left} align="left" />
-      <span className="text-slate-500 text-[13px] px-0.5 shrink-0">{arrow}</span>
+      <span className="text-slate-500 text-[16px] px-0.5 shrink-0">{arrow}</span>
       <PreviewCol side={right} align="right" />
     </div>
   );
@@ -176,8 +176,8 @@ function PreviewCol({ side, align }: { side: PreviewSide; align: "left" | "right
     <div className={`flex items-center gap-1.5 min-w-0 flex-1 ${right ? "justify-end" : ""}`}>
       {!right && side.glyph}
       <div className={`min-w-0 ${right ? "text-right" : ""}`}>
-        <div className="text-[13px] text-white truncate">{side.top}</div>
-        {side.bottom != null && <div className="text-[9px] text-slate-500 truncate">{side.bottom}</div>}
+        <div className="text-[16px] text-white truncate">{side.top}</div>
+        {side.bottom != null && <div className="text-[12px] text-slate-500 truncate">{side.bottom}</div>}
       </div>
       {right && side.glyph}
     </div>

@@ -92,7 +92,7 @@ export default function SettingsModal({
         <div className="flex items-center justify-between px-5 h-14 border-b border-[#1A1A2E] shrink-0">
           <div className="flex items-center gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-[#4FC3F7] shrink-0" />
-            <p className="font-mono text-[11px] text-[#4FC3F7] tracking-widest">// SETTINGS</p>
+            <p className="font-mono text-[14px] text-[#4FC3F7] tracking-widest">// SETTINGS</p>
           </div>
           <button
             onClick={onClose}
@@ -122,7 +122,7 @@ export default function SettingsModal({
                   onMouseLeave={e => { if (!active) e.currentTarget.style.background = "transparent"; }}
                 >
                   <span className="shrink-0" style={{ color: active ? "#4FC3F7" : "#64748b" }}>{s.icon}</span>
-                  <span className="font-mono text-[13px]" style={{ color: active ? "#4FC3F7" : "#cbd5e1" }}>{s.label}</span>
+                  <span className="font-mono text-[16px]" style={{ color: active ? "#4FC3F7" : "#cbd5e1" }}>{s.label}</span>
                 </button>
               );
             })}
@@ -133,7 +133,7 @@ export default function SettingsModal({
             {/* Mobile-only quick links (Models/Skills/Docs routes) — desktop
                 has these in the chat sidebar / shell nav, so hidden lg+. */}
             <div className="lg:hidden px-5 pt-5">
-              <p className="font-mono text-[10px] text-slate-500 tracking-widest mb-2">BLUE CHAT</p>
+              <p className="font-mono text-[13px] text-slate-500 tracking-widest mb-2">BLUE CHAT</p>
               <div className="grid grid-cols-2 gap-2">
                 {QUICK_ROUTES.map(r => (
                   <Link
@@ -143,7 +143,7 @@ export default function SettingsModal({
                     className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl border border-[#1A1A2E] bg-[#0A0A12] hover:bg-[#ffffff06] transition-colors"
                   >
                     <span className="text-sm leading-none shrink-0">{r.icon}</span>
-                    <span className="font-mono text-[13px] text-slate-200">{r.label}</span>
+                    <span className="font-mono text-[16px] text-slate-200">{r.label}</span>
                   </Link>
                 ))}
               </div>

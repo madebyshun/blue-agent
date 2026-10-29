@@ -295,7 +295,7 @@ export default function EnableAlertsButton() {
 
   if (state.kind === "unsupported") {
     return (
-      <span className="rounded border px-2 py-1 font-mono text-[11px]" style={{ borderColor: BORDER, color: MUTED }}>
+      <span className="rounded border px-2 py-1 font-mono text-[14px]" style={{ borderColor: BORDER, color: MUTED }}>
         alerts unsupported
         {iosHint && <> · <span style={{ color: AMBER }}>iOS: Add to Home Screen</span></>}
       </span>
@@ -304,7 +304,7 @@ export default function EnableAlertsButton() {
 
   if (state.kind === "denied") {
     return (
-      <span className="rounded border px-2 py-1 font-mono text-[11px]" style={{ borderColor: BORDER, color: MUTED }}>
+      <span className="rounded border px-2 py-1 font-mono text-[14px]" style={{ borderColor: BORDER, color: MUTED }}>
         alerts blocked · enable in browser settings
       </span>
     );
@@ -314,7 +314,7 @@ export default function EnableAlertsButton() {
     return (
       <button
         onClick={disable}
-        className="rounded border px-2 py-1 font-mono text-[11px] hover:text-white"
+        className="rounded border px-2 py-1 font-mono text-[14px] hover:text-white"
         style={{ borderColor: RH_GREEN, color: RH_GREEN }}
       >
         ● Alerts on · turn off
@@ -336,7 +336,7 @@ export default function EnableAlertsButton() {
       <span className="inline-flex flex-col items-start gap-1 max-w-md">
         <span className="inline-flex items-center gap-1">
           <span
-            className="rounded border px-2 py-1 font-mono text-[11px]"
+            className="rounded border px-2 py-1 font-mono text-[14px]"
             style={{ borderColor: RED, color: AMBER }}
             title={state.message}
           >
@@ -344,14 +344,14 @@ export default function EnableAlertsButton() {
           </span>
           <button
             onClick={enable}
-            className="rounded border px-2 py-1 font-mono text-[11px] hover:text-white"
+            className="rounded border px-2 py-1 font-mono text-[14px] hover:text-white"
             style={{ borderColor: BORDER, color: "#9aa1ac" }}
           >
             Retry
           </button>
         </span>
         <span
-          className="font-mono text-[10px] leading-tight px-1"
+          className="font-mono text-[13px] leading-tight px-1"
           style={{ color: MUTED }}
           title={state.message}
         >
@@ -369,7 +369,7 @@ export default function EnableAlertsButton() {
       onClick={enable}
       disabled={state.kind === "busy"}
       title={title}
-      className="rounded border px-2 py-1 font-mono text-[11px] hover:text-white disabled:opacity-50"
+      className="rounded border px-2 py-1 font-mono text-[14px] hover:text-white disabled:opacity-50"
       style={{ borderColor: BORDER, color: "#9aa1ac" }}
     >
       {label}

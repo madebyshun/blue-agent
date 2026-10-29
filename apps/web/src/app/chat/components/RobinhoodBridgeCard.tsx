@@ -448,7 +448,7 @@ export function RobinhoodBridgeCard({ result }: { result: RobinhoodBridgeResult 
   // sibling swap/send-card error styling exactly. Never invent a fix here.
   if (result.error) {
     return (
-      <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 font-mono text-[11px] text-amber-300">
+      <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 font-mono text-[14px] text-amber-300">
         <div className="font-bold mb-1">Can&apos;t prepare bridge</div>
         <div className="text-amber-200/80">{result.error}</div>
       </div>
@@ -486,17 +486,17 @@ export function RobinhoodBridgeCard({ result }: { result: RobinhoodBridgeResult 
   const shortRecipient = (recipient || fromAddress) ? shortAddr(recipient || fromAddress) : "";
 
   return (
-    <div className="rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-4 font-mono text-[11px] text-slate-300 max-w-md">
+    <div className="rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-4 font-mono text-[14px] text-slate-300 max-w-md">
       <div className="flex items-center justify-between mb-3">
         <div>
-          <div className="text-white text-[12px] font-bold flex items-center gap-1.5">
+          <div className="text-white text-[15px] font-bold flex items-center gap-1.5">
             <ChainDot color={fromCfg.accent} />
             <span>{fromCfg.label}</span>
             <span className="text-slate-500">→</span>
             <ChainDot color={toCfg.accent} />
             <span>{toCfg.label}</span>
           </div>
-          <div className="text-slate-600 text-[10px]">
+          <div className="text-slate-600 text-[13px]">
             via Relay Protocol · you sign · non-custodial
           </div>
         </div>
@@ -513,13 +513,13 @@ export function RobinhoodBridgeCard({ result }: { result: RobinhoodBridgeResult 
           <div className="flex gap-2 flex-wrap mt-1">
             {txHash && (
               <a href={`${fromCfg.explorer}/tx/${txHash}`} target="_blank" rel="noopener noreferrer"
-                className="text-[10px] px-2 py-1 rounded-lg border border-[#34D39940] text-[#34D399] inline-block">
+                className="text-[13px] px-2 py-1 rounded-lg border border-[#34D39940] text-[#34D399] inline-block">
                 Source tx ↗
               </a>
             )}
             {prep?.meta?.trackerUrl && (
               <a href={prep.meta.trackerUrl} target="_blank" rel="noopener noreferrer"
-                className="text-[10px] px-2 py-1 rounded-lg border border-[#34D39940] text-[#34D399] inline-block">
+                className="text-[13px] px-2 py-1 rounded-lg border border-[#34D39940] text-[#34D399] inline-block">
                 Relay tracker ↗
               </a>
             )}
@@ -546,7 +546,7 @@ export function RobinhoodBridgeCard({ result }: { result: RobinhoodBridgeResult 
               the server refuses to auto-resolve anything but dollar-for-dollar.
               It still has to be said BEFORE the button, not discovered after. */}
           {assetChanged && prep?.meta?.assetNote && (
-            <div className="mb-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-2 py-1.5 text-[9px] text-amber-300">
+            <div className="mb-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-2 py-1.5 text-[12px] text-amber-300">
               {prep.meta.assetNote}
             </div>
           )}
@@ -558,7 +558,7 @@ export function RobinhoodBridgeCard({ result }: { result: RobinhoodBridgeResult 
               asset-changed notice sits, because both are "reconsider" facts and
               neither is discoverable after signing. */}
           {prep?.meta?.warning && (
-            <div className="mb-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-2 py-1.5 text-[9px] text-amber-300">
+            <div className="mb-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-2 py-1.5 text-[12px] text-amber-300">
               {prep.meta.warning.message}
             </div>
           )}
@@ -568,7 +568,7 @@ export function RobinhoodBridgeCard({ result }: { result: RobinhoodBridgeResult 
               promise that an answer is coming, and there is no longer one. The
               banner below says what actually happened and offers the way out. */}
           {q.symbolic && gate !== "unverified" && (
-            <div className="text-[9px] text-[#34D399] mb-2">
+            <div className="text-[12px] text-[#34D399] mb-2">
               {q.value != null ? `${q.word} → ${amtLabel} ${symbol}` : "Resolving your balance…"}
             </div>
           )}
@@ -588,7 +588,7 @@ export function RobinhoodBridgeCard({ result }: { result: RobinhoodBridgeResult 
               `totalCostUsd/Percent` is Relay's own both-sides-priced figure for
               the whole trip. Null means Relay didn't price it — which prints
               "unknown", never a zero. */}
-          <div className="text-[9px] text-slate-500 mb-2 space-y-1">
+          <div className="text-[12px] text-slate-500 mb-2 space-y-1">
             <div className="flex items-center justify-between gap-2">
               <span className="truncate">
                 Cost{" "}
@@ -623,20 +623,20 @@ export function RobinhoodBridgeCard({ result }: { result: RobinhoodBridgeResult 
             </div>
           </div>
 
-          {overBalance && <p className="text-[10px] text-red-500 mb-2">Exceeds your {symbol} balance on {fromCfg.label}</p>}
-          {loading && <p className="text-[9px] text-slate-600 mb-2">Fetching Relay quote…</p>}
-          {!loading && prepErr && <p className="text-[10px] text-amber-400 mb-2">{prepErr}</p>}
+          {overBalance && <p className="text-[13px] text-red-500 mb-2">Exceeds your {symbol} balance on {fromCfg.label}</p>}
+          {loading && <p className="text-[12px] text-slate-600 mb-2">Fetching Relay quote…</p>}
+          {!loading && prepErr && <p className="text-[13px] text-amber-400 mb-2">{prepErr}</p>}
           {wrongChain && !busy && (
-            <p className="text-[10px] text-amber-400 mb-2">
+            <p className="text-[13px] text-amber-400 mb-2">
               Wallet is on chain {walletChainId} — bridge sends from {fromCfg.label} ({fromCfg.id}).
             </p>
           )}
           {step === "delivering" && (
-            <p className="text-[10px] text-slate-400 mb-2">
+            <p className="text-[13px] text-slate-400 mb-2">
               Source tx mined — waiting for Relay solvers to fill on {toCfg.label}…
             </p>
           )}
-          {step === "error" && <p className="text-[10px] text-amber-400 mb-2">{err}</p>}
+          {step === "error" && <p className="text-[13px] text-amber-400 mb-2">{err}</p>}
 
           <PreTradeBanner pt={pt} />
 
@@ -653,7 +653,7 @@ export function RobinhoodBridgeCard({ result }: { result: RobinhoodBridgeResult 
               : () => { void doSend(); }
             }
             disabled={!isConnected ? false : (wrongChain ? busy : (!canSign || busy))}
-            className="w-full text-[12px] font-bold py-2.5 rounded-lg transition-all disabled:opacity-50"
+            className="w-full text-[15px] font-bold py-2.5 rounded-lg transition-all disabled:opacity-50"
             style={{ background: "#34D39915", color: "#34D399", border: "1px solid #34D39940" }}
           >
             {!isConnected ? "Connect your wallet"
@@ -687,7 +687,7 @@ export function RobinhoodBridgeCard({ result }: { result: RobinhoodBridgeResult 
           {txHash && prep?.meta?.trackerUrl && (
             <div className="mt-2 flex justify-end">
               <a href={prep.meta.trackerUrl} target="_blank" rel="noopener noreferrer"
-                className="text-[10px] text-slate-500 hover:text-slate-300 underline">
+                className="text-[13px] text-slate-500 hover:text-slate-300 underline">
                 open Relay tracker ↗
               </a>
             </div>

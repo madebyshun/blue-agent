@@ -169,7 +169,7 @@ export default function TrackRecordClient() {
               { key: "flow", label: "Flow", count: buckets.flow },
             ]}
           />
-          <div className="ml-auto flex items-center gap-2 text-[10px] uppercase tracking-widest" style={{ color: MUTED }}>
+          <div className="ml-auto flex items-center gap-2 text-[13px] uppercase tracking-widest" style={{ color: MUTED }}>
             <button
               onClick={() => setRulesOpen(true)}
               className="rounded border px-2 py-1 hover:text-white"
@@ -236,19 +236,19 @@ function TrackHeader() {
           prints the title, so the label + sub-line hide here to avoid a
           doubled title; the chip group below stays visible as mobile nav. */}
       <span
-        className="hidden lg:inline font-mono font-semibold text-[11px] tracking-[0.16em]"
+        className="hidden lg:inline font-mono font-semibold text-[14px] tracking-[0.16em]"
         style={{ color: "#E2E8F0" }}
       >
         // TRACK RECORD
       </span>
-      <span className="hidden lg:inline font-mono text-[10.5px]" style={{ color: "#64748B" }}>
+      <span className="hidden lg:inline font-mono text-[13px]" style={{ color: "#64748B" }}>
         every graded arrow, forever
       </span>
       {/* Right chip group — Live board / Inbox links double as mobile nav
           (the BLUEHOOD sidebar is lg-only); before this /hood/arrows had
           only a back-link, stranding a reader from the alert inbox where
           Review & Sign lives. Consistent with /hood + /hood/inbox now. */}
-      <div className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-2 font-mono text-[11px]">
+      <div className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-2 font-mono text-[14px]">
         <Link href="/hood" className="hover:text-white" style={{ color: "#64748B" }}>
           ← Live board
         </Link>
@@ -314,11 +314,11 @@ function MetricStrip({ data, filtered }: { data: ArrowsRes | null; filtered: Arr
     <div className="mb-8 grid grid-cols-2 gap-3 md:grid-cols-4">
       {items.map((it) => (
         <div key={it.label} className="rounded border px-4 py-3" style={{ borderColor: BORDER, backgroundColor: SURFACE }}>
-          <div className="mb-1 font-mono text-[9px] uppercase tracking-widest" style={{ color: MUTED }}>
+          <div className="mb-1 font-mono text-[12px] uppercase tracking-widest" style={{ color: MUTED }}>
             {it.label}
           </div>
           <div className="font-mono text-xl text-white">{it.value}</div>
-          {it.sub && <div className="mt-1 text-[11px]" style={{ color: MUTED }}>{it.sub}</div>}
+          {it.sub && <div className="mt-1 text-[14px]" style={{ color: MUTED }}>{it.sub}</div>}
         </div>
       ))}
     </div>
@@ -353,7 +353,7 @@ function FilterPills<K extends string>({
 }) {
   return (
     <div className="flex items-center gap-1">
-      <span className="mr-1 font-mono text-[10px] uppercase tracking-widest" style={{ color: MUTED }}>{label}</span>
+      <span className="mr-1 font-mono text-[13px] uppercase tracking-widest" style={{ color: MUTED }}>{label}</span>
       {opts.map((o) => {
         const active = value === o.key;
         const empty = o.count === 0;
@@ -393,7 +393,7 @@ function SortToggle({ value, onChange }: { value: SortKey; onChange: (v: SortKey
           <button
             key={o.key}
             onClick={() => onChange(o.key)}
-            className="rounded border px-2 py-1 text-[11px] font-medium transition-colors"
+            className="rounded border px-2 py-1 text-[14px] font-medium transition-colors"
             style={{ borderColor: active ? "#3f4550" : BORDER, color: active ? "#E7E9EE" : MUTED }}
           >
             {o.label}
@@ -408,7 +408,7 @@ function ArrowTable({ arrows }: { arrows: Arrow[] }) {
   return (
     <div className="overflow-x-auto rounded border" style={{ borderColor: BORDER, backgroundColor: SURFACE }}>
       <table className="w-full text-sm">
-        <thead className="font-mono text-[9px] uppercase tracking-widest" style={{ color: MUTED }}>
+        <thead className="font-mono text-[12px] uppercase tracking-widest" style={{ color: MUTED }}>
           <tr className="border-b" style={{ borderColor: BORDER }}>
             <th className="px-3 py-2 text-left">Serial</th>
             <th className="px-3 py-2 text-left">Ticker</th>
@@ -420,7 +420,7 @@ function ArrowTable({ arrows }: { arrows: Arrow[] }) {
             <th className="px-3 py-2 text-left">Outcome</th>
           </tr>
         </thead>
-        <tbody className="font-mono text-[13px]">
+        <tbody className="font-mono text-[16px]">
           {arrows.map((a) => <TrackRow key={a.id} a={a} />)}
         </tbody>
       </table>
@@ -463,7 +463,7 @@ function TrackRow({ a }: { a: Arrow }) {
           {a.ticker}
           {chainOf(a) === "base" && (
             <span
-              className="ml-1.5 rounded px-1 py-0.5 align-middle font-mono text-[9px] font-semibold tracking-wider"
+              className="ml-1.5 rounded px-1 py-0.5 align-middle font-mono text-[12px] font-semibold tracking-wider"
               style={{ color: BASE_BLUE, backgroundColor: `${BASE_BLUE}22` }}
               title="Coinbase B20 tokenized stock on Base (chainId 8453)"
             >
@@ -478,7 +478,7 @@ function TrackRow({ a }: { a: Arrow }) {
         <td className="px-3 py-2 text-right" style={{ color: "#E7E9EE" }}>${a.reference_price.toFixed(2)}</td>
         <td className="px-3 py-2 text-left">
           <span
-            className="rounded px-2 py-0.5 font-mono text-[10px] font-semibold tracking-wider"
+            className="rounded px-2 py-0.5 font-mono text-[13px] font-semibold tracking-wider"
             style={{ color: outcome.color, backgroundColor: `${outcome.color}18` }}
           >
             {outcome.label}
@@ -506,16 +506,16 @@ function EmptyState({ allZero }: { allZero: boolean }) {
         <>
           {/* Short line stays mono; the ≥2-sentence paragraph takes the
               `hood-prose` token per T-V1. */}
-          <div className="font-mono text-white text-[13px] mb-2">No graded arrows yet.</div>
+          <div className="font-mono text-white text-[16px] mb-2">No graded arrows yet.</div>
           {/* Frozen: no first receipt is coming. arrow-freeze-check §4.4. */}
-          <p className="hood-prose max-w-md mx-auto text-[13.5px] leading-relaxed">
+          <p className="hood-prose max-w-md mx-auto text-[16px] leading-relaxed">
             {ARROWS_FROZEN
               ? ARROWS_FROZEN_NOTE
               : "The engine fires on live setups and grades them automatically — first receipts land when NYSE opens Monday."}
           </p>
         </>
       ) : (
-        <span className="font-mono text-[13px]">No arrows match this filter.</span>
+        <span className="font-mono text-[16px]">No arrows match this filter.</span>
       )}
     </div>
   );
@@ -530,7 +530,7 @@ function GradingRulesModal({ onClose }: { onClose: () => void }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between">
-          <div className="font-mono text-[11px] uppercase tracking-widest" style={{ color: MUTED }}>// grading rules</div>
+          <div className="font-mono text-[14px] uppercase tracking-widest" style={{ color: MUTED }}>// grading rules</div>
           <button onClick={onClose} className="text-slate-400 hover:text-white">✕</button>
         </div>
         <ul className="space-y-3 text-sm font-mono">
@@ -555,7 +555,7 @@ function GradingRulesModal({ onClose }: { onClose: () => void }) {
             <span style={{ color: "#9aa1ac" }}>= informational, does NOT count toward hit rate</span>
           </li>
         </ul>
-        <p className="mt-4 text-[11px] font-mono" style={{ color: MUTED }}>
+        <p className="mt-4 text-[14px] font-mono" style={{ color: MUTED }}>
           Every outcome is hard-mapped in code by the same tool that fired the arrow. The LLM never picks HIT / MISS.
         </p>
       </div>
@@ -565,7 +565,7 @@ function GradingRulesModal({ onClose }: { onClose: () => void }) {
 
 function SectionHeader({ label }: { label: string }) {
   return (
-    <div className="mb-3 font-mono text-[10px] uppercase tracking-widest" style={{ color: MUTED }}>
+    <div className="mb-3 font-mono text-[13px] uppercase tracking-widest" style={{ color: MUTED }}>
       {label}
     </div>
   );
@@ -573,7 +573,7 @@ function SectionHeader({ label }: { label: string }) {
 
 function Footer() {
   return (
-    <footer className="mt-12 border-t pt-6 text-[11px]" style={{ borderColor: BORDER, color: MUTED }}>
+    <footer className="mt-12 border-t pt-6 text-[14px]" style={{ borderColor: BORDER, color: MUTED }}>
       <div className="flex flex-wrap gap-x-6 gap-y-2">
         <span>Oracle: Chainlink AggregatorV3 (RH) + B20 share price (Base)</span>
         <span>DEX: GeckoTerminal (Uniswap V3/V4 · Aerodrome)</span>

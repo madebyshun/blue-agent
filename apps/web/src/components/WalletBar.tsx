@@ -39,7 +39,7 @@ export default function WalletBar() {
         >
           {isPending ? "Connecting…" : "Connect Wallet"}
         </button>
-        <span className="block font-mono text-[10px] text-slate-600 mt-1 px-0.5">→ Connect any wallet for 500 credits/day — no token needed</span>
+        <span className="block font-mono text-[13px] text-slate-600 mt-1 px-0.5">→ Connect any wallet for 500 credits/day — no token needed</span>
         <WalletPickerModal open={picker} onClose={() => setPicker(false)} />
       </div>
     );
@@ -60,7 +60,7 @@ export default function WalletBar() {
       </div>
       <button
         onClick={() => disconnect()}
-        className="self-start font-mono text-[11px] text-slate-400 hover:text-red-400 hover:border-red-400/30 border border-[#1A1A2E] rounded-lg px-3 py-1.5 transition-colors"
+        className="self-start font-mono text-[14px] text-slate-400 hover:text-red-400 hover:border-red-400/30 border border-[#1A1A2E] rounded-lg px-3 py-1.5 transition-colors"
       >
         Disconnect wallet
       </button>

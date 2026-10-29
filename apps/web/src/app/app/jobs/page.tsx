@@ -55,25 +55,25 @@ export default async function JobsPage() {
   const card = "rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14]";
   const Label = ({ title, sub }: { title: string; sub?: string }) => (
     <div className="flex items-baseline gap-2.5 mt-[24px] mb-3 flex-wrap">
-      <span className="text-[9.5px] font-medium tracking-[0.14em] text-[#64748B]">{title}</span>
-      {sub && <span className="text-[10px] text-[#475569]">{sub}</span>}
+      <span className="text-[12px] font-medium tracking-[0.14em] text-[#64748B]">{title}</span>
+      {sub && <span className="text-[13px] text-[#64748B]">{sub}</span>}
     </div>
   );
   return (
     <div className="flex flex-col h-full bg-[#050508] overflow-hidden font-mono [&_a]:font-mono">
       <div className="hidden lg:flex items-center gap-3.5 flex-wrap shrink-0 min-h-[56px] px-5 py-2 border-b border-[#1A1A2E]">
-        <span className="text-[11px] font-semibold tracking-[0.16em] text-[#E2E8F0]">// JOBS</span>
-        <span className="text-[10.5px] text-[#64748B]">work first, paid on unlock · USDC on Base 8453 · or hire Blue Agent on ACP</span>
+        <span className="text-[14px] font-semibold tracking-[0.16em] text-[#E2E8F0]">// JOBS</span>
+        <span className="text-[13px] text-[#64748B]">work first, paid on unlock · USDC on Base 8453 · or hire Blue Agent on ACP</span>
         <div className="ml-auto flex items-center gap-2">
-          <span className="text-[10px] text-[#94A3B8] border border-[#1A1A2E] rounded-[7px] px-2.5 py-[5px]">{listed ? `${listed.offerings.length} listed` : "registry —"}{jobs ? ` · ${done} completed` : ""}</span>
-          <Link href="/services" className="text-[10.5px] text-[#94A3B8] hover:text-[#E2E8F0] border border-[#1A1A2E] rounded-[7px] px-2.5 py-[5px]">Single calls → Services</Link>
-          <a href={REGISTRY} target="_blank" rel="noreferrer" className="text-[10.5px] font-semibold text-[#050508] bg-[#4FC3F7] hover:bg-[#29ABE2] rounded-[7px] px-2.5 py-[5px]">ACP registry ↗</a>
+          <span className="text-[13px] text-[#94A3B8] border border-[#1A1A2E] rounded-[7px] px-2.5 py-[5px]">{listed ? `${listed.offerings.length} listed` : "registry —"}{jobs ? ` · ${done} completed` : ""}</span>
+          <Link href="/services" className="text-[13px] text-[#94A3B8] hover:text-[#E2E8F0] border border-[#1A1A2E] rounded-[7px] px-2.5 py-[5px]">Single calls → Services</Link>
+          <a href={REGISTRY} target="_blank" rel="noreferrer" className="text-[13px] font-semibold text-[#050508] bg-[#4FC3F7] hover:bg-[#29ABE2] rounded-[7px] px-2.5 py-[5px]">ACP registry ↗</a>
         </div>
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="px-5 py-[18px] w-full">
-          <p className="text-[10.5px] leading-[1.7] text-[#94A3B8] lg:hidden">
+          <p className="text-[13px] leading-[1.7] text-[#94A3B8] lg:hidden">
             Post a job, or deliver one as an ERC-8004 agent: the poster pays the result they want, straight to the agent, in USDC on Base 8453.
           </p>
 
@@ -81,39 +81,39 @@ export default async function JobsPage() {
           <JobBoardClient />
 
           <Label title="HIRE BLUE AGENT ON ACP" sub="fixed offerings, read live from the ACP registry · escrow on Base" />
-          {listed === null ? <p className="text-[10.5px] text-[#64748B]">ACP registry unreachable right now.</p>
-            : listed.offerings.length === 0 ? <p className="text-[10.5px] text-[#64748B]">No offerings listed.</p>
+          {listed === null ? <p className="text-[13px] text-[#64748B]">ACP registry unreachable right now.</p>
+            : listed.offerings.length === 0 ? <p className="text-[13px] text-[#64748B]">No offerings listed.</p>
             : (
               <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill,minmax(300px,1fr))" }}>
                 {listed.offerings.map((o) => (
                   <div key={o.name} className="rounded-[14px] p-[14px] border flex flex-col" style={{ borderColor: "rgba(79,195,247,.22)", background: "rgba(79,195,247,.035)" }}>
                     <div className="flex items-start justify-between gap-2">
-                      <span className="text-[12px] font-semibold text-[#E2E8F0]">{o.name}</span>
-                      <span className="shrink-0 text-[8.5px] font-medium text-[#4FC3F7] border border-[#4FC3F7]/30 rounded-full px-[7px] py-[2px]">{o.priceValue} USDC</span>
+                      <span className="text-[15px] font-semibold text-[#E2E8F0]">{o.name}</span>
+                      <span className="shrink-0 text-[11px] font-medium text-[#4FC3F7] border border-[#4FC3F7]/30 rounded-full px-[7px] py-[2px]">{o.priceValue} USDC</span>
                     </div>
-                    <p className="font-prose text-[10.5px] leading-[1.6] text-[#94A3B8] mt-2 flex-1">{o.description}</p>
+                    <p className="font-prose text-[13px] leading-[1.6] text-[#94A3B8] mt-2 flex-1">{o.description}</p>
                     <div className="flex flex-wrap gap-[5px] mt-[10px]">
-                      <span className="text-[8.5px] text-[#94A3B8] border border-[#1A1A2E] rounded-[5px] px-[6px] py-[2px]">SLA {o.slaMinutes} min</span>
-                      <span className="text-[8.5px] text-[#94A3B8] border border-[#1A1A2E] rounded-[5px] px-[6px] py-[2px]">escrow · Base 8453</span>
+                      <span className="text-[11px] text-[#94A3B8] border border-[#1A1A2E] rounded-[5px] px-[6px] py-[2px]">SLA {o.slaMinutes} min</span>
+                      <span className="text-[11px] text-[#94A3B8] border border-[#1A1A2E] rounded-[5px] px-[6px] py-[2px]">escrow · Base 8453</span>
                     </div>
-                    {o.requirements.length > 0 && <div className="text-[9px] text-[#475569] mt-[9px]">send: {o.requirements.join(", ")}</div>}
+                    {o.requirements.length > 0 && <div className="text-[12px] text-[#64748B] mt-[9px]">send: {o.requirements.join(", ")}</div>}
                   </div>
                 ))}
               </div>
             )}
           {coded.length > 0 && (
-            <p className="mt-2.5 text-[9.5px] text-[#475569]">
+            <p className="mt-2.5 text-[12px] text-[#64748B]">
               Built, not yet listed on ACP: {coded.map((o) => `${o.name} (${o.priceUsdc} USDC)`).join(" · ")}. Until listed they are reachable as MCP tools.
             </p>
           )}
 
           <Label title={`RECENT JOBS${jobs ? ` · ${jobs.length}` : ""}`} sub={jobs ? `${done} completed` : undefined} />
-          {jobs === null ? <p className="text-[10.5px] text-[#64748B]">Job ledger unreadable right now.</p>
-            : jobs.length === 0 ? <p className="text-[10.5px] text-[#64748B]">No jobs yet.</p>
+          {jobs === null ? <p className="text-[13px] text-[#64748B]">Job ledger unreadable right now.</p>
+            : jobs.length === 0 ? <p className="text-[13px] text-[#64748B]">No jobs yet.</p>
             : (
               <div className="space-y-1.5">
                 {jobs.map((j) => (
-                  <div key={j.job_id} className={`${card} flex flex-wrap items-center gap-3 px-4 py-2.5 text-[10.5px]`}>
+                  <div key={j.job_id} className={`${card} flex flex-wrap items-center gap-3 px-4 py-2.5 text-[13px]`}>
                     <span className="text-[#E2E8F0]">#{j.job_id}</span>
                     <span className="text-[#94A3B8]">{j.offering}</span>
                     <span className={STATUS[j.status] ?? "text-[#94A3B8]"}>{j.status}</span>
@@ -126,7 +126,7 @@ export default async function JobsPage() {
               </div>
             )}
 
-          <p className="text-[9.5px] text-[#475569] mt-4 leading-relaxed">
+          <p className="text-[12px] text-[#64748B] mt-4 leading-relaxed">
             Provider: Blue Agent{listed?.agentId ? ` · ACP agent ${listed.agentId}` : ""} · wallet{" "}
             <a className="text-[#4FC3F7]" href={`https://basescan.org/address/${SELLER}`} target="_blank" rel="noreferrer">{short(SELLER)}</a> on Base.
             Blue Agent never holds the buyer&apos;s funds; the ACP escrow contract does.
