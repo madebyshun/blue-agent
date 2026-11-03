@@ -6,7 +6,6 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { Exchange, ProviderRow } from "@/lib/hub/exchange";
 import ExchangeHeader from "./ExchangeHeader";
-import SubTabs, { AGENTS_TABS } from "./_components/SubTabs";
 
 const usd = (n: number) => (n >= 1000 ? `$${(n / 1000).toFixed(1)}k` : n >= 1 ? `$${n.toFixed(2)}` : `$${n.toFixed(3)}`);
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
@@ -76,7 +75,6 @@ export default function ExchangeView({ ex, totalPaid, ours, oursPayTo, agentId, 
 
       <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="px-5 py-[18px] w-full">
-          <SubTabs tabs={AGENTS_TABS} active="/exchange/discovered" />
 
           {/* Search + sort */}
           <div className="flex items-center gap-2.5 flex-wrap">
@@ -123,7 +121,6 @@ export default function ExchangeView({ ex, totalPaid, ours, oursPayTo, agentId, 
             <div className="ml-auto text-right font-mono">
               <p className="text-[15px] font-semibold text-[#E2E8F0]">{R ? usd(ours?.usd ?? 0) : "—"}</p>
               <p className="text-[12px] text-[#64748B]">{R ? `${ours?.paidCalls ?? 0} paid calls from outside wallets` : ""}</p>
-              <p className="text-[12px] text-[#64748B]">{R ? `team tests: ${ours?.teamCalls ?? 0} calls, ${usd(ours?.teamUsd ?? 0)}, not counted` : ""}</p>
             </div>
           </Link>
 

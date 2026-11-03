@@ -16,6 +16,5 @@ export default function SubTabs({ tabs, active }: { tabs: { href: string; label:
   );
 }
 
-export const AGENTS_TABS = [{ href: "/exchange", label: "Listed agents" }, { href: "/exchange/discovered", label: "All sellers" }];
 export const CREATE_TABS = [{ href: "/exchange/create", label: "Create an agent" }, { href: "/exchange/sell", label: "Sell your service" }];
 export const ACCOUNT_TABS = [{ href: "/exchange/usage", label: "My usage" }, { href: "/exchange/following", label: "Following" }];

@@ -9,7 +9,6 @@ import { readListings } from "@/lib/hub/listings";
 import { X402_PAY_TO } from "@/lib/x402-payee";
 import { BLUE_AGENT_ID } from "@/lib/erc8004";
 import ExchangeHeader from "./ExchangeHeader";
-import SubTabs, { AGENTS_TABS } from "./_components/SubTabs";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
@@ -67,7 +66,6 @@ export default async function AgentsPage() {
       <ExchangeHeader active="agents" chip={`${listings.length + 1} listed · ${ex.rows.length.toLocaleString("en-US")} paid · ${ex.daysCovered}d`} />
       <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="px-5 py-[18px] w-full">
-          <SubTabs tabs={AGENTS_TABS} active="/exchange" />
           <h1 className="text-[18px] font-semibold text-[#E2E8F0]">Agent Exchange</h1>
           <p className="mt-1.5 max-w-[900px] text-[14px] leading-[1.7] text-[#94A3B8]">
             Every agent Blue Agent knows on Base: the ones listed here first, then sellers with an ERC-8004 identity, then everyone else on{" "}

@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useAccount } from "wagmi";
 import { ConnectButton } from "@/components/ConnectModal";
-import { useEnsureSession } from "@/hooks/useEnsureSession";
+import { useEnsureSession, useSessionEpoch } from "@/hooks/useEnsureSession";
 import { sessionFetch } from "@/lib/session-client";
 
 const card = "rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14]";
@@ -25,7 +25,8 @@ const H = ({ t, s }: { t: string; s?: string }) => (
 /** Loads a session-gated JSON endpoint for the connected wallet; signs in on demand. */
 function useSessionJson<T>(path: string) {
   const { address } = useAccount();
-  const { fetchWithSession } = useEnsureSession();
+  const { fetchWithSession, hasSession } = useEnsureSession();
+  const epoch = useSessionEpoch();
   const [data, setData] = useState<T | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -39,6 +40,14 @@ function useSessionJson<T>(path: string) {
       setData(d as T);
     } catch (e) { setErr((e as Error).message.slice(0, 200)); } finally { setBusy(false); }
   }, [address, fetchWithSession, path]);
+  // Already signed in (Chat, the sidebar, another tab)? Load without asking
+  // again. Only a wallet with no session sees the one-message prompt.
+  useEffect(() => {
+    if (!address || data) return;
+    let live = true;
+    hasSession(address).then((ok) => { if (ok && live) load(); }).catch(() => {});
+    return () => { live = false; };
+  }, [address, epoch, hasSession, load, data]);
   return { address, data, err, busy, load, setData, fetchWithSession };
 }
 
@@ -47,7 +56,7 @@ function Gate({ label, children, onLoad, loaded, busy, err }: { label: string; c
   if (!isConnected) return <div className={`${card} p-4 flex items-center gap-3 flex-wrap`}><span className="text-[14px] text-[#94A3B8] flex-1">Connect the wallet you use on Base.</span><ConnectButton label={label} /></div>;
   if (!loaded) return (
     <div className={`${card} p-4 flex items-center gap-3 flex-wrap`}>
-      <span className="text-[14px] text-[#94A3B8] flex-1">{err ?? "Sign one message (no gas, no payment) so we know this wallet is yours."}</span>
+      <span className="text-[14px] text-[#94A3B8] flex-1">{err ?? "Connecting a wallet only shares its address. Sign one message (no gas, no payment) to prove it is yours; you stay signed in across Chat, Agents and Markets."}</span>
       <button className={btn} disabled={busy} onClick={onLoad}>{busy ? "Signing in…" : "Sign in & load"}</button>
     </div>
   );

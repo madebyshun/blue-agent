@@ -116,6 +116,8 @@ const IconChat = svg(<path strokeLinecap="round" strokeLinejoin="round" d="M8.62
 const IconSkills = svg(<path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456Z" />);
 // Connectors — squares-plus.
 const IconConnectors = svg(<path strokeLinecap="round" strokeLinejoin="round" d="M13.5 16.875h3.375m0 0h3.375m-3.375 0V13.5m0 3.375v3.375M6 10.5h2.25a2.25 2.25 0 0 0 2.25-2.25V6a2.25 2.25 0 0 0-2.25-2.25H6A2.25 2.25 0 0 0 3.75 6v2.25A2.25 2.25 0 0 0 6 10.5Zm0 9.75h2.25A2.25 2.25 0 0 0 10.5 18v-2.25a2.25 2.25 0 0 0-2.25-2.25H6a2.25 2.25 0 0 0-2.25 2.25V18A2.25 2.25 0 0 0 6 20.25Zm9.75-9.75H18a2.25 2.25 0 0 0 2.25-2.25V6A2.25 2.25 0 0 0 18 3.75h-2.25A2.25 2.25 0 0 0 13.5 6v2.25a2.25 2.25 0 0 0 2.25 2.25Z" />);
+// Discovered — magnifying glass (every x402 seller found on the Bazaar).
+const IconDiscovered = svg(<path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />);
 const IconServices = svg(<path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 0 0 6 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0 1 18 16.5h-2.25m-7.5 0h7.5m-7.5 0-1 3m8.5-3 1 3m0 0 .5 1.5m-.5-1.5h-9.5m0 0-.5 1.5m.75-9 3-3 2.148 2.148A12.061 12.061 0 0 1 16.5 7.605" />);
 // Exchange — arrows trading places (sellers ↔ buyers).
 const IconExchange = svg(<path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />);
@@ -210,7 +212,9 @@ const MODES: Mode[] = [
         // features"). Discovered, Sell services, Following and Docs are switches or
         // links inside these pages; their URLs still resolve and light the parent.
         items: [
-          { id: "agents", href: "/exchange", icon: IconAgents, also: ["/exchange/discovered", "/exchange/docs", "/services"] },
+          { id: "agents", href: "/exchange", icon: IconAgents, also: ["/exchange/docs"] },
+          { id: "discovered", href: "/exchange/discovered", icon: IconDiscovered },
+          { id: "services", href: "/services", icon: IconServices },
           { id: "jobs", href: "/jobs", icon: IconJobs },
           { id: "analytics", href: "/exchange/analytics", icon: IconAnalytics },
           { id: "create", href: "/exchange/create", icon: IconCreate, also: ["/exchange/sell"] },
