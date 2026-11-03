@@ -4,7 +4,7 @@
   "agent": {
     "name": "Blue Agent",
     "handle": "@blueagent_",
-    "description": "Onchain AI agent for builders — idea, build, audit, ship, raise. 65 tools on Blue Hub reading Base 8453 and Robinhood Chain 4663, x402 pay-per-call in USDC on Base. Inference by Virtuals.",
+    "description": "Onchain AI agent for builders — idea, build, audit, ship, raise. 70 tools on Blue Hub reading Base 8453 and Robinhood Chain 4663, x402 pay-per-call in USDC on Base. Inference by Virtuals.",
     "version": "1.2.0",
     "network": "base",
     "chain_id": 8453,
@@ -38,8 +38,8 @@
     "pricing": "https://blueagent.dev/.well-known/pricing",
     "endpoint_pattern": "https://blueagent.dev/api/x402/{tool-id}",
     "manifest_pattern": "https://blueagent.dev/.well-known/ai-tool/{tool-id}.json",
-    "tools": 65,
-    "paid_tools": 57,
+    "tools": 70,
+    "paid_tools": 62,
     "free_tools": [
       "blue-doctor",
       "hood-live",

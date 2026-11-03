@@ -9,6 +9,7 @@ import { readAgentReputation } from "@/lib/erc8004";
 import { X402_PAY_TO } from "@/lib/x402-payee";
 import ExchangeHeader from "../ExchangeHeader";
 import HireAgent from "../_components/HireAgent";
+import { blueHireServices } from "@/lib/hub/blue-services";
 import { FollowButton } from "../_components/AccountViews";
 import { readListing } from "@/lib/hub/listings";
 
@@ -57,7 +58,7 @@ export default async function SellerPage({ params }: { params: Promise<{ payTo: 
   const delta = d1 !== null && d0 ? Math.round(((d1 - d0) / d0) * 1000) / 10 : null;
   const peak = Math.max(0.0001, ...series);
   const name = detail?.hosts[0] ?? row?.hosts[0] ?? listing?.domain ?? short(payTo);
-  const hireable = detail?.resources.length ? detail.resources
+  const hireable = payTo === X402_PAY_TO.toLowerCase() ? blueHireServices() : detail?.resources.length ? detail.resources
     : (listing?.services ?? []).filter((s) => s.probe === "live").map((s) => ({ url: s.url, priceUsd: s.priceUsd, description: s.description }));
 
   return (
@@ -77,7 +78,7 @@ export default async function SellerPage({ params }: { params: Promise<{ payTo: 
             payTo <a className="text-[#4FC3F7]" href={`https://basescan.org/address/${payTo}`} target="_blank" rel="noreferrer">{payTo}</a> · Base 8453
             {payTo === X402_PAY_TO.toLowerCase() && <> · this is Blue Agent, see <Link className="text-[#4FC3F7]" href="/services">services</Link></>}
           </p>
-          {payTo !== X402_PAY_TO.toLowerCase() && hireable.length > 0 && (
+          {hireable.length > 0 && (
             <div className="mt-3"><HireAgent payTo={payTo} name={listing?.name ?? name} services={hireable} /></div>
           )}
         </div>

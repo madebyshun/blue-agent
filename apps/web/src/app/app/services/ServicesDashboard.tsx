@@ -102,7 +102,10 @@ function Stat({ label, value, sub }: { label: string; value: string; sub: string
   );
 }
 
-export default function ServicesDashboard({ rows, stats, receipts }: { rows: ServiceRow[]; stats: McpStats; receipts: McpReceipt[] | null }) {
+/** The x402 HTTP services a buyer can hire from Blue Agent's page (lib/hub/blue-services). */
+export interface HttpService { id: string; name: string; priceUsd: number; group: "stocks" | "tokens" }
+
+export default function ServicesDashboard({ rows, stats, receipts, http = [], hireHref = null }: { rows: ServiceRow[]; stats: McpStats; receipts: McpReceipt[] | null; http?: HttpService[]; hireHref?: string | null }) {
   const [filter, setFilter] = useState<(typeof FILTERS)[number]["id"]>("all");
   const [search, setSearch] = useState("");
   const [qs, setQs] = useState<keyof typeof QUICKSTART>("Claude Code");
@@ -287,6 +290,29 @@ export default function ServicesDashboard({ rows, stats, receipts }: { rows: Ser
               ))}
             </div>
           </div>
+
+          {http.length > 0 && (
+            <div className="mt-[24px]">
+              <div className="flex items-baseline gap-2.5 mb-3 flex-wrap">
+                <span className="font-mono text-[12px] font-medium tracking-[0.14em] text-[#64748B]">X402 HTTP SERVICES</span>
+                <span className="font-mono text-[13px] text-[#64748B]">pay per call in USDC on Base; any x402 client, or Hire from Blue Agent&apos;s page</span>
+                {hireHref && <Link href={hireHref} className="ml-auto font-mono text-[13px] text-[#4FC3F7]">Hire Blue Agent →</Link>}
+              </div>
+              {(["stocks", "tokens"] as const).map((g) => (
+                <div key={g} className="mb-3">
+                  <p className="mb-1.5 font-mono text-[12px] text-[#94A3B8]">{g === "stocks" ? "Stock tokens · Base 8453 + Robinhood Chain 4663" : "Tokens, wallets and gas · Base 8453"}</p>
+                  <div className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-3">
+                    {http.filter((h) => h.group === g).map((h) => (
+                      <div key={h.id} className="flex items-center gap-2 rounded-[10px] border border-[#1A1A2E] bg-[#0D0D14] px-3 py-2">
+                        <span className="min-w-0 flex-1 truncate font-mono text-[13px] text-[#E2E8F0]" title={h.name}>{h.id}</span>
+                        <span className="font-mono text-[13px] text-[#94A3B8] tabular-nums">{usd(h.priceUsd)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           <a href="/jobs" className="flex items-center gap-3 mt-[24px] border border-[#1A1A2E] rounded-[14px] px-4 py-[13px] bg-[#0D0D14] hover:border-[#4FC3F7]/45 transition-colors">
             <span className="font-mono text-[12px] font-medium tracking-[0.14em] text-[#64748B]">HIRE</span>

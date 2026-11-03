@@ -122,7 +122,15 @@ class Uncached<T> extends Error { constructor(public value: T) { super("uncached
 function cacheWhole<A extends unknown[], T>(fn: (...a: A) => Promise<T>, key: string, revalidate: number): (...a: A) => Promise<T> {
   const cached = unstable_cache(fn, [key], { revalidate });
   return async (...a: A) => {
-    try { return await cached(...a); } catch (e) { if (e instanceof Uncached) return e.value as T; throw e; }
+    try { return await cached(...a); } catch (e) {
+      if (e instanceof Uncached) return e.value as T;
+      // Outside a Next request (tsx scripts, tests) there is no incremental
+      // cache: run the read itself, uncached.
+      if (/incrementalCache|static generation store/i.test(String((e as Error)?.message ?? ""))) {
+        try { return await fn(...a); } catch (e2) { if (e2 instanceof Uncached) return e2.value as T; throw e2; }
+      }
+      throw e;
+    }
   };
 }
 

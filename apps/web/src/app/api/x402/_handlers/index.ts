@@ -65,6 +65,12 @@ import hRhStockSearch  from "./rh-stock-search";
 import hRhRwaVerify    from "./rh-rwa-verify";
 import hRhTokenScan    from "./rh-token-scan";
 import hRhStockQuote   from "./rh-stock-quote";
+// Base stocks (2026-11-03) — every Coinbase Tokenized Stock on Base 8453
+import hBaseStockSearch    from "./base-stock-search";
+import hBaseStockQuote     from "./base-stock-quote";
+import hBaseStockOhlc      from "./base-stock-ohlc";
+import hBaseStockLiquidity from "./base-stock-liquidity";
+import hBaseStockMovers    from "./base-stock-movers";
 // RH RWA Phase 2 (M2·M3·M4·M5) — market analytics
 import hRhStockOhlc      from "./rh-stock-ohlc";
 import hRhStockLiquidity from "./rh-stock-liquidity";
@@ -143,6 +149,12 @@ export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "rh-rwa-verify":      hRhRwaVerify,
   "rh-token-scan":      hRhTokenScan,
   "rh-stock-quote":     hRhStockQuote,
+  // ── Base stocks — Coinbase Tokenized Stocks on Base 8453 ─────────────
+  "base-stock-search":    hBaseStockSearch,
+  "base-stock-quote":     hBaseStockQuote,
+  "base-stock-ohlc":      hBaseStockOhlc,
+  "base-stock-liquidity": hBaseStockLiquidity,
+  "base-stock-movers":    hBaseStockMovers,
   // ── RH RWA Phase 2 — Market Analytics ─────────────────────────────────
   "rh-stock-ohlc":      hRhStockOhlc,
   "rh-stock-liquidity": hRhStockLiquidity,
