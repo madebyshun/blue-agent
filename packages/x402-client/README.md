@@ -2,49 +2,28 @@
 
 x402 client SDK for [Blue Hub](https://blueagent.dev/hub) — call Blue Agent tools on Base and pay per call in USDC. No API key is sent to Blue Agent.
 
-## Claude Code paid MCP demo
+## Paid MCP for Claude Code, Codex, Cursor (`blueagent-x402-mcp`)
 
-The production MCP endpoint is `https://blueagent.dev/api/mcp`. Generic MCP clients can discover the tools, but they do not all know how to handle an x402 `PaymentRequired` tool result. This package includes an x402-aware local stdio bridge that signs the exact EIP-3009 authorization locally and retries the same call.
-
-Use a dedicated demo wallet with only the USDC you intend to spend. The bridge is not on npm yet, so build it locally and point your MCP client at the built file:
+The remote server `https://blueagent.dev/api/mcp` works in any MCP client, but a generic client stops at a paid tool's `PaymentRequired`. This package's local stdio bridge pays it: it signs the exact EIP-3009 USDC authorization on Base locally and retries the same call. The key never leaves your machine.
 
 ```bash
-cd packages/x402-client && npm run build
-export BUYER_PRIVATE_KEY=0x...
-node dist/mcp-stdio.js
+# read-only: free tools run, paid tools show their price, nothing is signed
+claude mcp add blue-agent -- npx -y --package @blueagent/x402 blueagent-x402-mcp
+
+# paying, from a wallet funded only for this, under two caps checked before any signature
+claude mcp add blue-agent \
+  -e BUYER_PRIVATE_KEY=0x... -e BLUEAGENT_MAX_PER_CALL=0.05 -e BLUEAGENT_BUDGET=1.00 \
+  -- npx -y --package @blueagent/x402 blueagent-x402-mcp
 ```
 
-Configure Claude Code with the absolute path to that build:
+| Env | Default | Meaning |
+|---|---|---|
+| `BUYER_PRIVATE_KEY` | unset (read-only) | Wallet that pays, USDC on Base 8453 |
+| `BLUEAGENT_MAX_PER_CALL` | `0.05` | Refuse any single payment above this, in USD |
+| `BLUEAGENT_BUDGET` | `1.00` | Refuse once this process has paid this much, in USD |
+| `BLUEAGENT_MCP_URL` | `https://blueagent.dev/api/mcp` | Server to bridge |
 
-```json
-{
-  "mcpServers": {
-    "blue-agent-paid": {
-      "command": "node",
-      "args": ["/absolute/path/to/blue-agent/packages/x402-client/dist/mcp-stdio.js"],
-      "env": { "BUYER_PRIVATE_KEY": "0x..." }
-    }
-  }
-}
-```
-
-Once a release carrying the `blueagent-x402-mcp` bin is published, this becomes `npx --yes --package @blueagent/x402 blueagent-x402-mcp`.
-
-Then ask:
-
-```text
-Compare NVDA on Base 8453 and Robinhood Chain 4663.
-Which venue is cheaper versus the Chainlink reference price?
-Do not give me a buy or sell recommendation.
-```
-
-The bridge performs: unpaid MCP call → exact `PaymentRequired` parsing → local EIP-3009 signature → retry with `_meta["x402/payment"]` → result and settlement receipt. The private key never leaves the local process. The terminal prints a Basescan URL after successful settlement.
-
-For a direct local test without Claude Code:
-
-```bash
-BUYER_PRIVATE_KEY=0x... npx tsx apps/web/scripts/mcp-paid-e2e.ts https://blueagent.dev/api/mcp stock_signal
-```
+A refused payment returns an error that says why; nothing is signed. After a settlement the terminal prints the Basescan link.
 
 ## SDK quick start
 

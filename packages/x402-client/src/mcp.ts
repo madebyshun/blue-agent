@@ -20,7 +20,13 @@ type PaymentRequirement = {
 };
 type PaymentRequired = { x402Version: number; accepts?: PaymentRequirement[]; resource?: unknown; extensions?: unknown; error?: string };
 
-export type PaidMcpConfig = { url?: string; privateKey: `0x${string}`; timeoutMs?: number; ttlSlackSeconds?: number };
+/**
+ * `privateKey` absent = read-only: free tools run, paid tools return their
+ * PaymentRequired untouched and nothing is signed. `maxPerCallAtomic` and
+ * `budgetAtomic` (USDC, 6 decimals) are enforced BEFORE signing: a quote above
+ * either is refused and nothing is paid.
+ */
+export type PaidMcpConfig = { url?: string; privateKey?: `0x${string}`; timeoutMs?: number; ttlSlackSeconds?: number; maxPerCallAtomic?: bigint; budgetAtomic?: bigint };
 export type PaidMcpResult = { content?: Array<{ type?: string; text?: string }>; isError?: boolean; structuredContent?: Record<string, unknown>; _meta?: Record<string, unknown> };
 
 function assertAddress(value: string, label: string): asserts value is `0x${string}` {
@@ -83,19 +89,26 @@ async function signPayment(privateKey: `0x${string}`, req: PaymentRequirement, r
   };
 }
 
+const fmt = (atomic: bigint) => { const v = Number(atomic) / 1e6; return `$${v > 0 && v < 0.01 ? v.toFixed(3) : v.toFixed(2)}`; };
+
 export class PaidMcpClient {
   private readonly url: string;
-  private readonly privateKey: `0x${string}`;
+  private readonly privateKey: `0x${string}` | null;
+  private readonly maxPerCall: bigint;
+  private readonly budget: bigint;
+  private spent = 0n;
   private readonly timeoutMs: number;
   private readonly ttlSlackSeconds: number;
   private nextId = 1;
 
   constructor(config: PaidMcpConfig) {
     this.url = config.url ?? "https://blueagent.dev/api/mcp";
-    this.privateKey = config.privateKey;
+    this.privateKey = config.privateKey ?? null;
+    this.maxPerCall = config.maxPerCallAtomic ?? 50_000n;      // $0.05
+    this.budget = config.budgetAtomic ?? 1_000_000n;           // $1.00 per process
     this.timeoutMs = config.timeoutMs ?? 30_000;
     this.ttlSlackSeconds = config.ttlSlackSeconds ?? 60;
-    assertAddress(privateKeyToAccount(this.privateKey).address, "buyer wallet");
+    if (this.privateKey) assertAddress(privateKeyToAccount(this.privateKey).address, "buyer wallet");
   }
 
   private async rpc(method: string, params: Record<string, unknown> = {}): Promise<JsonRpc> {
@@ -137,8 +150,14 @@ export class PaidMcpClient {
     if (!firstResult) throw new Error("MCP tools/call returned no result");
     const required = parsePaymentRequired(firstResult);
     if (!required) return firstResult;
+    // Read-only: hand back the price, sign nothing.
+    if (!this.privateKey) return firstResult;
     const req = required.accepts?.[0];
     if (!req) throw new Error(`PaymentRequired for ${name} contained no accepted payment`);
+    const amount = /^\d+$/.test(req.amount) ? BigInt(req.amount) : -1n;
+    if (amount < 0n) throw new Error(`PaymentRequired for ${name} has an invalid amount; nothing was paid`);
+    if (amount > this.maxPerCall) throw new Error(`${name} costs ${fmt(amount)}, above the per-call cap of ${fmt(this.maxPerCall)}; nothing was paid`);
+    if (this.spent + amount > this.budget) throw new Error(`${name} costs ${fmt(amount)}; ${fmt(this.budget - this.spent)} of the ${fmt(this.budget)} budget is left; nothing was paid`);
     const payment = await signPayment(this.privateKey, req, required.resource, this.ttlSlackSeconds);
     const paid = await this.rpc("tools/call", {
       name,
@@ -151,10 +170,12 @@ export class PaidMcpClient {
     if (result.isError || receipt?.success !== true) {
       throw new Error(`Paid MCP call failed: ${result.content?.map(c => c.text).filter(Boolean).join(" ") ?? "unknown error"}`);
     }
+    this.spent += amount;
     return result;
   }
 
-  get walletAddress(): string { return privateKeyToAccount(this.privateKey).address; }
+  get walletAddress(): string | null { return this.privateKey ? privateKeyToAccount(this.privateKey).address : null; }
+  get spentAtomic(): bigint { return this.spent; }
 }
 
 export function paymentReceipt(result: PaidMcpResult): { success: boolean; transaction?: string | null; network?: string; payer?: string | null } | null {
