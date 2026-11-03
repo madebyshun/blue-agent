@@ -2,16 +2,26 @@
 import { createInterface } from "node:readline";
 import { PaidMcpClient, paymentReceipt, parseMcpJsonLine } from "./mcp";
 
+// No key = read-only: free tools work, paid tools show their price and nothing
+// is signed. With a key, two caps are enforced before any signature:
+// BLUEAGENT_MAX_PER_CALL (USD, default 0.05) and BLUEAGENT_BUDGET (USD for this
+// process, default 1.00). Use a wallet funded only with what the agent may spend.
 const key = process.env.BUYER_PRIVATE_KEY as `0x${string}` | undefined;
-if (!key || !/^0x[0-9a-fA-F]{64}$/.test(key)) {
-  console.error("blueagent-x402-mcp: set BUYER_PRIVATE_KEY to a dedicated demo wallet before starting");
+if (key && !/^0x[0-9a-fA-F]{64}$/.test(key)) {
+  console.error("blueagent-x402-mcp: BUYER_PRIVATE_KEY is not a 0x-prefixed 32-byte hex key");
   process.exit(1);
 }
+const usd = (v: string | undefined, d: number) => BigInt(Math.round((Number(v) > 0 ? Number(v) : d) * 1e6));
 
 const client = new PaidMcpClient({
   privateKey: key,
   url: process.env.BLUEAGENT_MCP_URL,
+  maxPerCallAtomic: usd(process.env.BLUEAGENT_MAX_PER_CALL, 0.05),
+  budgetAtomic: usd(process.env.BLUEAGENT_BUDGET, 1),
 });
+console.error(key
+  ? `blueagent-x402-mcp: paying from ${client.walletAddress} · per-call cap $${process.env.BLUEAGENT_MAX_PER_CALL ?? "0.05"} · budget $${process.env.BLUEAGENT_BUDGET ?? "1.00"}`
+  : "blueagent-x402-mcp: read-only (no BUYER_PRIVATE_KEY): free tools run, paid tools show their price");
 
 function send(id: number | string | undefined, result: unknown): void {
   process.stdout.write(`${JSON.stringify({ jsonrpc: "2.0", ...(id === undefined ? {} : { id }), result })}\n`);
@@ -28,7 +38,7 @@ async function handle(line: string): Promise<void> {
     send(request.id, {
       protocolVersion: "2025-03-26",
       capabilities: {},
-      serverInfo: { name: "Blue Agent x402 MCP bridge", version: "0.2.0" },
+      serverInfo: { name: "Blue Agent x402 MCP bridge", version: "0.3.0" },
     });
     return;
   }

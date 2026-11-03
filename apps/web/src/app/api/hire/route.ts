@@ -21,6 +21,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { readProviderDetail } from "@/lib/hub/exchange";
 import { readListing, recordHire } from "@/lib/hub/listings";
+import { blueHireServices } from "@/lib/hub/blue-services";
+import { X402_PAY_TO } from "@/lib/x402-payee";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -51,7 +53,10 @@ export async function POST(req: NextRequest) {
   const [detail, listing] = await Promise.all([readProviderDetail(payTo), readListing(payTo)]);
   // A seller listed on /exchange/sell adds the services it proved (unpaid 402
   // to this payTo on Base) — same allowlist rule, a different source.
-  const res = detail?.resources.find((r) => r.url === url)
+  // Blue Agent itself: its data-grounded services (lib/hub/blue-services), the
+  // same allowlist rule. The buyer still pays Blue Agent's own payTo directly.
+  const own = payTo === X402_PAY_TO.toLowerCase() ? blueHireServices().find((r) => r.url === url) : undefined;
+  const res = own ?? detail?.resources.find((r) => r.url === url)
     ?? listing?.services.filter((s) => s.probe === "live").map((s) => ({ url: s.url, priceUsd: s.priceUsd, description: s.description, method: undefined as string | undefined })).find((r) => r.url === url);
   if (!res || !/^https:\/\//.test(url)) return NextResponse.json({ error: "That service is not in this seller's listing." }, { status: 404 });
 

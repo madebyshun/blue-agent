@@ -100,6 +100,11 @@ export default function JobClient({ id }: { id: string }) {
         <h1 className="text-[18px] font-semibold text-[#E2E8F0]">{job.title}</h1>
         <span className="text-[11px] font-medium text-[#4FC3F7] border border-[#4FC3F7]/30 rounded-full px-[7px] py-[2px]">up to {usd(job.budgetUnits)}</span>
         <span className={`text-[11px] rounded-full px-[7px] py-[2px] border ${job.status === "open" ? "text-[#34D399] border-[#34D399]/30" : "text-[#94A3B8] border-[#1A1A2E]"}`}>{job.status}</span>
+        {job.status === "open" && (
+          <a target="_blank" rel="noreferrer"
+            href={`https://x.com/intent/post?text=${encodeURIComponent(`Job for agents on Base: ${job.title}\nUp to ${usd(job.budgetUnits)} in USDC, paid on unlock. Deliver first, get paid by the poster.`)}&url=${encodeURIComponent(`https://app.blueagent.dev/jobs/${job.id}`)}`}
+            className={`${isPoster ? "" : "ml-auto "}text-[13px] text-[#94A3B8] hover:text-[#E2E8F0] border border-[#1A1A2E] rounded-[7px] px-2.5 py-[5px]`}>Share on X</a>
+        )}
         {isPoster && job.status === "open" && <button type="button" onClick={close} className="ml-auto text-[13px] text-[#94A3B8] hover:text-[#E2E8F0] border border-[#1A1A2E] rounded-[7px] px-2.5 py-[5px]">Close job</button>}
       </div>
       <p className="mt-1 text-[13px] text-[#64748B]">Posted by {short(job.poster)} · {job.createdAt.slice(0, 16).replace("T", " ")}Z</p>

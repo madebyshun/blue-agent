@@ -83,7 +83,7 @@ JSON Schema per tool) · [`llms.txt`](https://blueagent.dev/llms.txt) (short bri
      Source of truth: apps/web/src/lib/agent-tools.ts (AGENT_TOOLS).
      Body fields are the WIRE shape (post-x402Body), not the Hub form. -->
 
-Blue Hub exposes **65 tools** across 7 categories — 57 paid, 8 free.
+Blue Hub exposes **70 tools** across 7 categories — 62 paid, 8 free.
 
 Categories: on-chain · signal · security · intelligence · builder · trading · base-ecosystem
 
@@ -97,10 +97,15 @@ The 8 priced $0.00 never answer 402 and never ask for a signature:
 Do not build an authorization for them — there is nothing to sign and no
 transfer to make.
 
-### on-chain (16)
+### on-chain (21)
 
 | id | price | body | what it does |
 |---|---|---|---|
+| `base-stock-liquidity` | $0.02 | `ticker`* | Where one Coinbase Tokenized Stock on Base 8453 can be traded: its deepest pools with liquidity, the top pool's 24h volume and turnover. Facts only; price impact is not modelled. |
+| `base-stock-movers` | $0.03 | `limit` `min_liquidity_usd` | 24h gainers and losers among all Coinbase Tokenized Stocks on Base 8453, by the deepest pool's change. Pools under the liquidity floor (default $10k) cannot rank; unread tokens are counted. |
+| `base-stock-ohlc` | $0.03 | `ticker`* `timeframe` `limit` | OHLCV candles (15m, 1h, 4h, 1d) for one Coinbase Tokenized Stock on Base 8453 from its deepest DEX pool, with a high / low / change / volume summary. |
+| `base-stock-quote` | $0.02 | `ticker`* | Live quote for one Coinbase Tokenized Stock on Base 8453: deepest DEX pool price, 24h change, liquidity and volume, plus the Chainlink share price and DEX-vs-oracle drift where a feed is held. Missing reads are null and said. |
+| `base-stock-search` | $0.01 | `query`* | Find Coinbase Tokenized Stocks on Base 8453 by ticker or company name, from the 218 Base publishes (base.org), each checked on chain (isB20, 8 decimals, exact symbol). Returns the contract to use; a ticker alone does not identify a token. |
 | `blue-doctor` | $0.00 | _(no body)_ | Upstream health for every data source the tools read from — Base 8453 and Robinhood Chain 4663 RPC, DexScreener, GeckoTerminal, DefiLlama, GitHub. Says down only when a probe actually failed; anything it could not reach is reported unknown with the reason. |
 | `blue-stream` | $0.05 | `feed` `chain` | Live snapshot feed of onchain activity on Base or Robinhood Chain — trending & new pools, TVL, real price/volume/liquidity. Pure real data, poll for a near-real-time feed. |
 | `dex-flow` | $0.15 | `token`* | DEX volume, buy/sell pressure and liquidity flow for any Base token — live DexScreener data. |
@@ -229,7 +234,7 @@ surface you are actually calling.
 **Cut from 85 to 18 on 2026-09-26, and the cut removed no capability.** The 85-tool manifest
 was 32,160 bytes — roughly 8,000 tokens spent before the agent read a single word of the user's
 question — and published MCP research finds tool-selection accuracy degrades sharply past
-~40 always-loaded entries. All 65 catalog tools remain live at `/api/x402/<id>`; `blue_registry`
+~40 always-loaded entries. All 70 catalog tools remain live at `/api/x402/<id>`; `blue_registry`
 lists them and `blue_call` runs any of them, so the rest moved from "always in context" to
 "one lookup away". A manifest is a context budget, not an inventory.
 

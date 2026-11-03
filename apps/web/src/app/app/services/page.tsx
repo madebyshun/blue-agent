@@ -11,7 +11,10 @@ import { MCP_PRICES } from "@/lib/mcp-paid";
 import { readMcpStats, readMcpReceipts } from "@/lib/mcp-receipts";
 import { META, type Group } from "./meta";
 import { scoreService } from "@/lib/service-score";
-import ServicesDashboard, { type ServiceRow } from "./ServicesDashboard";
+import ServicesDashboard, { type ServiceRow, type HttpService } from "./ServicesDashboard";
+import { blueHireServices } from "@/lib/hub/blue-services";
+import { AGENT_TOOLS } from "@/lib/agent-tools";
+import { BLUE_AGENT_ID } from "@/lib/erc8004";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Services — Blue Agent" };
@@ -37,5 +40,9 @@ export default async function ServicesPage() {
       score: stats.readable ? scoreService(s).score : null,
     };
   });
-  return <ServicesDashboard rows={rows} stats={stats} receipts={receipts} />;
+  const http: HttpService[] = blueHireServices().map((h) => {
+    const id = h.url.split("/").pop()!;
+    return { id, name: AGENT_TOOLS.find((t) => t.id === id)?.name ?? id, priceUsd: h.priceUsd ?? 0, group: /stock|b20/.test(id) ? "stocks" : "tokens" };
+  });
+  return <ServicesDashboard rows={rows} stats={stats} receipts={receipts} http={http} hireHref={BLUE_AGENT_ID !== null ? `/exchange/agent/${BLUE_AGENT_ID}` : null} />;
 }

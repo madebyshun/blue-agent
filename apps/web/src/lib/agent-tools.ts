@@ -1066,6 +1066,81 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     x402Body: (v) => ({ ticker: v.ticker ?? "" }),
   },
 
+  // ─── Base stocks — every Coinbase Tokenized Stock on Base 8453 (2026-11-03) ──
+  {
+    id: "base-stock-search",
+    name: "Base Stock Search",
+    description: "Find Coinbase Tokenized Stocks on Base 8453 by ticker or company name, from the 218 Base publishes (base.org), each checked on chain (isB20, 8 decimals, exact symbol). Returns the contract to use; a ticker alone does not identify a token.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "on-chain",
+    inputs: [
+      { key: "query", label: "Ticker or company", placeholder: "NVDA, nvidia, spacex", required: true },
+    ],
+    isComposite: false,
+    price: "$0.01", priceUSDC: 10000,
+    x402Url: `${X402_BASE}/base-stock-search`,
+    x402Body: (v) => ({ query: v.query ?? "" }),
+  },
+  {
+    id: "base-stock-quote",
+    name: "Base Stock Quote",
+    description: "Live quote for one Coinbase Tokenized Stock on Base 8453: deepest DEX pool price, 24h change, liquidity and volume, plus the Chainlink share price and DEX-vs-oracle drift where a feed is held. Missing reads are null and said.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "on-chain",
+    inputs: [
+      { key: "ticker", label: "Ticker", placeholder: "NVDA, TSLA, SNDK", required: true },
+    ],
+    isComposite: false,
+    price: "$0.02", priceUSDC: 20000,
+    x402Url: `${X402_BASE}/base-stock-quote`,
+    x402Body: (v) => ({ ticker: v.ticker ?? "" }),
+  },
+  {
+    id: "base-stock-ohlc",
+    name: "Base Stock OHLC",
+    description: "OHLCV candles (15m, 1h, 4h, 1d) for one Coinbase Tokenized Stock on Base 8453 from its deepest DEX pool, with a high / low / change / volume summary.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "on-chain",
+    inputs: [
+      { key: "ticker", label: "Ticker", placeholder: "NVDA, TSLA, SNDK", required: true },
+      { key: "timeframe", label: "Timeframe", placeholder: "15m, 1h, 4h, 1d" },
+      { key: "limit", label: "Candles", placeholder: "48" },
+    ],
+    isComposite: false,
+    price: "$0.03", priceUSDC: 30000,
+    x402Url: `${X402_BASE}/base-stock-ohlc`,
+    x402Body: (v) => ({ ticker: v.ticker ?? "", ...(v.timeframe ? { timeframe: v.timeframe } : {}), ...(v.limit ? { limit: Number(v.limit) } : {}) }),
+  },
+  {
+    id: "base-stock-liquidity",
+    name: "Base Stock Liquidity",
+    description: "Where one Coinbase Tokenized Stock on Base 8453 can be traded: its deepest pools with liquidity, the top pool's 24h volume and turnover. Facts only; price impact is not modelled.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "on-chain",
+    inputs: [
+      { key: "ticker", label: "Ticker", placeholder: "NVDA, TSLA, SNDK", required: true },
+    ],
+    isComposite: false,
+    price: "$0.02", priceUSDC: 20000,
+    x402Url: `${X402_BASE}/base-stock-liquidity`,
+    x402Body: (v) => ({ ticker: v.ticker ?? "" }),
+  },
+  {
+    id: "base-stock-movers",
+    name: "Base Stock Movers",
+    description: "24h gainers and losers among all Coinbase Tokenized Stocks on Base 8453, by the deepest pool's change. Pools under the liquidity floor (default $10k) cannot rank; unread tokens are counted.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "on-chain",
+    inputs: [
+      { key: "limit", label: "How many", placeholder: "5" },
+      { key: "min_liquidity_usd", label: "Min liquidity (USD)", placeholder: "10000" },
+    ],
+    isComposite: false,
+    price: "$0.03", priceUSDC: 30000,
+    x402Url: `${X402_BASE}/base-stock-movers`,
+    x402Body: (v) => ({ ...(v.limit ? { limit: Number(v.limit) } : {}), ...(v.min_liquidity_usd ? { min_liquidity_usd: Number(v.min_liquidity_usd) } : {}) }),
+  },
+
   // ─── RH RWA Phase 2 — Market Analytics ─────────────────────────────────
   {
     id: "rh-stock-ohlc",
