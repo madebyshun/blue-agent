@@ -22,6 +22,30 @@ export const BLUE_HIRE_IDS = [
   "rh-stock-quote", "rh-stock-arb", "rh-stock-ohlc", "rh-stock-liquidity", "rh-stock-movers",
 ] as const;
 
+/** A real, valid input per service, so "Check input and price" works first try:
+ *  Base WETH / AERO / NVDAc, and NVDA on Robinhood Chain. */
+export const BLUE_HIRE_EXAMPLES: Record<string, Record<string, unknown>> = {
+  "token-price": { token: "0x4200000000000000000000000000000000000006" },
+  "honeypot-check": { token: "0x940181a94A35A4569E4529A3CDfB74e38FD98631" },
+  "liquidity-depth": { token: "0x940181a94A35A4569E4529A3CDfB74e38FD98631" },
+  "contract-trust": { address: "0x940181a94A35A4569E4529A3CDfB74e38FD98631" },
+  "dex-flow": { token: "0x940181a94A35A4569E4529A3CDfB74e38FD98631" },
+  "safe-trending": { limit: 5 },
+  "pool-scan": { limit: 5 },
+  "wallet-risk": { address: "0x4200000000000000000000000000000000000006" },
+  "b20-inspect": { address: "0xb20000000000000000000078ee7ce2fE4908108C" },
+  "base-stock-search": { query: "NVDA" },
+  "base-stock-quote": { ticker: "NVDA" },
+  "base-stock-ohlc": { ticker: "NVDA", timeframe: "1h", limit: 24 },
+  "base-stock-liquidity": { ticker: "NVDA" },
+  "base-stock-movers": { limit: 5 },
+  "rh-stock-quote": { ticker: "NVDA" },
+  "rh-stock-arb": { ticker: "NVDA" },
+  "rh-stock-ohlc": { ticker: "NVDA" },
+  "rh-stock-liquidity": { ticker: "NVDA" },
+  "rh-stock-movers": { limit: 5 },
+};
+
 export function blueHireServices(): ResourceSample[] {
   return BLUE_HIRE_IDS.flatMap((id) => {
     const t = AGENT_TOOLS.find((x) => x.id === id);
@@ -35,8 +59,9 @@ export function blueHireServices(): ResourceSample[] {
     return [{
       url: `https://blueagent.dev/api/x402/${id}`,
       priceUsd: units / 1e6,
-      description: `${t.name}: ${t.description}`.slice(0, 300),
-      method: "POST", bodyType: "json", example, exampleIn: "body" as const,
+      name: t.name,
+      description: t.description.slice(0, 300),
+      method: "POST", bodyType: "json", example: BLUE_HIRE_EXAMPLES[id] ?? example, exampleIn: "body" as const,
     }];
   });
 }

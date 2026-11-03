@@ -79,7 +79,8 @@ export default async function SellerPage({ params }: { params: Promise<{ payTo: 
             {payTo === X402_PAY_TO.toLowerCase() && <> · this is Blue Agent, see <Link className="text-[#4FC3F7]" href="/services">services</Link></>}
           </p>
           {hireable.length > 0 && (
-            <div className="mt-3"><HireAgent payTo={payTo} name={listing?.name ?? name} services={hireable} /></div>
+            <div className="mt-3"><HireAgent payTo={payTo} name={listing?.name ?? name} services={hireable}
+              blurb={payTo === X402_PAY_TO.toLowerCase() ? "Stock tokens on Base and Robinhood Chain, token and wallet checks, from contracts, pools and oracles." : (listing?.description || row?.title || undefined)} /></div>
           )}
         </div>
 

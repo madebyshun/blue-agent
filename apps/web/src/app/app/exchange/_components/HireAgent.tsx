@@ -25,7 +25,11 @@ type Phase =
   | { k: "done"; body: unknown; tx: string | null; status: number }
   | { k: "error"; msg: string; signed?: boolean };
 
-export default function HireAgent({ payTo, name, services }: { payTo: string; name: string; services: ResourceSample[] }) {
+const svcName = (s: ResourceSample) => s.name ?? s.url.replace(/^https?:\/\/[^/]+/, "").split("/").filter(Boolean).slice(-2).join(" ").replace(/[-_]/g, " ") ?? s.url;
+const price = (s: ResourceSample) => (s.priceUsd === null ? "price on request" : `$${s.priceUsd} per task`);
+const Step = ({ n, t }: { n: number; t: string }) => <p className="mt-4 text-[13px] font-semibold text-[#E2E8F0]">{n}. {t}</p>;
+
+export default function HireAgent({ payTo, name, services, blurb }: { payTo: string; name: string; services: ResourceSample[]; blurb?: string }) {
   const { address, chainId, isConnected } = useAccount();
   const { switchChainAsync } = useSwitchChain();
   const { signTypedDataAsync } = useSignTypedData();
@@ -89,26 +93,34 @@ export default function HireAgent({ payTo, name, services }: { payTo: string; na
               <button type="button" onClick={() => setOpen(false)} className="ml-auto text-[16px] text-slate-500 hover:text-white">✕</button>
             </div>
             <p className="mt-2 text-[13px] leading-[1.6] text-[#94A3B8]">
-              Pick a service of <span className="text-[#E2E8F0]">{name}</span>. Each call is paid once, in USDC on Base, through x402, straight to {short(payTo)}. Blue Agent takes no fee.
+              Pick a service. Each task is paid once, in USDC on Base, through x402, straight to the agent&apos;s wallet {short(payTo)}. Blue Agent takes no fee.
             </p>
 
-            <p className="mt-4 text-[12px] tracking-[0.14em] text-[#64748B]">SERVICE</p>
-            <div className="mt-1.5 grid gap-1.5">
-              {services.map((s, n) => (
-                <button key={s.url} type="button" onClick={() => pick(n)} className={`flex w-full min-w-0 items-center gap-3 overflow-hidden rounded-[10px] border px-3 py-2 text-left ${n === i ? "border-[#4FC3F7]/50 bg-[#4FC3F7]/5" : "border-[#1A1A2E]"}`}>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[14px] text-[#E2E8F0]">{s.url.replace(/^https?:\/\//, "")}</span>
-                    <span className="block truncate text-[12px] text-[#64748B]">{s.description || "—"}</span>
-                  </span>
-                  <span className="shrink-0 text-[13px] text-[#4FC3F7]">{s.priceUsd === null ? "price —" : `$${s.priceUsd}`}</span>
-                </button>
-              ))}
+            <div className="mt-4 flex items-start gap-3 rounded-[12px] border border-[#1A1A2E] bg-[#0D0D14] p-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] border border-[#2a3350] bg-[#0F121A] text-[15px] font-semibold text-[#4FC3F7]">{name.slice(0, 1).toUpperCase()}</span>
+              <span className="min-w-0">
+                <span className="block text-[15px] font-semibold text-[#E2E8F0]">{name}</span>
+                {blurb && <span className="mt-0.5 block font-prose text-[13px] leading-[1.5] text-[#94A3B8]">{blurb}</span>}
+              </span>
             </div>
 
-            <p className="mt-4 text-[12px] tracking-[0.14em] text-[#64748B]">INPUT · {svc.method ?? "POST"} {svc.exampleIn === "query" ? "query" : "JSON body"}</p>
+            <p className="mt-4 text-[13px] text-[#94A3B8]">Service</p>
+            <select value={i} onChange={(e) => pick(Number(e.target.value))}
+              className="mt-1.5 w-full rounded-[10px] border border-[#1A1A2E] bg-[#050508] px-3 py-2.5 text-[14px] text-[#E2E8F0] outline-none focus:border-[#4FC3F7]/50">
+              {services.map((s, n) => <option key={s.url} value={n}>{svcName(s)} · {price(s)}</option>)}
+            </select>
+            <p className="mt-1.5 font-prose text-[13px] leading-[1.55] text-[#94A3B8]">{svc.description || "—"}</p>
+            <div className="mt-1.5 flex items-center gap-2 text-[12px] text-[#64748B]">
+              <span className="truncate">{svc.method ?? "POST"} {svc.url.replace(/^https?:\/\//, "")}</span>
+              <button type="button" onClick={() => navigator.clipboard?.writeText(svc.url)} className="ml-auto shrink-0 rounded-[7px] border border-[#1A1A2E] px-2 py-1 text-[#94A3B8] hover:text-[#E2E8F0]">Copy x402 endpoint</button>
+            </div>
+
+            <Step n={1} t="Request" />
+            <p className="mt-1 text-[12px] text-[#64748B]">{svc.exampleIn === "query" ? "Query parameters" : "JSON body"}: fill in the fields, then check the price.</p>
             <textarea className={`${input} mt-1.5 min-h-[110px]`} value={json} onChange={(e) => { setJson(e.target.value); setPh({ k: "idle" }); }} />
             {!parsed && <p className="mt-1 text-[13px] text-[#F87171]">Not valid JSON.</p>}
 
+            <Step n={2} t="Pay and run" />
             <div className="mt-4 grid gap-2">
               {ph.k === "quoted" ? (
                 <div className="rounded-[10px] border border-[#1A1A2E] p-3 text-[13px] text-[#94A3B8]">
@@ -122,7 +134,7 @@ export default function HireAgent({ payTo, name, services }: { payTo: string; na
                 </div>
               ) : (
                 <button type="button" onClick={quote} disabled={!parsed || ph.k === "quoting" || ph.k === "paying"} className="justify-self-start rounded-[8px] border border-[#1A1A2E] bg-[#0F121A] px-[13px] py-2 text-[13px] text-[#E2E8F0] disabled:opacity-40">
-                  {ph.k === "quoting" ? "Asking for the price…" : "Get the price"}
+                  {ph.k === "quoting" ? "Asking for the price…" : "Check input and price"}
                 </button>
               )}
               {ph.k === "paying" && <p className="text-[13px] text-[#94A3B8]">Confirm in your wallet, then the seller runs it…</p>}
@@ -133,6 +145,7 @@ export default function HireAgent({ payTo, name, services }: { payTo: string; na
               )}
               {(ph.k === "done" || ph.k === "free") && (
                 <div>
+                  <Step n={3} t="Output" />
                   <p className="text-[12px] tracking-[0.14em] text-[#34D399]">
                     RESULT{ph.k === "done" && ph.tx ? <> · <a className="text-[#4FC3F7]" href={`https://basescan.org/tx/${ph.tx}`} target="_blank" rel="noreferrer">paid, Basescan ↗</a></> : ph.k === "free" ? " · free, nothing was paid" : ""}
                   </p>

@@ -48,6 +48,8 @@ export interface ProviderIndexEntry { hosts: string[]; resources: number; title:
 export interface ProviderIndex { updatedAt: string; providers: Record<string, ProviderIndexEntry> }
 export interface ResourceSample {
   url: string; priceUsd: number | null; description: string;
+  /** Short display name (Blue Agent's own services); else derived from the URL. */
+  name?: string;
   /** From the Bazaar's own discovery info — the call a buyer copies (Hire Agent). */
   method?: string; bodyType?: string; example?: Record<string, unknown>; exampleIn?: "body" | "query";
 }

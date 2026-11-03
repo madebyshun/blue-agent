@@ -85,7 +85,8 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
               </div>
             </div>
             {(isBlue || (detail && detail.resources.length > 0)) && (
-              <div className="mt-3"><HireAgent payTo={p.payTo} name={name} services={isBlue ? blueHireServices() : detail!.resources} /></div>
+              <div className="mt-3"><HireAgent payTo={p.payTo} name={name} services={isBlue ? blueHireServices() : detail!.resources}
+                blurb={isBlue ? "Stock tokens on Base and Robinhood Chain, token and wallet checks, from contracts, pools and oracles." : reg?.description?.slice(0, 160)} /></div>
             )}
             <p className="mt-3 max-w-[900px] whitespace-pre-line font-prose text-[14px] leading-[1.7] text-[#94A3B8]">{reg?.description?.trim() || (p.regError ?? "No description in its registration file.")}</p>
             {reg?.services?.length ? (
@@ -157,7 +158,9 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
               ))}
             </div>
 
-            <div className={card}>
+            {/* Token talk is paused for Blue Agent itself (ShunTr, 2026-10-28): its
+                own profile shows no coin block; other agents keep theirs. */}
+            {!isBlue && <div className={card}>
               <p className="text-[12px] font-medium tracking-[0.14em] text-[#64748B]">TOKEN ECONOMY</p>
               {p.coins === null ? <p className="mt-2 text-[13px] text-[#64748B]">Coins could not be read right now.</p>
                 : p.coins.length === 0 ? (
@@ -177,7 +180,7 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
                     ) : <p className="mt-1 text-[12px] text-[#64748B]">No priced pair on DexScreener yet.</p>}
                   </Link>
                 ))}
-            </div>
+            </div>}
 
             <div className={card}>
               <p className="text-[12px] font-medium tracking-[0.14em] text-[#64748B]">LIVE ACTIVITY · BASE</p>

@@ -17,29 +17,9 @@
  * Then check: https://api.cdp.coinbase.com/platform/v2/x402/discovery/merchant?payTo=0x02950ad38ada1d599375bd447e080cd404809205
  */
 import { privateKeyToAccount } from "viem/accounts";
-import { blueHireServices } from "../src/lib/hub/blue-services";
+import { BLUE_HIRE_EXAMPLES, blueHireServices } from "../src/lib/hub/blue-services";
 import { quoteProblem, signX402, toQuote } from "../src/lib/x402-sign-client";
 import { X402_PAY_TO } from "../src/lib/x402-payee";
-
-// A real input per tool, so the unpaid call reaches the 402 (an empty one is
-// refused with 400 before any price). Base: WETH, AERO, NVDAc; RH: NVDA.
-const SAMPLE: Record<string, Record<string, unknown>> = {
-  "token-price": { token: "0x4200000000000000000000000000000000000006" },
-  "honeypot-check": { token: "0x940181a94A35A4569E4529A3CDfB74e38FD98631" },
-  "liquidity-depth": { token: "0x940181a94A35A4569E4529A3CDfB74e38FD98631" },
-  "contract-trust": { address: "0x940181a94A35A4569E4529A3CDfB74e38FD98631" },
-  "dex-flow": { token: "0x940181a94A35A4569E4529A3CDfB74e38FD98631" },
-  "wallet-risk": { address: "0x4200000000000000000000000000000000000006" },
-  "b20-inspect": { address: "0xb20000000000000000000078ee7ce2fE4908108C" },
-  "base-stock-search": { query: "NVDA" },
-  "base-stock-quote": { ticker: "NVDA" },
-  "base-stock-ohlc": { ticker: "NVDA" },
-  "base-stock-liquidity": { ticker: "NVDA" },
-  "rh-stock-quote": { ticker: "NVDA" },
-  "rh-stock-arb": { ticker: "NVDA" },
-  "rh-stock-ohlc": { ticker: "NVDA" },
-  "rh-stock-liquidity": { ticker: "NVDA" },
-};
 
 const MAX_TOTAL_USD = Number(process.env.MAX_TOTAL_USD ?? 3);
 
@@ -57,7 +37,7 @@ async function main() {
 
   for (const s of services) {
     const id = s.url.split("/").pop();
-    const body = JSON.stringify(SAMPLE[id ?? ""] ?? s.example ?? {});
+    const body = JSON.stringify(BLUE_HIRE_EXAMPLES[id ?? ""] ?? s.example ?? {});
     const r = await fetch(s.url, { method: "POST", headers: { "content-type": "application/json" }, body });
     if (r.status !== 402) { console.log(`SKIP ${id}: unpaid call answered ${r.status} (expected 402)`); continue; }
     const j = (await r.json().catch(() => ({}))) as { x402Version?: number; accepts?: Record<string, unknown>[] };
