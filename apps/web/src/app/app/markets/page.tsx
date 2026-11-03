@@ -20,6 +20,9 @@ export default async function MarketsPage() {
     readBlueLaunchMarkets().catch(() => ({ rows: [], readAt: null })),
   ]);
   const launched = new Set(launches.rows.map((r) => r.token.toLowerCase()));
+  // A stock token can also trend on GeckoTerminal (MSTRc, SNDKc did): list it
+  // once, as the verified stock row, never a second time as "crypto".
+  const stockSet = new Set(stocks.rows.map((r) => `${r.chain}:${r.contract.toLowerCase()}`));
   const rows: MarketRow[] = [
     ...stocks.rows.map((r) => ({
       chain: r.chain, kind: r.kind, token: r.contract, symbol: r.ticker, name: r.name, logo: r.logo,
@@ -31,7 +34,7 @@ export default async function MarketsPage() {
       price: r.priceUsd, change: r.change24hPct, mcap: r.mcapUsd, mcapIsFdv: r.mcapIsFdv, liq: r.liquidityUsd, vol: r.volume24hUsd,
       createdAt: r.poolCreatedAt, pool: r.pool, side: r.side, read: r.read,
     })),
-    ...trending.rows.filter((r) => !launched.has(r.token.toLowerCase())).map((r) => ({
+    ...trending.rows.filter((r) => !launched.has(r.token.toLowerCase()) && !stockSet.has(`${r.chain}:${r.token.toLowerCase()}`)).map((r) => ({
       chain: r.chain, kind: "crypto" as const, token: r.token, symbol: r.symbol, name: r.name, logo: r.logo,
       price: r.priceUsd, change: r.change24hPct, mcap: r.mcapUsd, mcapIsFdv: r.mcapIsFdv, liq: r.liquidityUsd, vol: r.volume24hUsd,
       createdAt: r.poolCreatedAt, pool: r.pool || null, side: "base" as const, read: true,
