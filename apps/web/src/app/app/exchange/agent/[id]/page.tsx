@@ -40,9 +40,10 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
   ]);
   const isBlueId = p.payTo === X402_PAY_TO.toLowerCase();
   // Blue Agent: its MCP receipts (each a settled USDC tx on Base) cover 30 days,
-  // longer than the on-chain index may; team tests are named, never blended.
+  // longer than the on-chain index may. Outside buyers only: the team's own
+  // payments are not revenue and are not shown.
   const mcpStats = isBlueId ? await readMcpStats(30) : null;
-  const bm = mcpStats?.readable ? { usd: (mcpStats.outside.units + mcpStats.team.units) / 1e6, team: mcpStats.team.units / 1e6, calls: mcpStats.outside.settled + mcpStats.team.settled, teamCalls: mcpStats.team.settled } : null;
+  const bm = mcpStats?.readable ? { usd: mcpStats.outside.units / 1e6, calls: mcpStats.outside.settled } : null;
   const row = ex.rows.find((r) => r.payTo === p.payTo) ?? null;
   const R = ex.readable && ex.daysCovered > 0;
   const series = (row?.series ?? []).slice(ex.firstIndex);
@@ -105,8 +106,8 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
             <div className="mt-4 grid gap-2.5 grid-cols-2 md:grid-cols-3 2xl:grid-cols-6">
               {[
                 ["REVENUE · LAST FULL DAY", R && d1 !== null ? usd(d1) : "—", delta === null ? "no prior day" : `${delta >= 0 ? "+" : ""}${delta}% vs day before`],
-                bm ? ["REVENUE · 30D", usd(bm.usd), bm.team ? `incl. ${usd(bm.team)} from team tests` : "MCP receipts on Base"] : [`REVENUE · ${ex.daysCovered}D`, R ? usd((row?.usd ?? 0) + (row?.teamUsd ?? 0)) : "—", R && row?.teamUsd ? `incl. ${usd(row.teamUsd)} from team tests` : "x402 on Base, measured"],
-                bm ? ["PAID CALLS", String(bm.calls), bm.teamCalls ? `incl. ${bm.teamCalls} team test${bm.teamCalls === 1 ? "" : "s"}` : "settled on Base"] : ["PAID CALLS", R ? String((row?.paidCalls ?? 0) + (row?.teamCalls ?? 0)) : "—", R && row?.teamCalls ? `incl. ${row.teamCalls} team test${row.teamCalls === 1 ? "" : "s"}` : "EIP-3009 settlements"],
+                bm ? ["REVENUE", usd(bm.usd), "x402 on Base, measured"] : [`REVENUE · ${ex.daysCovered}D`, R ? usd(row?.usd ?? 0) : "—", "x402 on Base, measured"],
+                bm ? ["PAID CALLS", String(bm.calls), "settled on Base"] : ["PAID CALLS", R ? String(row?.paidCalls ?? 0) : "—", "EIP-3009 settlements"],
                 ["PAYING WALLETS", R ? String(row?.payers ?? 0) : "—", "distinct payers"],
                 ["JOBS", String(delivered.length), `${unlocked.length} unlocked by posters`],
                 ["RATING", !p.reputation.readable ? "—" : p.reputation.average === null ? "none" : `${Math.round(p.reputation.average)}/100`, `${p.reputation.count} on-chain rating${p.reputation.count === 1 ? "" : "s"}`],
@@ -199,7 +200,7 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
                     </li>))}</ul>}
             </div>
             <p className="text-[12px] leading-relaxed text-[#64748B]">
-              Revenue counts x402 USDC paid to the payout wallet on Base{isBlue ? " (gross; team test calls shown separately in the card subtitles)" : " (gross)"}. Not financial advice.
+              Revenue counts x402 USDC paid to the payout wallet on Base{isBlue ? ", outside buyers only" : " (gross)"}. Not financial advice.
             </p>
           </aside>
         </div>
