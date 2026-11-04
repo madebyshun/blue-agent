@@ -8,12 +8,15 @@
  * What one launch is (all enforced by the factory, read 2026-10-28):
  *   - a B20 token with NO admin: 1,000,000,000 supply minted once, no mint,
  *     pause, seize or rename, ever;
- *   - a Uniswap v4 pool against ETH holding the whole supply as liquidity no
+ *   - a Uniswap v4 pool against ETH, or a Coinbase stock on Base the factory has
+ *     enabled (`quotes(stock).enabled`; 11 on 2026-11-04), holding the whole supply as liquidity no
  *     function can remove; the launcher may buy first in the same tx;
  *   - the pool's fee (1% or 3%, chosen) split by `collect`: 80% to the
  *     launcher's recipient, 5% to an APPROVED referrer, the rest to Quadra.
  *     Blue Agent's referrer 0x884f…7a9b read `approvedReferrers == true`.
- *   - Quadra v3 is NOT audited (its README says so) — the page says it too.
+ *   - Quadra v3 is NOT audited (its README says so). ShunTr asked 2026-11-04 to drop
+ *     the "Quadra v3 is not audited" line from the launch card; one plain sentence
+ *     stays in the page's fine print, because users send funds into these contracts.
  *
  * Revenue share to HOLDERS: the factory has none. Fees go to one recipient,
  * which the launcher can point at the agent's wallet (`setCreatorRecipient`).
