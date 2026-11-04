@@ -1,5 +1,5 @@
 // x402/base-stock-search — find Coinbase Tokenized Stocks on Base 8453 by ticker
-// or company name, from the 218 Base publishes (lib/base-stocks/coinbase-list),
+// or company name, from every one Base publishes (lib/base-stocks/coinbase-list),
 // each asserted on chain. Returns the CONTRACT to use: a ticker alone does not
 // identify a token (NVDA is a different contract on Robinhood Chain).
 import { COINBASE_BASE_STOCKS, COINBASE_BASE_STOCKS_CHECKED_AT, COINBASE_BASE_STOCKS_SOURCE } from "@/lib/base-stocks/coinbase-list";

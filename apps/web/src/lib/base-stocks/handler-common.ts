@@ -1,6 +1,6 @@
 // Shared by the base-stock-* x402 tools (api/x402/_handlers/base-stock-*): resolve a ticker or contract to ONE
 // Coinbase Tokenized Stock on Base 8453 from lib/base-stocks/coinbase-list (the
-// 218 Base publishes, each asserted on chain). Never by fuzzy name: a ticker
+// every one Base publishes, each asserted on chain). Never by fuzzy name: a ticker
 // either matches a listed symbol exactly, or the caller is told the near misses.
 import { COINBASE_BASE_STOCKS, type CoinbaseBaseStock } from "@/lib/base-stocks/coinbase-list";
 

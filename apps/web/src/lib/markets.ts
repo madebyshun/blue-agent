@@ -67,7 +67,7 @@ export interface MarketExtras {
 export function stockUniverse(): Omit<StockRow, "priceUsd" | "volume24hUsd" | "liquidityUsd" | "read" | keyof MarketExtras>[] {
   return [
     // Base: every Coinbase Tokenized Stock Base publishes (lib/base-stocks/
-    // coinbase-list, 218 checked on chain), named as Blue Hood's registry names
+    // coinbase-list, each checked on chain), named as Blue Hood's registry names
     // them where it lists the ticker too.
     ...COINBASE_BASE_STOCKS.map((s) => ({
       chain: "base" as const, ticker: s.ticker, name: BASE_STOCKS.find((b) => b.token.toLowerCase() === s.token.toLowerCase())?.name ?? s.name,
