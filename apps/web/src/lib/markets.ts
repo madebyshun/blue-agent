@@ -95,7 +95,7 @@ async function gtPrices(chain: MarketChain, addrs: string[]): Promise<{ px: Reco
   const unread = new Set<string>();
   for (let i = 0; i < addrs.length; i += 30) {
     const chunk = addrs.slice(i, i + 30);
-    const { body } = await gtJson<{ data?: GtToken[]; included?: GtPool[] }>(`/networks/${chain}/tokens/multi/${chunk.join(",")}?include=top_pools`, 2);
+    const body = await gtMulti(chain, chunk.join(","));
     if (!body) chunk.forEach((x) => unread.add(x));
     const pools = new Map((body?.included ?? []).map((p) => [String((p as { id?: string }).id ?? ""), p]));
     for (const t of body?.data ?? []) {
@@ -135,6 +135,19 @@ function cacheWhole<A extends unknown[], T>(fn: (...a: A) => Promise<T>, key: st
 }
 
 /** Stock tokens on both chains with GeckoTerminal market data. Cached 5 min when complete. */
+/**
+ * One 30-address chunk, cached 5 min on its own. Caching only the WHOLE read
+ * meant one 429 among ~10 sequential chunks (268 Base stocks + RH) left every
+ * view uncached and re-reading all of them: /markets measured 72s per load on
+ * 2026-11-04. Per chunk, a refused chunk still never caches (null is thrown
+ * out uncached), but the next view re-reads only that chunk.
+ */
+const gtMulti = cacheWhole(async (chain: MarketChain, csv: string) => {
+  const { body } = await gtJson<{ data?: GtToken[]; included?: GtPool[] }>(`/networks/${chain}/tokens/multi/${csv}?include=top_pools`, 2);
+  if (!body) throw new Uncached(null);
+  return body;
+}, "markets:gt-multi:v1", 300);
+
 export const readStockMarkets = cacheWhole(async (): Promise<{ rows: StockRow[]; readAt: string }> => {
   const uni = stockUniverse();
   const priced: StockRow[] = [];
