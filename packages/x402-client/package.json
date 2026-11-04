@@ -1,7 +1,7 @@
 {
   "name": "@blueagent/x402",
-  "version": "0.3.1",
-  "description": "x402 client SDK for Blue Hub — pay-per-call AI tools on Base",
+  "version": "0.3.2",
+  "description": "x402 client SDK for Blue Hub \u2014 pay-per-call AI tools on Base",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
@@ -10,9 +10,9 @@
   },
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.mjs",
-      "require": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "require": "./dist/index.js"
     }
   },
   "files": [
@@ -47,7 +47,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/madebyshun/blue-agent",
+    "url": "git+https://github.com/madebyshun/blue-agent.git",
     "directory": "packages/x402-client"
   },
   "homepage": "https://blueagent.dev",
