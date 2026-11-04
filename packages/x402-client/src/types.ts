@@ -1,3 +1,5 @@
+import type { AgentBudgetConfig } from "./budget";
+
 // ─── x402 v2 Types ────────────────────────────────────────────────────────────
 
 export interface X402PaymentRequired {
@@ -49,6 +51,8 @@ export interface X402ClientConfig {
   ttl?: number;
   /** Refuse, before signing, any 402 above this many USDC atomic units (6 decimals). Unset = no cap. */
   maxPerCallAtomic?: bigint;
+  /** Total / per-agent budgets and a loop guard, enforced before signing (see budget.ts). */
+  budget?: AgentBudgetConfig;
 }
 
 export interface CallOptions {
@@ -58,6 +62,8 @@ export interface CallOptions {
   method?: "GET" | "POST";
   /** Extra headers */
   headers?: Record<string, string>;
+  /** Which agent is spending: its budget and loop guard apply. Default "default". */
+  agent?: string;
 }
 
 export interface CallResult<T = unknown> {

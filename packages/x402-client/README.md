@@ -25,6 +25,40 @@ claude mcp add blue-agent \
 
 A refused payment returns an error that says why; nothing is signed. After a settlement the terminal prints the Basescan link.
 
+## Agent budget
+
+One key can pay for many agents without any of them draining it. Every limit is
+checked after the 402 is read and **before** anything is signed, so a refused
+call is never paid. The client holds no funds; it only declines to sign.
+
+```ts
+const client = new X402Client({
+  privateKey: process.env.BUYER_KEY as `0x${string}`,
+  maxPerCallAtomic: 50_000n,                 // no single call above $0.05
+  budget: {
+    totalAtomic: 2_000_000n,                 // $2.00 for this client, all agents
+    perAgentAtomic: { scout: 250_000n },     // scout: $0.25, fixed at construction
+    defaultAgentAtomic: 500_000n,            // any other agent: $0.50
+    loop: { maxRepeats: 5, windowSeconds: 60 }, // the default; `false` turns it off
+  },
+});
+
+await client.call(url, { agent: "scout", body: { ticker: "NVDA" } });
+
+client.budget.report();          // [{ agent, spentAtomic, calls, capAtomic }], highest spend first
+client.budget.remainingAtomic("scout");
+```
+
+A refusal throws `BudgetError` with `code`:
+- `BUDGET_EXCEEDED`: the total budget would be passed.
+- `AGENT_BUDGET_EXCEEDED`: that agent's budget would be passed.
+- `LOOP_DETECTED`: the same agent made the same call (endpoint and body) more than
+  `maxRepeats` times inside `windowSeconds`, which is how a stuck agent burns money.
+
+Spend is reserved before signing and kept only when the seller answers 2xx, so
+parallel calls cannot overshoot a budget and a failed call gives its share back.
+Budgets live in memory for the life of the client.
+
 ## SDK quick start
 
 ```typescript
