@@ -27,5 +27,5 @@ export function resolveBaseStock(input: string): { stock: CoinbaseBaseStock } | 
 }
 
 export function stockRef(s: CoinbaseBaseStock) {
-  return { ticker: s.ticker, symbol: s.symbol, name: s.name, token: s.token, ...BASE_CHAIN, token_url: `https://basescan.org/token/${s.token}` };
+  return { ticker: s.ticker, symbol: s.symbol, name: s.name, token: s.token, logo: s.image, ...BASE_CHAIN, token_url: `https://basescan.org/token/${s.token}` };
 }

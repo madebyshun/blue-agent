@@ -35,7 +35,8 @@ async function readEnabledAssets(): Promise<AssetInfo> {
     const addr = String(a.address ?? "").toLowerCase();
     const p = Number(a.price_usd);
     // The picker keys ETH by the zero address (the factory's native quote).
-    out[addr === WETH ? ETH_QUOTE : addr] = { logo: logoOf(a.image_url), priceUsd: Number.isFinite(p) && p > 0 ? p : null };
+    const own = COINBASE_BASE_STOCKS.find((x) => x.token.toLowerCase() === addr)?.image ?? null;
+    out[addr === WETH ? ETH_QUOTE : addr] = { logo: own ?? logoOf(a.image_url), priceUsd: Number.isFinite(p) && p > 0 ? p : null };
   }
   return out;
 }

@@ -134,6 +134,8 @@ function cacheWhole<A extends unknown[], T>(fn: (...a: A) => Promise<T>, key: st
   };
 }
 
+const BASE_LOGO = new Map(COINBASE_BASE_STOCKS.filter((s) => s.image).map((s) => [s.token.toLowerCase(), s.image as string]));
+
 /** Stock tokens on both chains with GeckoTerminal market data. Cached 5 min when complete. */
 /**
  * One 30-address chunk, cached 5 min on its own. Caching only the WHOLE read
@@ -160,7 +162,9 @@ export const readStockMarkets = cacheWhole(async (): Promise<{ rows: StockRow[];
       const p = px[u.contract.toLowerCase()];
       priced.push({
         ...u, priceUsd: p?.price ?? null, volume24hUsd: p?.vol ?? null, liquidityUsd: p?.liq ?? null, read: !unread.has(u.contract.toLowerCase()),
-        logo: p?.logo ?? null, change24hPct: p?.change24hPct ?? null, mcapUsd: p?.mcapUsd ?? null, mcapIsFdv: p?.mcapIsFdv ?? false,
+        // Base: the token's own logo (contractURI, synced into coinbase-list) first,
+        // so a row GeckoTerminal could not read still shows its mark.
+        logo: (chain === "base" ? BASE_LOGO.get(u.contract.toLowerCase()) : null) ?? p?.logo ?? null, change24hPct: p?.change24hPct ?? null, mcapUsd: p?.mcapUsd ?? null, mcapIsFdv: p?.mcapIsFdv ?? false,
         pool: p?.pool ?? null, side: p?.side ?? "base", poolCreatedAt: p?.poolCreatedAt ?? null,
       });
     }
