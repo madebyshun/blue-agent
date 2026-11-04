@@ -36,6 +36,8 @@ export const MCP_PRICES: Readonly<Record<string, number>> = {
   token_verdict: 10_000,  // $0.01
   wallet_risk: 10_000,    // $0.01
   trending_safe: 50_000,  // $0.05
+  stock_quote: 20_000,    // $0.02 — the catalog price of base-stock-quote
+  stock_movers: 30_000,   // $0.03 — the catalog price of base-stock-movers
 };
 
 const BUILDER_CODE_EXT = declareBuilderCodeExtension("bc_2ejr35xc");

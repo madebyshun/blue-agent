@@ -38,7 +38,7 @@ async function rpc(method: string, params: Record<string, unknown> = {}): Promis
 
   console.log("1. manifest");
   const listed = (await rpc("tools/list")).tools?.map((t) => t.name) ?? [];
-  const expected = ["swap_prepare", "token_verdict", "stock_signal", "trending_safe", "wallet_risk", "token_price", "send_prepare", "bridge_prepare", "sign_check", "approvals_audit", "blue_registry", "blue_call", "blue_doctor"];
+  const expected = ["swap_prepare", "token_verdict", "stock_signal", "stock_quote", "stock_movers", "trending_safe", "wallet_risk", "token_price", "send_prepare", "bridge_prepare", "sign_check", "approvals_audit", "blue_registry", "blue_call", "blue_doctor"];
   ok("tools/list serves exactly the v2 set", JSON.stringify(listed) === JSON.stringify(expected), listed.join(","));
   ok("no tool name carries a dot (the Claude API rejects them)", MCP_TOOLS.every((t) => /^[a-zA-Z0-9_-]{1,64}$/.test(t.name)));
   ok("every paid tool is in the manifest, and says its price", Object.keys(MCP_PRICES).every((n) => MCP_TOOLS.find((t) => t.name === n)?.description.includes("PAID:")));
