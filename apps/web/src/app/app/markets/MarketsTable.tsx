@@ -6,6 +6,7 @@
 // as rows scroll into view, two at a time, from the same cached candles the
 // token page uses (GeckoTerminal is keyless and 429s on bursts).
 import { useEffect, useMemo, useRef, useState } from "react";
+import { TradeModal } from "./MarketSwap";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import StockMark from "@/components/blue-hood/StockMark";
@@ -109,13 +110,17 @@ function Spark({ r, up }: { r: MarketRow; up: boolean | null }) {
 }
 
 // ── Table ────────────────────────────────────────────────────────────────────
-export default function MarketsTable({ rows, readAt }: { rows: MarketRow[]; readAt: string | null }) {
+/** One chain's stock-token totals. `vol` null = nothing was read; `complete` false = a lower bound. */
+export interface ChainStat { count: number; vol: number | null; complete: boolean }
+
+export default function MarketsTable({ rows, readAt, stats }: { rows: MarketRow[]; readAt: string | null; stats: Record<"base" | "robinhood", ChainStat> }) {
   const router = useRouter();
   const [kind, setKind] = useState<"all" | "stocks" | "crypto" | "launches">("all");
   const [chain, setChain] = useState<"all" | "base" | "robinhood">("all");
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<{ k: SortKey; dir: 1 | -1 }>({ k: "vol", dir: -1 });
   const [page, setPage] = useState(0);
+  const [trade, setTrade] = useState<MarketRow | null>(null);
   useEffect(() => setPage(0), [kind, chain, q, sort]);
 
   const shown = useMemo(() => {
@@ -135,7 +140,21 @@ export default function MarketsTable({ rows, readAt }: { rows: MarketRow[]; read
   }, [rows, kind, chain, q, sort]);
   const pages = Math.max(1, Math.ceil(shown.length / PAGE));
   const slice = shown.slice(page * PAGE, page * PAGE + PAGE);
-  const trending = useMemo(() => [...rows].filter((r) => r.vol !== null).sort((a, b) => (b.vol ?? 0) - (a.vol ?? 0)).slice(0, 16), [rows]);
+  const trending = useMemo(() => [...rows].filter((r) => r.vol !== null && (chain === "all" || r.chain === chain)).sort((a, b) => (b.vol ?? 0) - (a.vol ?? 0)).slice(0, 16), [rows, chain]);
+
+  // The stat cards follow the chain filter: one chain's numbers, or both added up with the split underneath.
+  const cards = useMemo(() => {
+    const b = stats.base, h = stats.robinhood;
+    const volText = (s: ChainStat) => s.vol === null ? "—" : `${s.complete ? "" : "≥"}${usd(s.vol)}`;
+    const volSub = (s: ChainStat) => s.vol === null ? "not read" : s.complete ? "stock tokens, DEX pools" : "partial read: a lower bound";
+    if (chain === "base") return [["STOCK TOKENS · BASE 8453", String(b.count), "every Coinbase B20 on base.org, checked on chain"], ["24H VOLUME · BASE 8453", volText(b), volSub(b)]];
+    if (chain === "robinhood") return [["STOCK TOKENS · ROBINHOOD CHAIN 4663", String(h.count), "Robinhood stock tokens + ETFs"], ["24H VOLUME · ROBINHOOD CHAIN 4663", volText(h), volSub(h)]];
+    const both: ChainStat = { count: b.count + h.count, vol: b.vol === null && h.vol === null ? null : (b.vol ?? 0) + (h.vol ?? 0), complete: b.complete && h.complete && b.vol !== null && h.vol !== null };
+    return [
+      ["STOCK TOKENS · BOTH CHAINS", String(both.count), `${b.count} on Base 8453 · ${h.count} on Robinhood Chain 4663`],
+      ["24H VOLUME · BOTH CHAINS", volText(both), `Base 8453 ${volText(b)} · Robinhood Chain 4663 ${volText(h)}`],
+    ];
+  }, [stats, chain]);
 
   const chip = (on: boolean) => `text-[13px] rounded-[7px] px-2.5 py-[5px] border transition-colors ${on ? "border-[#4FC3F7]/60 text-[#4FC3F7] bg-[#4FC3F7]/10" : "border-[#1A1A2E] text-[#94A3B8] hover:text-[#E2E8F0]"}`;
   const Th = ({ k, children, className = "" }: { k: SortKey; children: React.ReactNode; className?: string }) => (
@@ -149,6 +168,16 @@ export default function MarketsTable({ rows, readAt }: { rows: MarketRow[]; read
 
   return (
     <div>
+      {trade && <TradeModal chain={trade.chain} contract={trade.token} symbol={label(trade)} name={trade.name} onClose={() => setTrade(null)} />}
+      <div className="mb-3 grid gap-2.5 grid-cols-1 sm:grid-cols-2">
+        {cards.map(([l, v, sub]) => (
+          <div key={l} className="rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] p-[14px]">
+            <p className="text-[12px] tracking-[0.12em] text-[#64748B]">{l}</p>
+            <p className="mt-1.5 text-[22px] font-semibold text-[#E2E8F0] tabular-nums">{v}</p>
+            <p className="mt-0.5 text-[12px] text-[#64748B]">{sub}</p>
+          </div>
+        ))}
+      </div>
       {/* 24h trending strip */}
       <div className="flex items-center gap-3 overflow-x-auto rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] px-3 py-2 [scrollbar-width:none]">
         <span className="shrink-0 flex items-center gap-1.5 text-[12px] font-semibold tracking-[0.12em] text-[#E2E8F0]"><span className="h-1.5 w-1.5 rounded-full bg-[#34D399]" />24H TRENDING</span>
@@ -221,7 +250,7 @@ export default function MarketsTable({ rows, readAt }: { rows: MarketRow[]; read
                   <td className="px-2 text-right text-[#94A3B8] tabular-nums">{!r.read ? "—" : usd(r.liq)}</td>
                   <td className="px-2 text-right text-[#E2E8F0] tabular-nums">{!r.read ? "—" : r.vol === null ? <span className="text-[#64748B]">no pool</span> : usd(r.vol)}</td>
                   <td className="px-3 text-right">
-                    <Link href={`/markets/${r.chain}/${r.token}#trade`} className="inline-flex items-center whitespace-nowrap rounded-[8px] border border-[#2a3350] bg-[#0F121A] px-3.5 py-2 text-[13px] text-[#E2E8F0] hover:border-[#4FC3F7]/60 hover:text-[#4FC3F7]">Trade</Link>
+                    <button type="button" onClick={(e) => { e.stopPropagation(); setTrade(r); }} className="inline-flex items-center whitespace-nowrap rounded-[8px] border border-[#2a3350] bg-[#0F121A] px-3.5 py-2 text-[13px] text-[#E2E8F0] hover:border-[#4FC3F7]/60 hover:text-[#4FC3F7]">Trade</button>
                   </td>
                 </tr>
               );

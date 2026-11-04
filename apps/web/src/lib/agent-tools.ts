@@ -1070,7 +1070,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
   {
     id: "base-stock-search",
     name: "Base Stock Search",
-    description: "Find Coinbase Tokenized Stocks on Base 8453 by ticker or company name, from the 218 Base publishes (base.org), each checked on chain (isB20, 8 decimals, exact symbol). Returns the contract to use; a ticker alone does not identify a token.",
+    description: "Find Coinbase Tokenized Stocks on Base 8453 by ticker or company name, from every one Base publishes (base.org), each checked on chain (isB20, 8 decimals, exact symbol). Returns the contract to use; a ticker alone does not identify a token.",
     agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
     category: "on-chain",
     inputs: [

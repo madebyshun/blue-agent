@@ -1,5 +1,5 @@
 // x402/base-stock-movers — the 24h gainers and losers among Coinbase Tokenized
-// Stocks on Base 8453 (all 218 Base publishes), ranked by the deepest pool's
+// Stocks on Base 8453 (every one Base publishes), ranked by the deepest pool's
 // 24h change. Dust pools cannot rank: a pool needs min_liquidity_usd (default
 // $10k) or its "move" is one trade. Tokens whose read was refused are counted,
 // not dropped silently.

@@ -4,15 +4,19 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAccount, useSendTransaction, useSwitchChain } from "wagmi";
 import { base } from "wagmi/chains";
-import { createPublicClient, encodeFunctionData, http, isAddress, parseEther, parseEventLogs } from "viem";
+import { createPublicClient, encodeFunctionData, http, isAddress, parseEventLogs, parseUnits } from "viem";
 import { ConnectButton } from "@/components/ConnectModal";
 import ExchangeHeader from "../ExchangeHeader";
 import MarketsHeader from "../../markets/MarketsHeader";
 import {
   QUADRA_FACTORY_V3 as FACTORY, QUADRA_V3_ABI as ABI, QUADRA_V3_EXPECTS as EXPECT, BLUE_REFERRER, ETH_QUOTE,
   REVENUE_SHARE_DEPLOYER as RSD, REVENUE_SHARE_DEPLOYER_ABI as RSD_ABI, MAX_AGENT_BPS, stakerWording,
-  coinProblem, coinContractUri, newSalt, type CoinDraft,
+  ERC20_MIN_ABI, coinProblem, coinContractUri, newSalt, type CoinDraft,
 } from "@/lib/agent-coin";
+import { COINBASE_BASE_STOCKS } from "@/lib/base-stocks/coinbase-list";
+import { useSpendableBalance } from "@/lib/wallet/useSpendableBalance";
+import { resolveSpend } from "@/lib/wallet/read-state";
+import { UnverifiedBalance } from "@/components/wallet/UnverifiedBalance";
 
 const pub = createPublicClient({ chain: base, transport: http() });
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
@@ -22,24 +26,35 @@ const card = "rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] px-4 py-3.5";
 const H = ({ children }: { children: string }) => <h2 className="mb-2 text-[12px] font-medium tracking-[0.14em] text-[#64748B]">{children}</h2>;
 
 type Step = { s: "idle" | "busy" | "done" | "error"; msg?: string; hash?: string };
-interface Check { ok: boolean; why: string[]; referrerOk: boolean }
+/** What a coin can pair with: ETH, or a Coinbase stock on Base the factory has enabled. */
+interface Pair { address: `0x${string}`; symbol: string; decimals: number }
+const ETH_PAIR: Pair = { address: ETH_QUOTE, symbol: "ETH", decimals: 18 };
+interface Check { ok: boolean; why: string[]; referrerOk: boolean; pairs: Pair[] }
 
 /** Every constant the page states is read back from the deployed factory first (Quadra's rule 16). */
 async function preflight(): Promise<Check> {
   const why: string[] = [];
-  const [low, high, creator, ref, eth, approved] = await Promise.all([
+  const [low, high, creator, ref, eth, approved, stocks] = await Promise.all([
     pub.readContract({ address: FACTORY, abi: ABI, functionName: "FEE_LOW" }),
     pub.readContract({ address: FACTORY, abi: ABI, functionName: "FEE_HIGH" }),
     pub.readContract({ address: FACTORY, abi: ABI, functionName: "CREATOR_SHARE_BPS" }),
     pub.readContract({ address: FACTORY, abi: ABI, functionName: "REFERRER_SHARE_BPS" }),
     pub.readContract({ address: FACTORY, abi: ABI, functionName: "quotes", args: [ETH_QUOTE] }),
     pub.readContract({ address: FACTORY, abi: ABI, functionName: "approvedReferrers", args: [BLUE_REFERRER] }),
+    // A stock is offered only when the factory itself answers that its pair is enabled (one Multicall3 read).
+    pub.multicall({ contracts: COINBASE_BASE_STOCKS.map((st) => ({ address: FACTORY, abi: ABI, functionName: "quotes", args: [st.token] } as const)) }),
   ]);
+  // Coinbase stocks on Base are B20 with 8 decimals (asserted on chain in coinbase-list.ts).
+  const pairs: Pair[] = [
+    ...(eth[0] ? [ETH_PAIR] : []),
+    ...COINBASE_BASE_STOCKS.filter((_, i) => stocks[i].status === "success" && (stocks[i].result as readonly [boolean, number])[0])
+      .map((st) => ({ address: st.token, symbol: st.symbol, decimals: 8 })),
+  ];
   if (low !== EXPECT.feeLow || high !== EXPECT.feeHigh) why.push(`fees read ${low}/${high}, expected ${EXPECT.feeLow}/${EXPECT.feeHigh}`);
   if (creator !== EXPECT.creatorShareBps) why.push(`creator share reads ${creator} bps, expected ${EXPECT.creatorShareBps}`);
   if (ref !== EXPECT.referrerShareBps) why.push(`referrer share reads ${ref} bps, expected ${EXPECT.referrerShareBps}`);
-  if (!eth[0]) why.push("the ETH pair is not enabled for new launches");
-  return { ok: why.length === 0, why, referrerOk: approved };
+  if (pairs.length === 0) why.push("no pair is enabled for new launches");
+  return { ok: why.length === 0, why, referrerOk: approved, pairs };
 }
 
 /** `markets`: rendered as Markets → Launch token (/markets/launch); otherwise the Exchange tab. */
@@ -50,6 +65,7 @@ export default function TokenizeClient({ markets = false }: { markets?: boolean 
   const [d, setD] = useState<CoinDraft>({ name: "", symbol: "", description: "", image: "", agentId: "" });
   const [fee, setFee] = useState<10_000 | 30_000>(10_000);
   const [buy, setBuy] = useState("0");
+  const [pairAddr, setPairAddr] = useState<string>(ETH_QUOTE);
   const [check, setCheck] = useState<Check | null>(null);
   const [launch, setLaunch] = useState<Step & { token?: string }>({ s: "idle" });
   const [recip, setRecip] = useState("");
@@ -62,7 +78,7 @@ export default function TokenizeClient({ markets = false }: { markets?: boolean 
   const token = (launch.token ?? coin).trim();
   const [agentOwner, setAgentOwner] = useState<string | null>(null);
 
-  useEffect(() => { preflight().then(setCheck).catch(() => setCheck({ ok: false, why: ["could not read the factory on Base"], referrerOk: false })); }, []);
+  useEffect(() => { preflight().then(setCheck).catch(() => setCheck({ ok: false, why: ["could not read the factory on Base"], referrerOk: false, pairs: [] })); }, []);
   useEffect(() => {
     setAgentOwner(null);
     const id = d.agentId.trim();
@@ -73,17 +89,33 @@ export default function TokenizeClient({ markets = false }: { markets?: boolean 
 
   const set = (k: keyof CoinDraft) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setD({ ...d, [k]: e.target.value });
   const problem = coinProblem(d);
+  const pair = check?.pairs.find((p) => p.address === pairAddr) ?? check?.pairs[0] ?? ETH_PAIR;
+  const isEth = pair.address === ETH_QUOTE;
   let buyWei = 0n;
   let buyBad = false;
-  try { buyWei = parseEther(buy || "0"); } catch { buyBad = true; }
+  try { buyWei = parseUnits(buy || "0", pair.decimals); } catch { buyBad = true; }
+  // The first buy's balance: one hook, three-outcome verdict (spend-gate-check). ETH or the paired stock.
+  const bal = useSpendableBalance({ holder: address ?? "", native: isEth, token: isEth ? undefined : pair.address, chainId: base.id });
+  const gate = resolveSpend({ loading: bal.loading, received: bal.received, failed: bal.failed, over: bal.raw != null && buyWei > bal.raw });
   const agentNotMine = !!agentOwner && agentOwner !== "none" && !!address && agentOwner !== address.toLowerCase();
 
   async function onLaunch() {
     setLaunch({ s: "busy", msg: "Confirm in your wallet…" });
     try {
       if (chainId !== base.id) await switchChainAsync({ chainId: base.id });
-      const data = encodeFunctionData({ abi: ABI, functionName: "launch", args: [d.name.trim(), d.symbol.trim(), coinContractUri(d), newSalt(), ETH_QUOTE, buyWei, fee, BLUE_REFERRER] });
-      const hash = await sendTransactionAsync({ to: FACTORY, data, value: buyWei, chainId: base.id });
+      // A stock's first buy is pulled with transferFrom, so the factory needs an allowance for exactly that amount first.
+      if (!isEth && buyWei > 0n && address) {
+        const allowance = await pub.readContract({ address: pair.address, abi: ERC20_MIN_ABI, functionName: "allowance", args: [address, FACTORY] });
+        if (allowance < buyWei) {
+          setLaunch({ s: "busy", msg: `1 of 2 · allow the launchpad to take ${buy} ${pair.symbol}. Confirm in your wallet…` });
+          const ah = await sendTransactionAsync({ to: pair.address, data: encodeFunctionData({ abi: ERC20_MIN_ABI, functionName: "approve", args: [FACTORY, buyWei] }), chainId: base.id });
+          const arc = await pub.waitForTransactionReceipt({ hash: ah });
+          if (arc.status !== "success") throw new Error(`approve reverted (${ah})`);
+          setLaunch({ s: "busy", msg: "2 of 2 · launch. Confirm in your wallet…" });
+        }
+      }
+      const data = encodeFunctionData({ abi: ABI, functionName: "launch", args: [d.name.trim(), d.symbol.trim(), coinContractUri(d), newSalt(), pair.address, buyWei, fee, BLUE_REFERRER] });
+      const hash = await sendTransactionAsync({ to: FACTORY, data, value: isEth ? buyWei : 0n, chainId: base.id });
       const rc = await pub.waitForTransactionReceipt({ hash });
       if (rc.status !== "success") throw new Error(`launch reverted (${hash})`);
       const ev = parseEventLogs({ abi: ABI, logs: rc.logs, eventName: "Launched" })[0];
@@ -153,7 +185,7 @@ export default function TokenizeClient({ markets = false }: { markets?: boolean 
             <h1 className="text-[18px] font-semibold text-[#E2E8F0]">{markets ? "Launch a token" : "Tokenize an agent"}</h1>
             <p className="mt-1.5 max-w-[860px] text-[14px] leading-[1.7] text-[#94A3B8]">
               {markets ? "Launch a token on Quadra's launchpad on Base 8453, for yourself or for an agent." : "Launch a coin for your agent on Quadra's launchpad on Base 8453."} The coin has no admin and a fixed supply, and its whole supply sits
-              in a Uniswap v4 pool as liquidity nobody can pull. Every trade pays the pool fee, and 80% of it can go straight to your agent&apos;s wallet
+              in a Uniswap v4 pool, paired with ETH or a Coinbase stock on Base, as liquidity nobody can pull. Every trade pays the pool fee, and 80% of it can go straight to your agent&apos;s wallet
               to fund its work. You sign every step from your own wallet.
             </p>
           </div>
@@ -177,8 +209,18 @@ export default function TokenizeClient({ markets = false }: { markets?: boolean 
                   ))}
                 </div>
               </div>
-              <label className="grid gap-1"><span className={label}>Your first buy, in ETH (0 = none), at the opening price, before anyone else</span><input className={input} value={buy} onChange={(e) => setBuy(e.target.value.trim())} /></label>
-              {buyBad && <p className="text-[13px] text-[#F87171]">Not an ETH amount.</p>}
+              <div className="grid gap-1">
+                <span className={label}>Pair with (chosen once, forever)</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {(check?.pairs ?? [ETH_PAIR]).map((p) => (
+                    <button key={p.address} type="button" onClick={() => { setPairAddr(p.address); setBuy("0"); }} className="rounded-full border px-[11px] py-1 text-[12px]"
+                      style={pair.address === p.address ? { color: "#050508", background: "#4FC3F7", borderColor: "#4FC3F7", fontWeight: 600 } : { color: "#94A3B8", borderColor: "#1A1A2E" }}>{p.symbol}</button>
+                  ))}
+                </div>
+                {!isEth && <p className="text-[12px] leading-[1.6] text-[#64748B]">Pairing with {pair.symbol} trades your coin against that Coinbase stock token on Base. The launchpad sets the opening price.</p>}
+              </div>
+              <label className="grid gap-1"><span className={label}>Your first buy, in {pair.symbol} (0 = none), at the opening price, before anyone else</span><input className={input} value={buy} onChange={(e) => setBuy(e.target.value.trim())} /></label>
+              {buyBad && <p className="text-[13px] text-[#F87171]">Not a {pair.symbol} amount.</p>}
               {problem && d.name && <p className="text-[13px] text-[#F87171]">{problem}</p>}
             </section>
 
@@ -200,10 +242,13 @@ export default function TokenizeClient({ markets = false }: { markets?: boolean 
                 {check === null ? <p className="text-[13px] text-[#64748B]">Reading the factory on Base…</p>
                   : !check.ok ? <p className="text-[13px] text-[#F87171]">Not sending: the factory did not answer as expected ({check.why.join("; ")}).</p>
                   : !isConnected ? <ConnectButton label="Connect wallet" />
-                  : <button type="button" onClick={onLaunch} disabled={!!problem || buyBad || launch.s === "busy" || launch.s === "done"}
+                  : <button type="button" onClick={onLaunch} disabled={!!problem || buyBad || (buyWei > 0n && gate !== "ok") || launch.s === "busy" || launch.s === "done"}
                       className="rounded-[8px] bg-[#4FC3F7] px-[13px] py-2 text-[13px] font-semibold text-[#050508] hover:bg-[#29ABE2] disabled:opacity-40">
-                      {launch.s === "busy" ? "Launching…" : `Launch ${d.symbol.trim() || "the coin"}${buyWei > 0n ? ` and buy ${buy} ETH` : ""}`}
+                      {launch.s === "busy" ? "Launching…" : `Launch ${d.symbol.trim() || "the coin"} / ${pair.symbol}${buyWei > 0n ? ` and buy with ${buy} ${pair.symbol}` : ""}`}
                     </button>}
+                {isConnected && buyWei > 0n && (bal.failed
+                  ? <UnverifiedBalance symbol={pair.symbol} onRetry={() => { void bal.refetch(); }} busy={bal.refetching} />
+                  : gate === "insufficient" && <p className="text-[13px] text-[#F87171]">Your wallet holds less than {buy} {pair.symbol} on Base.</p>)}
                 <Status s={launch} />
                 {launch.token && (
                   <p className="text-[13px] text-[#94A3B8]">
@@ -212,7 +257,7 @@ export default function TokenizeClient({ markets = false }: { markets?: boolean 
                     <a className="text-[#4FC3F7]" href={`https://dexscreener.com/base/${launch.token}`} target="_blank" rel="noreferrer">DexScreener ↗</a>
                   </p>
                 )}
-                <p className="text-[12px] text-[#64748B]">Factory <a className="text-[#4FC3F7]" href={`https://basescan.org/address/${FACTORY}`} target="_blank" rel="noreferrer">{short(FACTORY)}</a> · Quadra v3 is not audited.</p>
+                <p className="text-[12px] text-[#64748B]">Factory <a className="text-[#4FC3F7]" href={`https://basescan.org/address/${FACTORY}`} target="_blank" rel="noreferrer">{short(FACTORY)}</a> on Base 8453</p>
               </section>
 
               <section className={`${card} grid gap-2.5`}>
@@ -233,7 +278,7 @@ export default function TokenizeClient({ markets = false }: { markets?: boolean 
                   </>
                 ) : (
                   <>
-                    <p className="text-[13px] leading-[1.6] text-[#94A3B8]">{stakerWording(d.symbol.trim() || "COIN", "ETH")}</p>
+                    <p className="text-[13px] leading-[1.6] text-[#94A3B8]">{stakerWording(d.symbol.trim() || "COIN", pair.symbol)}</p>
                     <p className="text-[13px] leading-[1.6] text-[#64748B]">
                       Holders who do not stake receive nothing. The agent receives the share you set of the launcher&apos;s 80%; stakers share the rest, released over 7 days.
                       Quadra&apos;s and the referrer&apos;s shares are not affected. The contract has no owner and is not audited.
@@ -261,7 +306,7 @@ export default function TokenizeClient({ markets = false }: { markets?: boolean 
           </div>
 
           <p className="text-[12px] leading-relaxed text-[#64748B]">
-            A coin is not a share in the agent and pays no dividends. Launching one is your decision and your transaction; Blue Agent builds the calls and never holds your keys or funds.
+            A coin is not a share in the agent and pays no dividends. Launching one is your decision and your transaction; Blue Agent builds the calls and never holds your keys or funds. The launchpad contracts have not been audited.
             {" "}<Link className="text-[#4FC3F7]" href="/exchange/create">No agent yet? Create one first →</Link>
           </p>
         </div>
