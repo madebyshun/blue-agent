@@ -38,7 +38,7 @@ async function handle(line: string): Promise<void> {
     send(request.id, {
       protocolVersion: "2025-03-26",
       capabilities: {},
-      serverInfo: { name: "Blue Agent x402 MCP bridge", version: "0.3.0" },
+      serverInfo: { name: "Blue Agent x402 MCP bridge", version: "0.3.1" },
     });
     return;
   }
