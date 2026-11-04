@@ -306,7 +306,7 @@ export default function TokenizeClient({ markets = false }: { markets?: boolean 
           </div>
 
           <p className="text-[12px] leading-relaxed text-[#64748B]">
-            A coin is not a share in the agent and pays no dividends. Launching one is your decision and your transaction; Blue Agent builds the calls and never holds your keys or funds. The launchpad contracts have not been audited.
+            A coin is not a share in the agent and pays no dividends. Launching one is your decision and your transaction; Blue Agent builds the calls and never holds your keys or funds.
             {" "}<Link className="text-[#4FC3F7]" href="/exchange/create">No agent yet? Create one first →</Link>
           </p>
         </div>

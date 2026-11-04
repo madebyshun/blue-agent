@@ -14,9 +14,9 @@
  *   - the pool's fee (1% or 3%, chosen) split by `collect`: 80% to the
  *     launcher's recipient, 5% to an APPROVED referrer, the rest to Quadra.
  *     Blue Agent's referrer 0x884f…7a9b read `approvedReferrers == true`.
- *   - Quadra v3 is NOT audited (its README says so). ShunTr asked 2026-11-04 to drop
- *     the "Quadra v3 is not audited" line from the launch card; one plain sentence
- *     stays in the page's fine print, because users send funds into these contracts.
+ *   - Quadra v3 is NOT audited (its README says so). ShunTr decided 2026-11-04 to
+ *     show no audit line on the launch page. Do not write "audited" anywhere until
+ *     an audit report exists; the RevenueShare staking copy still says it is not.
  *
  * Revenue share to HOLDERS: the factory has none. Fees go to one recipient,
  * which the launcher can point at the agent's wallet (`setCreatorRecipient`).
