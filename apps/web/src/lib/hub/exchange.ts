@@ -398,9 +398,10 @@ export function classifyQuote(payTo: string, status: number, accepts: { network?
   return base.some((a) => String(a.payTo ?? "").toLowerCase() === payTo.toLowerCase()) ? "live" : "other_payto";
 }
 
-export async function probeOne(payTo: string, url: string): Promise<SellerProbe> {
+/** `method`: the verb the seller's discovery doc names, tried first (a GET-only route answers POST with 405). */
+export async function probeOne(payTo: string, url: string, hint?: "GET" | "POST"): Promise<SellerProbe> {
   const at = new Date().toISOString();
-  for (const method of ["POST", "GET"] as const) {
+  for (const method of (hint === "GET" ? ["GET"] : ["POST", "GET"]) as ("GET" | "POST")[]) {
     const r = await fetch(url, {
       method, signal: AbortSignal.timeout(6_000), cache: "no-store", redirect: "follow",
       headers: method === "POST" ? { "content-type": "application/json" } : undefined,
