@@ -6,7 +6,13 @@ import type { AssetInfo } from "./TokenizeClient";
 
 export async function launchAssets(): Promise<AssetInfo> {
   try {
-    const { rows } = await readStockMarkets();
+    // Bounded: the picker is decoration, the page must not wait on GeckoTerminal.
+    const read = await Promise.race([
+      readStockMarkets(),
+      new Promise<null>((r) => setTimeout(() => r(null), 4000)),
+    ]);
+    if (!read) return {};
+    const { rows } = read;
     return Object.fromEntries(rows.filter((r) => r.chain === "base").map((r) => [r.contract.toLowerCase(), { logo: r.logo, priceUsd: r.priceUsd }]));
   } catch {
     return {};

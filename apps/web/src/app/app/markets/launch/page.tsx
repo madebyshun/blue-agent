@@ -4,7 +4,9 @@ import type { Metadata } from "next";
 import { launchAssets } from "@/app/app/exchange/tokenize/assets";
 import TokenizeClient from "../../exchange/tokenize/TokenizeClient";
 
-export const revalidate = 300;
+// Dynamic, like /markets: a static prerender would read 268 stock pools at
+// BUILD time and time the Vercel build out (0fe60625 failed that way).
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Launch a token — Blue Agent",
