@@ -8,6 +8,7 @@ import { readExchange, readSellerIdentities, readSellerProbes, type ProviderRow 
 import { readListings } from "@/lib/hub/listings";
 import { X402_PAY_TO } from "@/lib/x402-payee";
 import { BLUE_AGENT_ID } from "@/lib/erc8004";
+import { readMcpStats } from "@/lib/mcp-receipts";
 import ExchangeHeader from "./ExchangeHeader";
 
 export const dynamic = "force-dynamic";
@@ -50,7 +51,10 @@ const Badge = ({ c, children }: { c: string; children: React.ReactNode }) => (
 );
 
 export default async function AgentsPage() {
-  const [ex, ids, probes, listings] = await Promise.all([readExchange(30), readSellerIdentities(), readSellerProbes(), readListings()]);
+  const [ex, ids, probes, listings, mcp] = await Promise.all([readExchange(30), readSellerIdentities(), readSellerProbes(), readListings(), readMcpStats(30)]);
+  // Blue's own MCP receipts (each a settled USDC tx on Base) reach back 30 days;
+  // the on-chain index may cover fewer, so Blue's card reads the receipts.
+  const blueMcp = mcp.readable ? { usd: (mcp.outside.units + mcp.team.units) / 1e6, team: mcp.team.units / 1e6 } : null;
   const R = ex.readable && ex.daysCovered > 0;
   const byPay = new Map(ex.rows.map((r) => [r.payTo, r]));
   const ours = X402_PAY_TO.toLowerCase();
@@ -92,8 +96,8 @@ export default async function AgentsPage() {
             <Row href={BLUE_AGENT_ID !== null ? `/exchange/agent/${BLUE_AGENT_ID}` : "/services"} title="Blue Agent"
               sub="Stock tokens, token checks and unsigned transactions on Base 8453 and Robinhood Chain 4663. MCP + x402."
               meta={`${BLUE_AGENT_ID !== null ? `ERC-8004 #${BLUE_AGENT_ID} · ` : ""}payTo ${short(ours)}`}
-              right={R ? usd((blue?.usd ?? 0) + (blue?.teamUsd ?? 0)) : "—"}
-              rightSub={R && blue?.teamUsd ? `${ex.daysCovered}d · incl. ${usd(blue.teamUsd)} team tests` : `${ex.daysCovered}d, measured`}
+              right={blueMcp ? usd(blueMcp.usd) : R ? usd((blue?.usd ?? 0) + (blue?.teamUsd ?? 0)) : "—"}
+              rightSub={blueMcp ? (blueMcp.team ? `30d · incl. ${usd(blueMcp.team)} team tests` : "30d, receipts on Base") : R && blue?.teamUsd ? `${ex.daysCovered}d · incl. ${usd(blue.teamUsd)} team tests` : `${ex.daysCovered}d, measured`}
               badges={<><Badge c="#34D399">✓ listed</Badge>{BLUE_AGENT_ID !== null && <Badge c="#A78BFA">ERC-8004</Badge>}</>} />
             {listings.map((l) => {
               const r = byPay.get(l.payTo);

@@ -7,6 +7,7 @@ import { notFound } from "next/navigation";
 import { readAgentProfile } from "@/lib/agent-profile";
 import { readExchange, readProviderDetail, readSellerProbes, recentPayments } from "@/lib/hub/exchange";
 import { listJobs } from "@/lib/jobs";
+import { readMcpStats } from "@/lib/mcp-receipts";
 import { X402_PAY_TO } from "@/lib/x402-payee";
 import ExchangeHeader from "../../ExchangeHeader";
 import HireAgent from "../../_components/HireAgent";
@@ -37,6 +38,11 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
   const [ex, detail, probes, recent, jobs] = await Promise.all([
     readExchange(30), readProviderDetail(p.payTo), readSellerProbes(), recentPayments(p.payTo, 8), listJobs(200),
   ]);
+  const isBlueId = p.payTo === X402_PAY_TO.toLowerCase();
+  // Blue Agent: its MCP receipts (each a settled USDC tx on Base) cover 30 days,
+  // longer than the on-chain index may; team tests are named, never blended.
+  const mcpStats = isBlueId ? await readMcpStats(30) : null;
+  const bm = mcpStats?.readable ? { usd: (mcpStats.outside.units + mcpStats.team.units) / 1e6, team: mcpStats.team.units / 1e6, calls: mcpStats.outside.settled + mcpStats.team.settled, teamCalls: mcpStats.team.settled } : null;
   const row = ex.rows.find((r) => r.payTo === p.payTo) ?? null;
   const R = ex.readable && ex.daysCovered > 0;
   const series = (row?.series ?? []).slice(ex.firstIndex);
@@ -99,8 +105,8 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
             <div className="mt-4 grid gap-2.5 grid-cols-2 md:grid-cols-3 2xl:grid-cols-6">
               {[
                 ["REVENUE · LAST FULL DAY", R && d1 !== null ? usd(d1) : "—", delta === null ? "no prior day" : `${delta >= 0 ? "+" : ""}${delta}% vs day before`],
-                [`REVENUE · ${ex.daysCovered}D`, R ? usd((row?.usd ?? 0) + (row?.teamUsd ?? 0)) : "—", R && row?.teamUsd ? `incl. ${usd(row.teamUsd)} from team tests` : "x402 on Base, measured"],
-                ["PAID CALLS", R ? String((row?.paidCalls ?? 0) + (row?.teamCalls ?? 0)) : "—", R && row?.teamCalls ? `incl. ${row.teamCalls} team test${row.teamCalls === 1 ? "" : "s"}` : "EIP-3009 settlements"],
+                bm ? ["REVENUE · 30D", usd(bm.usd), bm.team ? `incl. ${usd(bm.team)} from team tests` : "MCP receipts on Base"] : [`REVENUE · ${ex.daysCovered}D`, R ? usd((row?.usd ?? 0) + (row?.teamUsd ?? 0)) : "—", R && row?.teamUsd ? `incl. ${usd(row.teamUsd)} from team tests` : "x402 on Base, measured"],
+                bm ? ["PAID CALLS", String(bm.calls), bm.teamCalls ? `incl. ${bm.teamCalls} team test${bm.teamCalls === 1 ? "" : "s"}` : "settled on Base"] : ["PAID CALLS", R ? String((row?.paidCalls ?? 0) + (row?.teamCalls ?? 0)) : "—", R && row?.teamCalls ? `incl. ${row.teamCalls} team test${row.teamCalls === 1 ? "" : "s"}` : "EIP-3009 settlements"],
                 ["PAYING WALLETS", R ? String(row?.payers ?? 0) : "—", "distinct payers"],
                 ["JOBS", String(delivered.length), `${unlocked.length} unlocked by posters`],
                 ["RATING", !p.reputation.readable ? "—" : p.reputation.average === null ? "none" : `${Math.round(p.reputation.average)}/100`, `${p.reputation.count} on-chain rating${p.reputation.count === 1 ? "" : "s"}`],
