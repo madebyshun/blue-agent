@@ -11,7 +11,6 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Markets — Blue Agent", description: "Stock tokens and crypto on Base and Robinhood Chain, priced from their DEX pools." };
 
 const usd = (n: number) => n >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(1)}k` : `$${n.toFixed(2)}`;
-const card = "rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14]";
 
 export default async function MarketsPage() {
   const [stocks, trending, launches] = await Promise.all([
@@ -63,21 +62,10 @@ export default async function MarketsPage() {
       <MarketsHeader active="markets" chip={`${count("base") + count("robinhood")} stock tokens · ${trending.rows.length} trending · 2 chains`} />
       <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="px-5 py-[18px] w-full">
-          <div className="mb-3 grid gap-2.5 grid-cols-2 md:grid-cols-4">
-            {[
-              ["STOCK TOKENS · BASE", String(count("base")), "every Coinbase B20 on base.org, checked on chain"],
-              ["STOCK TOKENS · ROBINHOOD", String(count("robinhood")), "Robinhood stock tokens + ETFs"],
-              ["24H VOLUME · BASE", volShow("base"), volRead("base") ? "stock tokens, DEX pools" : "partial read: a lower bound"],
-              ["24H VOLUME · ROBINHOOD", volShow("robinhood"), volRead("robinhood") ? "stock tokens, DEX pools" : "partial read: a lower bound"],
-            ].map(([l, v, s]) => (
-              <div key={l} className={`${card} p-[14px]`}>
-                <p className="text-[12px] tracking-[0.12em] text-[#64748B]">{l}</p>
-                <p className="mt-1.5 text-[22px] font-semibold text-[#E2E8F0] tabular-nums">{v}</p>
-                <p className="mt-0.5 text-[12px] text-[#64748B]">{s}</p>
-              </div>
-            ))}
-          </div>
-          <MarketsTable rows={rows} readAt={stocks.readAt} />
+          <MarketsTable rows={rows} readAt={stocks.readAt} stats={{
+            base: { count: count("base"), vol: volShow("base") === "—" ? null : vol("base"), complete: volRead("base") },
+            robinhood: { count: count("robinhood"), vol: volShow("robinhood") === "—" ? null : vol("robinhood"), complete: volRead("robinhood") },
+          }} />
           <p className="text-[12px] text-[#64748B] mt-4 leading-relaxed">
             Stock tokens come from Blue Agent&apos;s verified registries, matched by contract on each chain. Trending crypto is GeckoTerminal&apos;s list as-is, <span className="text-[#F59E0B]">unchecked</span>: no tax or honeypot test runs here, and tokens using a major&apos;s symbol (BTC, ETH, USDC…) are left out.
             Prices, change, market cap, liquidity, volume and charts are read from each token&apos;s DEX pools (Aerodrome / Uniswap on Base, Uniswap v4 on Robinhood Chain) through GeckoTerminal, every 5 minutes. A stock token tracks a share; it is not the share. Not financial advice.
