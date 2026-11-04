@@ -53,6 +53,34 @@ async function getJson(url: string): Promise<unknown> {
   return r.json();
 }
 
+type DiscoveryEntry = { resource?: string; method?: string; description?: string; accepts?: { network?: string; payTo?: string; amount?: string; maxAmountRequired?: string }[] };
+export interface Candidate { url: string; method?: "GET" | "POST"; priceUsd: number | null; description: string }
+
+/**
+ * The services a seller's /.well-known/x402 offers on its own domain, at most 12.
+ * The list is `items` (CDP Bazaar shape) or `resources` (x402 v2 well-known, e.g.
+ * Skavio, issue #518). An entry without `accepts` stays a candidate: the unpaid
+ * probe reads the payTo from the live 402, which is the proof that counts. An
+ * entry WITH accepts must name USDC on Base to this wallet.
+ */
+export function discoveryCandidates(doc: unknown, wallet: string, domain: string): Candidate[] {
+  const d = (doc ?? {}) as { items?: unknown; resources?: unknown };
+  const entries = [...(Array.isArray(d.items) ? d.items : []), ...(Array.isArray(d.resources) ? d.resources : [])] as DiscoveryEntry[];
+  const seen = new Set<string>();
+  return entries.flatMap((it): Candidate[] => {
+    const url = String(it?.resource ?? "");
+    const accepts = Array.isArray(it?.accepts) ? it.accepts : [];
+    const a = accepts.find((x) => (x.network === "eip155:8453" || x.network === "base") && String(x.payTo ?? "").toLowerCase() === wallet.toLowerCase());
+    if ((accepts.length && !a) || !/^https:\/\//.test(url) || seen.has(url)) return [];
+    let host = ""; try { host = new URL(url).hostname; } catch { return []; }
+    if (host !== domain && !host.endsWith(`.${domain}`)) return [];
+    seen.add(url);
+    const raw = Number(a?.amount ?? a?.maxAmountRequired);
+    const m = String(it.method ?? "").toUpperCase();
+    return [{ url, method: m === "GET" || m === "POST" ? m : undefined, priceUsd: a && Number.isFinite(raw) ? raw / 1e6 : null, description: String(it.description ?? "").slice(0, 200) }];
+  }).slice(0, 12);
+}
+
 /** Verify the claim and, if it holds, save the listing. Returns the listing or why not. */
 export async function verifyClaim(wallet: string, name: string, description: string): Promise<Listing | string> {
   const claim = await kv.get<{ domain: string; token: string }>(claimKey(wallet));
@@ -63,19 +91,11 @@ export async function verifyClaim(wallet: string, name: string, description: str
   if (String(proof?.token ?? "") !== claim.token || String(proof?.payTo ?? "").toLowerCase() !== wallet) {
     return `${proofUrl} does not hold this wallet and token yet.`;
   }
-  let doc: { items?: { resource?: string; description?: string; accepts?: { network?: string; payTo?: string; amount?: string; maxAmountRequired?: string }[] }[] };
-  try { doc = (await getJson(`https://${claim.domain}/.well-known/x402`)) as typeof doc; } catch (e) { return `Could not read https://${claim.domain}/.well-known/x402: ${(e as Error).message}`; }
-  const candidates = (doc?.items ?? []).flatMap((it) => {
-    const url = String(it.resource ?? "");
-    const a = (it.accepts ?? []).find((x) => (x.network === "eip155:8453" || x.network === "base") && String(x.payTo ?? "").toLowerCase() === wallet);
-    if (!a || !/^https:\/\//.test(url)) return [];
-    let host = ""; try { host = new URL(url).hostname; } catch { return []; }
-    if (host !== claim.domain && !host.endsWith(`.${claim.domain}`)) return [];
-    const raw = Number(a.amount ?? a.maxAmountRequired);
-    return [{ url, priceUsd: Number.isFinite(raw) ? raw / 1e6 : null, description: String(it.description ?? "").slice(0, 200) }];
-  }).slice(0, 12);
+  let doc: unknown;
+  try { doc = await getJson(`https://${claim.domain}/.well-known/x402`); } catch (e) { return `Could not read https://${claim.domain}/.well-known/x402: ${(e as Error).message}`; }
+  const candidates = discoveryCandidates(doc, wallet, claim.domain);
   if (!candidates.length) return "No service in your /.well-known/x402 asks for USDC on Base to this wallet, on this domain.";
-  const services = await Promise.all(candidates.map(async (c) => ({ ...c, probe: (await probeOne(wallet, c.url)).result })));
+  const services = await Promise.all(candidates.map(async ({ method, ...c }) => ({ ...c, probe: (await probeOne(wallet, c.url, method)).result })));
   if (!services.some((s) => s.probe === "live")) return "None of your services answered an unpaid call with a 402 for USDC on Base to this wallet.";
   const listing: Listing = {
     payTo: wallet, domain: claim.domain, name: name.trim().slice(0, 60) || claim.domain,
