@@ -170,9 +170,15 @@ export const readStockMarkets = cacheWhole(async (): Promise<{ rows: StockRow[];
     }
   }
   const out = { rows: priced, readAt: new Date().toISOString() };
-  if (partial) throw new Uncached(out);
+  // A partial read IS cached now, for 60s. Never caching it (until 2026-11-04)
+  // meant one 429 among ~16 chunks left every view re-reading all of them:
+  // /markets measured 60–72s a load in production. Each unread row already says
+  // so (read: false), so caching it hides nothing; Next serves the cached read
+  // at once and refreshes it in the background, and the per-chunk cache
+  // (gtMulti) means each refresh re-asks GeckoTerminal only for what it missed.
+  void partial;
   return out;
-}, "markets:stocks:v4", 300);
+}, "markets:stocks:v5", 60);
 
 export interface TrendingRow {
   chain: MarketChain;
@@ -231,9 +237,10 @@ export const readTrending = cacheWhole(async (): Promise<{ rows: TrendingRow[]; 
     }
   }
   const out = { rows, readAt: new Date().toISOString(), unread };
-  if (unread.length) throw new Uncached(out);
+  // Partial reads cached for 60s, same reasoning as readStockMarkets: `unread`
+  // names the chain that was not read, so the gap is stated, not hidden.
   return out;
-}, "markets:trending:v3", 300);
+}, "markets:trending:v4", 60);
 
 // ── Launched through Blue Agent ──────────────────────────────────────────────
 //
