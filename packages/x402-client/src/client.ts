@@ -8,6 +8,7 @@
 import { privateKeyToAccount }    from "viem/accounts";
 import { buildPaymentHeader }     from "./signer";
 import { signPayment }            from "./mcp";
+import { AgentBudget, DEFAULT_AGENT } from "./budget";
 import type {
   X402ClientConfig,
   PaymentOption,
@@ -42,6 +43,8 @@ export class X402Client {
   private ttl:         number;
   private address:     string;
   private maxPerCall?: bigint;
+  /** Budgets and loop guard; always present (default: loop guard only). */
+  readonly budget: AgentBudget;
 
   constructor(config: X402ClientConfig) {
     const pk = config.privateKey.startsWith("0x")
@@ -53,6 +56,7 @@ export class X402Client {
     this.ttl        = config.ttl    ?? 300;
     this.address    = privateKeyToAccount(this.privateKey).address;
     this.maxPerCall = config.maxPerCallAtomic;
+    this.budget     = new AgentBudget(config.budget);
   }
 
   // ── Core: call any x402 endpoint ────────────────────────────────────────────
@@ -64,6 +68,9 @@ export class X402Client {
     const { body = {}, headers: extraHeaders = {} } = options;
 
     const method = options.method ?? "POST";
+    const agent = options.agent ?? DEFAULT_AGENT;
+    // Loop guard first, for every call: a retry storm is stopped before even the probe.
+    this.budget.checkLoop(agent, `${method} ${endpoint} ${method === "GET" ? "" : JSON.stringify(body)}`);
     const send = (payHeaders: Record<string, string> = {}) => fetch(endpoint, method === "GET"
       ? { method, headers: { ...extraHeaders, ...payHeaders } }
       : { method, headers: { "Content-Type": "application/json", ...extraHeaders, ...payHeaders }, body: JSON.stringify(body) });
@@ -97,6 +104,10 @@ export class X402Client {
       throw new Error(`${endpoint} costs ${this._formatPrice(amount)}, above the per-call cap of ${this._formatPrice(String(this.maxPerCall))}; nothing was paid`);
     }
 
+    // Budgets: reserve before signing; kept only if the seller answers 2xx.
+    const hold = this.budget.reserve(agent, BigInt(amount), endpoint);
+    try {
+
     // Step 3 — sign EIP-3009 TransferWithAuthorization, in the version the seller speaks.
     const paymentHeader = requirements.x402Version >= 2
       ? Buffer.from(JSON.stringify(await signPayment(this.privateKey, {
@@ -114,6 +125,7 @@ export class X402Client {
       const err = await paid.text();
       throw new Error(`Payment failed (${paid.status}): ${err}`);
     }
+    hold.commit();
 
     const data = await paid.json() as T;
 
@@ -134,6 +146,9 @@ export class X402Client {
       amountPaid: amount,
       txSettled,
     };
+    } finally {
+      hold.release(); // no-op once committed
+    }
   }
 
   // ── Blue Hub shortcuts ───────────────────────────────────────────────────────

@@ -29,3 +29,6 @@ import type { X402ClientConfig } from "./types";
 export function createX402Client(config: X402ClientConfig): X402Client {
   return new X402Client(config);
 }
+
+export { AgentBudget, BudgetError, DEFAULT_AGENT } from "./budget";
+export type { AgentBudgetConfig, AgentSpend, BudgetErrorCode } from "./budget";
