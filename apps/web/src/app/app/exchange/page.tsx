@@ -92,7 +92,8 @@ export default async function AgentsPage() {
             <Row href={BLUE_AGENT_ID !== null ? `/exchange/agent/${BLUE_AGENT_ID}` : "/services"} title="Blue Agent"
               sub="Stock tokens, token checks and unsigned transactions on Base 8453 and Robinhood Chain 4663. MCP + x402."
               meta={`${BLUE_AGENT_ID !== null ? `ERC-8004 #${BLUE_AGENT_ID} · ` : ""}payTo ${short(ours)}`}
-              right={R ? usd(blue?.usd ?? 0) : "—"} rightSub={`${ex.daysCovered}d, measured`}
+              right={R ? usd((blue?.usd ?? 0) + (blue?.teamUsd ?? 0)) : "—"}
+              rightSub={R && blue?.teamUsd ? `${ex.daysCovered}d · incl. ${usd(blue.teamUsd)} team tests` : `${ex.daysCovered}d, measured`}
               badges={<><Badge c="#34D399">✓ listed</Badge>{BLUE_AGENT_ID !== null && <Badge c="#A78BFA">ERC-8004</Badge>}</>} />
             {listings.map((l) => {
               const r = byPay.get(l.payTo);

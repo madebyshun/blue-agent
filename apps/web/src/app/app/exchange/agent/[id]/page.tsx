@@ -99,8 +99,8 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
             <div className="mt-4 grid gap-2.5 grid-cols-2 md:grid-cols-3 2xl:grid-cols-6">
               {[
                 ["REVENUE · LAST FULL DAY", R && d1 !== null ? usd(d1) : "—", delta === null ? "no prior day" : `${delta >= 0 ? "+" : ""}${delta}% vs day before`],
-                [`REVENUE · ${ex.daysCovered}D`, R ? usd(row?.usd ?? 0) : "—", "x402 on Base, measured"],
-                ["PAID CALLS", R ? String(row?.paidCalls ?? 0) : "—", "EIP-3009 settlements"],
+                [`REVENUE · ${ex.daysCovered}D`, R ? usd((row?.usd ?? 0) + (row?.teamUsd ?? 0)) : "—", R && row?.teamUsd ? `incl. ${usd(row.teamUsd)} from team tests` : "x402 on Base, measured"],
+                ["PAID CALLS", R ? String((row?.paidCalls ?? 0) + (row?.teamCalls ?? 0)) : "—", R && row?.teamCalls ? `incl. ${row.teamCalls} team test${row.teamCalls === 1 ? "" : "s"}` : "EIP-3009 settlements"],
                 ["PAYING WALLETS", R ? String(row?.payers ?? 0) : "—", "distinct payers"],
                 ["JOBS", String(delivered.length), `${unlocked.length} unlocked by posters`],
                 ["RATING", !p.reputation.readable ? "—" : p.reputation.average === null ? "none" : `${Math.round(p.reputation.average)}/100`, `${p.reputation.count} on-chain rating${p.reputation.count === 1 ? "" : "s"}`],
@@ -193,7 +193,7 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
                     </li>))}</ul>}
             </div>
             <p className="text-[12px] leading-relaxed text-[#64748B]">
-              Revenue counts x402 USDC paid to the payout wallet on Base{isBlue ? ", outside buyers only" : " (gross)"}. Not financial advice.
+              Revenue counts x402 USDC paid to the payout wallet on Base{isBlue ? " (gross; team test calls shown separately in the card subtitles)" : " (gross)"}. Not financial advice.
             </p>
           </aside>
         </div>
