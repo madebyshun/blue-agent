@@ -1,18 +1,39 @@
 /**
  * X402Client — wraps fetch with automatic x402 payment handling
- * Works with Blue Hub and any x402 v2 compatible endpoint
+ * Works with Blue Hub and any x402 endpoint that takes USDC on Base, v1 or v2:
+ * reads PAYMENT-REQUIRED (v2) or X-Payment-Requirements (v1) or the 402 body,
+ * pays `amount` (v2) or `maxAmountRequired` (v1), retries with PAYMENT-SIGNATURE
+ * and X-PAYMENT, and reads PAYMENT-RESPONSE or X-Payment-Response (issue #446).
  */
 import { privateKeyToAccount }    from "viem/accounts";
 import { buildPaymentHeader }     from "./signer";
+import { signPayment }            from "./mcp";
 import type {
   X402ClientConfig,
-  X402PaymentRequired,
+  PaymentOption,
   CallOptions,
   CallResult,
   PricingManifest,
 } from "./types";
 
 const BLUE_HUB_BASE    = "https://blueagent.dev";
+const BASE_NETWORK     = "eip155:8453";
+const BASE_USDC        = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913";
+
+type Requirements = { x402Version: number; accepts: PaymentOption[]; resource?: unknown };
+
+const decode = (h: string): unknown => JSON.parse(Buffer.from(h, "base64").toString("utf-8"));
+
+/** The 402's payment requirements, from whichever place the seller put them. */
+export async function readRequirements(res: Response): Promise<Requirements> {
+  const fromHeader = res.headers.get("PAYMENT-REQUIRED") ?? res.headers.get("X-Payment-Requirements");
+  let raw: unknown = null;
+  if (fromHeader) { try { raw = decode(fromHeader); } catch { /* fall through to the body */ } }
+  if (!raw || !Array.isArray((raw as Requirements).accepts)) raw = await res.json().catch(() => null);
+  const r = raw as Partial<Requirements> | null;
+  if (!r || !Array.isArray(r.accepts) || !r.accepts.length) throw new Error("402 response has no payment requirements (PAYMENT-REQUIRED header or body); nothing was paid");
+  return { x402Version: Number(r.x402Version ?? 1), accepts: r.accepts, resource: r.resource };
+}
 const PRICING_ENDPOINT = `${BLUE_HUB_BASE}/.well-known/pricing`;
 
 export class X402Client {
@@ -20,6 +41,7 @@ export class X402Client {
   private rpcUrl:      string;
   private ttl:         number;
   private address:     string;
+  private maxPerCall?: bigint;
 
   constructor(config: X402ClientConfig) {
     const pk = config.privateKey.startsWith("0x")
@@ -30,6 +52,7 @@ export class X402Client {
     this.rpcUrl     = config.rpcUrl ?? "https://mainnet.base.org";
     this.ttl        = config.ttl    ?? 300;
     this.address    = privateKeyToAccount(this.privateKey).address;
+    this.maxPerCall = config.maxPerCallAtomic;
   }
 
   // ── Core: call any x402 endpoint ────────────────────────────────────────────
@@ -40,12 +63,13 @@ export class X402Client {
   ): Promise<CallResult<T>> {
     const { body = {}, headers: extraHeaders = {} } = options;
 
+    const method = options.method ?? "POST";
+    const send = (payHeaders: Record<string, string> = {}) => fetch(endpoint, method === "GET"
+      ? { method, headers: { ...extraHeaders, ...payHeaders } }
+      : { method, headers: { "Content-Type": "application/json", ...extraHeaders, ...payHeaders }, body: JSON.stringify(body) });
+
     // Step 1 — probe: get 402 with payment requirements
-    const probe = await fetch(endpoint, {
-      method:  "POST",
-      headers: { "Content-Type": "application/json", ...extraHeaders },
-      body:    JSON.stringify(body),
-    });
+    const probe = await send();
 
     if (probe.status !== 402) {
       // Already 200 (free tool) or unexpected error
@@ -57,35 +81,34 @@ export class X402Client {
       throw new Error(`Unexpected ${probe.status}: ${err}`);
     }
 
-    // Step 2 — parse payment requirements from header
-    const rawHeader = probe.headers.get("X-Payment-Requirements")
-      ?? probe.headers.get("x-payment-requirements");
+    // Step 2 — payment requirements: x402 v2 `PAYMENT-REQUIRED` header, the legacy
+    // `X-Payment-Requirements` header, or the 402 body (issue #446).
+    const requirements = await readRequirements(probe);
 
-    if (!rawHeader) {
-      throw new Error("402 response missing X-Payment-Requirements header");
+    // A Base USDC `exact` option: the only thing this signer can pay. v2 names the
+    // amount `amount`; v1 named it `maxAmountRequired`.
+    const option = requirements.accepts.find((o) =>
+      o.scheme === "exact" && (o.network === BASE_NETWORK || o.network === "base") &&
+      String(o.asset ?? "").toLowerCase() === BASE_USDC);
+    if (!option) throw new Error("No USDC-on-Base payment option in the 402; nothing was paid");
+    const amount = String(option.amount ?? option.maxAmountRequired ?? "");
+    if (!/^\d+$/.test(amount) || BigInt(amount) <= 0n) throw new Error("Invalid payment amount in the 402; nothing was paid");
+    if (this.maxPerCall !== undefined && BigInt(amount) > this.maxPerCall) {
+      throw new Error(`${endpoint} costs ${this._formatPrice(amount)}, above the per-call cap of ${this._formatPrice(String(this.maxPerCall))}; nothing was paid`);
     }
 
-    const requirements: X402PaymentRequired = JSON.parse(
-      Buffer.from(rawHeader, "base64").toString("utf-8"),
-    );
+    // Step 3 — sign EIP-3009 TransferWithAuthorization, in the version the seller speaks.
+    const paymentHeader = requirements.x402Version >= 2
+      ? Buffer.from(JSON.stringify(await signPayment(this.privateKey, {
+          scheme: "exact", network: BASE_NETWORK, asset: option.asset as `0x${string}`, amount,
+          payTo: option.payTo as `0x${string}`, maxTimeoutSeconds: option.maxTimeoutSeconds ?? this.ttl,
+          extra: option.extra as { name?: string; version?: string } | undefined,
+        }, requirements.resource, 60))).toString("base64")
+      : await buildPaymentHeader(this.privateKey, { ...option, maxAmountRequired: amount }, this.ttl);
 
-    // Pick first accepted option (Blue Hub uses exact/eip155:8453)
-    const option = requirements.accepts?.[0];
-    if (!option) throw new Error("No payment option in requirements");
-
-    // Step 3 — sign EIP-3009 TransferWithAuthorization
-    const paymentHeader = await buildPaymentHeader(this.privateKey, option, this.ttl);
-
-    // Step 4 — retry with X-Payment header
-    const paid = await fetch(endpoint, {
-      method:  "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Payment":    paymentHeader,
-        ...extraHeaders,
-      },
-      body: JSON.stringify(body),
-    });
+    // Step 4 — retry. v2 sellers read PAYMENT-SIGNATURE, v1 sellers (and Blue Hub) X-PAYMENT;
+    // the value is the same base64 payload, so both are sent.
+    const paid = await send({ "PAYMENT-SIGNATURE": paymentHeader, "X-PAYMENT": paymentHeader });
 
     if (!paid.ok) {
       const err = await paid.text();
@@ -94,24 +117,21 @@ export class X402Client {
 
     const data = await paid.json() as T;
 
-    // Extract settlement info from response header if present
-    const paymentResponse = paid.headers.get("X-Payment-Response")
-      ?? paid.headers.get("x-payment-response");
+    // Settlement receipt: v2 `PAYMENT-RESPONSE` ({ transaction }), v1 `X-Payment-Response`.
+    const paymentResponse = paid.headers.get("PAYMENT-RESPONSE") ?? paid.headers.get("X-Payment-Response");
     let txSettled: string | undefined;
     if (paymentResponse) {
       try {
-        const pr = JSON.parse(Buffer.from(paymentResponse, "base64").toString("utf-8")) as { txHash?: string };
-        txSettled = pr.txHash;
+        const pr = JSON.parse(Buffer.from(paymentResponse, "base64").toString("utf-8")) as { transaction?: string; txHash?: string };
+        txSettled = pr.transaction ?? pr.txHash;
       } catch { /* optional */ }
     }
-
-    const priceUSD = this._formatPrice(option.maxAmountRequired);
 
     return {
       data,
       toolId:     this._toolId(endpoint),
-      pricePaid:  priceUSD,
-      amountPaid: option.maxAmountRequired,
+      pricePaid:  this._formatPrice(amount),
+      amountPaid: amount,
       txSettled,
     };
   }

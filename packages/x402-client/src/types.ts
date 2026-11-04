@@ -9,7 +9,11 @@ export interface X402PaymentRequired {
 export interface PaymentOption {
   scheme:             "exact";
   network:            string;           // "eip155:8453"
-  maxAmountRequired:  string;           // raw units e.g. "250000"
+  /** v2: raw units e.g. "250000" */
+  amount?:            string;
+  /** v1 name for the same thing */
+  maxAmountRequired?: string;
+  maxTimeoutSeconds?: number;
   asset:              string;           // USDC contract address
   payTo:              string;           // recipient address
   extra?:             Record<string, unknown>;
@@ -43,11 +47,15 @@ export interface X402ClientConfig {
   rpcUrl?: string;
   /** Extra seconds added to validBefore (default: 300) */
   ttl?: number;
+  /** Refuse, before signing, any 402 above this many USDC atomic units (6 decimals). Unset = no cap. */
+  maxPerCallAtomic?: bigint;
 }
 
 export interface CallOptions {
   /** Request body (will be JSON.stringify'd) */
   body?: Record<string, unknown>;
+  /** HTTP method; default POST. Use GET for a GET-only x402 route. */
+  method?: "GET" | "POST";
   /** Extra headers */
   headers?: Record<string, string>;
 }

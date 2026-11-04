@@ -9,7 +9,7 @@ const MCP_PAYMENT = "x402/payment";
 const MCP_PAYMENT_RESPONSE = "x402/payment-response";
 
 type JsonRpc = { jsonrpc: "2.0"; id?: number | string; result?: any; error?: { code: number; message: string } };
-type PaymentRequirement = {
+export type PaymentRequirement = {
   scheme: "exact";
   network: string;
   asset: `0x${string}`;
@@ -49,7 +49,7 @@ function validateRequirement(req: PaymentRequirement, ttlSlackSeconds: number): 
   if (ttlSlackSeconds < 0 || !Number.isSafeInteger(ttlSlackSeconds)) throw new Error("Invalid payment TTL slack");
 }
 
-async function signPayment(privateKey: `0x${string}`, req: PaymentRequirement, resource: unknown, ttlSlackSeconds: number) {
+export async function signPayment(privateKey: `0x${string}`, req: PaymentRequirement, resource: unknown, ttlSlackSeconds: number) {
   validateRequirement(req, ttlSlackSeconds);
   const account = privateKeyToAccount(privateKey);
   const now = Math.floor(Date.now() / 1000);

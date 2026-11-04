@@ -75,12 +75,13 @@ export async function buildPaymentHeader(
   const from        = account.address;
   const nonce       = randomNonce();
   const validBefore = String(Math.floor(Date.now() / 1000) + ttl);
+  const value       = option.amount ?? option.maxAmountRequired ?? "";
 
   const signature = await signTransferWithAuthorization(
     privateKey,
     from,
     option.payTo,
-    option.maxAmountRequired,
+    value,
     validBefore,
     nonce,
   );
@@ -88,14 +89,14 @@ export async function buildPaymentHeader(
   const authorization: X402Authorization = {
     from,
     to:          option.payTo,
-    value:       option.maxAmountRequired,
+    value,
     validAfter:  "0",
     validBefore,
     nonce,
   };
 
   const payment: X402Payment = {
-    x402Version: 2,
+    x402Version: 1,
     scheme:      "exact",
     network:     option.network,
     payload: { signature, authorization },
