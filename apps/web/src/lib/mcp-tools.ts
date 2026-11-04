@@ -173,6 +173,31 @@ export const MCP_TOOLS = [
     },
   },
   {
+    name: "stock_quote",
+    description:
+      "Live quote for a tokenized stock, on every chain that lists it: Base 8453 (Coinbase Tokenized Stocks, every one base.org publishes, checked on chain) and Robinhood Chain 4663. Per chain: the verified contract, DEX price, 24h change, liquidity and volume, and the Chainlink share price where a feed is held. A ticker alone never identifies a token — use the returned contract. Missing reads are null and said. Triggers — \"price of NVDA stock token\", \"quote my TSLA\", \"market data on my holdings\", \"is AAPL on Base\". PAID: $0.02 USDC on Base 8453 over the x402 MCP transport — the first call returns PaymentRequired (isError with structuredContent); an x402 MCP client (e.g. @x402/mcp) pays and retries with _meta[\"x402/payment\"]. Bad input is refused before any price, and a failed run is not charged.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ticker: { type: "string", description: "Stock ticker, e.g. \"NVDA\" (the Base symbol \"NVDAc\" or a Base token address also work)." },
+        chain:  { type: "string", enum: ["base", "robinhood", "both"], description: "One venue, or \"both\" (default): every chain that lists the ticker." },
+      },
+      required: ["ticker"],
+    },
+  },
+  {
+    name: "stock_movers",
+    description:
+      "Today's biggest tokenized-stock gainers and losers, ranked by each token's deepest DEX pool over 24h, on Base 8453 and/or Robinhood Chain 4663. Dust pools are filtered out and counted, not ranked. Facts, not a buy or sell signal. Triggers — \"which stock tokens are moving\", \"top gainers\", \"biggest losers today\", \"what's hot in tokenized stocks\". PAID: $0.03 USDC on Base 8453 over the x402 MCP transport — the first call returns PaymentRequired (isError with structuredContent); an x402 MCP client (e.g. @x402/mcp) pays and retries with _meta[\"x402/payment\"]. Bad input is refused before any price, and a failed run is not charged.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        chain: { type: "string", enum: ["base", "robinhood", "both"], description: "One venue, or \"both\" (default)." },
+        limit: { type: "number", description: "Movers per side, 1–20. Default 5." },
+      },
+    },
+  },
+  {
     name: "trending_safe",
     description:
       "Trending tokens on Base 8453, each with its buy/sell tax read from the contract and its exit liquidity depth — what is moving that you could also get out of. SAFE here = tradeable with a verified tax; it is not a buy signal. Triggers — \"what's trending on Base\", \"hot tokens\", \"where's the volume\", \"anything new worth a look\". PAID: $0.05 USDC on Base 8453 over the x402 MCP transport — the first call returns PaymentRequired (isError with structuredContent); an x402 MCP client (e.g. @x402/mcp) pays and retries with _meta[\"x402/payment\"]. Bad input is refused before any price, and a failed run is not charged.",

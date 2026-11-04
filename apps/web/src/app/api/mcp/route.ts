@@ -11,7 +11,7 @@
  *   }
  *
  * Protocol: JSON-RPC 2.0 over HTTP POST
- * Tools: 13 — 5 paid + 8 free
+ * Tools: 15 — 7 paid + 8 free
  *        MCP v2 (2026-10-22): renamed, five paid over the x402 MCP transport
  *        (lib/mcp-paid.ts); the v1 names answer until MCP_LEGACY_UNTIL.
  *        CUT FROM 85 ON 2026-09-26. The reasoning, the measurements, and the rule
@@ -75,6 +75,7 @@ import { MCP_TOOLS, MCP_LEGACY, MCP_LEGACY_UNTIL } from "@/lib/mcp-tools";
 import { runPaidMcpTool, type McpCallResult } from "@/lib/mcp-paid";
 import { findOffering } from "@/lib/blue-hood/acp-offerings";
 import { tokenVerdict } from "@/lib/token-verdict";
+import { planStockQuote, planStockMovers, STOCK_QUOTE_TOOL, STOCK_MOVERS_TOOL, type StockChain } from "@/lib/mcp-stock-tools";
 import {
   briefHasNumberDrift,
   withholdDriftedBriefRecord,
@@ -810,6 +811,26 @@ async function callPaidV2(name: string, args: Record<string, unknown>, meta: unk
       if (!/^0x[a-fA-F0-9]{40}$/.test(String(args.token ?? "").trim())) return "token must be a 0x contract address — a ticker does not identify a token.";
       return null;
     }, async () => ({ text: asJson(await tokenVerdict(parseTxChain(args.chain)!, String(args.token).trim())) }));
+  }
+  if (name === "stock_quote" || name === "stock_movers") {
+    // Each chain is a catalog handler run in-process. Any chain that fails
+    // fails the whole call (and nothing is charged): a 200 carrying one venue
+    // when the caller asked for both would be a partial answer at full price.
+    const plan = name === "stock_quote" ? planStockQuote(args) : planStockMovers(args);
+    return paidRun(() => ("refuse" in plan ? plan.refuse : null), async () => {
+      if ("refuse" in plan) throw new Error(plan.refuse);
+      const tools = name === "stock_quote" ? STOCK_QUOTE_TOOL : STOCK_MOVERS_TOOL;
+      const body = (c: StockChain) => ("ticker" in plan ? { ticker: c === "robinhood" ? plan.rhTicker : plan.ticker } : { limit: plan.limit });
+      const reads = await Promise.all(plan.chains.map(async (c) => [c, JSON.parse(await callHubTool(tools[c], body(c)))] as const));
+      const chainIds: Record<StockChain, number> = { base: 8453, robinhood: 4663 };
+      return {
+        text: asJson({
+          ...("ticker" in plan ? { ticker: plan.ticker } : {}),
+          chains: Object.fromEntries(reads.map(([c, r]) => [c, { chain_id: chainIds[c], ...r }])),
+          ...("ticker" in plan && plan.chains.length === 1 ? { note: `Listed only on ${plan.chains[0] === "base" ? "Base 8453" : "Robinhood Chain 4663"}.` } : {}),
+        }),
+      };
+    });
   }
   if (name === "wallet_risk") {
     return paidRun(() => (/^0x[a-fA-F0-9]{40}$/.test(String(args.address ?? "").trim()) ? null : "address must be a 0x wallet address."),

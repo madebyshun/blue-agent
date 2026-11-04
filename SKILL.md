@@ -222,7 +222,7 @@ them.
 
 The MCP surface is deliberately a **subset**, not a mirror.
 
-MCP serves 13 tools — 5 paid + 8 free.
+MCP serves 15 tools — 7 paid + 8 free.
 
 Since MCP v2 (2026-10-22) five tools are paid per call over the x402 MCP transport
 (`swap_prepare`, `token_verdict`, `stock_signal`, `trending_safe`, `wallet_risk`);
