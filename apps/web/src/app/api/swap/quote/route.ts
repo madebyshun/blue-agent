@@ -26,8 +26,8 @@ export async function GET(req: Request) {
   const key = process.env.ZEROX_API_KEY;
 
   // Base B20 stock tokens: 0x refuses them ("not authorized for trade due to
-  // legal restrictions", measured 2026-10-03), so a leg that is a REGISTERED
-  // Base stock routes through Aerodrome Slipstream instead (lib/aerodrome-swap).
+  // legal restrictions", measured 2026-10-03), so a leg that is ANY verified
+  // Base stock (Hood registry or base.org's list) routes through Aerodrome Slipstream instead (lib/aerodrome-swap).
   // Same response shape, plus `venue: "aerodrome"`; needs no 0x key.
   if (baseStockByToken(sellToken) || baseStockByToken(buyToken)) {
     const q = await aerodromeQuote({ sellToken, buyToken, sellAmount, taker, slippageBps });
