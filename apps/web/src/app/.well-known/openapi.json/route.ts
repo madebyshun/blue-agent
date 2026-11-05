@@ -197,6 +197,10 @@ export async function GET() {
       // first time a free tool shipped with nothing comparing it to a price.
       description: `${liveTools.length} AI tools for Base builders and investors — ${paidCount} pay-per-use, ${freeTools.length} free. No API keys.\n\nThe ${paidCount} paid tools each require a micro-payment in USDC on Base mainnet via the x402 protocol.\n\nThe ${freeTools.length} free tools never return 402 and never ask for a signature — POST them directly, do not build an authorization: ${freeTools.map(t => `\`${t.id}\``).join(", ")}. They carry no \`x-x402\` block for the same reason.\n\n**Payment:** x402 v2 (EIP-3009 USDC on Base, eip155:8453)\n**payTo:** \`${PAY_TO}\`\n**Asset:** USDC \`${USDC_BASE}\``,
       version:     "1.0.0",
+      // Read by Circle's agent-readiness check (agents.circle.com/sell/score)
+      // and by any agent choosing a tool: what you get, what to send, when to
+      // call. Kept short on purpose (Circle budgets ~1000 tokens).
+      "x-guidance": `Live onchain data and checks for Base 8453 and Robinhood Chain 4663, sold per call in USDC on Base over x402. Use it before an agent quotes a price, trades, or signs. Tokenized stocks: base-stock-search finds a Coinbase stock token by ticker (returns the verified contract), base-stock-quote returns its DEX price, 24h change, liquidity, volume and Chainlink price, base-stock-movers lists today's gainers and losers; rh-stock-* tools do the same on Robinhood Chain. Tokens and wallets: token-price, honeypot-check, risk-gate and wallet-risk read the contract and chain directly. Every response names its chain; a ticker alone never identifies a token, so pass the contract when you have it. Missing data comes back as null with the reason, never as an estimate. POST a JSON body as described per operation; an unpaid call returns 402 with the price, and a failed run is not charged.`,
       contact: {
         name: "Blue Hub",
         url:  BASE_URL,
