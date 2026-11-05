@@ -77,7 +77,11 @@ async function call(name: string, args: Record<string, unknown>) {
   const tickers = [...new Set([...gainers.slice(0, CANDIDATES).map((g) => g.ticker), ...WATCHLIST])];
   for (const t of tickers) {
     const g = { ticker: t };
-    const q = await call("stock_quote", { ticker: g.ticker, chain: "base" });
+    // One candidate's failed read (e.g. a data source rate-limiting) must not end
+    // the round. A failed paid call is not charged, so skip it and move on.
+    let q: any;
+    try { q = await call("stock_quote", { ticker: g.ticker, chain: "base" }); }
+    catch (e) { console.log(`   ${g.ticker}: quote unavailable right now, skipped (not charged)`); continue; }
     const b = q?.chains?.base;
     const row = b?.buy_impact?.buys?.find((x: { usd: number }) => x.usd === size);
     const impact: number | null = row?.impact_pct ?? null;
