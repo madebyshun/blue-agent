@@ -41,9 +41,9 @@ function buildPaymentRequired(
     accepts: [requirements],
     resource: {
       url: endpointUrl,
-      description: meta?.description ?? `Blue Hub tool: ${tool}`,
+      description: meta?.description ?? `Blue Agent tool: ${tool}`,
       mimeType: "application/json",
-      serviceName: "Blue Hub",
+      serviceName: "Blue Agent",
       tags: ["base", "ai", "defi", "agents"],
       iconUrl: "https://blueagent.dev/icon.png",
     },
@@ -367,9 +367,9 @@ async function handle(
   const bazaarExt = buildBazaarExtension(meta);
   const resourceInfo = {
     url: `https://blueagent.dev/api/x402/${tool}`,
-    description: meta?.description ?? `Blue Hub tool: ${tool}`,
+    description: meta?.description ?? `Blue Agent tool: ${tool}`,
     mimeType: "application/json",
-    serviceName: "Blue Hub",
+    serviceName: "Blue Agent",
     tags: ["base", "ai", "defi", "agents", "builder"],
     iconUrl: "https://blueagent.dev/icon.png",
   };
