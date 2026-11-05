@@ -37,6 +37,7 @@ const key = process.env.BUYER_PRIVATE_KEY as `0x${string}` | undefined;
 const fund = new PaidMcpClient({
   url: MCP_URL,
   privateKey: key,
+  timeoutMs: 120_000,                                         // a paid call verifies, runs and settles; 30s was too short
   maxPerCallAtomic: 50_000n,                                  // no single call above $0.05
   budgetAtomic: BigInt(Math.round(BUDGET_USD * 1e6)),         // the whole run
 });

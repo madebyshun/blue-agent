@@ -106,7 +106,10 @@ export class PaidMcpClient {
     this.privateKey = config.privateKey ?? null;
     this.maxPerCall = config.maxPerCallAtomic ?? 50_000n;      // $0.05
     this.budget = config.budgetAtomic ?? 1_000_000n;           // $1.00 per process
-    this.timeoutMs = config.timeoutMs ?? 30_000;
+    // 120s, the MCP route's maxDuration. It was 30s until 0.3.2, and a paid call
+    // that ran longer (verify + run + settle) was abandoned AFTER the server had
+    // settled: the buyer paid and got nothing (measured 2026-11-05, $0.03).
+    this.timeoutMs = config.timeoutMs ?? 120_000;
     this.ttlSlackSeconds = config.ttlSlackSeconds ?? 60;
     if (this.privateKey) assertAddress(privateKeyToAccount(this.privateKey).address, "buyer wallet");
   }
@@ -119,8 +122,13 @@ export class PaidMcpClient {
       body: JSON.stringify({ jsonrpc: "2.0", id, method, params }),
       signal: AbortSignal.timeout(this.timeoutMs),
     });
-    const body = await res.json().catch(() => null) as JsonRpc | null;
-    if (!body) throw new Error(`MCP ${method} returned non-JSON HTTP ${res.status}`);
+    let readErr = "";
+    const body = await res.json().catch((e: unknown) => { readErr = e instanceof Error ? `${e.name}: ${e.message}` : String(e); return null; }) as JsonRpc | null;
+    if (!body) {
+      const paid = !!(params as { _meta?: Record<string, unknown> })._meta?.[MCP_PAYMENT];
+      throw new Error(`MCP ${method} returned HTTP ${res.status} but its body could not be read${readErr ? ` (${readErr})` : ""}.` +
+        (paid ? " A payment was attached: the server may have settled it. Check the payer's USDC transfers on Base before retrying." : ""));
+    }
     if (body.error) throw new Error(`MCP ${method}: ${body.error.message}`);
     return body;
   }
