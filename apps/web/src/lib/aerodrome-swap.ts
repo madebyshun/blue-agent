@@ -153,3 +153,45 @@ export async function aerodromeQuote(p: { sellToken: string; buyToken: string; s
     issues: { allowance: { spender: SWAP_ROUTER } },
   };
 }
+
+/**
+ * Price impact of BUYING `token` with USDC on its deepest Aerodrome CL pool, at
+ * a few order sizes, against a $100 reference quote. Read with the Quoter (a
+ * simulated call: nothing is signed or sent). Works for any Base token with a
+ * USDC pool, not only the Blue Hood registry.
+ *
+ * Why it exists (measured 2026-11-05): pool TVL misleads on Base stock tokens.
+ * AAPLc showed ~$0.5M TVL yet a $10k buy quoted +380%; MSFTc moved +31% on
+ * $1k; NVDAc moved +0.32% on $10k. Concentrated liquidity out of range is
+ * counted in TVL but not available to a trade.
+ *
+ * One pool only: a router splitting across pools may do better, and the result
+ * says so. null = no USDC pool with liquidity, or the quoter refused.
+ */
+export async function quoteBuyImpact(token: Address, tokenDecimals: number, sizesUsd: number[] = [1_000, 10_000]): Promise<
+  { pool: string; tickSpacing: number; reference_usd: number; buys: { usd: number; impact_pct: number | null }[] } | null
+> {
+  const found = await bestPool(token);
+  if (!found) return null;
+  const c = clientFor("base");
+  const quote = async (usd: number): Promise<bigint | null> => {
+    try {
+      const { result } = await c.simulateContract({
+        address: QUOTER, abi: QUOTER_ABI, functionName: "quoteExactInputSingle",
+        args: [{ tokenIn: USDC_BASE, tokenOut: token, amountIn: BigInt(Math.round(usd * 1e6)), tickSpacing: found.tickSpacing, sqrtPriceLimitX96: 0n }],
+      });
+      return result[0] > 0n ? result[0] : null;
+    } catch { return null; }
+  };
+  const REF = 100;
+  const ref = await quote(REF);
+  if (!ref) return null;
+  const refPrice = REF / (Number(ref) / 10 ** tokenDecimals);
+  const buys = [];
+  for (const usd of sizesUsd) {
+    const out = await quote(usd);
+    const px = out ? usd / (Number(out) / 10 ** tokenDecimals) : null;
+    buys.push({ usd, impact_pct: px ? Math.round((px / refPrice - 1) * 10_000) / 100 : null });
+  }
+  return { pool: found.pool, tickSpacing: found.tickSpacing, reference_usd: REF, buys };
+}

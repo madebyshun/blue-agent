@@ -1084,7 +1084,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
   {
     id: "base-stock-quote",
     name: "Base Stock Quote",
-    description: "Live quote for one Coinbase Tokenized Stock on Base 8453: deepest DEX pool price, 24h change, liquidity and volume, plus the Chainlink share price and DEX-vs-oracle drift where a feed is held. Missing reads are null and said.",
+    description: "Live quote for one Coinbase Tokenized Stock on Base 8453: deepest DEX pool price, 24h change, liquidity and volume, what a $1k and a $10k USDC buy would move the price (Aerodrome Quoter, since TVL alone misleads), plus the Chainlink share price and DEX-vs-oracle drift where a feed is held. Missing reads are null and said.",
     agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
     category: "on-chain",
     inputs: [
