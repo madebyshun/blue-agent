@@ -33,6 +33,7 @@
 import { encodeFunctionData, parseAbi, type Address } from "viem";
 import { clientFor } from "@/lib/tx-chains";
 import { BASE_STOCKS } from "@/lib/base-stocks/registry";
+import { COINBASE_BASE_STOCKS } from "@/lib/base-stocks/coinbase-list";
 
 export const CL_FACTORY = "0xf8f2eB4940CFE7d13603DDDD87f123820Fc061Ef" as const;
 export const SWAP_ROUTER = "0x698Cb2b6dd822994581fEa6eA4Fc755d1363A92F" as const;
@@ -52,9 +53,22 @@ const ROUTER_ABI = parseAbi([
 ]);
 
 const lc = (a: string) => a.toLowerCase();
-/** The registered Base stock at this address, or null. Registry only — never a name. */
-export function baseStockByToken(addr: string) {
-  return BASE_STOCKS.find((s) => lc(s.token) === lc(addr)) ?? null;
+/**
+ * The Base stock token at this address, or null. Matched by ADDRESS only, never
+ * a name: first Blue Hood's registry, then every Coinbase Tokenized Stock Base
+ * publishes (lib/base-stocks/coinbase-list, each checked on chain: isB20,
+ * 8 decimals, exact symbol).
+ *
+ * It was the 9-token registry only until 2026-11-05. 0x refuses every B20 stock
+ * ("not authorized for trade due to legal restrictions"), so a verified stock
+ * outside the registry (LIc, measured that day) fell through to 0x and could
+ * not be swapped at all.
+ */
+export function baseStockByToken(addr: string): { symbol: string; token: string } | null {
+  const hood = BASE_STOCKS.find((s) => lc(s.token) === lc(addr));
+  if (hood) return { symbol: hood.symbol, token: hood.token };
+  const cb = COINBASE_BASE_STOCKS.find((s) => lc(s.token) === lc(addr));
+  return cb ? { symbol: cb.symbol, token: cb.token } : null;
 }
 
 export type AeroQuote =
