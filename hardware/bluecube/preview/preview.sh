@@ -37,11 +37,17 @@ feed "hood"                           hood;        shot hood        feed "$OUT/r
 feed "trending"                       trending;    shot trending    feed "$OUT/raw/trending.json" 2 $N
 feed "status"                         status;      shot status      feed "$OUT/raw/status.json" 3 $N
 feed "buddy"                          buddy;       shot "buddy-live" feed "$OUT/raw/buddy.json" 4 $N
+# The buddy mode as the server drives it (mood → bot state)...
 for pair in h:happy d:dance-up a:alarm w:worried s:sad; do
   shot "mood-${pair#*:}" feed "$OUT/raw/buddy.json" 4 $N --mood "${pair%%:*}" --ms 400
 done
 shot mood-asleep  feed "$OUT/raw/buddy.json" 4 $N --mood h --hour 3 --ms 800
-shot thinking     think "Running hood live" --ms 900
+# ...and every BlueBot state the cube can show, by index (cube_render.h Bot).
+i=0
+for st in idle working thinking searching approval question error finished rate-limit sleeping dizzy love proud annoyed happy; do
+  shot "bot-$st" bot $i "$st" --ms 700
+  i=$((i + 1))
+done
 shot card-trade   card "Trade confirmed" "0.1 ETH -> USDC on Base. Pre-trade check: pass." good
 shot card-alert   card "Price alert fired" "NVDA on Base crossed \$240. Waiting for your signature in the Price alerts chat." warn
 shot card-refused card "Trade refused by the pre-trade check" "Sell tax could not be read for this token." alert
