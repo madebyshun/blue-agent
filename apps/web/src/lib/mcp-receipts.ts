@@ -21,6 +21,7 @@ import { kv, kvGetProbe, kvMutate } from "@/lib/kv";
 export const TEAM_WALLETS: ReadonlySet<string> = new Set([
   "0xd5c1dfc036f9911348ea8065f73c8123f4013fab", // ShunTr (treasury / test wallet)
   "0x00fd29b7d6dbf13afb879afbb239db1d48ce746f", // ShunTr test buyer — first paid MCP call, 2026-10-23 (tx 0xedbfc03a…581c)
+  "0x64d1c1d957b6b69d3d82cd2756f44c1a6b30e318", // ShunTr holds its key (found 2026-11-05 seeding Bazaar); paid 0.20 USDC to the payTo on 2026-09-26
 ]);
 
 export type McpOutcome = "settled" | "not_charged";
