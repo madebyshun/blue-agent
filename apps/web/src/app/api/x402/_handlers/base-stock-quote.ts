@@ -6,6 +6,7 @@
 import { BASE_STOCKS } from "@/lib/base-stocks/registry";
 import { readBaseStockQuote } from "@/lib/base-stocks/b20-quote";
 import { readTokenMarket } from "@/lib/markets";
+import { quoteBuyImpact } from "@/lib/aerodrome-swap";
 import { readBody, resolveBaseStock, stockRef } from "@/lib/base-stocks/handler-common";
 
 export default async function handler(req: Request): Promise<Response> {
@@ -14,9 +15,10 @@ export default async function handler(req: Request): Promise<Response> {
   if ("error" in r) return Response.json(r, { status: 400 });
   const s = r.stock;
   const hood = BASE_STOCKS.find((x) => x.token.toLowerCase() === s.token.toLowerCase());
-  const [mk, oracle] = await Promise.all([
+  const [mk, oracle, impact] = await Promise.all([
     readTokenMarket("base", s.token),
     hood ? readBaseStockQuote(hood).catch(() => null) : Promise.resolve(null),
+    quoteBuyImpact(s.token, 8).catch(() => null),
   ]);
   if (mk.status === "unread" && !oracle) {
     throw new Error("Market data could not be read right now (GeckoTerminal); nothing was charged.");
@@ -32,6 +34,11 @@ export default async function handler(req: Request): Promise<Response> {
       share_price_usd: oracle.share_price_usd, feed_age_seconds: oracle.feed_age_seconds, feed_is_stale: oracle.feed_is_stale,
       multiplier: oracle.multiplier, drift_pct: oracle.drift_pct, source: "Chainlink on Base, divided by the token's multiplier()",
     } : { status: "no Chainlink feed held for this stock; DEX price only" },
+    // Liquidity TVL alone misleads on these pools; this is what a buy would move the price.
+    buy_impact: impact ? {
+      ...impact,
+      source: "Aerodrome Quoter on Base, deepest USDC pool only; a router splitting across pools may do better",
+    } : { status: "no Aerodrome USDC pool could be quoted" },
     note: "A stock token tracks a share; it is not the share. Not financial advice.",
     timestamp: new Date().toISOString(),
   });
