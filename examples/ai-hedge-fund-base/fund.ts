@@ -82,6 +82,7 @@ async function call(name: string, args: Record<string, unknown>) {
     const row = b?.buy_impact?.buys?.find((x: { usd: number }) => x.usd === size);
     const impact: number | null = row?.impact_pct ?? null;
     const price = b?.dex?.price_usd;
+    if (row && row.fills === false) { console.log(`   ${g.ticker}: REFUSED (no pool can fill $${size.toLocaleString()} in full)`); continue; }
     if (impact === null) { console.log(`   ${g.ticker}: no depth read, skipped`); continue; }
     const ok = impact <= MAX_IMPACT_PCT;
     console.log(`   ${g.ticker} ${b?.symbol ?? ""} at $${price?.toFixed?.(2) ?? "?"}: +${impact}% ${ok ? "PASS" : `REFUSED (above ${MAX_IMPACT_PCT}%)`}`);
