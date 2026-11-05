@@ -24,6 +24,7 @@ import { declareBuilderCodeExtension } from "@x402/extensions/builder-code";
 import { buildRequirements, cdpVerify, cdpSettle } from "@/app/api/_lib/x402-cdp";
 import { recordMcpReceipt } from "@/lib/mcp-receipts";
 import { feedbackTemplate } from "@/lib/erc8004";
+import { after } from "next/server";
 
 export const MCP_PAYMENT_META_KEY = "x402/payment";
 export const MCP_PAYMENT_RESPONSE_META_KEY = "x402/payment-response";
@@ -168,15 +169,22 @@ export async function runPaidMcpTool(opts: {
   const settle = await cdpSettle(payment, requirements, resource, extensions);
   // A failed settle still returns the result (parity with /api/x402/[tool]), so
   // the caller was not charged — and the receipt says exactly that.
-  await recordMcpReceipt(settle.ok
-    ? { tool, outcome: "settled", units, payer, tx: settle.tx ?? null, ms }
-    : { tool, outcome: "not_charged", units: 0, payer, tx: null, ms });
-  if (settle.ok) {
-    const { recordSettlement } = await import("@/lib/x402-settlements");
-    await recordSettlement(units, settle.tx).catch(() => {});
-    const { recordToolPayment, payerFromPayload } = await import("@/lib/wallet/spend-log");
-    await recordToolPayment(payerFromPayload(payment), `mcp:${tool}`, units, settle.tx).catch(() => {});
-  }
+  // Bookkeeping runs AFTER the response is sent (next/server `after`): once the
+  // buyer has paid, three sequential KV writes must not stand between them and
+  // the result. A paid call on 2026-11-05 settled and then reached the client
+  // past its timeout, so the buyer paid $0.03 for nothing.
+  const book = async () => {
+    await recordMcpReceipt(settle.ok
+      ? { tool, outcome: "settled", units, payer, tx: settle.tx ?? null, ms }
+      : { tool, outcome: "not_charged", units: 0, payer, tx: null, ms });
+    if (settle.ok) {
+      const { recordSettlement } = await import("@/lib/x402-settlements");
+      await recordSettlement(units, settle.tx).catch(() => {});
+      const { recordToolPayment, payerFromPayload } = await import("@/lib/wallet/spend-log");
+      await recordToolPayment(payerFromPayload(payment), `mcp:${tool}`, units, settle.tx).catch(() => {});
+    }
+  };
+  try { after(book); } catch { await book(); }   // outside a request (tests, scripts): run it inline
   return {
     content: [{ type: "text", text: out.text }],
     ...(out.structured ? { structuredContent: out.structured } : {}),
