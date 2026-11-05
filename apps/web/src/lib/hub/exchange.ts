@@ -244,10 +244,18 @@ export interface Exchange {
   rows: ProviderRow[];
   /** Every listed seller summed per UTC day, oldest first (keys as YYYYMMDD). */
   daily: { day: string; usd: number; calls: number; sellers: number }[];
+  /**
+   * Distinct paying wallets across ALL sellers and days (a wallet paying five
+   * sellers counts once). A true lower bound only when `payersSaturated`: each
+   * seller keeps at most PAYER_KEEP payers a day, so a capped seller may hide some.
+   */
+  payersDistinct: number;
+  payersSaturated: boolean;
 }
 
 export async function readExchange(days = 30): Promise<Exchange> {
-  const out: Exchange = { readable: true, daysCovered: 0, firstDay: null, firstIndex: 0, lagBlocks: null, listUpdatedAt: null, providersListed: 0, rows: [], daily: [] };
+  const out: Exchange = { readable: true, daysCovered: 0, firstDay: null, firstIndex: 0, lagBlocks: null, listUpdatedAt: null, providersListed: 0, rows: [], daily: [], payersDistinct: 0, payersSaturated: false };
+  const allPayers = new Set<string>();
   try {
     const idx = await readProviderIndex();
     out.listUpdatedAt = idx?.updatedAt ?? null;
@@ -272,10 +280,12 @@ export async function readExchange(days = 30): Promise<Exchange> {
         };
         r.paidCalls += c.n; r.usd += c.u / 1e6; r.teamCalls += c.tn ?? 0; r.teamUsd += (c.tu ?? 0) / 1e6;
         r.series[i] += c.u / 1e6;
-        for (const x of c.pay) r.set.add(x);
+        for (const x of c.pay) { r.set.add(x); allPayers.add(x); }
+        if (c.pay.length >= PAYER_KEEP) out.payersSaturated = true;
         acc.set(p, r);
       }
     });
+    out.payersDistinct = allPayers.size;
     out.rows = [...acc.values()].map(({ set, ...r }) => ({ ...r, payers: set.size }))
       .sort((a, b) => b.usd - a.usd || b.paidCalls - a.paidCalls);
     const cur = await kv.get<string>(K_CURSOR);

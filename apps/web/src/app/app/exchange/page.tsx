@@ -62,7 +62,6 @@ export default async function AgentsPage() {
   const withId = ex.rows.filter((r) => ids[r.payTo]?.agentIds.length).slice(0, 20);
   const top = ex.rows.filter((r) => sum7(r) > 0).sort((a, b) => sum7(b) - sum7(a)).slice(0, 10);
   const volume = ex.rows.reduce((a, r) => a + r.usd, 0);
-  const payersApprox = ex.rows.reduce((a, r) => a + r.payers, 0);
   const live = (p: string) => probes[p]?.result === "live";
 
   return (
@@ -81,7 +80,7 @@ export default async function AgentsPage() {
               [`AGENT REVENUE · ${ex.daysCovered}D`, R ? usd(volume) : "—", "x402 on Base, measured"],
               ["LISTED AGENTS", String(listings.length + 1), "proved they run their service"],
               [`PAID SELLERS · ${ex.daysCovered}D`, R ? ex.rows.length.toLocaleString("en-US") : "—", "received an x402 settlement"],
-              ["PAYING WALLETS", R ? `≥${payersApprox.toLocaleString("en-US")}` : "—", "sum per seller, a lower bound"],
+              ["PAYING WALLETS", R ? `${ex.payersSaturated ? "≥" : ""}${ex.payersDistinct.toLocaleString("en-US")}` : "—", `distinct, ${ex.daysCovered}d${ex.payersSaturated ? " (busiest sellers capped)" : ""}`],
             ].map(([l, v, s]) => (
               <div key={l} className={`${card} p-[14px]`}>
                 <p className="text-[12px] tracking-[0.12em] text-[#64748B]">{l}</p>
