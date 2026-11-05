@@ -90,7 +90,7 @@ const MULTICALL3 = "0xcA11bde05977b3631167028862bE2a173976CA11" as const;
  * public Base RPC are rate-limited (see lib/wallet/base-token-discovery.ts);
  * the first version of this function made 13 of them and found nothing.
  */
-async function bestPool(stock: Address): Promise<{ pool: Address; tickSpacing: number } | null> {
+async function poolCandidates(stock: Address): Promise<{ pool: Address; tickSpacing: number }[]> {
   const c = clientFor("base");
   let spacings: number[] = [1, 10, 50, 100, 200, 2000];
   try { spacings = (await c.readContract({ address: CL_FACTORY, abi: FACTORY_ABI, functionName: "tickSpacings" })).map(Number); } catch { /* fallback list */ }
@@ -101,20 +101,57 @@ async function bestPool(stock: Address): Promise<{ pool: Address; tickSpacing: n
   const cands = pools
     .map((r, i) => ({ pool: r.status === "success" ? (r.result as Address) : null, tickSpacing: spacings[i] }))
     .filter((x): x is { pool: Address; tickSpacing: number } => !!x.pool && !/^0x0{40}$/i.test(x.pool));
-  if (!cands.length) return null;
+  if (!cands.length) return [];
   const liq = await c.multicall({
     allowFailure: true, multicallAddress: MULTICALL3, batchSize: 0,
     contracts: cands.map((x) => ({ address: x.pool, abi: POOL_ABI, functionName: "liquidity" as const })),
   });
-  let best: { pool: Address; tickSpacing: number; liq: bigint } | null = null;
-  cands.forEach((x, i) => {
-    const r = liq[i];
-    if (r.status !== "success") return;          // unread pool: skipped, never ranked as empty
-    const l = r.result as bigint;
-    if (l > 0n && (!best || l > best.liq)) best = { ...x, liq: l };
-  });
-  const b = best as { pool: Address; tickSpacing: number; liq: bigint } | null;
-  return b ? { pool: b.pool, tickSpacing: b.tickSpacing } : null;
+  // Every pool with liquidity in range. Unread pools are skipped, never ranked as empty.
+  return cands.filter((_, i) => liq[i].status === "success" && (liq[i].result as bigint) > 0n);
+}
+
+// Uniswap-v3 sqrt-price bounds. The Quoter does NOT revert when a pool runs out
+// of liquidity: the simulated swap stops at the bound and reports what it got,
+// as if all of amountIn had been spent. Such a quote is a partial fill.
+const MIN_SQRT = 4295128739n, MAX_SQRT = 1461446703485210103287273052203988822378723970342n;
+
+/** A swap that moves the price more than this, against a 1%-size reference, is refused. */
+export const MAX_IMPACT_PCT = 5;
+
+export type PoolQuote = { pool: Address; tickSpacing: number; out: bigint; full: boolean };
+
+/**
+ * The pool to trade on for THIS size: the most output among quotes that fill
+ * in full. Pure, so it is tested without a chain (aero-best-quote-test.ts).
+ */
+export function pickBestQuote(quotes: (PoolQuote | null)[]): PoolQuote | null {
+  let best: PoolQuote | null = null;
+  for (const q of quotes) if (q && q.full && q.out > 0n && (!best || q.out > best.out)) best = q;
+  return best;
+}
+
+/**
+ * Quote `amountIn` on every candidate pool and keep the best.
+ *
+ * Until 2026-11-05 the pool was picked BEFORE quoting, by in-range liquidity()
+ * alone. On LIc / INFYc / HSAIc that sometimes chose a pool whose liquidity sat
+ * in a sliver of range: every size bought what $100 did (read as "+900%"), and
+ * swap_prepare would have built the trade on that pool, its slippage floor
+ * computed from the same bad quote. Liquidity is not depth; the quote is.
+ */
+async function bestQuote(tokenIn: Address, tokenOut: Address, amountIn: bigint, cands: { pool: Address; tickSpacing: number }[]): Promise<PoolQuote | null> {
+  const c = clientFor("base");
+  const quotes = await Promise.all(cands.map(async (x) => {
+    try {
+      const { result } = await c.simulateContract({
+        address: QUOTER, abi: QUOTER_ABI, functionName: "quoteExactInputSingle",
+        args: [{ tokenIn, tokenOut, amountIn, tickSpacing: x.tickSpacing, sqrtPriceLimitX96: 0n }],
+      });
+      const after = result[1];
+      return { ...x, out: result[0], full: after > MIN_SQRT + 1n && after < MAX_SQRT - 1n };
+    } catch { return null; }
+  }));
+  return pickBestQuote(quotes);
 }
 
 /**
@@ -132,22 +169,30 @@ export async function aerodromeQuote(p: { sellToken: string; buyToken: string; s
   if (!/^0x[a-fA-F0-9]{40}$/.test(p.taker)) return { venue: "aerodrome", error: "A taker wallet is required to build the swap." };
   if (!/^\d+$/.test(p.sellAmount) || BigInt(p.sellAmount) === 0n) return { venue: "aerodrome", error: "bad sellAmount" };
 
-  const found = await bestPool(stock.token as Address);
-  if (!found) return { venue: "aerodrome", error: `No Aerodrome ${stock.symbol}/USDC pool with liquidity was found on Base.` };
+  const cands = await poolCandidates(stock.token as Address);
+  if (!cands.length) return { venue: "aerodrome", error: `No Aerodrome ${stock.symbol}/USDC pool with liquidity was found on Base.` };
 
-  const c = clientFor("base");
   const amountIn = BigInt(p.sellAmount);
-  let out: bigint;
-  try {
-    const { result } = await c.simulateContract({
-      address: QUOTER, abi: QUOTER_ABI, functionName: "quoteExactInputSingle",
-      args: [{ tokenIn: p.sellToken as Address, tokenOut: p.buyToken as Address, amountIn, tickSpacing: found.tickSpacing, sqrtPriceLimitX96: 0n }],
-    });
-    out = result[0];
-  } catch (e) {
-    return { venue: "aerodrome", error: `Aerodrome could not quote this size: ${(e as Error).message.slice(0, 120)}` };
+  const found = await bestQuote(p.sellToken as Address, p.buyToken as Address, amountIn, cands);
+  if (!found) return { venue: "aerodrome", error: `No Aerodrome ${stock.symbol}/USDC pool can fill this size in full; try a smaller amount.` };
+  const out = found.out;
+
+  // Impact guard. Slippage is measured from the quote, so a quote that is itself
+  // far off the market passes it: on 2026-11-05 a $1k MSFTc buy quoted
+  // $947.68/token against a ~$512 market (+69%), and this would have built it.
+  // Compare against a 1%-size reference on the same candidates; refuse past
+  // MAX_IMPACT_PCT with the numbers, so the caller can size down.
+  const refIn = amountIn / 100n;
+  if (refIn > 0n) {
+    const ref = await bestQuote(p.sellToken as Address, p.buyToken as Address, refIn, cands);
+    if (ref && ref.out > 0n) {
+      // price = in/out; impact = (in/out) / (refIn/refOut) - 1
+      const impact = (Number(amountIn) / Number(out)) / (Number(refIn) / Number(ref.out)) - 1;
+      if (impact > MAX_IMPACT_PCT / 100) {
+        return { venue: "aerodrome", error: `This size would move ${stock.symbol}'s price ${(impact * 100).toFixed(1)}% on Aerodrome (limit ${MAX_IMPACT_PCT}%). The pool is too thin for it; try a smaller amount.` };
+      }
+    }
   }
-  if (out === 0n) return { venue: "aerodrome", error: "Aerodrome quotes zero output at this size." };
   const bps = p.slippageBps ?? 100;
   const minOut = (out * BigInt(10_000 - bps)) / 10_000n;
   const data = encodeFunctionData({
@@ -169,7 +214,7 @@ export async function aerodromeQuote(p: { sellToken: string; buyToken: string; s
 }
 
 /**
- * Price impact of BUYING `token` with USDC on its deepest Aerodrome CL pool, at
+ * Price impact of BUYING `token` with USDC on Aerodrome CL, at
  * a few order sizes, against a $100 reference quote. Read with the Quoter (a
  * simulated call: nothing is signed or sent). Works for any Base token with a
  * USDC pool, not only the Blue Hood registry.
@@ -179,33 +224,25 @@ export async function aerodromeQuote(p: { sellToken: string; buyToken: string; s
  * $1k; NVDAc moved +0.32% on $10k. Concentrated liquidity out of range is
  * counted in TVL but not available to a trade.
  *
- * One pool only: a router splitting across pools may do better, and the result
- * says so. null = no USDC pool with liquidity, or the quoter refused.
+ * Each size is quoted on EVERY USDC pool and the best full fill wins (per-size
+ * `pool`); no split across pools, so a router may still do better. null = no
+ * pool, or $100 cannot fill. `fills: false` = no pool fills that size in full.
  */
 export async function quoteBuyImpact(token: Address, tokenDecimals: number, sizesUsd: number[] = [1_000, 10_000]): Promise<
-  { pool: string; tickSpacing: number; reference_usd: number; buys: { usd: number; impact_pct: number | null }[] } | null
+  { pool: string; tickSpacing: number; reference_usd: number; buys: { usd: number; impact_pct: number | null; fills: boolean; pool: string | null }[] } | null
 > {
-  const found = await bestPool(token);
-  if (!found) return null;
-  const c = clientFor("base");
-  const quote = async (usd: number): Promise<bigint | null> => {
-    try {
-      const { result } = await c.simulateContract({
-        address: QUOTER, abi: QUOTER_ABI, functionName: "quoteExactInputSingle",
-        args: [{ tokenIn: USDC_BASE, tokenOut: token, amountIn: BigInt(Math.round(usd * 1e6)), tickSpacing: found.tickSpacing, sqrtPriceLimitX96: 0n }],
-      });
-      return result[0] > 0n ? result[0] : null;
-    } catch { return null; }
-  };
+  const cands = await poolCandidates(token);
+  if (!cands.length) return null;
   const REF = 100;
-  const ref = await quote(REF);
+  const ref = await bestQuote(USDC_BASE, token, BigInt(REF * 1e6), cands);
   if (!ref) return null;
-  const refPrice = REF / (Number(ref) / 10 ** tokenDecimals);
+  const refPrice = REF / (Number(ref.out) / 10 ** tokenDecimals);
   const buys = [];
   for (const usd of sizesUsd) {
-    const out = await quote(usd);
-    const px = out ? usd / (Number(out) / 10 ** tokenDecimals) : null;
-    buys.push({ usd, impact_pct: px ? Math.round((px / refPrice - 1) * 10_000) / 100 : null });
+    const q = await bestQuote(USDC_BASE, token, BigInt(Math.round(usd * 1e6)), cands);
+    if (!q) { buys.push({ usd, impact_pct: null, fills: false, pool: null }); continue; }
+    const px = usd / (Number(q.out) / 10 ** tokenDecimals);
+    buys.push({ usd, impact_pct: Math.round((px / refPrice - 1) * 10_000) / 100, fills: true, pool: q.pool });
   }
-  return { pool: found.pool, tickSpacing: found.tickSpacing, reference_usd: REF, buys };
+  return { pool: ref.pool, tickSpacing: ref.tickSpacing, reference_usd: REF, buys };
 }

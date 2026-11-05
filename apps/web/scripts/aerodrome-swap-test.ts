@@ -51,8 +51,15 @@ function call(to: string, d: string): string | null {
   if (to === POOL100 && d.startsWith("0x1a686502")) return word(1_000n);
   if (to === QUOTER.toLowerCase()) {
     const { args } = decodeFunctionData({ abi: Q, data: d as `0x${string}` });
-    quoted = { tickSpacing: Number(args[0].tickSpacing), amountIn: args[0].amountIn };
-    return encodeFunctionResult({ abi: Q, functionName: "quoteExactInputSingle", result: [415_935n, 0n, 1, 200_000n] });
+    const ts = Number(args[0].tickSpacing), amountIn = args[0].amountIn;
+    // Every candidate pool is now quoted (best output wins), plus a 1%-size
+    // reference for the impact guard: keep the full-size quote on the winner.
+    if (ts === 10 && amountIn >= 1_000_000n) quoted = { tickSpacing: ts, amountIn };
+    // Realistic quoter: output proportional to input (no impact), the deeper
+    // pool (10) pays more than the thin one (100), and a mid-range post-swap
+    // sqrt price (a bound would mean the pool ran dry).
+    const out = (amountIn * (ts === 10 ? 415_935n : 200_000n)) / 1_000_000n;
+    return encodeFunctionResult({ abi: Q, functionName: "quoteExactInputSingle", result: [out, 79228162514264337593543950336n, 1, 200_000n] });
   }
   return null;
 }
