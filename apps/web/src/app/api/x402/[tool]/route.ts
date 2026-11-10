@@ -194,7 +194,12 @@ async function handle(
   if (halt) return haltedResponse(tool, halt);
 
   const requirements = buildRequirements(String(priceUnits));
-  const xPayment    = req.headers.get("x-payment") ?? req.headers.get("X-Payment");
+  // x402 v2 sends the payment in PAYMENT-SIGNATURE; v1 (and our own client,
+  // which sends both) in X-PAYMENT. Same base64 payload either way. Until
+  // 2026-11-10 only X-PAYMENT was read, so a canonical v2 buyer paid and got a
+  // fresh 402 back: vet402's one purchase from us (token-price, 2026-10-23)
+  // is recorded as settle_failed / HTTP 402 for exactly that reason.
+  const xPayment    = req.headers.get("payment-signature") ?? req.headers.get("x-payment");
   const xInternal   = req.headers.get("x-blue-internal") ?? req.headers.get("X-Blue-Internal");
   // X-Blue-User pairs with X-Blue-Internal to flip the bypass from
   // free-for-server into "debit the user's credit ledger". This is how
@@ -455,5 +460,17 @@ async function handle(
     const { recordToolPayment, payerFromPayload } = await import("@/lib/wallet/spend-log");
     await recordToolPayment(payerFromPayload(paymentPayload), tool, priceUnits, settle.tx);
   }
-  return NextResponse.json({ ...data, _settle: { ok: settle.ok, status: settle.status, tx: settle.tx } });
+  // The settlement receipt in both dialects: v2 reads PAYMENT-RESPONSE
+  // ({ success, transaction, network, payer }), v1 X-PAYMENT-RESPONSE.
+  const receiptHeaders: Record<string, string> = {};
+  if (settle.ok) {
+    const { payerFromPayload } = await import("@/lib/wallet/spend-log");
+    const receipt = Buffer.from(JSON.stringify({
+      success: true, transaction: settle.tx ?? null, network: requirements.network, payer: payerFromPayload(paymentPayload),
+    })).toString("base64");
+    receiptHeaders["PAYMENT-RESPONSE"] = receipt;
+    receiptHeaders["X-PAYMENT-RESPONSE"] = receipt;
+    receiptHeaders["Access-Control-Expose-Headers"] = "PAYMENT-RESPONSE, X-PAYMENT-RESPONSE";
+  }
+  return NextResponse.json({ ...data, _settle: { ok: settle.ok, status: settle.status, tx: settle.tx } }, { headers: receiptHeaders });
 }
