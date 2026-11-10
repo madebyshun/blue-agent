@@ -25,13 +25,14 @@
  * Asset types come from the registries only, never from a name (§1 table):
  *   rh_stock_token  — rwa-registry, issuer RHJ: a Robinhood Assets (Jersey)
  *                     debt security tracking a US share;
- *   b20_stock_token — BASE_STOCKS: a Coinbase B20 tokenized stock;
+ *   b20_stock_token — BASE_STOCKS or coinbase-list: a Coinbase B20 tokenized stock;
  *   major / native  — the addresses this app pins;
  *   crypto          — anything else.
  */
 import { findByContract as findRwaByContract } from "@/lib/robinhood/rwa-registry";
 import { nyseMarketStatus } from "@/lib/robinhood/rwa-market";
 import { BASE_STOCKS } from "@/lib/base-stocks/registry";
+import { COINBASE_BASE_STOCKS } from "@/lib/base-stocks/coinbase-list";
 import { BASE_MAJORS, classifyToken, normalizeSymbol } from "@/lib/wallet/token-trust";
 import { readTokenTax } from "@/lib/token-tax";
 import { measuredHoneypotVerdict } from "@/lib/honeypot-verdict";
@@ -245,6 +246,24 @@ async function tokenCheck(input: PreTradeInput): Promise<PreTradeCheck> {
     return drift === undefined ? out : { ...out, drift_pct: drift };
   }
 
+  // Every other Coinbase Tokenized Stock Base publishes (coinbase-list, each
+  // checked on chain: isB20, 8 decimals, exact symbol). Until 2026-11-10 only the
+  // 9-token Hood registry was recognised, so LIc / BIDUc fell through to the
+  // generic path: labelled "crypto" with a TAX_UNREAD warning, because GoPlus
+  // does not read B20 stocks. Matched by ADDRESS only. No oracle reading exists
+  // for these (Blue Hood's desk polls only the registry), which is a fact about
+  // coverage, not a risk, so it is INFO, not WARN.
+  const listed = COINBASE_BASE_STOCKS.find((s) => s.token.toLowerCase() === token.toLowerCase());
+  if (listed) {
+    reasons.push({ level: "INFO", code: "ISSUER_POLICY", text: "B20 tokens can carry issuer transfer policies — a transfer the policy forbids will revert." });
+    if (input.kind === "swap") {
+      const wk = weekendReason(now);
+      if (wk) reasons.push(wk);
+      reasons.push({ level: "INFO", code: "NO_ORACLE_FEED", text: "No Chainlink reading is held for this stock, so its DEX price is not compared to the share here." });
+    }
+    return finish("b20_stock_token", `B20 tokenized stock (Coinbase) · tracks ${listed.ticker}`, reasons);
+  }
+
   let symbol = "";
   let metaRead = true;
   try { symbol = (await readTokenMeta("base", token as `0x${string}`)).symbol; } catch { metaRead = false; }
@@ -259,7 +278,8 @@ async function tokenCheck(input: PreTradeInput): Promise<PreTradeCheck> {
   if (trust === "verified") return finish("major", symbol || token, reasons);
   // A registered B20 stock's symbol from another contract is an impostor too.
   const norm = normalizeSymbol(symbol);
-  if (trust === "impostor" || (norm && BASE_STOCKS.some((s) => normalizeSymbol(s.symbol) === norm))) {
+  // A Coinbase stock's symbol on another contract is an impostor too (registry or the full list).
+  if (trust === "impostor" || (norm && (BASE_STOCKS.some((s) => normalizeSymbol(s.symbol) === norm) || COINBASE_BASE_STOCKS.some((s) => normalizeSymbol(s.symbol) === norm)))) {
     reasons.push({ level: impostorLevel(input.kind), code: "IMPOSTOR", text: `This contract calls itself ${impostorNames(symbol).shown} but is not the verified ${impostorNames(symbol).real} on Base — an impersonator.` });
     return finish("crypto", symbol || token, reasons);
   }
