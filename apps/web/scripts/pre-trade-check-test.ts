@@ -164,6 +164,12 @@ async function run(input: Parameters<typeof preTradeCheck>[0]) {
     c.asset_type === "rh_stock_token" && /Robinhood, Jersey/.test(c.label) && c.label.includes(RH_STOCK.ticker) && !/share/i.test(c.label), c.label);
   c = await run({ chain: "base", kind: "swap", token: NVDA.token, now: WEEKDAY });
   ok("a BASE_STOCKS token → b20_stock_token (Coinbase)", c.asset_type === "b20_stock_token" && /B20 tokenized stock \(Coinbase\)/.test(c.label), c.label);
+  // A verified Coinbase stock OUTSIDE the Hood registry (BIDUc): was "crypto" +
+  // TAX_UNREAD until 2026-11-10. Matched by address in coinbase-list; no oracle
+  // is held for it, which is INFO, so a clean read is PASS. No RPC is touched.
+  c = await run({ chain: "base", kind: "swap", token: "0xb200000000000000000000d2b7D9aeE52F6C6BEf", now: WEEKDAY });
+  ok("a coinbase-list stock outside the registry → b20_stock_token, PASS, tracks BIDU",
+    c.asset_type === "b20_stock_token" && c.verdict === "PASS" && /tracks BIDU/.test(c.label) && !/TAX_UNREAD/.test(c.reasons.map((r) => r.code).join(",")), `${c.verdict} ${c.asset_type} ${c.label}`);
   c = await run({ chain: "base", kind: "swap", token: CLEAN, now: WEEKDAY });
   ok("an unregistered Base token → crypto", c.asset_type === "crypto");
   c = await run({ chain: "robinhood", kind: "swap", token: RH_UNLISTED, now: WEEKDAY });
