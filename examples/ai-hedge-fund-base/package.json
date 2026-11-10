@@ -8,7 +8,7 @@
     "typecheck": "tsc --noEmit --strict --module nodenext --moduleResolution nodenext --target es2022 --skipLibCheck --types node fund.ts"
   },
   "dependencies": {
-    "@blueagent/x402": "^0.3.1",
+    "@blueagent/x402": "^0.3.2",
     "viem": "^2.21.0"
   },
   "devDependencies": {

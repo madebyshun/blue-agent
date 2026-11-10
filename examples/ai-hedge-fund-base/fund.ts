@@ -8,7 +8,10 @@
  *   2. stock_quote  ($0.02)  for each candidate: verified contract, price, and
  *                            what a $1k / $10k USDC buy moves the price
  *   3. refuse any order whose price impact is above MAX_IMPACT_PCT
- *   4. swap_prepare ($0.01)  an UNSIGNED USDC -> stock swap for the one that passes
+ *   4. /prices/snapshot ($0.02, Financial Datasets) the real share price, from a
+ *                            second x402 seller; refuse a token trading more than
+ *                            MAX_PREMIUM_PCT above share x multiplier()
+ *   5. swap_prepare ($0.01)  an UNSIGNED USDC -> stock swap for the one that passes
  *
  * Every data call is paid from BUYER_PRIVATE_KEY in USDC on Base, capped per
  * call and per run by @blueagent/x402 before anything is signed.
@@ -20,8 +23,10 @@
  * cost and stops. The "strategy" (buy today's top gainer that the pool can
  * absorb) is a demo of the plumbing, not investment advice.
  */
-import { PaidMcpClient } from "@blueagent/x402";
+import { PaidMcpClient, X402Client } from "@blueagent/x402";
 import { privateKeyToAccount } from "viem/accounts";
+import { createPublicClient, http, parseAbi } from "viem";
+import { base } from "viem/chains";
 
 const MCP_URL = process.env.MCP_URL ?? "https://blueagent.dev/api/mcp";
 const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
@@ -32,6 +37,13 @@ const BUDGET_USD = Number(process.env.BUDGET_USD ?? 0.5);
 // Checked after today's gainers. Small caps lead the gainer list and their pools
 // are thin, so most get refused; these are the deepest pools measured 2026-11-05.
 const WATCHLIST = (process.env.WATCHLIST ?? "NVDA,MSTR").split(",").map((s) => s.trim()).filter(Boolean);
+
+// The real share price, bought from a SECOND x402 seller: Financial Datasets
+// (api.financialdatasets.ai), $0.02 a snapshot in USDC on Base. A token whose
+// pool trades above the share by more than this is refused: why pay a premium?
+const MAX_PREMIUM_PCT = Number(process.env.MAX_PREMIUM_PCT ?? 2);
+const PREMIUM_CHECKS = Number(process.env.PREMIUM_CHECKS ?? 2);
+const FD = "https://api.financialdatasets.ai";
 
 const key = process.env.BUYER_PRIVATE_KEY as `0x${string}` | undefined;
 const fund = new PaidMcpClient({
@@ -73,6 +85,7 @@ async function call(name: string, args: Record<string, unknown>) {
   // 2-3. Quote each and refuse what the pool cannot absorb.
   const size = ORDER_USD <= 1000 ? 1000 : 10000;   // the impact sizes stock_quote reports
   let pick: { ticker: string; token: string; impact: number } | null = null;
+  const passes: { ticker: string; token: string; impact: number; price: number | null; symbol: string }[] = [];
   console.log(`\n2. depth check: what a $${size.toLocaleString()} buy moves the price`);
   const tickers = [...new Set([...gainers.slice(0, CANDIDATES).map((g) => g.ticker), ...WATCHLIST])];
   for (const t of tickers) {
@@ -90,18 +103,43 @@ async function call(name: string, args: Record<string, unknown>) {
     if (impact === null) { console.log(`   ${g.ticker}: no depth read, skipped`); continue; }
     const ok = impact <= MAX_IMPACT_PCT;
     console.log(`   ${g.ticker} ${b?.symbol ?? ""} at $${price?.toFixed?.(2) ?? "?"}: +${impact}% ${ok ? "PASS" : `REFUSED (above ${MAX_IMPACT_PCT}%)`}`);
-    if (ok && !pick) pick = { ticker: g.ticker, token: b.token, impact };
+    if (ok) passes.push({ ticker: g.ticker, token: b.token, impact, price: typeof price === "number" ? price : null, symbol: b?.symbol ?? `${g.ticker}c` });
+  }
+
+  // 3. Premium check: the token's pool price against the real share, bought from
+  // Financial Datasets over x402. A Coinbase stock token is worth multiplier()
+  // shares (dividends raise it), so the fair token price is share x multiplier.
+  const fd = key ? new X402Client({ privateKey: key, maxPerCallAtomic: 50_000n, budget: { totalAtomic: BigInt(PREMIUM_CHECKS) * 50_000n } }) : null;
+  const rpc = createPublicClient({ chain: base, transport: http() });
+  const MULT = parseAbi(["function multiplier() view returns (uint256)"]);
+  if (passes.length) console.log(`\n3. premium check: token on Base vs the real share (Financial Datasets, paid per call)`);
+  for (const p of passes.slice(0, PREMIUM_CHECKS)) {
+    if (!fd) { console.log(`   ${p.ticker}: needs a wallet to buy the share price`); break; }
+    let share: number | null = null;
+    try {
+      const r = await fd.call<{ snapshot?: { price?: number } }>(`${FD}/prices/snapshot?ticker=${encodeURIComponent(p.ticker)}`, { method: "GET" });
+      share = typeof r.data?.snapshot?.price === "number" ? r.data.snapshot.price : null;
+    } catch (e) { console.log(`   ${p.ticker}: share price unavailable (${e instanceof Error ? e.message.slice(0, 80) : e})`); continue; }
+    let mult = 1;
+    try { mult = Number(await rpc.readContract({ address: p.token as `0x${string}`, abi: MULT, functionName: "multiplier" })) / 1e18; } catch { /* not a B20 asset token: 1 share */ }
+    if (share === null || p.price === null) { console.log(`   ${p.ticker}: no price to compare, skipped`); continue; }
+    const fair = share * mult;
+    const premium = (p.price / fair - 1) * 100;
+    const ok = premium <= MAX_PREMIUM_PCT;
+    console.log(`   ${p.symbol} $${p.price.toFixed(2)} vs ${p.ticker} share $${share.toFixed(2)}${mult !== 1 ? ` x ${mult.toFixed(6)}` : ""}: ${premium >= 0 ? "+" : ""}${premium.toFixed(2)}% ${ok ? "PASS" : `REFUSED (premium above ${MAX_PREMIUM_PCT}%)`}`);
+    if (ok) { pick = p; break; }
   }
 
   // 4. Prepare, never sign.
-  if (!pick) { console.log("\n3. no candidate passes the depth check: no trade this round."); }
-  else if (!wallet) { console.log(`\n3. would prepare a $${ORDER_USD} buy of ${pick.ticker}; needs a wallet.`); }
+  if (!pick) { console.log("\n4. no candidate passes both checks: no trade this round."); }
+  else if (!wallet) { console.log(`\n4. would prepare a $${ORDER_USD} buy of ${pick.ticker}; needs a wallet.`); }
   else {
     const tx = await call("swap_prepare", { chain: "base", fromAddress: wallet, tokenIn: USDC_BASE, tokenOut: pick.token, amountIn: String(ORDER_USD), slippageBps: Math.max(50, Math.ceil(pick.impact * 100) + 50) });
-    console.log(`\n3. prepared, UNSIGNED: buy ${pick.ticker} with $${ORDER_USD} USDC on Base`);
+    console.log(`\n4. prepared, UNSIGNED: buy ${pick.ticker} with $${ORDER_USD} USDC on Base`);
     console.log(JSON.stringify(tx, null, 2));
     console.log("\nReview it, then sign with your own wallet. This script never sends it.");
   }
 
-  console.log(`\nspent ${usd(fund.spentAtomic)} on data this round`);
+  const fdSpent = fd ? fd.budget.spentAtomic : 0n;
+  console.log(`\nspent ${usd(fund.spentAtomic + fdSpent)} on data this round: ${usd(fund.spentAtomic)} to Blue Agent, ${usd(fdSpent)} to Financial Datasets`);
 })().catch((e) => { console.error(e instanceof Error ? e.message : e); process.exit(1); });
