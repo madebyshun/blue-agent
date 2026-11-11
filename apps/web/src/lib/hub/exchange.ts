@@ -30,10 +30,10 @@ const TRANSFER = parseAbiItem("event Transfer(address indexed from, address inde
 const AUTH_USED = parseAbiItem("event AuthorizationUsed(address indexed authorizer, bytes32 indexed nonce)");
 const BAZAAR = "https://api.cdp.coinbase.com/platform/v2/x402/discovery/resources";
 
-export const CHUNK = 2_000n;          // blocks per getLogs window (~67 min on Base)
+export const CHUNK = 2_000n;          // blocks per getLogs window (~6.7 min on Base since its 0.2 s blocks, 2026-11-05; ~67 min before)
 const ADDR_BATCH = 200;               // payTos per getLogs (publicnode caps results at 20,000)
 const BACKFILL_DAYS = 7;              // first run starts here, then walks forward
-const BLOCKS_PER_DAY = 43_200n;
+const BLOCKS_PER_DAY = 432_000n;      // 0.2 s blocks since ~2026-11-05 (was 43,200 at 2 s)
 const DAY_TTL = 35 * 24 * 3600;
 const PAYER_KEEP = 2_000;             // per provider per day; beyond it the count saturates
 

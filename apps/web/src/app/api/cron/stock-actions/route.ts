@@ -1,7 +1,8 @@
 /**
  * Cron: walks Base 8453 forward for corporate-action announcements on every
  * Coinbase Tokenized Stock (lib/base-stocks/corporate-actions.ts) and stores new
- * action ids in KV. Every 30 min: ~900 new blocks, 34 getLogs calls.
+ * action ids in KV. Every 30 min: ~9,000 new blocks (0.2 s blocks), one
+ * 20,000-block window, 34 getLogs calls.
  * Auth: `Authorization: Bearer $CRON_SECRET` (what Vercel Cron sends).
  */
 import { NextRequest, NextResponse } from "next/server";
