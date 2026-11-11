@@ -22,7 +22,7 @@ async function main() {
   const dry = process.argv.includes("--dry");
   const r = await fetch("https://www.base.org/api/stocks", { headers: { "user-agent": "Mozilla/5.0", accept: "application/json" } });
   if (!r.ok) throw new Error(`base.org/api/stocks answered ${r.status}`);
-  const list = ((await r.json()) as { stocks: { ticker: string; address: string; name: string }[] }).stocks;
+  const list = ((await r.json()) as { stocks: { ticker: string; address: string; name: string; prospectus?: unknown }[] }).stocks;
   const c = createPublicClient({ chain: base, transport: http(process.env.BASE_RPC_URL || "https://base-rpc.publicnode.com"), batch: { multicall: true } });
   const checked = await Promise.all(list.map(async (s) => {
     const token = getAddress(s.address);
@@ -37,9 +37,11 @@ async function main() {
   // `image`, kept only if it answers an image. A token without one stays null
   // (the UI falls back), never a guessed URL. 16 at a time: it is Coinbase's API.
   const CONTRACT_URI = parseAbi(["function contractURI() view returns (string)"]);
-  const images: (string | null)[] = [];
-  for (let i = 0; i < checked.length; i += 16) {
-    images.push(...await Promise.all(checked.slice(i, i + 16).map(async (x) => {
+  // A failed read (Coinbase's API rate-limits bursts: one run on 2026-11-11 got
+  // 156 of 338 where the file already held 251) must not wipe a logo that was
+  // verified before, so each token is tried 3 times, then keeps its previous one.
+  const previous = new Map(COINBASE_BASE_STOCKS.map((s) => [s.token.toLowerCase(), s.image]));
+  const readImage = async (x: { token: `0x${string}` }): Promise<string | null> => {
       try {
         const uri = await c.readContract({ address: x.token, abi: CONTRACT_URI, functionName: "contractURI" });
         if (!/^https:\/\//.test(uri)) return null;
@@ -55,10 +57,21 @@ async function main() {
         const jpg = b[0] === 0xff && b[1] === 0xd8;
         return png || jpg ? img : null;
       } catch { return null; }
+  };
+  const images: (string | null)[] = [];
+  for (let i = 0; i < checked.length; i += 8) {
+    images.push(...await Promise.all(checked.slice(i, i + 8).map(async (x) => {
+      for (let t = 0; t < 3; t++) {
+        const img = await readImage(x);
+        if (img) return img;
+        await new Promise((r) => setTimeout(r, 1500 * (t + 1)));
+      }
+      return previous.get(x.token.toLowerCase()) ?? null;
     })));
   }
   const withImage = images.filter(Boolean).length;
-  console.log(`logos: ${withImage} of ${checked.length} from each token's contractURI`);
+  const lost = checked.filter((x, i) => previous.get(x.token.toLowerCase()) && !images[i]).map((x) => x.ticker);
+  console.log(`logos: ${withImage} of ${checked.length} from each token's contractURI${lost.length ? ` · LOST ${lost.join(", ")}` : ""}`);
   const bad = checked.filter((x) => !x.ok);
   const before = new Set(COINBASE_BASE_STOCKS.map((s) => s.token.toLowerCase()));
   const added = checked.filter((x) => !before.has(x.token.toLowerCase())).map((x) => x.ticker);
@@ -68,8 +81,13 @@ async function main() {
   if (bad.length) { console.error("Refusing to write: every listed token must pass on chain."); process.exit(1); }
   if (dry) return;
 
+  // The issuer's own prospectus PDF, as base.org links it. Kept only when it is
+  // Coinbase's URL for THIS ticker, so a typo in the feed cannot point a token
+  // at another company's document.
+  const prospectus = (x: { ticker: string; prospectus?: unknown }) =>
+    x.prospectus === `https://api.coinbase.com/v1/tokenized-stocks/prospectus/${x.ticker}.pdf` ? x.prospectus : null;
   const esc = (t: string) => t.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-  const rows = checked.map((x, i) => `  { ticker: "${esc(x.ticker.replace(/c$/, ""))}", symbol: "${esc(x.ticker)}", name: "${esc(x.name)}", token: "${x.token}", image: ${images[i] ? `"${esc(images[i]!)}"` : "null"} },`);
+  const rows = checked.map((x, i) => `  { ticker: "${esc(x.ticker.replace(/c$/, ""))}", symbol: "${esc(x.ticker)}", name: "${esc(x.name)}", token: "${x.token}", image: ${images[i] ? `"${esc(images[i]!)}"` : "null"}, prospectus: ${prospectus(x) ? `"${esc(prospectus(x)!)}"` : "null"} },`);
   const today = new Date().toISOString().slice(0, 10);
   const file = `/**
  * Every Coinbase Tokenized Stock on Base 8453, as Base publishes them.
@@ -79,7 +97,8 @@ async function main() {
  * token: B20 factory isB20() == true, decimals() == 8, symbol() == the listed
  * ticker. ${checked.length} of ${checked.length} passed. \`image\` is the token's own logo, read
  * from contractURI() → Coinbase's metadata JSON and kept only if it answers an
- * image (${withImage} of ${checked.length}); null means none was served. Re-run the script to refresh; do not hand-edit.
+ * image (${withImage} of ${checked.length}); null means none was served. \`prospectus\` is the
+ * issuer's prospectus PDF as base.org links it (${checked.filter((x) => prospectus(x)).length} of ${checked.length}). Re-run the script to refresh; do not hand-edit.
  *
  * This is the MARKETS catalogue (what /markets lists on Base). It is NOT
  * lib/base-stocks/registry.ts: BASE_STOCKS is Blue Hood's allowlist for grading
@@ -88,7 +107,7 @@ async function main() {
  */
 import type { Address } from "viem";
 
-export interface CoinbaseBaseStock { ticker: string; symbol: string; name: string; token: Address; image: string | null }
+export interface CoinbaseBaseStock { ticker: string; symbol: string; name: string; token: Address; image: string | null; prospectus: string | null }
 
 export const COINBASE_BASE_STOCKS_SOURCE = "https://www.base.org/api/stocks" as const;
 export const COINBASE_BASE_STOCKS_CHECKED_AT = "${today}" as const;

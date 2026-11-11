@@ -150,13 +150,30 @@ const gtMulti = cacheWhole(async (chain: MarketChain, csv: string) => {
   return body;
 }, "markets:gt-multi:v1", 300);
 
+/**
+ * Base stock tokens Coinbase has not minted yet: totalSupply() == 0 on Base 8453.
+ * base.org lists a token before it is issued (2026-11-11: 338 listed, 72 minted,
+ * and none of the other 266 had a pool), so asking GeckoTerminal about them costs
+ * ~9 sequential calls a cold /markets load for rows that cannot have a price.
+ * One multicall, cached an hour. A failed read returns an empty set: every token
+ * is then read as before, never hidden on a guess.
+ */
+export const unmintedBaseStocks = cacheWhole(async (): Promise<string[]> => {
+  const c = createPublicClient({ chain: base, transport: http(process.env.HUB_RPC_URL || "https://base-rpc.publicnode.com", { retryCount: 2 }) });
+  try {
+    const res = await c.multicall({ contracts: COINBASE_BASE_STOCKS.map((s) => ({ address: s.token, abi: erc20Abi, functionName: "totalSupply" } as const)), allowFailure: true });
+    return COINBASE_BASE_STOCKS.filter((_, i) => res[i]?.status === "success" && res[i].result === 0n).map((s) => s.token.toLowerCase());
+  } catch { throw new Uncached([] as string[]); }
+}, "markets:base-unminted:v1", 3600);
+
 export const readStockMarkets = cacheWhole(async (): Promise<{ rows: StockRow[]; readAt: string }> => {
   const uni = stockUniverse();
   const priced: StockRow[] = [];
   let partial = false;
+  const unminted = new Set(await unmintedBaseStocks());
   for (const chain of MARKET_CHAINS) {
     const mine = uni.filter((u) => u.chain === chain);
-    const { px, unread } = await gtPrices(chain, mine.map((u) => u.contract.toLowerCase()));
+    const { px, unread } = await gtPrices(chain, mine.filter((u) => !(chain === "base" && unminted.has(u.contract.toLowerCase()))).map((u) => u.contract.toLowerCase()));
     if (unread.size) partial = true;
     for (const u of mine) {
       const p = px[u.contract.toLowerCase()];
@@ -178,7 +195,7 @@ export const readStockMarkets = cacheWhole(async (): Promise<{ rows: StockRow[];
   // (gtMulti) means each refresh re-asks GeckoTerminal only for what it missed.
   void partial;
   return out;
-}, "markets:stocks:v5", 60);
+}, "markets:stocks:v6", 60);
 
 export interface TrendingRow {
   chain: MarketChain;
