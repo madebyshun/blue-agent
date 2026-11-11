@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   CALL_HOUR_UTC,
+  callInstant,
   callFromArchive,
   fridayOf,
   gradeCall,
@@ -78,15 +79,21 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // 3. BACKFILL (manual)
-    // First run fills the record from the archive without anyone passing a flag.
-    if (req.nextUrl.searchParams.get("backfill") === "1" || store.weekends.length === 0) {
+    // 3. BACKFILL
+    // Missing weekends are filled every run (last 3 weeks); the first run and
+    // ?backfill=1 walk the whole archive.
+    const full = req.nextUrl.searchParams.get("backfill") === "1" || store.weekends.length === 0;
+    {
       const start = `${BASE_SERIES_ARCHIVE_START.slice(0, 4)}-${BASE_SERIES_ARCHIVE_START.slice(4, 6)}-${BASE_SERIES_ARCHIVE_START.slice(6)}`;
       let f = start;
       while (new Date(f).getUTCDay() !== 5) f = addDays(f, 1);
-      const current = fridayOf(now);
-      for (; f < current; f = addDays(f, 7)) {
-        if (known.has(f)) continue;
+      // Every weekend whose Sunday call time has passed; the current one too,
+      // once its call is due (fridayOf(Wednesday) is the weekend just graded).
+      // Hourly runs only look back 3 weeks, so a weekend that can never be
+      // graded costs nothing forever; ?backfill=1 walks the whole archive.
+      const floor = full ? "" : addDays(now.toISOString().slice(0, 10), -21);
+      for (; callInstant(f).getTime() < now.getTime(); f = addDays(f, 7)) {
+        if (known.has(f) || f < floor) continue;
         const call = await callFromArchive(f);
         if (!call || !call.rows.length) { log.push(`backfill ${f}: no Sunday call point`); continue; }
         const graded = await gradeCall(call, now);
