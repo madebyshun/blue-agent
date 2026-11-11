@@ -61,7 +61,7 @@ export const SEED: readonly { token: string; id: string }[] = [
 
 const K = "stocks:corp-actions:v1";
 type Stored = { cursor: string; found: { token: string; id: string }[] };
-const WINDOW = 2_000n;   // blocks per getLogs
+const WINDOW = 20_000n;  // blocks per getLogs: ~67 min at Base's 0.2 s blocks (since 2026-11-05)
 const GROUP = 10;        // publicnode allows at most 10 addresses per getLogs (measured)
 const ID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/;
 

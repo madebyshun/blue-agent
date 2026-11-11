@@ -76,6 +76,13 @@ const BERYL_TS = {
 
 // Hardcoded floor for Sepolia (Beryl activation ~block 43,018,656, buffer ~8,656)
 const FLOOR_SEPOLIA = 43_010_000n;
+// Mainnet: the first block at/after BERYL_TS.mainnet, found by bisecting block
+// timestamps on 2026-11-11 (47,810,527), minus a small buffer. A block number,
+// not seconds / block time: Base went from 2 s to 0.2 s blocks at ~block
+// 53,556,344 (2026-11-05 18:00 UTC), and the old `secsSince / 2` estimate put
+// the floor ~2.1M blocks too late, so every B20 created between activation and
+// mid-August fell outside the scan, a gap that grew ~9x faster each day after.
+const FLOOR_MAINNET = 47_800_000n;
 
 // ── Public types ───────────────────────────────────────────────────────────
 
@@ -143,11 +150,7 @@ function getFloor(network: "mainnet" | "sepolia", latest: bigint): bigint | null
   const nowSec = Math.floor(Date.now() / 1_000);
   if (nowSec < BERYL_TS.mainnet) return null; // pre-activation — no tokens
 
-  const secsSince   = nowSec - BERYL_TS.mainnet;
-  const blocksSince = BigInt(Math.ceil(secsSince / 2)); // ~2 s/block on Base
-  const buffer      = 5_000n;
-  const floor       = latest > blocksSince + buffer ? latest - blocksSince - buffer : 0n;
-  return floor;
+  return latest > FLOOR_MAINNET ? FLOOR_MAINNET : 0n;
 }
 
 // ── Scan helpers ───────────────────────────────────────────────────────────
