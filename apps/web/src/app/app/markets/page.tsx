@@ -1,5 +1,6 @@
-// /markets — Markets mode home (R3): stock tokens on Base 8453 and Robinhood
-// Chain 4663, plus trending crypto on both, in one sortable table (MarketsTable).
+// /markets — Markets mode home (R3): stock tokens on Base 8453 plus trending
+// Base crypto, in one sortable table (MarketsTable). Robinhood Chain rows were
+// taken off this list 2026-11-11 (Base focus); their token pages still resolve.
 // Every row names its chain; a ticker alone never identifies a token (NVDA is
 // two contracts). Data: lib/markets.ts (registries + GeckoTerminal).
 import type { Metadata } from "next";
@@ -8,7 +9,7 @@ import MarketsHeader from "./MarketsHeader";
 import MarketsTable, { type MarketRow } from "./MarketsTable";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Markets — Blue Agent", description: "Stock tokens and crypto on Base and Robinhood Chain, priced from their DEX pools." };
+export const metadata: Metadata = { title: "Markets — Blue Agent", description: "Stock tokens and crypto on Base, priced from their DEX pools." };
 
 const usd = (n: number) => n >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(1)}k` : `$${n.toFixed(2)}`;
 
@@ -22,7 +23,7 @@ export default async function MarketsPage() {
   // A stock token can also trend on GeckoTerminal (MSTRc, SNDKc did): list it
   // once, as the verified stock row, never a second time as "crypto".
   const stockSet = new Set(stocks.rows.map((r) => `${r.chain}:${r.contract.toLowerCase()}`));
-  const rows: MarketRow[] = [
+  const all: MarketRow[] = [
     ...stocks.rows.map((r) => ({
       chain: r.chain, kind: r.kind, token: r.contract, symbol: r.ticker, name: r.name, logo: r.logo,
       price: r.priceUsd, change: r.change24hPct, mcap: r.mcapUsd, mcapIsFdv: r.mcapIsFdv, liq: r.liquidityUsd, vol: r.volume24hUsd,
@@ -39,6 +40,8 @@ export default async function MarketsPage() {
       createdAt: r.poolCreatedAt, pool: r.pool || null, side: "base" as const, read: true,
     })),
   ];
+  // Base only (2026-11-11): the list, stats and chip describe Base 8453.
+  const rows = all.filter((r) => r.chain === "base");
   // An image GeckoTerminal hands to many contracts is the ISSUER's mark, not the
   // company's (every Robinhood stock token carries Robinhood's feather). Drop it
   // so the row falls back to its own company mark (StockMark) or a monogram.
@@ -59,7 +62,7 @@ export default async function MarketsPage() {
 
   return (
     <div className="flex flex-col h-full bg-[#050508] overflow-hidden font-mono [&_a]:font-mono [&_button]:font-mono">
-      <MarketsHeader active="markets" chip={`${count("base") + count("robinhood")} stock tokens · ${trending.rows.length} trending · 2 chains`} />
+      <MarketsHeader active="markets" chip={`${count("base")} stock tokens · ${rows.filter((r) => r.kind === "crypto").length} trending · Base 8453`} />
       <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="px-5 py-[18px] w-full">
           <MarketsTable rows={rows} readAt={stocks.readAt} stats={{
@@ -67,8 +70,8 @@ export default async function MarketsPage() {
             robinhood: { count: count("robinhood"), vol: volShow("robinhood") === "—" ? null : vol("robinhood"), complete: volRead("robinhood") },
           }} />
           <p className="text-[12px] text-[#64748B] mt-4 leading-relaxed">
-            Stock tokens come from Blue Agent&apos;s verified registries, matched by contract on each chain. Trending crypto is GeckoTerminal&apos;s list as-is, <span className="text-[#F59E0B]">unchecked</span>: no tax or honeypot test runs here, and tokens using a major&apos;s symbol (BTC, ETH, USDC…) are left out.
-            Prices, change, market cap, liquidity, volume and charts are read from each token&apos;s DEX pools (Aerodrome / Uniswap on Base, Uniswap v4 on Robinhood Chain) through GeckoTerminal, every 5 minutes. A stock token tracks a share; it is not the share. Not financial advice.
+            Stock tokens are every Coinbase B20 listed on base.org, matched by contract and checked on chain. Trending crypto is GeckoTerminal&apos;s list as-is, <span className="text-[#F59E0B]">unchecked</span>: no tax or honeypot test runs here, and tokens using a major&apos;s symbol (BTC, ETH, USDC…) are left out.
+            Prices, change, market cap, liquidity, volume and charts are read from each token&apos;s DEX pools (Aerodrome / Uniswap on Base 8453) through GeckoTerminal, every 5 minutes. A stock token tracks a share; it is not the share. Not financial advice.
           </p>
         </div>
       </div>
