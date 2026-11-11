@@ -107,7 +107,7 @@ export async function GET(req: NextRequest) {
 
     // 4. SESSION VOLUME: weekly, from Monday on (its own KV key and write).
     if (now.getUTCDay() !== 0) {
-      try { log.push(await refreshSessionVolume(now)); } catch (e) { log.push(`sessions failed: ${(e as Error).message.slice(0, 120)}`); }
+      try { log.push(await refreshSessionVolume(now, now.getTime() + 200_000)); } catch (e) { log.push(`sessions failed: ${(e as Error).message.slice(0, 120)}`); }
     }
     return NextResponse.json({ status: "ok", changed, log });
   } catch (e) {
