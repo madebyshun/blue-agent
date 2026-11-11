@@ -35,6 +35,10 @@
     {
       "path": "/api/cron/hub-providers",
       "schedule": "17 4 * * *"
+    },
+    {
+      "path": "/api/cron/stock-actions",
+      "schedule": "7,37 * * * *"
     }
   ]
 }

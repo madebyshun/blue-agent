@@ -9,6 +9,7 @@ import { readTokenMarket } from "@/lib/markets";
 import { quoteBuyImpact } from "@/lib/aerodrome-swap";
 import { readBody, resolveBaseStock, stockRef } from "@/lib/base-stocks/handler-common";
 import { readIssuance } from "@/lib/base-stocks/issuance";
+import { actionsFor } from "@/lib/base-stocks/corporate-actions";
 
 export default async function handler(req: Request): Promise<Response> {
   const body = await readBody(req);
@@ -19,10 +20,18 @@ export default async function handler(req: Request): Promise<Response> {
   // Listed is not issued: most tokens on base.org's list have no supply and no
   // pool yet. Say that, instead of asking a market API about a token that
   // cannot have a price (and failing the call on its silence).
-  const issuance = await readIssuance(s);
+  const [issuance, corp] = await Promise.all([
+    readIssuance(s),
+    actionsFor(s.token).catch(() => null),
+  ]);
+  // Dividends and splits, announced before they apply. Coinbase's own record per
+  // action; an announced one has no multiplier yet.
+  const corporate_actions = corp
+    ? { ...corp, source: "announcement events on the token (Base 8453) + Coinbase's record for each action" }
+    : { status: "could not be read right now" };
   if (issuance.minted === false) {
     return Response.json({
-      ...stockRef(s), issuance, status: "listed, not issued",
+      ...stockRef(s), issuance, corporate_actions, status: "listed, not issued",
       dex: { status: "not issued yet: Coinbase has minted no supply, so there is no pool or price" },
       note: "Listed by Coinbase on base.org, with zero supply on Base 8453 at this read. A stock token tracks a share; it is not the share. Not financial advice.",
       timestamp: new Date().toISOString(),
@@ -39,6 +48,7 @@ export default async function handler(req: Request): Promise<Response> {
   return Response.json({
     ...stockRef(s),
     issuance,
+    corporate_actions,
     dex: mk.pool ? {
       price_usd: mk.pool.priceUsd, change_24h_pct: mk.pool.change24hPct, liquidity_usd: mk.pool.liquidityUsd,
       volume_24h_usd: mk.pool.volume24hUsd, pool: mk.pool.address, pool_name: mk.pool.name, dex: mk.pool.dex,
