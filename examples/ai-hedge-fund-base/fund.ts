@@ -103,6 +103,11 @@ async function call(name: string, args: Record<string, unknown>) {
     if (impact === null) { console.log(`   ${g.ticker}: no depth read, skipped`); continue; }
     const ok = impact <= MAX_IMPACT_PCT;
     console.log(`   ${g.ticker} ${b?.symbol ?? ""} at $${price?.toFixed?.(2) ?? "?"}: +${impact}% ${ok ? "PASS" : `REFUSED (above ${MAX_IMPACT_PCT}%)`}`);
+    // A pending split makes the premium check below meaningless (the share may
+    // already be post-split while multiplier() is not), so such a candidate is
+    // refused rather than compared.
+    const splitPending = (b?.warnings ?? []).some((w: string) => /split/i.test(w));
+    if (ok && splitPending) { console.log(`   ${g.ticker}: REFUSED (stock split pending, cannot compare to the share)`); continue; }
     if (ok) passes.push({ ticker: g.ticker, token: b.token, impact, price: typeof price === "number" ? price : null, symbol: b?.symbol ?? `${g.ticker}c` });
   }
 
