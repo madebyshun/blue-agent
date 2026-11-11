@@ -22,6 +22,7 @@ import {
   saveStore,
 } from "@/lib/weekend/scorecard";
 import { closeEntry, openEntry } from "@/lib/weekend/diary";
+import { refreshSessionVolume } from "@/lib/weekend/sessions";
 import { BASE_SERIES_ARCHIVE_START } from "@/lib/blue-hood/kv-keys";
 
 export const runtime = "nodejs";
@@ -103,6 +104,11 @@ export async function GET(req: NextRequest) {
     }
 
     if (changed) await saveStore(store);
+
+    // 4. SESSION VOLUME: weekly, from Monday on (its own KV key and write).
+    if (now.getUTCDay() !== 0) {
+      try { log.push(await refreshSessionVolume(now)); } catch (e) { log.push(`sessions failed: ${(e as Error).message.slice(0, 120)}`); }
+    }
     return NextResponse.json({ status: "ok", changed, log });
   } catch (e) {
     const msg = (e as Error).message.slice(0, 300);
