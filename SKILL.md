@@ -83,7 +83,7 @@ JSON Schema per tool) · [`llms.txt`](https://blueagent.dev/llms.txt) (short bri
      Source of truth: apps/web/src/lib/agent-tools.ts (AGENT_TOOLS).
      Body fields are the WIRE shape (post-x402Body), not the Hub form. -->
 
-Blue Hub exposes **70 tools** across 7 categories — 62 paid, 8 free.
+Blue Hub exposes **72 tools** across 7 categories — 62 paid, 10 free.
 
 Categories: on-chain · signal · security · intelligence · builder · trading · base-ecosystem
 
@@ -92,8 +92,8 @@ USDC `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`. Fields marked `*` are require
 every other field has a server-side default. Machine-readable equivalent, with
 full JSON Schema per tool: https://blueagent.dev/api/catalog
 
-The 8 priced $0.00 never answer 402 and never ask for a signature:
-`blue-doctor` · `hood-live` · `hood-track-record` · `pre-trade-check` · `sign-check` · `approval-audit` · `rh-rwa-verify` · `rh-token-scan`.
+The 10 priced $0.00 never answer 402 and never ask for a signature:
+`blue-doctor` · `hood-live` · `hood-track-record` · `weekend-scorecard` · `weekend-diary` · `pre-trade-check` · `sign-check` · `approval-audit` · `rh-rwa-verify` · `rh-token-scan`.
 Do not build an authorization for them — there is nothing to sign and no
 transfer to make.
 
@@ -123,7 +123,7 @@ transfer to make.
 | `token-price` | $0.01 | `token`* | Live price, mcap, volume and liquidity for any Base token (DexScreener). |
 | `wallet-holdings` | $0.02 | `address`* | Live ERC-20 + ETH holdings and USD value for a Base wallet (Moralis). |
 
-### signal (5)
+### signal (7)
 
 | id | price | body | what it does |
 |---|---|---|---|
@@ -132,6 +132,8 @@ transfer to make.
 | `rh-stock-agent-brief` | $0.20 | `ticker`* | Agent-consumable JSON brief for a Robinhood Chain RWA. Deterministic market-hours-aware verdict: WATCH / ARB_LONG_DEX / ARB_SHORT_DEX (market OPEN) · FROZEN_ALIGNED / PREMARKET_DRIFT / AFTERHOURS_DRIFT (CLOSED) · THIN_LIQUIDITY / NO_ORACLE / INSUFFICIENT_DATA. Uses shared resolvePrimaryPool for cross-tool consistency. Model-recall context (no web search on this gateway) + risk flags. |
 | `rh-stock-arb` | $0.05 | `ticker`* | Chainlink oracle vs deepest DEX pool spot for a Robinhood Chain tokenized stock. Market-hours-aware verdict: OPEN → ALIGNED / LONG_DEX / SHORT_DEX (real arb); CLOSED → FROZEN_ALIGNED / PREMARKET_DRIFT / AFTERHOURS_DRIFT (Chainlink is frozen, DEX drift ≠ arb). Warnings for feed-abnormally-stale + thin pool. |
 | `rh-stock-movers` | $0.05 | `limit` `min_tvl_usd` `min_volume_24h_usd` | Top gainers / losers 24h among Robinhood Chain tokenized stocks & ETFs. Dust-pool filter (default min $5k TVL + $500 24h volume) drops noise pools that would otherwise quote AAPL at $868 via a $453-TVL pool. Sign-filtered so a token with -1.56% never lands in gainers. Filtered pools surface as filtered_out for transparency. |
+| `weekend-diary` | $0.00 | `entries` | Blue's public PAPER book on Base 8453 stocks over the weekend. One rule, fixed 2026-11-11 and applied in code: every stock whose Sunday 22:00 UTC weekend call is UP or DOWN gets a $1,000 paper position in that direction at the Base DEX price, closed at the next open. Returns the rule, its in-sample backtest (published as measured, including that it lost), the forward totals, and each weekend's positions and P&L. The short diary notes are model-generated from those numbers and flagged as such. Free. |
+| `weekend-scorecard` | $0.00 | `ticker` `weekends` | Does the price Base trades a stock at over the weekend call Monday's open? Every Base 8453 stock on the Blue Hood desk, every weekend since 2026-08-28: the frozen Chainlink price (Friday's last round), the Base DEX price at Sunday 22:00 UTC, the weekend move between them, and the oracle at the next regular-session open. Moves under 0.5% (the feed's own deviation step) are FLAT and not graded. The headline hit rate ships only from 30 graded calls, with a Wilson 95% interval and a two-sided binomial p-value; below that you get calls, hits and needed. Between Saturday and the open it also returns a provisional live reading. BTC/ETH weekend moves are context only. Free. |
 
 ### security (15)
 
@@ -234,7 +236,7 @@ surface you are actually calling.
 **Cut from 85 to 18 on 2026-09-26, and the cut removed no capability.** The 85-tool manifest
 was 32,160 bytes — roughly 8,000 tokens spent before the agent read a single word of the user's
 question — and published MCP research finds tool-selection accuracy degrades sharply past
-~40 always-loaded entries. All 70 catalog tools remain live at `/api/x402/<id>`; `blue_registry`
+~40 always-loaded entries. All 72 catalog tools remain live at `/api/x402/<id>`; `blue_registry`
 lists them and `blue_call` runs any of them, so the rest moved from "always in context" to
 "one lookup away". A manifest is a context budget, not an inventory.
 

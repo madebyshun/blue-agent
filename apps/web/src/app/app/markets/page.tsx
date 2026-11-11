@@ -6,6 +6,7 @@ import type { Metadata } from "next";
 import { readBlueLaunchMarkets, readStockMarkets, readTrending, type MarketChain } from "@/lib/markets";
 import MarketsHeader from "./MarketsHeader";
 import MarketsTable, { type MarketRow } from "./MarketsTable";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Markets — Blue Agent", description: "Stock tokens and crypto on Base and Robinhood Chain, priced from their DEX pools." };
@@ -62,6 +63,10 @@ export default async function MarketsPage() {
       <MarketsHeader active="markets" chip={`${count("base") + count("robinhood")} stock tokens · ${trending.rows.length} trending · 2 chains`} />
       <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="px-5 py-[18px] w-full">
+          <Link href="/markets/weekend" className="mb-3 flex items-center justify-between gap-3 bg-[#0B0F1E] border border-[#1A1A2E] hover:border-[#4FC3F7]/40 rounded-[10px] px-4 py-2.5 text-[13px]">
+            <span className="text-[#E2E8F0]">Weekend scorecard <span className="text-[#94A3B8]">· does Base&apos;s Sunday price call Monday&apos;s open? Graded every weekend on Base 8453.</span></span>
+            <span className="text-[#4FC3F7]">Open →</span>
+          </Link>
           <MarketsTable rows={rows} readAt={stocks.readAt} stats={{
             base: { count: count("base"), vol: volShow("base") === "—" ? null : vol("base"), complete: volRead("base") },
             robinhood: { count: count("robinhood"), vol: volShow("robinhood") === "—" ? null : vol("robinhood"), complete: volRead("robinhood") },

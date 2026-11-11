@@ -39,6 +39,10 @@
     {
       "path": "/api/cron/stock-actions",
       "schedule": "7,37 * * * *"
+    },
+    {
+      "path": "/api/cron/weekend",
+      "schedule": "12 * * * 0,1,2,3"
     }
   ]
 }
