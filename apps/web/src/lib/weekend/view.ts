@@ -8,7 +8,7 @@ import { kvGetProbe } from "@/lib/kv";
 import { KV_BASE_ROWS_LATEST, BASE_ROWS_MAX_AGE_MS } from "@/lib/blue-hood/kv-keys";
 import type { BaseDeskLatest } from "@/lib/blue-hood/types";
 import {
-  METHOD, buildCall, fridayOf, loadStore, nyOpenUtc, publicCall, publicWeekend, summarize,
+  METHOD, buildCall, fridayOf, loadStore, nyOpenUtc, publicCall, publicWeekend, readPoints, summarize,
 } from "./scorecard";
 import { BACKTEST, RULE, RULE_FIXED_AT, STAKE_USD, diaryTotals } from "./diary";
 
@@ -74,4 +74,23 @@ export async function diaryView(opts: { limit?: number } = {}) {
     notes: "Positions, prices and P&L are computed in code. Each note is model-generated from those numbers (note_model_generated: true).",
     page: WEEKEND_PAGE,
   };
+}
+
+/**
+ * Hourly oracle vs Base DEX for one ticker across one weekend (Friday 12:00
+ * UTC → the open + 3h), straight from the Base desk archive. Four KV reads;
+ * the page calls it for ONE weekend only.
+ */
+export async function weekendReplay(friday: string, ticker: string) {
+  const days = [0, 1, 2, 3].map((n) => addDays(friday, n));
+  const { points } = await readPoints(days);
+  const from = Date.parse(`${friday}T12:00:00Z`);
+  const to = nyOpenUtc(addDays(friday, 3)).getTime() + 3 * 3_600_000;
+  return points
+    .filter((p) => { const t = Date.parse(p.at); return t >= from && t <= to; })
+    .sort((a, b) => a.at.localeCompare(b.at))
+    .flatMap((p) => {
+      const r = p.rows.find((x) => x.ticker === ticker);
+      return r && r.oracle_usd != null && r.dex_usd != null ? [{ at: p.at, oracle: r.oracle_usd, dex: r.dex_usd, session: p.session }] : [];
+    });
 }
