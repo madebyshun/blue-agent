@@ -8,6 +8,7 @@ import { readBaseStockQuote } from "@/lib/base-stocks/b20-quote";
 import { readTokenMarket } from "@/lib/markets";
 import { quoteBuyImpact } from "@/lib/aerodrome-swap";
 import { readBody, resolveBaseStock, stockRef } from "@/lib/base-stocks/handler-common";
+import { readIssuance } from "@/lib/base-stocks/issuance";
 
 export default async function handler(req: Request): Promise<Response> {
   const body = await readBody(req);
@@ -15,6 +16,18 @@ export default async function handler(req: Request): Promise<Response> {
   if ("error" in r) return Response.json(r, { status: 400 });
   const s = r.stock;
   const hood = BASE_STOCKS.find((x) => x.token.toLowerCase() === s.token.toLowerCase());
+  // Listed is not issued: most tokens on base.org's list have no supply and no
+  // pool yet. Say that, instead of asking a market API about a token that
+  // cannot have a price (and failing the call on its silence).
+  const issuance = await readIssuance(s);
+  if (issuance.minted === false) {
+    return Response.json({
+      ...stockRef(s), issuance, status: "listed, not issued",
+      dex: { status: "not issued yet: Coinbase has minted no supply, so there is no pool or price" },
+      note: "Listed by Coinbase on base.org, with zero supply on Base 8453 at this read. A stock token tracks a share; it is not the share. Not financial advice.",
+      timestamp: new Date().toISOString(),
+    });
+  }
   const [mk, oracle, impact] = await Promise.all([
     readTokenMarket("base", s.token),
     hood ? readBaseStockQuote(hood).catch(() => null) : Promise.resolve(null),
@@ -25,6 +38,7 @@ export default async function handler(req: Request): Promise<Response> {
   }
   return Response.json({
     ...stockRef(s),
+    issuance,
     dex: mk.pool ? {
       price_usd: mk.pool.priceUsd, change_24h_pct: mk.pool.change24hPct, liquidity_usd: mk.pool.liquidityUsd,
       volume_24h_usd: mk.pool.volume24hUsd, pool: mk.pool.address, pool_name: mk.pool.name, dex: mk.pool.dex,
