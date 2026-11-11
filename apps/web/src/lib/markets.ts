@@ -187,6 +187,12 @@ export const readStockMarkets = cacheWhole(async (): Promise<{ rows: StockRow[];
     }
   }
   const out = { rows: priced, readAt: new Date().toISOString() };
+  // ...but a read where NOT ONE row of a chain came back is not partial, it is
+  // empty: caching it showed every Base row as "—" for a minute after the
+  // 2026-11-11 deploy (new chunk keys, all cold, GeckoTerminal 429). Never cache
+  // that; the next view retries, and the per-chunk cache keeps what it did get.
+  const blank = MARKET_CHAINS.some((c) => { const r = priced.filter((x) => x.chain === c && x.read && x.priceUsd !== null); return priced.some((x) => x.chain === c) && r.length === 0; });
+  if (blank) throw new Uncached(out);
   // A partial read IS cached now, for 60s. Never caching it (until 2026-11-04)
   // meant one 429 among ~16 chunks left every view re-reading all of them:
   // /markets measured 60–72s a load in production. Each unread row already says
