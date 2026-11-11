@@ -29,6 +29,12 @@ export default async function handler(req: Request): Promise<Response> {
   const corporate_actions = corp
     ? { ...corp, source: "announcement events on the token (Base 8453) + Coinbase's record for each action" }
     : { status: "could not be read right now" };
+  // A split announced but not applied: the share may already trade post-split
+  // while multiplier() still holds the old ratio, so token-vs-share comparisons
+  // (premium checks, share x multiplier) are off by the split ratio until it
+  // applies. Said, not computed: the ratio is not in Coinbase's record.
+  const split = corp?.actions.find((a) => a.status === "announced" && /split/i.test(a.type));
+  const warnings = split ? [`Stock split announced ${split.announced_at?.slice(0, 10) ?? "(date unread)"} and not yet applied to multiplier(). Do not compare this token to a share price from another source until it applies: one side may already be post-split.`] : [];
   if (issuance.minted === false) {
     return Response.json({
       ...stockRef(s), issuance, corporate_actions, status: "listed, not issued",
@@ -47,6 +53,7 @@ export default async function handler(req: Request): Promise<Response> {
   }
   return Response.json({
     ...stockRef(s),
+    ...(warnings.length ? { warnings } : {}),
     issuance,
     corporate_actions,
     dex: mk.pool ? {
