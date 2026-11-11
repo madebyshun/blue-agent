@@ -310,7 +310,7 @@ export async function cryptoMove(fromIso: string, toIso: string): Promise<Weeken
       const t = Date.parse(iso);
       const start = new Date(t - 3_600_000).toISOString();
       const u = `https://api.exchange.coinbase.com/products/${pair}/candles?granularity=3600&start=${start}&end=${iso}`;
-      const r = await fetch(u, { headers: { accept: "application/json" }, signal: AbortSignal.timeout(8000) });
+      const r = await fetch(u, { headers: { accept: "application/json", "user-agent": "blueagent-weekend/1" }, signal: AbortSignal.timeout(8000) });
       if (!r.ok) return null;
       const rows = (await r.json()) as number[][];
       const last = rows.filter((x) => x[0] * 1000 <= t).sort((a, b) => b[0] - a[0])[0];
@@ -404,28 +404,33 @@ export async function gradeCall(call: WeekendCall, now: Date): Promise<GradedWee
 
   const tickers = call.rows.map((r) => r.ticker);
   const { points } = await readPoints(days.filter((d) => compact(d) <= yyyymmdd(now)));
-  const opens = findOpens(points, tickers, days);
 
   const ungraded: { ticker: string; reason: string }[] = [];
   const rows: GradedRow[] = [];
+  // Day by day, in order: a day the archive covers is read from the archive;
+  // a day it missed (no regular-session point at all) is read from chain. The
+  // first day that yields a post-09:30 round wins, so an archive hole on
+  // Monday is filled from Monday's chain, never skipped to Tuesday's archive.
   for (const c of call.rows) {
-    const a = opens.get(c.ticker);
-    if (a) { rows.push(gradeRow(c, { usd: a.usd, round_at: a.round_at, source: "archive" })); continue; }
-    // Archive hole: try the chain on each candidate day whose session is over.
-    let got: { usd: number; round_at: number } | null = null;
+    let got: { usd: number; round_at: number; source: "archive" | "chain" } | null = null;
     for (const d of days) {
-      const dayHasRegular = points.some((p) => p.hour.startsWith(compact(d)) && p.session === "regular");
       const open = nyOpenUtc(d).getTime();
-      if (dayHasRegular || now.getTime() < open + 90 * 60_000) continue;
+      if (now.getTime() < open + 90 * 60_000) break;
+      const dayHasRegular = points.some((p) => p.hour.startsWith(compact(d)) && p.session === "regular");
+      if (dayHasRegular) {
+        const a = findOpens(points, [c.ticker], [d]).get(c.ticker);
+        if (a) { got = { usd: a.usd, round_at: a.round_at, source: "archive" }; break; }
+        continue; // archive saw the session, the feed never moved: a holiday
+      }
       for (const after of [30, 60, 90]) {
         try {
           const x = await chainPriceAt(c.ticker, Math.floor((open + after * 60_000) / 1000));
-          if (x && x.round_at * 1000 >= open) { got = x; break; }
+          if (x && x.round_at * 1000 >= open) { got = { ...x, source: "chain" }; break; }
         } catch { /* try the next slot */ }
       }
       if (got) break;
     }
-    if (got) rows.push(gradeRow(c, { ...got, source: "chain" }));
+    if (got) rows.push(gradeRow(c, got));
     else ungraded.push({ ticker: c.ticker, reason: "no opening round found yet" });
   }
   // Wait while anything is still findable later in the window.
