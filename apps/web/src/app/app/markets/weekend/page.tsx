@@ -8,6 +8,7 @@ import MarketsHeader from "../MarketsHeader";
 import StockMark from "@/components/blue-hood/StockMark";
 import { diaryView, scorecardView, weekendReplay } from "@/lib/weekend/view";
 import { CallScatter, PairBars, ReplayChart } from "./charts";
+import { readSessionVolume } from "@/lib/weekend/sessions";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
@@ -40,7 +41,7 @@ function Stamp() {
 
 export default async function WeekendPage({ searchParams }: { searchParams: Promise<{ ticker?: string; w?: string }> }) {
   const q = await searchParams;
-  const [card, diary] = await Promise.all([scorecardView({ limit: 52 }), diaryView({ limit: 52 })]);
+  const [card, diary, sessions] = await Promise.all([scorecardView({ limit: 52 }), diaryView({ limit: 52 }), readSessionVolume().catch(() => null)]);
   if (card === "error" || diary === "error") {
     return (
       <div className="flex flex-col h-full bg-[#050508] font-mono">
@@ -85,6 +86,38 @@ export default async function WeekendPage({ searchParams }: { searchParams: Prom
               sub={s.mean_dex_error_pct != null && s.mean_flat_error_pct != null ? `avg miss ${s.mean_dex_error_pct.toFixed(2)}% vs ${s.mean_flat_error_pct.toFixed(2)}%` : undefined} />
             <Big n={String(s.weekends)} l="weekends graded" sub={`${s.rows_graded} stock-weekends since Aug 28`} />
           </section>
+
+          {sessions && (
+            <section className={`${CARD} p-5`}>
+              <div className={EYEBROW}>WHEN IT TRADES · {sessions.tickers.length} STOCK TOKENS · {new Date(sessions.window.from).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }).toUpperCase()} – {new Date(Date.parse(sessions.window.to) - 86_400_000).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }).toUpperCase()}</div>
+              <div className="mt-1 text-[22px] text-[#F8FAFC] font-semibold">{Math.round(100 - sessions.share.open)}% of the volume trades while NYSE is closed.</div>
+              <div className="text-[12px] text-[#64748B] mt-1">${(sessions.total_usd / 1e9).toFixed(2)}B of DEX volume on Base 8453 over {sessions.window.weeks} weeks</div>
+              <div className="mt-4 flex h-[44px] rounded-[10px] overflow-hidden text-[15px] font-semibold">
+                {([["open", "#334155", "#F8FAFC"], ["nights", "#2B7FB0", "#F8FAFC"], ["weekend", "#4FC3F7", "#04121C"]] as const).map(([k, bg, fg]) => (
+                  <div key={k} style={{ width: `${sessions.share[k]}%`, background: bg, color: fg }} className="flex items-center justify-center">{Math.round(sessions.share[k])}%</div>
+                ))}
+              </div>
+              <div className="mt-2 flex gap-5 text-[11px] text-[#94A3B8]">
+                <span><span className="inline-block w-2.5 h-2.5 rounded-sm bg-[#334155] mr-1.5" />NYSE open</span>
+                <span><span className="inline-block w-2.5 h-2.5 rounded-sm bg-[#2B7FB0] mr-1.5" />nights, pre/post</span>
+                <span><span className="inline-block w-2.5 h-2.5 rounded-sm bg-[#4FC3F7] mr-1.5" />weekend</span>
+              </div>
+              <div className="mt-4 grid md:grid-cols-2 gap-x-8 gap-y-2">
+                {sessions.tickers.map((t) => (
+                  <div key={t.ticker} className="grid grid-cols-[28px_64px_1fr_44px] items-center gap-2 text-[12px]">
+                    <StockMark ticker={t.ticker} chain="base" size={22} />
+                    <span className="text-[#E2E8F0]">{t.ticker}c</span>
+                    <div className="flex h-[10px] rounded-sm overflow-hidden">
+                      <div style={{ width: `${t.share.open}%` }} className="bg-[#334155]" /><div style={{ width: `${t.share.nights}%` }} className="bg-[#2B7FB0]" /><div style={{ width: `${t.share.weekend}%` }} className="bg-[#4FC3F7]" />
+                    </div>
+                    <span className="text-right text-[#94A3B8]">{Math.round(t.share.open)}%</span>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-3 text-[11px] text-[#475569]">{sessions.source}. {sessions.caveat}{sessions.left_out.length ? ` Left out: ${sessions.left_out.map((x) => `${x.ticker} (${x.reason})`).join(", ")}.` : ""} Right-hand figure: share traded while NYSE is open.</p>
+              <Stamp />
+            </section>
+          )}
 
           {dots.length > 0 && (
             <section className="grid lg:grid-cols-2 gap-4">
