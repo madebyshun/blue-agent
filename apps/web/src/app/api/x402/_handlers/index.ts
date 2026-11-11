@@ -14,6 +14,8 @@ import hSafeTrending from "./safe-trending";
 import hBlueDoctor from "./blue-doctor";
 import hHoodLive from "./hood-live";
 import hHoodTrackRecord from "./hood-track-record";
+import hWeekendScorecard from "./weekend-scorecard";
+import hWeekendDiary from "./weekend-diary";
 import hWalletHoldings from "./wallet-holdings";
 import hGasTracker from "./gas-tracker";
 import hWalletRisk from "./wallet-risk";
@@ -94,6 +96,8 @@ export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "blue-doctor": hBlueDoctor,
   "hood-live": hHoodLive,
   "hood-track-record": hHoodTrackRecord,
+  "weekend-scorecard": hWeekendScorecard,
+  "weekend-diary": hWeekendDiary,
   "wallet-holdings": hWalletHoldings,
   "gas-tracker": hGasTracker,
   "wallet-risk": hWalletRisk,

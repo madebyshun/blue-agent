@@ -116,7 +116,9 @@ export interface ChainStat { count: number; vol: number | null; complete: boolea
 export default function MarketsTable({ rows, readAt, stats }: { rows: MarketRow[]; readAt: string | null; stats: Record<"base" | "robinhood", ChainStat> }) {
   const router = useRouter();
   const [kind, setKind] = useState<"all" | "stocks" | "crypto" | "launches">("all");
-  const [chain, setChain] = useState<"all" | "base" | "robinhood">("all");
+  // Base only since 2026-11-11 (ShunTr: focus Base). Robinhood token pages
+  // still resolve at /markets/robinhood/<address>; they are just not listed.
+  const chain = "base" as "all" | "base" | "robinhood";
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<{ k: SortKey; dir: 1 | -1 }>({ k: "vol", dir: -1 });
   const [page, setPage] = useState(0);
@@ -195,10 +197,6 @@ export default function MarketsTable({ rows, readAt, stats }: { rows: MarketRow[
       <div className="mt-3 flex items-center gap-2 flex-wrap">
         {([["all", "All"], ["stocks", "Stock tokens"], ["crypto", "Trending crypto"], ["launches", "Launched on Blue Agent"]] as const).map(([id, l]) => (
           <button key={id} type="button" onClick={() => setKind(id)} className={chip(kind === id)}>{l}</button>
-        ))}
-        <span className="mx-1 h-4 w-px bg-[#1A1A2E]" />
-        {([["all", "Both chains"], ["base", "Base 8453"], ["robinhood", "Robinhood Chain 4663"]] as const).map(([id, l]) => (
-          <button key={id} type="button" onClick={() => setChain(id)} className={chip(chain === id)}>{l}</button>
         ))}
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search markets, ticker or 0x…"
           className="ml-auto w-[260px] bg-[#0D0D14] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-3 py-[7px] text-[14px] text-[#E2E8F0] placeholder:text-[#64748B] outline-none" />

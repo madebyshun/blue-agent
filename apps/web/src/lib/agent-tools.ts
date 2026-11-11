@@ -146,6 +146,39 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     x402Body: (v) => (v.limit ? { limit: Number(v.limit) } : {}),
   },
   {
+    id: "weekend-scorecard",
+    name: "Base Weekend Scorecard",
+    // Free for the same reason as the track record above: a scorecard behind a
+    // paywall is one nobody can check.
+    description:
+      "Does the price Base trades a stock at over the weekend call Monday's open? Every Base 8453 stock on the Blue Hood desk, every weekend since 2026-08-28: the frozen Chainlink price (Friday's last round), the Base DEX price at Sunday 22:00 UTC, the weekend move between them, and the oracle at the next regular-session open. Moves under 0.5% (the feed's own deviation step) are FLAT and not graded. The headline hit rate ships only from 30 graded calls, with a Wilson 95% interval and a two-sided binomial p-value; below that you get calls, hits and needed. Between Saturday and the open it also returns a provisional live reading. BTC/ETH weekend moves are context only. Free.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "signal",
+    inputs: [
+      { key: "ticker", label: "Ticker (optional)", placeholder: "NVDA — omit for all" },
+      { key: "weekends", label: "Weekends (optional)", placeholder: "1–52 (default 12)" },
+    ],
+    isComposite: false,
+    price: "$0.00", priceUSDC: 0,
+    x402Url: `${X402_BASE}/weekend-scorecard`,
+    x402Body: (v) => ({ ...(v.ticker ? { ticker: v.ticker } : {}), ...(v.weekends ? { weekends: Number(v.weekends) } : {}) }),
+  },
+  {
+    id: "weekend-diary",
+    name: "Blue's Weekend Book",
+    description:
+      "Blue's public PAPER book on Base 8453 stocks over the weekend. One rule, fixed 2026-11-11 and applied in code: every stock whose Sunday 22:00 UTC weekend call is UP or DOWN gets a $1,000 paper position in that direction at the Base DEX price, closed at the next open. Returns the rule, its in-sample backtest (published as measured, including that it lost), the forward totals, and each weekend's positions and P&L. The short diary notes are model-generated from those numbers and flagged as such. Free.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "signal",
+    inputs: [
+      { key: "entries", label: "Entries (optional)", placeholder: "1–52 (default 12)" },
+    ],
+    isComposite: false,
+    price: "$0.00", priceUSDC: 0,
+    x402Url: `${X402_BASE}/weekend-diary`,
+    x402Body: (v) => (v.entries ? { entries: Number(v.entries) } : {}),
+  },
+  {
     id: "safe-trending",
     name: "Safe Trending",
     // SAFE means one specific thing and the description has to say which, or
