@@ -43,7 +43,7 @@ export const BACKTEST = {
   wins: 14,
   avg_return_pct: -0.79,
   pnl_usd: -276,
-  note: "in-sample, before the rule went live; the rule was not changed after seeing it",
+  note: "in-sample, before the rule went live; the rule was not changed after seeing it. Same 35 calls as the scorecard, scored differently: a scorecard hit is the open's direction vs Friday's close (20 of 35); a trade win is the open vs the Base DEX entry, so a right call that Base had already priced past still loses (14 of 35)",
 } as const;
 
 export interface Position {
