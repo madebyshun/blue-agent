@@ -7,9 +7,12 @@
  *   - open    : Mon-Fri 09:30-16:00
  *   - weekend : Friday 20:00 to Sunday 20:00
  *   - nights  : everything else (overnight, pre- and post-market)
- * An hour is bucketed by its start. A ticker whose pools do not have candles
- * back to the window start is LEFT OUT and named, never counted on a part
- * window (META on 2026-11-12: its deepest pool's candles start 10-21).
+ * An hour is bucketed by its start. A pool younger than the window simply had
+ * no volume before it existed, so it is counted as is (the window is 672 h
+ * and GeckoTerminal returns up to 1000 non-empty hours, so nothing is cut).
+ * A record is stored only when EVERY ticker with a pool was read: a partial
+ * read (GeckoTerminal 429s from shared Vercel IPs) is retried next run instead
+ * of publishing a split built on whichever tickers happened to answer.
  * DEX volume includes arbitrage and bot flow; the record says so.
  *
  * Computed by /api/cron/weekend once per week (~30 GeckoTerminal calls),
@@ -32,6 +35,8 @@ export interface SessionVolume {
   share: SessionSplit;
   tickers: { ticker: string; total_usd: number; usd: SessionSplit; share: SessionSplit }[];
   left_out: { ticker: string; reason: string }[];
+  /** True only when every ticker with a pool was read. */
+  complete: boolean;
   source: string;
   caveat: string;
 }
@@ -66,27 +71,32 @@ export async function computeSessionVolume(now: Date, weeks = 4): Promise<Sessio
   const fromS = from.getTime() / 1000, toS = to.getTime() / 1000;
   const tickers: SessionVolume["tickers"] = [];
   const left_out: SessionVolume["left_out"] = [];
+  let unread = false;
   for (const s of BASE_STOCKS) {
     const pools = await gtJson<{ data?: { attributes: { address: string; reserve_in_usd: string | null } }[] }>(
-      `/networks/base/tokens/${s.token.toLowerCase()}/pools?page=1`, 3);
-    await sleep(2200);
+      `/networks/base/tokens/${s.token.toLowerCase()}/pools?page=1`, 5);
+    await sleep(3000);
     const top = (pools.body?.data ?? [])
       .sort((a, b) => Number(b.attributes.reserve_in_usd ?? 0) - Number(a.attributes.reserve_in_usd ?? 0))
       .slice(0, 3);
-    if (!top.length) { left_out.push({ ticker: s.ticker, reason: "no pool read" }); continue; }
+    if (pools.body === null) { left_out.push({ ticker: s.ticker, reason: "pools not readable" }); unread = true; continue; }
+    if (!top.length) { left_out.push({ ticker: s.ticker, reason: "no pool" }); continue; }
     const usd: SessionSplit = { open: 0, nights: 0, weekend: 0 };
-    let covered = false, failed = false;
+    let failed = false;
     for (const p of top) {
       const o = await gtJson<{ data?: { attributes?: { ohlcv_list?: number[][] } } }>(
-        `/networks/base/pools/${p.attributes.address}/ohlcv/hour?aggregate=1&limit=1000&currency=usd`, 3);
-      await sleep(2200);
+        `/networks/base/pools/${p.attributes.address}/ohlcv/hour?aggregate=1&limit=1000&currency=usd`, 5);
+      await sleep(3000);
       const rows = o.body?.data?.attributes?.ohlcv_list;
       if (!rows) { failed = true; break; }
-      if (rows.some((r) => r[0] <= fromS)) covered = true;
       for (const [ts, , , , , v] of rows) if (ts >= fromS && ts < toS) usd[sessionOf(ts)] += v;
     }
-    if (failed) { left_out.push({ ticker: s.ticker, reason: "candles not readable" }); continue; }
-    if (!covered) { left_out.push({ ticker: s.ticker, reason: "pool history shorter than the window" }); continue; }
+    if (failed) { left_out.push({ ticker: s.ticker, reason: "candles not readable" }); unread = true; continue; }
+    // A pool with real reserves and zero volume across four weeks is an empty
+    // GeckoTerminal answer, not a quiet market (META, 2026-11-11): retry.
+    if (usd.open + usd.nights + usd.weekend === 0 && Number(top[0].attributes.reserve_in_usd ?? 0) >= 10_000) {
+      left_out.push({ ticker: s.ticker, reason: "empty candles for a funded pool" }); unread = true; continue;
+    }
     tickers.push({ ticker: s.ticker, total_usd: Math.round(usd.open + usd.nights + usd.weekend), usd, share: shareOf(usd) });
   }
   const usd = tickers.reduce((a, t) => ({ open: a.open + t.usd.open, nights: a.nights + t.usd.nights, weekend: a.weekend + t.usd.weekend }), { open: 0, nights: 0, weekend: 0 });
@@ -97,6 +107,7 @@ export async function computeSessionVolume(now: Date, weeks = 4): Promise<Sessio
     usd, share: shareOf(usd),
     tickers: tickers.sort((a, b) => b.share.open - a.share.open),
     left_out,
+    complete: !unread,
     source: "GeckoTerminal hourly candles, 3 deepest pools per token, Base 8453; sessions in New York time",
     caveat: "DEX volume includes arbitrage and bot flow.",
   };
@@ -104,16 +115,17 @@ export async function computeSessionVolume(now: Date, weeks = 4): Promise<Sessio
 
 export async function readSessionVolume(): Promise<SessionVolume | null> {
   const p = await kvGetProbe<SessionVolume>(KV_SESSIONS);
-  return p.status === "hit" ? p.value : null;
+  // A record from before `complete` existed may be a partial read: not shown.
+  return p.status === "hit" && p.value.complete === true ? p.value : null;
 }
 
 /** Recompute when the stored window does not end at the latest Monday. */
 export async function refreshSessionVolume(now: Date): Promise<string> {
   const cur = await readSessionVolume();
   const want = lastMonday(now).toISOString();
-  if (cur && cur.window.to === want) return "sessions: current";
+  if (cur && cur.window.to === want && cur.complete === true) return "sessions: current";
   const next = await computeSessionVolume(now);
-  if (next.tickers.length < 4) return `sessions: only ${next.tickers.length} tickers read, kept the old record`;
+  if (!next.complete) return `sessions: partial read (${next.left_out.map((x) => x.ticker).join(", ")}), not stored; retrying next run`;
   await kvSet(KV_SESSIONS, next);
   return `sessions: ${next.tickers.length} tickers, $${Math.round(next.total_usd / 1e6)}M, open ${next.share.open}%`;
 }
