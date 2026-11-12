@@ -44,7 +44,10 @@ ok("the chat tool tells the model not to add a call", /FACTS ONLY/.test(toolDesc
 // built to that doc pays per call for a branch that can no longer fire. Both
 // also advertised tools that lib/tool-halts.ts refuses. These checks read the
 // shipped text, so the copy cannot drift from the handler again unnoticed.
-const PAGE = readFileSync(join(process.cwd(), "src/app/page.tsx"), "utf8");
+// The landing's copy moved to _landing/Landing.tsx on 2026-11-12 (page.tsx is
+// now the server half that measures the figures); read both.
+const PAGE = readFileSync(join(process.cwd(), "src/app/page.tsx"), "utf8") +
+  readFileSync(join(process.cwd(), "src/app/_landing/Landing.tsx"), "utf8");
 const PLUGIN = readFileSync(join(process.cwd(), "public/plugin.md"), "utf8");
 const AI_PLUGIN = readFileSync(join(process.cwd(), "src/app/.well-known/ai-plugin.json/route.ts"), "utf8");
 const block = (src: string, start: string) => {

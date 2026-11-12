@@ -110,6 +110,10 @@ export const zh: Dict = {
     footer_powered: "由 Venice AI 提供支持 · x402 原生 · Base",
   },
   nav_marketing: {
+    chat: "聊天",
+    agents: "代理",
+    markets: "市场",
+    builders: "开发者",
     about: "关于",
     // 页内区块锚点（2026-09-19）：`how`→§01 #flow，`models`→§02 #models，
     // `pricing`→§07 #pricing。`hub` 已从导航栏移除（落地页没有 Hub 区块），
