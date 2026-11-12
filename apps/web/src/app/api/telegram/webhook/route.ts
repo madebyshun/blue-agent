@@ -468,10 +468,11 @@ export async function GET() {
  * ShunTr in Vercel. Until it is set, the bot only tells the sender their id.
  */
 async function handleDrafts(arg: string, chatId: number, fromId: number | undefined): Promise<string> {
-  const owner = process.env.X_DRAFTS_OWNER_TG_ID ?? "";
+  // Tolerate how a value gets pasted into Vercel: spaces, quotes, a newline.
+  const owner = (process.env.X_DRAFTS_OWNER_TG_ID ?? "").replace(/["'\s]/g, "");
   if (!fromId) return "Could not read your Telegram id.";
   if (!owner) return `Drafts are not set up yet. Your Telegram id is <code>${fromId}</code>: set X_DRAFTS_OWNER_TG_ID to it in Vercel, then send /drafts on.`;
-  if (String(fromId) !== owner) return "Drafts are for the @blueagent_ owner only.";
+  if (String(fromId) !== owner) return `Drafts are for the @blueagent_ owner only. Your Telegram id is <code>${fromId}</code>; if that is you, set X_DRAFTS_OWNER_TG_ID to exactly that number in Vercel and redeploy.`;
   const a = arg.trim().toLowerCase();
   if (a === "off") { await kvDel(KV_DRAFTS_CHAT); return "Drafts off. Nothing will be sent until /drafts on."; }
   if (a === "on" || a === "") { await kvSet(KV_DRAFTS_CHAT, { chatId, since: new Date().toISOString() }); return "Drafts on. You will get @blueagent_ drafts here at 07:00 and 20:00 Vietnam time (00:00 and 13:00 UTC). Nothing is posted for you."; }
