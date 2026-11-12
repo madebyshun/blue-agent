@@ -31,10 +31,9 @@ function ThemeToggle({ className = "" }: { className?: string }) {
   );
 }
 
-// Product-forward marketing nav (landing-shaped like Halo/Dot): the bar is
-// in-page section anchors that scroll the landing — How it works (§01 #flow),
-// Models (§02 #models) and Pricing (§07 #pricing) — plus Docs, the one external
-// route. Each hash link scrolls on "/" and navigates-then-scrolls from other
+// Marketing nav: in-page anchors for the landing's three modes (rebuilt
+// 2026-11-12) — Chat (#chat), Agents (#agents), Markets (#markets) — the
+// builder section (#builders), plus Docs, the one external route. Each hash link scrolls on "/" and navigates-then-scrolls from other
 // routes; the target sections carry `scroll-mt-24` so the fixed bar never covers
 // them. `hub` was dropped 2026-09-19 — the landing has no Hub section for a
 // top-level link to scroll to (the Hub lives in the app shell + the CTA).
@@ -43,11 +42,11 @@ function ThemeToggle({ className = "" }: { className?: string }) {
 // no route yet, so it renders as a non-clickable "soon" item (not an <a>),
 // which also keeps it out of the link-liveness check.
 const NAV_LINKS: { key: string; href?: string; soon?: boolean }[] = [
-  { key: "how",      href: "/#flow" },
-  { key: "models",   href: "/#models" },
-  { key: "pricing",  href: "/#pricing" },
+  { key: "chat",     href: "/#chat" },
+  { key: "agents",   href: "/#agents" },
+  { key: "markets",  href: "/#markets" },
+  { key: "builders", href: "/#builders" },
   { key: "docs",     href: "/docs" },
-  { key: "physical", soon: true },
 ];
 
 function SoonBadge() {

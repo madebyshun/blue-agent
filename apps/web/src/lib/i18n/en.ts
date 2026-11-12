@@ -112,6 +112,10 @@ export const en = {
     footer_powered: "Powered by Venice AI · x402 native · Base",
   },
   nav_marketing: {
+    chat: "Chat",
+    agents: "Agents",
+    markets: "Markets",
+    builders: "Builders",
     about: "About",
     // In-page section anchors (2026-09-19): `how`→§01 #flow, `models`→§02
     // #models, `pricing`→§07 #pricing. `hub` is retired from the bar (the
