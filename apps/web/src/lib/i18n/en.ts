@@ -176,6 +176,8 @@ export const en = {
     following: "Following",
     markets: "Markets",
     portfolio: "Portfolio",
+    weekend: "Weekend",
+    drift: "Drift",
     launch_token: "Launch token",
     create: "Create",
     my_account: "My account",

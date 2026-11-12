@@ -172,6 +172,8 @@ export const zh: Dict = {
     following: "关注",
     markets: "市场",
     portfolio: "投资组合",
+    weekend: "周末",
+    drift: "偏离",
     launch_token: "发行代币",
     create: "创建",
     my_account: "我的账户",
