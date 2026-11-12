@@ -229,7 +229,7 @@ export async function aerodromeQuote(p: { sellToken: string; buyToken: string; s
  * pool, or $100 cannot fill. `fills: false` = no pool fills that size in full.
  */
 export async function quoteBuyImpact(token: Address, tokenDecimals: number, sizesUsd: number[] = [1_000, 10_000]): Promise<
-  { pool: string; tickSpacing: number; reference_usd: number; buys: { usd: number; impact_pct: number | null; fills: boolean; pool: string | null }[] } | null
+  { pool: string; tickSpacing: number; reference_usd: number; pools_quoted: string[]; buys: { usd: number; impact_pct: number | null; fills: boolean; pool: string | null }[] } | null
 > {
   const cands = await poolCandidates(token);
   if (!cands.length) return null;
@@ -244,5 +244,27 @@ export async function quoteBuyImpact(token: Address, tokenDecimals: number, size
     const px = usd / (Number(q.out) / 10 ** tokenDecimals);
     buys.push({ usd, impact_pct: Math.round((px / refPrice - 1) * 10_000) / 100, fills: true, pool: q.pool });
   }
-  return { pool: ref.pool, tickSpacing: ref.tickSpacing, reference_usd: REF, buys };
+  return { pool: ref.pool, tickSpacing: ref.tickSpacing, reference_usd: REF, pools_quoted: cands.map((c) => c.pool), buys };
+}
+
+/**
+ * Whether a quoteBuyImpact result describes the stock's real market, given the
+ * deepest pool the market API sees. Pure; pinned by buy-impact-coverage-test.ts.
+ *
+ * Why (measured 2026-11-12): the deepest NVDAc/USDC pool on Base
+ * (0xf668…c8ec, ~$1.7M) reports factory() 0x9CB2…7a76, a CL factory this
+ * module's Quoter cannot read. quoteBuyImpact therefore quoted only thin
+ * Gauges V3 pools and published +14.45% on $10k where base.org shows ~0.05%;
+ * AAPLc read +13946.8% on $100k. A number from pools that are not the market
+ * is wrong, not conservative, so it becomes "unknown" with the reason.
+ */
+export function buyImpactCoverage(
+  impact: { pools_quoted: string[] } | null,
+  deepest: { address: string; dex?: string | null; liquidityUsd?: number | null } | null,
+): { ok: true } | { ok: false; reason: string } {
+  if (!impact) return { ok: false, reason: "no Aerodrome USDC pool could be quoted" };
+  if (!deepest?.address) return { ok: false, reason: "the deepest pool is unknown, so a quote on Aerodrome Gauges V3 pools cannot be shown to be the market" };
+  if (impact.pools_quoted.some((p) => lc(p) === lc(deepest.address))) return { ok: true };
+  const liq = deepest.liquidityUsd != null ? ` (~$${Math.round(deepest.liquidityUsd).toLocaleString("en-US")} liquidity)` : "";
+  return { ok: false, reason: `the deepest pool ${deepest.address}${deepest.dex ? ` on ${deepest.dex}` : ""}${liq} is not one this quoter can read, so a quote from thinner pools would overstate impact` };
 }
