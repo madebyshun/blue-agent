@@ -41,6 +41,10 @@
       "schedule": "7,37 * * * *"
     },
     {
+      "path": "/api/cron/x-drafts",
+      "schedule": "0 0,13 * * *"
+    },
+    {
       "path": "/api/cron/weekend",
       "schedule": "12 * * * 0,1,2,3"
     }

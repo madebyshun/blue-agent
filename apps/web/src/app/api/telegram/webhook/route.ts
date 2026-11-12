@@ -39,6 +39,8 @@
 import { NextRequest, NextResponse, after } from "next/server";
 import { kvGetProbe } from "@/lib/kv";
 import { sendMessage, esc, shortAddr, BOT_USERNAME, type TgUpdate, type TgUser } from "@/lib/telegram/bot";
+import { kvSet, kvDel } from "@/lib/kv";
+import { KV_DRAFTS_CHAT } from "@/lib/xdrafts/compose";
 import { checkReply, txReply } from "@/lib/telegram/check";
 import { rateLimit } from "@/lib/rate-limit";
 import {
@@ -460,6 +462,22 @@ export async function GET() {
   return NextResponse.json({ ok: true, webhook: "blue-hood-telegram" });
 }
 
+/**
+ * /drafts on|off — where the @blueagent_ X drafts go (cron /api/cron/x-drafts).
+ * Owner only: the sender's Telegram id must equal X_DRAFTS_OWNER_TG_ID, set by
+ * ShunTr in Vercel. Until it is set, the bot only tells the sender their id.
+ */
+async function handleDrafts(arg: string, chatId: number, fromId: number | undefined): Promise<string> {
+  const owner = process.env.X_DRAFTS_OWNER_TG_ID ?? "";
+  if (!fromId) return "Could not read your Telegram id.";
+  if (!owner) return `Drafts are not set up yet. Your Telegram id is <code>${fromId}</code>: set X_DRAFTS_OWNER_TG_ID to it in Vercel, then send /drafts on.`;
+  if (String(fromId) !== owner) return "Drafts are for the @blueagent_ owner only.";
+  const a = arg.trim().toLowerCase();
+  if (a === "off") { await kvDel(KV_DRAFTS_CHAT); return "Drafts off. Nothing will be sent until /drafts on."; }
+  if (a === "on" || a === "") { await kvSet(KV_DRAFTS_CHAT, { chatId, since: new Date().toISOString() }); return "Drafts on. You will get @blueagent_ drafts here at 07:00 and 20:00 Vietnam time (00:00 and 13:00 UTC). Nothing is posted for you."; }
+  return "Use /drafts on or /drafts off.";
+}
+
 export async function POST(req: NextRequest) {
   if (!verifySecret(req)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
@@ -537,6 +555,9 @@ export async function POST(req: NextRequest) {
         break;
       case "/track":
         reply = await handleTrack();
+        break;
+      case "/drafts":
+        reply = group ? null : await handleDrafts(rest, msg.chat.id, msg.from?.id);
         break;
       default:
         // Silent in groups: other bots' commands and chatter are not ours.
