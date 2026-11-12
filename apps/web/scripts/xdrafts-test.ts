@@ -6,7 +6,7 @@ check("an em dash is flagged", lint("Base — stocks").includes("em dash"));
 check("a chain id in copy is flagged", lint("on Base 8453").some((p) => p.startsWith("chain id")));
 check("over 280 characters is flagged", lint("x".repeat(281)).some((p) => p.includes("281")));
 check("clean copy passes", lint("Pre-open on Base. NVDAc -0.28%").length === 0);
-const msg = telegramText({ kind: "pre-open", text: "a < b & c", shot: "https://app.blueagent.dev/markets/drift", problems: [] }, new Date("2026-11-12T13:00:00Z"));
+const msg = telegramText({ kind: "pre-open", text: "a < b & c", shot: "https://app.blueagent.dev/markets/drift", tag: "none", problems: [] }, new Date("2026-11-12T13:00:00Z"));
 check("telegram text escapes HTML", msg.includes("a &lt; b &amp; c") && msg.includes("<pre>"));
 check("telegram text says nothing is posted", /by hand/.test(msg));
 const err = telegramText({ kind: "yesterday", error: "archive miss" }, new Date());
