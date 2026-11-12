@@ -1,9 +1,11 @@
 /**
  * Cron: Blue Hub exchange — re-pulls the CDP Bazaar and rewrites the Base provider list (lib/hub/exchange.ts). Daily. A partial pull never replaces the stored list.
+ * Also refreshes vet402's per-host delivery records (lib/hub/vet402.ts, one ~18 MB CSV read).
  * Auth: `Authorization: Bearer $CRON_SECRET` (what Vercel Cron sends).
  */
 import { NextRequest, NextResponse } from "next/server";
 import { refreshProviders, refreshSellerIdentities, probeSellers } from "@/lib/hub/exchange";
+import { refreshVet402 } from "@/lib/hub/vet402";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,8 +25,9 @@ export async function GET(req: NextRequest) {
     // a slice of sellers for ERC-8004 identities.
     const result = await refreshProviders(started + 150_000);
     const identities = await refreshSellerIdentities(started + 215_000).catch((e) => ({ error: (e as Error).message.slice(0, 200) }));
+    const vet402 = await refreshVet402().catch((e) => ({ error: (e as Error).message.slice(0, 200) }));
     const probes = await probeSellers(started + (300 - 5) * 1000).catch((e) => ({ error: (e as Error).message.slice(0, 200) }));
-    return NextResponse.json({ status: "ok", ms: Date.now() - started, ...result, identities, probes });
+    return NextResponse.json({ status: "ok", ms: Date.now() - started, ...result, identities, vet402, probes });
   } catch (e) {
     const msg = (e as Error).message.slice(0, 300);
     console.error(`[cron:hub-providers] ${msg}`);

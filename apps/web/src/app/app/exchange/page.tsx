@@ -2,6 +2,7 @@
 // first (Blue Agent, then sellers that proved they run their service on
 // /exchange/sell), then sellers that hold an ERC-8004 identity on Base, then
 // this week's top sellers. Every x402 seller is on /exchange/discovered.
+import { readVet402, recordFor, type Vet402Blob } from "@/lib/hub/vet402";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { readExchange, readSellerIdentities, readSellerProbes, type ProviderRow } from "@/lib/hub/exchange";
@@ -50,8 +51,16 @@ const Badge = ({ c, children }: { c: string; children: React.ReactNode }) => (
   <span className="shrink-0 text-[11px] font-medium rounded-full border px-[7px] py-[2px]" style={{ color: c, borderColor: `${c}4d` }}>{children}</span>
 );
 
+// vet402's delivery record for a seller's hosts (lib/hub/vet402.ts, CC BY 4.0).
+function V({ blob, hosts }: { blob: Vet402Blob | null; hosts: string[] }) {
+  const r = recordFor(blob, hosts);
+  if (!r) return null;
+  const c = r.sellerFail > 0 ? "#F87171" : r.delivered === r.bought ? "#34D399" : "#F59E0B";
+  return <Badge c={c}>vet402 {r.delivered}/{r.bought} delivered</Badge>;
+}
+
 export default async function AgentsPage() {
-  const [ex, ids, probes, listings, mcp] = await Promise.all([readExchange(30), readSellerIdentities(), readSellerProbes(), readListings(), readMcpStats(30)]);
+  const [ex, ids, probes, listings, mcp, vet] = await Promise.all([readExchange(30), readSellerIdentities(), readSellerProbes(), readListings(), readMcpStats(30), readVet402().catch(() => null)]);
   // Blue's own MCP receipts (each a settled USDC tx on Base) reach back 30 days;
   // the on-chain index may cover fewer, so Blue's card reads the receipts.
   const blueMcp = mcp.readable ? { usd: mcp.outside.units / 1e6 } : null;
@@ -104,7 +113,7 @@ export default async function AgentsPage() {
                 <Row key={l.payTo} href={`/exchange/${l.payTo}`} title={l.name} sub={l.description || l.domain}
                   meta={`${l.domain} · ${l.services.filter((s) => s.probe === "live").length} verified service${l.services.length === 1 ? "" : "s"} · payTo ${short(l.payTo)}`}
                   right={R ? usd(r?.usd ?? 0) : "—"} rightSub={`${ex.daysCovered}d, measured`}
-                  badges={<><Badge c="#34D399">✓ listed</Badge>{ids[l.payTo]?.agentIds.length ? <Badge c="#A78BFA">ERC-8004</Badge> : null}</>} />
+                  badges={<><Badge c="#34D399">✓ listed</Badge>{ids[l.payTo]?.agentIds.length ? <Badge c="#A78BFA">ERC-8004</Badge> : null}<V blob={vet} hosts={[l.domain]} /></>} />
               );
             })}
           </div>
@@ -121,7 +130,7 @@ export default async function AgentsPage() {
                 <Row key={r.payTo} href={`/exchange/agent/${ids[r.payTo].agentIds[0]}`} title={r.hosts[0] ?? short(r.payTo)} sub={r.title || "—"}
                   meta={`agent #${ids[r.payTo].agentIds[0]} · ${r.paidCalls.toLocaleString("en-US")} paid calls · ${r.payers} wallets`}
                   right={usd(r.usd)} rightSub={`${ex.daysCovered}d, measured`}
-                  badges={<><Badge c="#A78BFA">ERC-8004</Badge>{live(r.payTo) && <Badge c="#34D399">✓ live 402</Badge>}</>} />
+                  badges={<><Badge c="#A78BFA">ERC-8004</Badge>{live(r.payTo) && <Badge c="#34D399">✓ live 402</Badge>}<V blob={vet} hosts={r.hosts} /></>} />
               ))}
             </div>
           )}
@@ -133,14 +142,16 @@ export default async function AgentsPage() {
               <Row key={r.payTo} href={`/exchange/${r.payTo}`} title={`${i + 1}. ${r.hosts[0] ?? short(r.payTo)}`} sub={r.title || "—"}
                 meta={`${r.paidCalls.toLocaleString("en-US")} paid calls · ${r.payers >= 2000 ? "2,000+" : r.payers} wallets · ${short(r.payTo)}`}
                 right={usd(sum7(r))} rightSub="7d, measured"
-                badges={live(r.payTo) ? <Badge c="#34D399">✓ live 402</Badge> : null} />
+                badges={<>{live(r.payTo) ? <Badge c="#34D399">✓ live 402</Badge> : null}<V blob={vet} hosts={r.hosts} /></>} />
             ))}
           </div>
           <Link href="/exchange/discovered" className="mt-3 inline-block text-[13px] text-[#4FC3F7]">Every x402 seller on Base ({ex.providersListed.toLocaleString("en-US")}) → Discovered</Link>
 
           <p className="text-[12px] text-[#64748B] mt-4 leading-relaxed">
             Revenue counts USDC paid to a seller&apos;s payTo on Base in a transaction that used the payer&apos;s EIP-3009 authorization, the way x402 settles. Gross:
-            a seller&apos;s own test wallets cannot be told apart, so nothing is subtracted on a guess. Not financial advice. <Link className="text-[#4FC3F7]" href="/exchange/docs">How it works →</Link>
+            a seller&apos;s own test wallets cannot be told apart, so nothing is subtracted on a guess.
+            {vet && <> &ldquo;vet402 x/y delivered&rdquo; is <a className="text-[#4FC3F7]" href="https://vet402.com/sellers" target="_blank" rel="noreferrer">vet402</a>&apos;s record of its own purchases from that seller&apos;s domain (delivered of bought, its own failures excluded), retrieved {vet.retrievedAt.slice(0, 10)}, CC BY 4.0.</>}
+            {" "}Not financial advice. <Link className="text-[#4FC3F7]" href="/exchange/docs">How it works →</Link>
           </p>
         </div>
       </div>
