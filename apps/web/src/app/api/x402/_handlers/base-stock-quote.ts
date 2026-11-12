@@ -6,7 +6,7 @@
 import { BASE_STOCKS } from "@/lib/base-stocks/registry";
 import { readBaseStockQuote } from "@/lib/base-stocks/b20-quote";
 import { readTokenMarket } from "@/lib/markets";
-import { quoteBuyImpact } from "@/lib/aerodrome-swap";
+import { quoteBuyImpact, buyImpactCoverage } from "@/lib/aerodrome-swap";
 import { readBody, resolveBaseStock, stockRef } from "@/lib/base-stocks/handler-common";
 import { readIssuance } from "@/lib/base-stocks/issuance";
 import { actionsFor } from "@/lib/base-stocks/corporate-actions";
@@ -51,6 +51,8 @@ export default async function handler(req: Request): Promise<Response> {
   if (mk.status === "unread" && !oracle) {
     throw new Error("Market data could not be read right now (GeckoTerminal); nothing was charged.");
   }
+  // Only publish impact measured on the pool the market actually trades in.
+  const coverage = buyImpactCoverage(impact, mk.pool ? { address: mk.pool.address, dex: mk.pool.dex, liquidityUsd: mk.pool.liquidityUsd } : null);
   return Response.json({
     ...stockRef(s),
     ...(warnings.length ? { warnings } : {}),
@@ -66,10 +68,10 @@ export default async function handler(req: Request): Promise<Response> {
       multiplier: oracle.multiplier, drift_pct: oracle.drift_pct, source: "Chainlink on Base, divided by the token's multiplier()",
     } : { status: "no Chainlink feed held for this stock; DEX price only" },
     // Liquidity TVL alone misleads on these pools; this is what a buy would move the price.
-    buy_impact: impact ? {
+    buy_impact: impact && coverage.ok ? {
       ...impact,
-      source: "Aerodrome Quoter on Base, deepest USDC pool only; a router splitting across pools may do better",
-    } : { status: "no Aerodrome USDC pool could be quoted" },
+      source: "Aerodrome Quoter on Base, best single USDC pool per size, the deepest pool among them; a router splitting across pools may do better",
+    } : { status: "unknown", reason: coverage.ok ? "no Aerodrome USDC pool could be quoted" : coverage.reason },
     note: "A stock token tracks a share; it is not the share. Not financial advice.",
     timestamp: new Date().toISOString(),
   });
