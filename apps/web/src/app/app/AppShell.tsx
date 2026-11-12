@@ -198,7 +198,6 @@ const MODES: Mode[] = [
           { id: "connectors", href: "/connectors", icon: IconConnectors },
         ],
       },
-      { id: "group_account", items: [{ id: "docs", href: "/docs/blue-chat", icon: IconDocs }] },
     ],
   },
   {
@@ -230,25 +229,24 @@ const MODES: Mode[] = [
     groups: [
       {
         id: "group_markets",
-        // Stock tokens + crypto on Base 8453 and Robinhood Chain 4663 (R3), and
-        // launching a token (Quadra v3 on Base). Hood (/hood) and Wallet (/wallet)
-        // stay live by URL but are off this nav: Markets and Portfolio cover them
-        // (ShunTr, 2026-10-29).
+        // Base 8453 only since 2026-11-11. Hood's drift board lives at
+        // /markets/drift since 2026-11-12 (/hood redirects there); Wallet stays
+        // live by URL, covered by Portfolio.
         items: [
           { id: "markets", href: "/markets", icon: IconUsage },
+          { id: "weekend", href: "/markets/weekend", icon: IconAnalytics },
+          { id: "drift", href: "/markets/drift", icon: IconDiscovered, also: ["/hood"] },
+          { id: "portfolio", href: "/portfolio", icon: IconAnalytics },
           { id: "launch_token", href: "/markets/launch", icon: IconCreate },
         ],
       },
-      {
-        id: "group_trade",
-        items: [{ id: "portfolio", href: "/portfolio", icon: IconAnalytics }],
-      },
-      { id: "group_account", items: [{ id: "docs", href: "/docs/blue-chat", icon: IconDocs }] },
     ],
   },
 ];
 
-const ALL_ITEMS = MODES.flatMap((m) => m.groups.flatMap((g) => g.items));
+/** Docs sits under all three sections, once. */
+const DOCS_ITEM: NavItem = { id: "docs", href: "/docs/blue-chat", icon: IconDocs };
+const ALL_ITEMS = [...MODES.flatMap((m) => m.groups.flatMap((g) => g.items)), DOCS_ITEM];
 
 function modeForPath(clean: string): Mode {
   return MODES.find((m) => m.prefixes.some((p) => clean === p || clean.startsWith(p + "/"))) ?? MODES[0];
@@ -266,24 +264,57 @@ function activeHref(clean: string, items: NavItem[]): string | null {
   return best;
 }
 
-/** Chat | Agents | Markets — a segmented control at the top of the rail. */
-function ModeSwitch({ mode, collapsed, onPick }: { mode: ModeId; collapsed?: boolean; onPick?: () => void }) {
+/**
+ * One rail, three titled sections (ShunTr 2026-11-12, after Bankr's sidebar):
+ * every destination is visible at once instead of hidden behind a mode switch.
+ * A section can be folded; the fold is a per-viewer convenience in
+ * localStorage and the section holding the current page never folds.
+ */
+function ModeSections({ current, collapsed, renderItem, afterChat }: {
+  current: ModeId; collapsed?: boolean; renderItem: (i: NavItem) => ReactNode; afterChat?: ReactNode;
+}) {
   const { t } = useLang();
+  const [folded, setFolded] = useState<ModeId[]>([]);
+  useEffect(() => {
+    try { const v = JSON.parse(localStorage.getItem("ba:nav:folded") ?? "[]"); if (Array.isArray(v)) setFolded(v); } catch { /* storage off */ }
+  }, []);
+  const toggle = (id: ModeId) => setFolded((f) => {
+    const next = f.includes(id) ? f.filter((x) => x !== id) : [...f, id];
+    try { localStorage.setItem("ba:nav:folded", JSON.stringify(next)); } catch { /* storage off */ }
+    return next;
+  });
   return (
-    <div className={`grid gap-1 ${collapsed ? "grid-cols-1" : "grid-cols-3"} rounded-[10px] border border-[#1A1A2E] bg-[#050508] p-1`}>
-      {MODES.map((m) => {
-        const on = m.id === mode;
+    <>
+      {MODES.map((m, mi) => {
+        const open = m.id === current || !folded.includes(m.id);
         return (
-          <Link key={m.id} href={m.home} onClick={onPick} title={t(`nav.mode_${m.id}`)}
-            className="rounded-[7px] py-[5px] text-center font-mono text-[13px] font-semibold transition-colors"
-            style={on ? { background: "#4FC3F7", color: "#050508" } : { color: "#94A3B8" }}>
-            {collapsed ? t(`nav.mode_${m.id}`).slice(0, 1) : t(`nav.mode_${m.id}`)}
-          </Link>
+          <div key={m.id} className={mi > 0 ? "mt-1" : ""}>
+            {collapsed
+              ? mi > 0 && <div className="mx-auto my-2 w-6 h-px bg-[#1A1A2E]" />
+              : (
+                <button type="button" onClick={() => m.id !== current && toggle(m.id)}
+                  className="w-full flex items-center justify-between px-3 pt-4 pb-1 font-mono text-[12px] uppercase"
+                  style={{ color: m.id === current ? "#94A3B8" : META, letterSpacing: LABEL_TRACK }}>
+                  <span>{t(`nav.mode_${m.id}`)}</span>
+                  {m.id !== current && <span aria-hidden className="text-[10px]">{open ? "▾" : "▸"}</span>}
+                </button>
+              )}
+            {(open || collapsed) && (
+              <div className="flex flex-col gap-0.5 px-2">
+                {m.groups.flatMap((g) => g.items).map(renderItem)}
+              </div>
+            )}
+            {m.id === "chat" && afterChat}
+          </div>
         );
       })}
-    </div>
+      <div className={collapsed ? "mt-2" : "mt-3"}>
+        <div className="flex flex-col gap-0.5 px-2">{renderItem(DOCS_ITEM)}</div>
+      </div>
+    </>
   );
 }
+
 
 // The app surface is served on app.blueagent.dev under clean, /app-less URLs
 // (middleware rewrites /chat → /app/chat), so on prod usePathname() already
@@ -333,7 +364,7 @@ function AppSideNav({ toolCount }: { toolCount: number }) {
   const { contextual } = useAppChrome();
   const clean = cleanPath(pathname);
   const mode = modeForPath(clean);
-  const active = activeHref(clean, mode.groups.flatMap((g) => g.items));
+  const active = activeHref(clean, ALL_ITEMS);
   const isActive = (href: string) => href === active;
 
   // Collapse state persists across sessions. Default expanded; hydrate from
@@ -454,9 +485,6 @@ function AppSideNav({ toolCount }: { toolCount: number }) {
           white on #4FC3F7 is ~1.9:1 and fails at 11.5px, dark-on-cyan is ~9:1.
           This is the one glow in the rail (`shadow-cta`); the handoff rations
           it to primary CTAs, and a second glowing thing would spend it. */}
-      <div className="shrink-0 px-2 pt-2">
-        <ModeSwitch mode={mode.id} collapsed={collapsed} />
-      </div>
 
       {contextual?.newChat && (
         <div className="shrink-0 px-2 pt-2 pb-1">
@@ -492,24 +520,7 @@ function AppSideNav({ toolCount }: { toolCount: number }) {
           let a long translation push the meta column out of view instead of
           eliding — the label would look complete while the count vanished. */}
       <nav className={`flex-1 min-h-0 overflow-y-auto overflow-x-hidden pb-2 ${contextual?.newChat ? "" : "pt-2"}`}>
-        {mode.groups.map((group, gi) => (
-          <div key={group.id} className={gi > 0 ? "mt-1" : ""}>
-            {collapsed
-              ? gi > 0 && <div className="mx-auto my-2 w-6 h-px bg-[#1A1A2E]" />
-              : (
-                <p
-                  className="px-3 pt-4 pb-1 font-mono text-[12px] uppercase"
-                  style={{ color: META, letterSpacing: LABEL_TRACK }}
-                >
-                  {t(`nav.${group.id}`)}
-                </p>
-              )}
-            <div className="flex flex-col gap-0.5 px-2">
-              {group.items.map(renderItem)}
-            </div>
-          </div>
-        ))}
-
+        <ModeSections current={mode.id} collapsed={collapsed} renderItem={renderItem} afterChat={<>
         {/* Page sub-nav — utilities + recents, registered by the page itself.
             Collapsed hides it: a 64px rail cannot show conversation titles, and
             the icons alone would be indistinguishable from one another. */}
@@ -590,6 +601,7 @@ function AppSideNav({ toolCount }: { toolCount: number }) {
             )}
           </div>
         )}
+        </>} />
       </nav>
 
       {/* Page-supplied footer (Blue Chat's credit chip) — above the shell's own. */}
@@ -708,7 +720,7 @@ function MobileDrawer({ toolCount }: { toolCount: number }) {
   const { t } = useLang();
   const clean = cleanPath(pathname);
   const mode = modeForPath(clean);
-  const active = activeHref(clean, mode.groups.flatMap((g) => g.items));
+  const active = activeHref(clean, ALL_ITEMS);
 
   // Close the drawer whenever the route changes (e.g. after tapping a product).
   useEffect(() => { setDrawerOpen(false); }, [pathname, setDrawerOpen]);
@@ -809,14 +821,13 @@ function MobileDrawer({ toolCount }: { toolCount: number }) {
             </div>
           )}
 
-          {/* Mode switch + that mode's groups — same as desktop. */}
-          <div className="px-3 pt-2 pb-1"><ModeSwitch mode={mode.id} /></div>
-          {mode.groups.map((group) => (
-            <div key={group.id} className="px-2 pt-1 border-t border-[#13131f] mt-1">
-              <p className="px-3 pt-3 pb-1 font-mono text-[12px] uppercase" style={{ color: META, letterSpacing: LABEL_TRACK }}>
-                {t(`nav.${group.id}`)}
+          {/* All three modes, one list — same as desktop. */}
+          {[...MODES, { id: "docs" as ModeId, home: "", prefixes: [], groups: [{ id: "docs", items: [DOCS_ITEM] }] }].map((m) => (
+            <div key={m.id} className="px-2 pt-1 border-t border-[#13131f] mt-1">
+              <p className="px-3 pt-3 pb-1 font-mono text-[12px] uppercase" style={{ color: m.id === mode.id ? "#94A3B8" : META, letterSpacing: LABEL_TRACK }}>
+                {(m.id as string) === "docs" ? "" : t(`nav.mode_${m.id}`)}
               </p>
-              {group.items.map((item) => {
+              {m.groups.flatMap((g) => g.items).map((item) => {
                 const on = item.href === active;
                 return (
                   <Link

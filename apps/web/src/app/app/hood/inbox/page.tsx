@@ -1,25 +1,11 @@
 /**
- * /hood/inbox — Blue Hood alert inbox (T-D D1).
- *
- * Source of truth for every arrow the engine has fired. Unlike /hood
- * (live board) and /hood/arrows (public track record), this is the
- * per-user inbox: unread badging + "mark all read" bookmark writes.
+ * /hood/inbox — retired from the UI 2026-11-12 with the /hood page. Alerts
+ * had been paused since arrows stopped (2026-09-30), so the inbox could only
+ * list old arrows; the record of those is /hood/arrows. Per-user read marks
+ * stay in KV (user state is evidence, not clutter); /api/hood/inbox/* is kept.
  */
-import type { Metadata } from "next";
-import InboxClient from "./InboxClient";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = {
-  title: "Blue Hood · Inbox",
-  description: "Every arrow Blue Hood has fired for you. Read/unread.",
-  // PWA hook — Blue Hood has its own manifest so a user can Add-to-Home-Screen
-  // and receive push notifications on iOS without any of the wider app coming
-  // along. See public/hood-manifest.json.
-  manifest: "/hood-manifest.json",
-};
-
-export const revalidate = 0;
-export const dynamic = "force-dynamic";
-
-export default function InboxPage() {
-  return <InboxClient />;
+export default function HoodInboxPage() {
+  redirect("/hood/arrows");
 }
