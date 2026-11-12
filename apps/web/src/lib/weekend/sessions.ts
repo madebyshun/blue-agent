@@ -69,10 +69,38 @@ type TickerRead = { usd: SessionSplit } | { none: true };
 export const KV_SESSIONS_PROGRESS = "weekend:sessions:progress:v1";
 interface Progress { to: string; done: Record<string, TickerRead> }
 
+/** Why the last ticker read failed — surfaced in the cron log, so a failure
+ *  can be told apart (429 vs timeout vs empty) instead of guessed at. */
+let lastFailure = "";
+
+/**
+ * GeckoTerminal GET with a 20 s timeout. `gtJson` (launchpads) aborts at 6 s,
+ * which is built for a chat turn; a 1000-candle answer to Vercel's hkg1
+ * region took longer and every read came back null (2026-11-11, 0 of 9).
+ */
+async function gt<T>(path: string): Promise<{ body: T | null }> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const r = await fetch(`https://api.geckoterminal.com/api/v2${path}`, {
+        headers: { Accept: "application/json", "User-Agent": "blueagent-weekend/1" },
+        signal: AbortSignal.timeout(20_000), cache: "no-store",
+      });
+      if (r.ok) return { body: (await r.json()) as T };
+      lastFailure = `HTTP ${r.status}`;
+      if (r.status !== 429) return { body: null };
+      await sleep(4000 * (attempt + 1));
+    } catch (e) {
+      lastFailure = (e as Error).name === "TimeoutError" ? "timeout 20s" : (e as Error).message.slice(0, 60);
+    }
+  }
+  return { body: null };
+}
+void gtJson;
+
 /** Read one ticker; null = not readable this time (retry on a later run). */
 async function readTicker(token: string, fromS: number, toS: number): Promise<TickerRead | null> {
-  const pools = await gtJson<{ data?: { attributes: { address: string; reserve_in_usd: string | null } }[] }>(
-    `/networks/base/tokens/${token.toLowerCase()}/pools?page=1`, 2);
+  const pools = await gt<{ data?: { attributes: { address: string; reserve_in_usd: string | null } }[] }>(
+    `/networks/base/tokens/${token.toLowerCase()}/pools?page=1`);
   await sleep(2500);
   if (pools.body === null) return null;
   const top = (pools.body.data ?? [])
@@ -81,11 +109,11 @@ async function readTicker(token: string, fromS: number, toS: number): Promise<Ti
   if (!top.length) return { none: true };
   const usd: SessionSplit = { open: 0, nights: 0, weekend: 0 };
   for (const p of top) {
-    const o = await gtJson<{ data?: { attributes?: { ohlcv_list?: number[][] } } }>(
-      `/networks/base/pools/${p.attributes.address}/ohlcv/hour?aggregate=1&limit=1000&currency=usd`, 2);
+    const o = await gt<{ data?: { attributes?: { ohlcv_list?: number[][] } } }>(
+      `/networks/base/pools/${p.attributes.address}/ohlcv/hour?aggregate=1&limit=1000&currency=usd`);
     await sleep(2500);
     const rows = o.body?.data?.attributes?.ohlcv_list;
-    if (!rows) return null;
+    if (!rows) { lastFailure ||= "no candles in answer"; return null; }
     for (const [ts, , , , , v] of rows) if (ts >= fromS && ts < toS) usd[sessionOf(ts)] += v;
   }
   // A pool with real reserves and zero volume across four weeks is an empty
@@ -151,10 +179,11 @@ export async function refreshSessionVolume(now: Date, deadline: number): Promise
   const cur = await readSessionVolume();
   const want = lastMonday(now).toISOString();
   if (cur && cur.window.to === want) return "sessions: current";
+  lastFailure = "";
   const { result, read } = await computeSessionVolume(now, deadline);
   if (!result.complete) {
     const waiting = result.left_out.filter((x) => x.reason === "not read yet").map((x) => x.ticker).join(", ");
-    return `sessions: ${read} read this run, waiting on ${waiting}; continues next run`;
+    return `sessions: ${read} read this run, waiting on ${waiting}; continues next run${lastFailure ? ` (last failure: ${lastFailure})` : ""}`;
   }
   await kvSet(KV_SESSIONS, result);
   return `sessions: ${result.tickers.length} tickers, $${Math.round(result.total_usd / 1e6)}M, open ${result.share.open}%`;
