@@ -12,6 +12,7 @@ import { NextResponse } from "next/server";
 import { AGENT_TOOLS } from "@/lib/agent-tools";
 import { HANDLERS }    from "@/app/api/x402/_handlers";
 import { wireSchema }  from "@/lib/tool-wire-schema";
+import { sampleFor }   from "@/lib/tool-samples";
 import { X402_PAY_TO } from "@/lib/x402-payee";
 
 export const runtime = "nodejs";
@@ -83,6 +84,10 @@ export async function GET() {
       // and still pay. `fields` is dropped here because JSON Schema is what a
       // caller consumes; the doc generator uses it.
       input: (({ fields: _fields, ...schema }) => schema)(wireSchema(t)),
+      // A directory's `no_sample_query` check reads this. It is one pair per
+      // tool — a body that works and the response keys it returns — not a
+      // second copy of the schema; see lib/tool-samples.ts for provenance.
+      sample: sampleFor(t.id) ?? null,
     }));
 
   return NextResponse.json(

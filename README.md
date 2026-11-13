@@ -20,7 +20,7 @@ Blue Agent is a full economic actor on Base: it holds a wallet, executes onchain
 
 ---
 
-## Blue Hub — 23 AI Tools on Base
+## Blue Hub — 29 AI Tools on Base
 
 Blue Hub is a curated marketplace of 29 AI tools built on Base — 22 pay-per-call, 7 free. Any agent or developer can call tools via x402 micropayments in USDC — no API key, no account, no human in the loop.
 
@@ -39,7 +39,7 @@ X-Payment: <EIP-3009 USDC on Base>
 POST https://blueagent.dev/api/x402/blue-doctor
 ```
 
-**29 tools across 7 categories** — on-chain · signal · security · intelligence · builder · trading · base-ecosystem
+**29 tools across 5 categories** — on-chain · signal · security · builder · trading
 
 <!-- Both numbers above, and every other tool count in this file, are pinned to
      `TOOL_COUNT` by apps/web/scripts/docs-truth-check.ts, which runs in CI. -->
@@ -59,20 +59,20 @@ import { createX402Client } from "@blueagent/x402"
 
 const client = createX402Client({ privateKey: "0x..." })
 
-// 5 core commands
-const brief = await client.idea("gasless USDC tipping app on Base")
-const arch  = await client.build("...")
-const audit = await client.audit("0x<contract>")
-const ship  = await client.ship("...")
-const raise = await client.raise("...")
+// Any Hub tool, by id — the SDK does 402 -> sign -> retry for you
+const price  = await client.hub("token-price", {
+  token: "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b", // $VIRTUAL on Base
+})
+const safety = await client.hub("honeypot-check", { token: "0x…" })
 
-// Any Hub tool
-const pick  = await client.tokenPick()
-const news  = await client.hub("ecosystem-digest", { focus: "DeFi" })
+// A free tool answers 200 on the first try; nothing is signed and nothing is charged
+const target = await client.hub("pre-trade-check", {
+  token: "0x…", chain: "base", kind: "swap", sender: "0x…", recipient: "0x…",
+})
 
-// Discover pricing
+// Discover pricing before spending
 const manifest = await client.pricing()
-const price    = await client.priceOf("blue-audit") // { priceUSD: "$1.00" }
+const quote    = await client.priceOf("base-stock-quote") // { priceUSD: "$0.02", amountRequired }
 ```
 
 The SDK handles the full x402 flow: `402 → decode requirements → sign EIP-3009 → retry → 200 OK`
@@ -116,13 +116,11 @@ Navigate with `↑ ↓ Enter`. Press `Esc` to go back.
 
 | Category | Tools |
 |---|---|
-| **Build** | idea · build · audit · ship · raise |
-| **Intelligence** | base-alpha · protocol-health · founder-check · narrative-pulse · token-pick-signal · ecosystem-digest · market-fit · blue-research |
-| **On-chain** | token-price · pool-scan · wallet-holdings · new-pools · gas-tracker · scam-detector · cross-protocol-yield · dex-flow |
-| **Security** | quick-safety · wallet-risk · honeypot-check · risk-gate · deep-analysis · contract-trust · key-exposure · token-distribution · liquidity-depth |
-| **Builder** | competitor-scan · repo-health · builder-deep-dd · grant-evaluator |
-| **Trading** | token-momentum-scanner |
-| **Earn** | lp-analyzer · cross-protocol-yield |
+| **On-chain** (12) | token-price · pool-scan · wallet-holdings · gas-tracker · base-stock-quote · base-stock-movers · rh-stock-quote · rh-stock-liquidity · rh-stock-holders · rh-stock-ohlc · safe-trending · rh-stock-swap-quote |
+| **Security** (9) | wallet-risk · honeypot-check · risk-gate · contract-trust · liquidity-depth · pre-trade-check · sign-check · approval-audit · rh-rwa-verify |
+| **Signal** (5) | hood-live · weekend-scorecard · rh-stock-movers · rh-stock-arb · rh-stock-agent-brief |
+| **Builder** (1) | blue-registry |
+| **Trading** (2) | rh-stock-swap-prepare · rh-stock-swap-quote |
 
 One category the TUI still renders is **not** listed above, because it does not
 work and listing it as a feature is how a stranger loses an afternoon:
@@ -145,13 +143,13 @@ blue doctor
 ## Blue Chat
 
 The browser terminal folded into Blue Chat at
-[app.blueagent.dev/chat](https://app.blueagent.dev/chat) — all 23 Hub tools, the
+[app.blueagent.dev/chat](https://app.blueagent.dev/chat) — all 29 Hub tools, the
 5 core commands, and onchain queries, in the browser. No install required.
 (`/terminal` still 301s there, so old links keep working.)
 
 ```
 blue hub ls                    # list all 29 tools
-blue hub info token-pick-signal
+blue hub info base-stock-quote
 blue idea <prompt>             # $0.05, inference via Virtuals
 blue balance 0x...             # ETH + USDC on Base mainnet
 ```

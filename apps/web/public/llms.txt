@@ -12,8 +12,8 @@ an X-Payment header. Settlement is on-chain via the Coinbase CDP facilitator.
 
 The 7 free tools are priced $0.00 in the catalog and never answer 402. Do not
 build an authorization for them — there is nothing to sign and no transfer to
-make. They are the safety checks and our own track record: blue-doctor,
-hood-live, hood-track-record, weekend-scorecard, weekend-diary, pre-trade-check, sign-check, approval-audit, rh-rwa-verify, rh-token-scan.
+make. They are the safety checks and our own record: blue-doctor, hood-live,
+weekend-scorecard, pre-trade-check, sign-check, approval-audit, rh-rwa-verify.
 
 ## Discovery
 - Machine-readable catalog (all tools, endpoints, prices, input schemas): https://blueagent.dev/api/catalog
@@ -47,8 +47,12 @@ hood-live, hood-track-record, weekend-scorecard, weekend-diary, pre-trade-check,
 - Endpoints: https://blueagent.dev/api/x402/{tool-id}  (POST)
 
 ## Examples
-- Ecosystem digest: https://blueagent.dev/api/x402/ecosystem-digest
-- Token pick signal: https://blueagent.dev/api/x402/token-pick-signal
-- Market-fit validator: https://blueagent.dev/api/x402/market-fit
+- Token price: https://blueagent.dev/api/x402/token-price
+- Tokenized stock quote: https://blueagent.dev/api/x402/base-stock-quote
+- Honeypot check: https://blueagent.dev/api/x402/honeypot-check
+- Pre-trade safety check (free): https://blueagent.dev/api/x402/pre-trade-check
+- The catalog itself: https://blueagent.dev/api/x402/blue-registry
 
 See https://blueagent.dev/api/catalog for the full list with prices and inputs.
+Every tool entry carries a `sample` — a request body that satisfies its schema,
+and the shape of what it returns — so an agent can size an answer before paying.

@@ -58,6 +58,7 @@ import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { AGENT_TOOLS } from "../src/lib/agent-tools";
 import { wireSchema }  from "../src/lib/tool-wire-schema";
+import { TOOL_SAMPLES } from "../src/lib/tool-samples";
 
 const WEB      = path.resolve(path.dirname(path.resolve(process.argv[1])), "..");
 const REPO     = path.resolve(WEB, "../..");
@@ -239,6 +240,81 @@ check(
   "every live tool has a handler file to check against",
   missing.length === 0,
   missing.length ? `no _handlers/<id>.ts: ${missing.join(", ")}` : "all resolved",
+);
+
+// ── 4. Every live tool ships a sample a caller can copy ─────────────────────
+//
+// MEASURED 2026-11-13 before this file existed: every one of the 62
+// payment-gated tools warned `no_sample_query` on the directory's own check —
+// a 402 body with field names and types, no example value, no example output.
+// An agent deciding whether to pay had to guess the value format and the
+// payoff, and guessing is where it bounces. A sample in the response fixes
+// that; this check is what stops the next tool from shipping without one,
+// because a field added once and never enforced is a field that disappears.
+console.log("\n4. every live tool ships a copyable sample");
+const noSample = LIVE.filter((t) => !TOOL_SAMPLES[t.id]).map((t) => t.id);
+check(
+  "no live tool is missing a sample request + response",
+  noSample.length === 0,
+  noSample.length ? `would be listed with no example: ${noSample.join(", ")}` : `${LIVE.length} tools sampled`,
+);
+const orphanSample = Object.keys(TOOL_SAMPLES).filter((id) => !LIVE.some((t) => t.id === id));
+check(
+  "no sample outlives the tool it describes",
+  orphanSample.length === 0,
+  orphanSample.length ? `sample for a tool that is not live: ${orphanSample.join(", ")}` : "none orphaned",
+);
+const emptyInput = LIVE.filter((t) => {
+  const w = wireSchema(t);
+  // A tool with required fields must show them filled in, or the copied
+  // sample it ships is a guaranteed 400.
+  return w.required.some((r) => !(r in (TOOL_SAMPLES[t.id]?.input ?? {})));
+});
+check(
+  "every required field is filled in its sample",
+  emptyInput.length === 0,
+  emptyInput.length ? `sample would 400: ${emptyInput.map((t) => t.id).join(", ")}` : "all filled",
+);
+
+// ── 5. agent.json advertises only live ids, at the catalog's own price ───────
+//
+// MEASURED 2026-11-13: `.well-known/agent.json` carried five `skills` entries
+// for ids that no longer exist anywhere (`blue-idea`, `blue-build`, `blue-audit`,
+// `blue-ship`, `blue-raise`, priced $0.05–$1.00), and it was the one discovery
+// surface docs-truth-check.ts never pinned — its counts were checked, its skills
+// array was not. A machine reads that file to decide what to POST, so a dead id
+// there is a 404 it cannot interpret. The array is now free to shrink, and the
+// price is taken from AGENT_TOOLS rather than retyped.
+console.log("\n5. agent.json advertises only live ids, at the catalog's price");
+const AGENT_JSON_PATH = path.join(REPO, "apps/web/public/.well-known/agent.json");
+const agentJson = existsSync(AGENT_JSON_PATH)
+  ? (JSON.parse(readFileSync(AGENT_JSON_PATH, "utf8")) as {
+      skills?: { tool_id?: string; price_usdc?: string }[];
+    })
+  : {};
+const agentSkills = agentJson.skills ?? [];
+const deadSkill = agentSkills
+  .map((s) => s.tool_id ?? "")
+  .filter((id) => id && !LIVE.some((t) => t.id === id));
+check(
+  "no agent.json skill points at a tool that is not live",
+  deadSkill.length === 0,
+  deadSkill.length ? `advertises dead ids: ${deadSkill.join(", ")}` : `${agentSkills.length} skills, all live`,
+);
+// Price drift is the quieter failure: the id exists, the number is wrong, and
+// the caller pays a different amount than the manifest promised.
+const wrongPrice = agentSkills.filter((s) => {
+  const t = LIVE.find((x) => x.id === s.tool_id);
+  if (!t) return false;
+  const catalog = (t.price ?? "").replace("$", "");
+  return s.price_usdc !== undefined && catalog !== "" && Number(s.price_usdc) !== Number(catalog);
+});
+check(
+  "every agent.json price matches the catalog",
+  wrongPrice.length === 0,
+  wrongPrice.length
+    ? `price drifted: ${wrongPrice.map((s) => `${s.tool_id} ${s.price_usdc} vs catalog`).join(", ")}`
+    : "all match",
 );
 
 console.log(

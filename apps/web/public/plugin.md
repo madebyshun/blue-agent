@@ -4,7 +4,7 @@
 > Hub UI: https://blueagent.dev/hub · Catalog (machine-readable): https://blueagent.dev/api/catalog
 
 29 AI tools for onchain builders and autonomous agents — audits, token signals,
-market-fit analysis, deep due diligence, launch readiness, ecosystem intel and
+stock signals, liquidity depth, contract trust and pre-trade safety and
 more. 22 are paid HTTP endpoints that speak **x402 v2** natively, so Base MCP
 can call any of them and settle the USDC payment without extra wiring. The
 other 10 are priced $0.00, never answer 402 and never ask for a signature.
@@ -35,10 +35,10 @@ other 10 are priced $0.00, never answer 402 and never ask for a signature.
 > A paid Blue Hub call charges USDC on-chain. Never auto-pay without consent.
 
 > [!NOTE]
-> **Eight tools are free and this gate does not apply to them.** They are priced
+> **Seven tools are free and this gate does not apply to them.** They are priced
 > `$0.00` in the catalog, never answer 402 and never ask for a signature:
-> `blue-doctor` · `hood-live` · `hood-track-record` · `weekend-scorecard` · `weekend-diary` · `pre-trade-check` ·
-> `sign-check` · `approval-audit` · `rh-rwa-verify` · `rh-token-scan`. POST them directly. Do not build an
+> `blue-doctor` · `hood-live` · `weekend-scorecard` · `pre-trade-check` ·
+> `sign-check` · `approval-audit` · `rh-rwa-verify`. POST them directly. Do not build an
 > authorization — there is nothing to sign and no transfer to make.
 >
 > This paragraph is load-bearing, not a footnote. The gate above used to read
@@ -67,14 +67,19 @@ no auth. Returns:
   "count": 29,
   "tools": [
     {
-      "id": "token-pick-signal",
-      "name": "Token Pick Signal",
-      "description": "The top Base token by an on-chain quality score … — facts from live pools, no buy/sell call.",
-      "price": "$0.20",
-      "priceUsdcUnits": 200000,
-      "endpoint": "https://blueagent.dev/api/x402/token-pick-signal",
+      "id": "base-stock-quote",
+      "name": "Base Stock Quote",
+      "description": "Price, liquidity and oracle drift for a tokenized stock on Base … Use when an agent needs a share price it can check against Chainlink.",
+      "price": "$0.02",
+      "priceUsdcUnits": 20000,
+      "endpoint": "https://blueagent.dev/api/x402/base-stock-quote",
       "method": "POST",
-      "input": { "type": "object", "properties": { ... }, "required": [...] }
+      "input": { "type": "object", "properties": { ... }, "required": [...] },
+      "sample": {
+        "provenance": "shape",
+        "input":  { "ticker": "AAPL" },
+        "output": { "ticker": "AAPL", "dex": { ... }, "oracle": { ... }, "..." : "..." }
+      }
     }
     // … one entry per tool
   ]
@@ -116,17 +121,22 @@ client needs to sign and retry:
     "scheme": "exact",
     "network": "eip155:8453",
     "asset":   "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-    "amount":  "200000",
+    "amount":  "20000",
     "payTo":   "0x02950ad38ada1d599375bd447e080cd404809205",
     "maxTimeoutSeconds": 120,
     "extra":   { "name": "USD Coin", "version": "2" }
   }],
   "tool": {
-    "id": "token-pick-signal",
-    "name": "Token Pick Signal",
+    "id": "base-stock-quote",
+    "name": "Base Stock Quote",
     "description": "…",
-    "price": "$0.20",
-    "input": { "type": "object", "properties": { ... }, "required": [...] }
+    "price": "$0.02",
+    "input":   { "type": "object", "properties": { ... }, "required": ["ticker"] },
+    "sample": {
+      "provenance": "shape",
+      "input":  { "ticker": "AAPL" },
+      "output": { "ticker": "AAPL", "dex": { ... }, "oracle": { ... } }
+    }
   }
 }
 ```
@@ -140,7 +150,7 @@ base64-encoded x402 payload in `X-Payment`. The server then:
 1. **Verifies** the payment via the Coinbase CDP facilitator (no charge).
 2. **Runs** the tool over live on-chain data — Base for most of the catalog,
    Robinhood Chain for the `rh-*` tools. Most tools make a single inference
-   pass; a few (deep-analysis, the launch simulators) make several and weight
+   pass; a few (`rh-stock-agent-brief`, `safe-trending`) make several and weight
    the results. Every pass goes to the same endpoint, so extra passes buy
    extra reasoning over the same data, not an extra opinion from elsewhere.
 3. **Settles** the USDC transfer on-chain via CDP (the user is charged
@@ -150,9 +160,9 @@ The 200 response carries the result and the settlement receipt:
 
 ```json
 {
-  "tool": "token-pick-signal",
+  "tool": "base-stock-quote",
+  "ticker": "AAPL",
   "facts_only": true,
-  "no_pick": false,
   "pick": {
     "token": "…", "price": "$…", "liquidity": "$…", "volume_24h": "$…",
     "score": 71, "signal_type": "building", "caution": []
@@ -201,7 +211,7 @@ That said, Blue Hub composes cleanly with execution plugins:
   it, and only on the user's go-ahead prepare an Aerodrome / Uniswap swap
   via that plugin's `send_calls`. Blue Hub supplies the *facts*; the
   execution plugin supplies the *action*. No Blue Hub tool returns a
-  buy/sell call to branch on — `token-pick-signal` reports facts only.
+  buy/sell call to branch on — `base-stock-quote` reports facts only.
 - **Audit-then-act.** Run `contract-trust` (Blue Hub) before any
   user-initiated `send_calls` against an unknown contract; abort if the
   verdict is `RED_FLAG`.
@@ -213,59 +223,53 @@ That said, Blue Hub composes cleanly with execution plugins:
 
 ## Popular tools (excerpt — full list via `/api/catalog`)
 
-> Prices below are pinned to the catalog by `apps/web/scripts/docs-truth-check.ts`
-> — a row whose id or price drifts from `AGENT_TOOLS` fails CI. Treat
-> `/api/catalog` as authoritative anyway; it is generated, this table is written.
+Every row below is live and priced in USDC on Base. Each one also carries a
+`sample` (a body that satisfies its schema, plus the shape of what it returns)
+on its 402 response and in `/api/catalog`.
 
-| Tool ID                   | Price  | What it returns                                              |
-|---------------------------|--------|--------------------------------------------------------------|
+| Tool                      | Price  | What it answers                                             |
+|---------------------------|--------|-------------------------------------------------------------|
+| `token-price`             | $0.01  | Live price, mcap, volume and liquidity for a Base token      |
+| `base-stock-quote`        | $0.02  | Tokenized-stock price, oracle share price and the drift      |
+| `base-stock-movers`       | $0.03  | 24h gainers and losers among Base tokenized stocks           |
+| `liquidity-depth`         | $0.03  | How much you can sell before the price moves                 |
+| `wallet-risk`             | $0.05  | Known-theft, phishing and sanctions flags on a Base address  |
+| `rh-stock-agent-brief`    | $0.20  | A Robinhood Chain stock's whole picture in one call          |
+| `honeypot-check`          | $0.10  | Buy-but-cannot-sell detection with measured transfer tax     |
 | `contract-trust`          | $0.15  | SAFE / CAUTION / RED_FLAG verdict before swapping            |
-| `ecosystem-digest`        | $0.20  | Weekly Base pulse — movers, narratives, what to watch        |
-| `token-pick-signal`       | $0.20  | Top Base token by on-chain quality score — facts, no call    |
-| `narrative-position`      | $0.15  | Narrative map · FRONT-RUN / RIDE / FADE / IGNORE             |
-| `market-fit`              | $0.25  | GO / WAIT / PIVOT verdict for a Base project                 |
-| `token-launch-readiness`  | $0.30  | Score 0–100 + GO/WAIT verdict + checklist                    |
-| `builder-deep-dd`         | $0.35  | STRONG_BUY → RED_FLAG due diligence verdict                  |
-| `competitor-scan`         | $0.20  | Competitive landscape · STRONG / COMPETITIVE / WEAK          |
-| `base-grant-finder`       | $0.20  | Matching grants for a Base project (Coinbase, OP RetroPGF)   |
-| `liquidity-depth`         | $0.03  | Liquidity depth, slippage estimate and exit risk for a token |
-| `protocol-risk-monitor`   | $0.35  | Real-time protocol risk · smart-contract, liquidity, oracle  |
-| `blue-idea`               | $0.05  | Rough concept → fundable brief (programmatic only)           |
-| `blue-build`              | $0.50  | Architecture, stack, folder structure, integrations          |
-| `blue-audit`              | $1.00  | Security + product risk review · critical issues · go/no-go  |
-| `blue-ship`               | $0.10  | Deploy checklist + verification + monitoring                 |
-| `blue-raise`              | $0.20  | Fundraising narrative + investor map                         |
-
----
+| `risk-gate`               | $0.20  | One pre-transaction verdict instead of five signals          |
+| `safe-trending`           | $0.15  | Trending Base tokens, tax-checked, with exit depth           |
+| `blue-registry`           | $0.05  | The catalog itself: every tool, its price and its endpoint   |
+| `blue-doctor`             | free   | Is the upstream down, or is your request wrong?              |
 
 ## Workflow examples
 
 **Pre-trade audit**
 > User: *"Before I swap into $TOKEN, audit the contract."*
 >
-> 1. `POST /api/x402/contract-trust` with `{ "address": "0x…" }`
-> 2. Base MCP signs $0.15 USDC, retries → result returned.
-> 3. If verdict is `RED_FLAG`, surface to user and *do not* prepare the swap.
+> 1. `POST /api/x402/pre-trade-check` with `{ "token": "0x…", "chain": "base", "kind": "swap", "sender": "0x…", "recipient": "0x…" }` — free.
+> 2. If it is not `PASS`, `POST /api/x402/contract-trust` with `{ "address": "0x…" }`.
+> 3. If either verdict is `RED_FLAG`, surface it and *do not* prepare the swap.
 
-**Token research**
-> User: *"Which Base token has the strongest liquidity and volume right now?"*
+**Is this token safe to buy?**
+> User: *"Is $TOKEN a honeypot?"*
 >
-> 1. `POST /api/x402/token-pick-signal` with `{ "context": "…" }`
-> 2. Returns the top Base token by an on-chain quality score — facts only (price, liquidity, volume, score, caution flags); no entry, target or buy/sell call.
+> 1. `POST /api/x402/honeypot-check` with `{ "token": "0x…" }` — $0.10.
+> 2. Then `POST /api/x402/liquidity-depth` with `{ "token": "0x…", "trade_size_usd": 500 }`
+>    for the exit: how much the price moves if the user sells.
 
-**Builder DD before investing**
-> User: *"Should I invest in this project?"*
+**Daily stock screen**
+> User: *"Which tokenized stocks moved today?"*
 >
-> 1. `POST /api/x402/builder-deep-dd` with `{ "name": "…", "description": "…" }`
-> 2. Returns STRONG_BUY / BUY / WATCH / PASS / RED_FLAG with rationale.
+> 1. `POST /api/x402/base-stock-movers` with `{ "limit": 5 }` — $0.03.
+> 2. For any name worth a closer look, `POST /api/x402/base-stock-quote` with
+>    `{ "ticker": "AAPL" }` — price, oracle share price and the drift between them.
 
-**Launch readiness**
-> User: *"Is my token ready to launch?"*
+**What am I about to sign?**
+> User: *"What does this transaction do?"*
 >
-> 1. `POST /api/x402/token-launch-readiness` with project context.
-> 2. Returns 0–100 score, GO/WAIT verdict, missing-items checklist.
-
----
+> 1. `POST /api/x402/sign-check` with `{ "chain": "base", "from": "0x…", "tx": { "to": "0x…", "data": "0x…", "value": "0" } }` — free.
+> 2. `BLOCK` = do not sign. `WARN` = show the summary and reasons, sign only on an explicit yes. `PASS` = every effect was read and nothing measured against it (not a recommendation).
 
 ## Authentication
 

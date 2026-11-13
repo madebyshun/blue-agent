@@ -165,14 +165,12 @@ export class X402Client {
     });
   }
 
-  /** blue idea — fundable brief from rough concept ($0.05) */
-  /** blue build — architecture + stack ($0.50) */
-  /** blue audit — smart contract security review ($1.00) */
-  /** blue ship — deployment checklist ($0.10) */
-  /** blue raise — investor pitch narrative ($0.20) */
-  /** token pick signal — asymmetric Base token pick ($0.25) */
-  /** narrative position — CT narrative tracker ($0.20) */
   // ── Pricing discovery ────────────────────────────────────────────────────────
+  // The per-product wrappers that used to sit here (idea $0.05, build $0.50,
+  // audit $1.00, ship $0.10, raise $0.20, token-pick-signal $0.25,
+  // narrative-position $0.20) were doc-comments for methods that never existed
+  // on this class; five of those ids retired on 2026-11-13. Call `hub(id, inputs)`
+  // with any live id from `pricing()`, or `blue_registry` for the catalog.
 
   /** Fetch the machine-readable pricing manifest */
   async pricing(): Promise<PricingManifest> {

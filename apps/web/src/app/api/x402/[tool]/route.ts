@@ -12,6 +12,7 @@ import { buildRequirements, cdpVerify, cdpSettle } from "@/app/api/_lib/x402-cdp
 import { HANDLERS } from "@/app/api/x402/_handlers";
 import { AGENT_TOOLS } from "@/lib/agent-tools";
 import { wireSchema } from "@/lib/tool-wire-schema";
+import { sampleFor } from "@/lib/tool-samples";
 import { recordCall } from "@/lib/usage-daily";
 import { kv } from "@/lib/kv";
 import { declareBuilderCodeExtension } from "@x402/extensions/builder-code";
@@ -126,6 +127,9 @@ export async function GET(
           description: meta.description,
           price: meta.price,
           input: inputSchema,
+          // What to POST and what comes back, so a caller does not have to
+          // guess either. See lib/tool-samples.ts for how honest each half is.
+          sample: meta ? sampleFor(meta.id) : undefined,
         } : undefined,
       },
       { status: 200, headers: { "Access-Control-Allow-Origin": "*" } }
@@ -148,6 +152,11 @@ export async function GET(
         description: meta.description,
         price: meta.price,
         input: inputSchema,
+        // The two things a paying agent guesses at: the value format and the
+        // payoff. `provenance` on the sample says whether its values are a real
+        // read or placeholders — a paid tool's output was never bought, so it
+        // is "shape" and the numbers are not measurements.
+        sample: meta ? sampleFor(meta.id) : undefined,
       } : undefined,
     },
     {

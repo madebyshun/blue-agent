@@ -54,44 +54,65 @@
   },
   "skills": [
     {
-      "name": "blue_idea",
-      "tool_id": "blue-idea",
-      "description": "Turn a rough concept into a fundable brief — problem, why now, why Base, MVP scope, risks, 24h plan.",
-      "price_usdc": "0.05",
+      "name": "token_price",
+      "tool_id": "token-price",
+      "description": "Live price, market cap, FDV, liquidity and 24h volume for a Base token, from its deepest DEX pool.",
+      "price_usdc": "0.01",
       "payment": "x402"
     },
     {
-      "name": "blue_build",
-      "tool_id": "blue-build",
-      "description": "Architecture, stack, folder structure, integrations, and test plan.",
-      "price_usdc": "0.50",
-      "payment": "x402"
-    },
-    {
-      "name": "blue_audit",
-      "tool_id": "blue-audit",
-      "description": "Security and product risk review — critical issues, suggested fixes, go/no-go.",
-      "price_usdc": "1.00",
-      "payment": "x402"
-    },
-    {
-      "name": "blue_ship",
-      "tool_id": "blue-ship",
-      "description": "Deployment checklist, verification steps, release notes, monitoring plan.",
+      "name": "honeypot_check",
+      "tool_id": "honeypot-check",
+      "description": "Decides whether a Base token can be sold after buying: honeypot patterns, buy and sell tax, blacklist.",
       "price_usdc": "0.10",
       "payment": "x402"
     },
     {
-      "name": "blue_raise",
-      "tool_id": "blue-raise",
-      "description": "Pitch narrative — market framing, why this wins, traction, ask, target investors.",
-      "price_usdc": "0.20",
+      "name": "contract_trust",
+      "tool_id": "contract-trust",
+      "description": "Verified source, proxy risk, flags and community trust for a contract, in one verdict.",
+      "price_usdc": "0.15",
+      "payment": "x402"
+    },
+    {
+      "name": "base_stock_quote",
+      "tool_id": "base-stock-quote",
+      "description": "Coinbase Tokenized Stock quote on Base: DEX price, Chainlink oracle price, the drift between them, and buy impact.",
+      "price_usdc": "0.02",
+      "payment": "x402"
+    },
+    {
+      "name": "base_stock_movers",
+      "tool_id": "base-stock-movers",
+      "description": "24h gainers and losers across every Coinbase Tokenized Stock on Base, by deepest-pool change.",
+      "price_usdc": "0.03",
+      "payment": "x402"
+    },
+    {
+      "name": "liquidity_depth",
+      "tool_id": "liquidity-depth",
+      "description": "What a $1k, $10k and $100k exit does to a Base token's price, and the largest position it can absorb.",
+      "price_usdc": "0.03",
+      "payment": "x402"
+    },
+    {
+      "name": "wallet_risk",
+      "tool_id": "wallet-risk",
+      "description": "Sanctions, mixer and flag screening for a wallet before an agent pays it or trades against it.",
+      "price_usdc": "0.05",
+      "payment": "x402"
+    },
+    {
+      "name": "blue_registry",
+      "tool_id": "blue-registry",
+      "description": "Search this catalog by need — every id, its price and how to call it. Answers what exists before guessing an id.",
+      "price_usdc": "0.05",
       "payment": "x402"
     }
   ],
   "sdk": {
     "package": "@blueagent/x402",
-    "version": "0.1.0",
+    "version": "0.3.2",
     "install": "npm install @blueagent/x402",
     "npm": "https://npmjs.com/package/@blueagent/x402",
     "description": "x402 client SDK — call any Blue Hub tool with automatic payment handling"
