@@ -4,7 +4,7 @@
 //
 //   preview <out.ppm> feed  <feed.json> <modeIdx> <modeCount> [--ms N] [--hour H] [--mood M]
 //   preview <out.ppm> card  <title> <body> <tone>
-//   preview <out.ppm> think <label> [--ms N]
+//   preview <out.ppm> bot   <state-index> <caption> [--ms N]
 //   preview <out.ppm> pair  <code>
 //   preview <out.ppm> update <code>
 //
@@ -60,7 +60,7 @@ int main(int argc, char** argv) {
   int modeIdx = 0, modeCount = 5;
   if (!strcmp(what, "feed") && argc >= 6) { modeIdx = atoi(argv[4]); modeCount = atoi(argv[5]); }
   cube::Ctx c{cv, modeIdx, modeCount, true, cube::Clock{true, hour, 36, 4, 10}, 1000, 12345};
-  cube::FaceAnim face;
+  cube::BotAnim bot;
 
   if (!strcmp(what, "feed")) {
     std::ifstream in(argv[3]);
@@ -71,20 +71,19 @@ int main(int argc, char** argv) {
     cube::parseFeed(doc, f, 0);
     if (const char* m = argStr(argc, argv, "--mood")) f.mood = m[0];
     if (!f.isBuddy) cube::drawHeader(c);
-    cube::drawFeed(c, f, face);
+    cube::drawFeed(c, f, bot);
     // Step the animation clock to the requested moment, frame by frame.
-    for (uint32_t t = 0; f.isBuddy && t < ms; t += 120) { c.now = 1000 + t + 120; cube::buddyTick(c, f, face, false); }
+    for (uint32_t t = 0; f.isBuddy && t < ms; t += 120) { c.now = 1000 + t + 120; cube::buddyTick(c, f, bot, false); }
   } else if (!strcmp(what, "card") && argc >= 6) {
     JsonDocument d;
     d["id"] = "preview"; d["title"] = argv[3]; d["body"] = argv[4]; d["tone"] = argv[5];
     cube::Card k{};
     cube::parseCard(d.as<JsonObjectConst>(), k);
     cube::drawCard(c, k);
-  } else if (!strcmp(what, "think") && argc >= 4) {
-    cube::Agent a{true, ""};
-    strncpy(a.label, argv[3], sizeof a.label - 1);
-    cube::thinkingTick(c, a, face, true);
-    for (uint32_t t = 0; t < ms; t += 120) { c.now = 1000 + t + 120; cube::thinkingTick(c, a, face, false); }
+  } else if (!strcmp(what, "bot") && argc >= 5) {
+    cube::Bot b = (cube::Bot)atoi(argv[3]);
+    cube::botTick(c, b, argv[4], cube::GRAY, bot, true);
+    for (uint32_t t = 0; t < ms; t += 120) { c.now = 1000 + t + 120; cube::botTick(c, b, argv[4], cube::GRAY, bot, false); }
   } else if (!strcmp(what, "pair") && argc >= 4) {
     cube::drawPairing(cv, argv[3], "app.blueagent.dev/link");
   } else if (!strcmp(what, "update") && argc >= 4) {
