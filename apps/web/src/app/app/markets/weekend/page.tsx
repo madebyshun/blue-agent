@@ -229,7 +229,7 @@ export default async function WeekendPage({ searchParams }: { searchParams: Prom
           </section>
 
           <p className="text-[12px] text-[#64748B] leading-relaxed">
-            Sources: the Blue Hood Base desk archive (hourly since Aug 28), Chainlink feeds and B20 multiplier() read on Base 8453 where the archive has a hole, Coinbase Exchange candles for BTC and ETH. Free for agents: POST /api/x402/weekend-scorecard and /api/x402/weekend-diary, no payment. A stock token tracks a share; it is not the share. Not financial advice.
+            Sources: the Blue Hood Base desk archive (hourly since Aug 28), Chainlink feeds and B20 multiplier() read on Base 8453 where the archive has a hole, Coinbase Exchange candles for BTC and ETH. Free for agents: POST /api/x402/weekend-scorecard, no payment. A stock token tracks a share; it is not the share. Not financial advice.
           </p>
         </div>
       </div>

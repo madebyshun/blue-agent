@@ -68,7 +68,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
   {
     id: "token-price",
     name: "Token Price",
-    description: "Live price, mcap, volume and liquidity for any Base token (DexScreener).",
+    description: "Live price, market cap, volume and liquidity for any Base token. Use when an agent asks what a Base token costs right now, or needs a spot price before sizing a swap.",
     agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
     category: "on-chain",
     inputs: [
@@ -82,7 +82,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
   {
     id: "pool-scan",
     name: "Pool Scan",
-    description: "Trending + newly-active Base pools with the chain TVL snapshot.",
+    description: "Trending and newly-active Base liquidity pools with the chain TVL snapshot. Use when an agent asks where Base liquidity is moving, or needs a pool list before choosing where to trade.",
     agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
     category: "on-chain",
     inputs: [
@@ -100,7 +100,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     // just failed, and charging for "is it you or me" would be charging for an
     // outage.
     description:
-      "Upstream health for every data source the tools read from — Base 8453 and Robinhood Chain 4663 RPC, DexScreener, GeckoTerminal, DefiLlama, GitHub. Says down only when a probe actually failed; anything it could not reach is reported unknown with the reason.",
+      "Upstream health for every data source these tools read: Base 8453 and Robinhood Chain 4663 RPC, DexScreener, GeckoTerminal, DefiLlama. Use when another call failed and an agent must know whether the source is down or the request was wrong. Free.",
     agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
     category: "on-chain",
     inputs: [],
@@ -115,7 +115,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     // Free: it reads a cron's stored output — one KV command, zero upstream
     // calls — and the same rows are already public at /hood.
     description:
-      "Every tokenized stock Blue Hood is watching right now, on both live venues: Chainlink oracle price, deepest-pool DEX spot, and the drift between them. Each row carries its own chain, chain_id and explorer link, because NVDA/META/GOOGL/AAPL exist on Base 8453 AND Robinhood Chain 4663 as different tokens in different pools. Rows come from the last completed 5-minute poll cycle, not a fresh quote — data_age_seconds and is_stale are part of the answer. Ungraded by construction; for the graded record use Blue Hood Track Record. Free.",
+      "Every tokenized stock Blue Hood watches right now on both venues: Chainlink oracle price, deepest-pool price and the drift between them. Use when an agent asks about tokenized stock prices, or wants the oracle-vs-pool gap before trading one. Free.",
     agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
     category: "signal",
     inputs: [
@@ -129,29 +129,12 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     x402Body: (v) => (v.chain ? { chain: v.chain } : {}),
   },
   {
-    id: "hood-track-record",
-    name: "Blue Hood Track Record",
-    // Free for a sharper reason than the other free tools: a track record behind
-    // a paywall is a track record nobody can check.
-    description:
-      "Blue Hood's own scoreboard — every public arrow with its graded outcome (HIT / MISS / VOID, VOID included), the raw counts, and the hit-rate we are allowed to publish. The headline passes a sample gate: below the published threshold you get ready:false with graded + needed and no percentage at all, plus a Wilson 95% interval once it clears. Receipts are returned freely so you can recompute it yourself — the window block tells you whether you were handed the whole record or the newest N of a longer one. An unreadable feed answers 503, never an empty record. Free.",
-    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
-    category: "signal",
-    inputs: [
-      { key: "limit", label: "Receipts limit (optional)", placeholder: "1–200 (default 100)" },
-    ],
-    isComposite: false,
-    price: "$0.00", priceUSDC: 0,
-    x402Url: `${X402_BASE}/hood-track-record`,
-    x402Body: (v) => (v.limit ? { limit: Number(v.limit) } : {}),
-  },
-  {
     id: "weekend-scorecard",
     name: "Base Weekend Scorecard",
     // Free for the same reason as the track record above: a scorecard behind a
     // paywall is one nobody can check.
     description:
-      "Does the price Base trades a stock at over the weekend call Monday's open? Every Base 8453 stock on the Blue Hood desk, every weekend since 2026-08-28: the frozen Chainlink price (Friday's last round), the Base DEX price at Sunday 22:00 UTC, the weekend move between them, and the oracle at the next regular-session open. Moves under 0.5% (the feed's own deviation step) are FLAT and not graded. The headline hit rate ships only from 30 graded calls, with a Wilson 95% interval and a two-sided binomial p-value; below that you get calls, hits and needed. Between Saturday and the open it also returns a provisional live reading. BTC/ETH weekend moves are context only. Free.",
+      "Does the price Base trades a stock at over the weekend call Monday's open? Every Base stock on the desk, scored. Use when an agent asks whether tokenized stocks track the real thing, or needs weekend-vs-open accuracy before trusting an off-hours price. Free.",
     agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
     category: "signal",
     inputs: [
@@ -164,45 +147,9 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     x402Body: (v) => ({ ...(v.ticker ? { ticker: v.ticker } : {}), ...(v.weekends ? { weekends: Number(v.weekends) } : {}) }),
   },
   {
-    id: "weekend-diary",
-    name: "Blue's Weekend Book",
-    description:
-      "Blue's public PAPER book on Base 8453 stocks over the weekend. One rule, fixed 2026-11-11 and applied in code: every stock whose Sunday 22:00 UTC weekend call is UP or DOWN gets a $1,000 paper position in that direction at the Base DEX price, closed at the next open. Returns the rule, its in-sample backtest (published as measured, including that it lost), the forward totals, and each weekend's positions and P&L. The short diary notes are model-generated from those numbers and flagged as such. Free.",
-    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
-    category: "signal",
-    inputs: [
-      { key: "entries", label: "Entries (optional)", placeholder: "1–52 (default 12)" },
-    ],
-    isComposite: false,
-    price: "$0.00", priceUSDC: 0,
-    x402Url: `${X402_BASE}/weekend-diary`,
-    x402Body: (v) => (v.entries ? { entries: Number(v.entries) } : {}),
-  },
-  {
-    id: "safe-trending",
-    name: "Safe Trending",
-    // SAFE means one specific thing and the description has to say which, or
-    // the name promises an audit the tool does not perform.
-    description:
-      "Trending Base tokens, each with its buy/sell tax read from the contract and its exit depth. SAFE here = tradeable with verified tax. A clean scan is not a buy signal.",
-    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
-    category: "on-chain",
-    inputs: [
-      { key: "min_liquidity_usd", label: "Min liquidity USD (optional)", placeholder: "500000" },
-      { key: "limit", label: "Limit (optional)", placeholder: "10" },
-    ],
-    isComposite: true,
-    price: "$0.15", priceUSDC: 150000,
-    x402Url: `${X402_BASE}/safe-trending`,
-    x402Body: (v) => ({
-      min_liquidity_usd: v.min_liquidity_usd ? Number(v.min_liquidity_usd) : 500000,
-      limit: v.limit ? Number(v.limit) : 10,
-    }),
-  },
-  {
     id: "wallet-holdings",
     name: "Wallet Holdings",
-    description: "Live ERC-20 + ETH holdings and USD value for a Base wallet (Moralis).",
+    description: "Live ERC-20 and ETH holdings with USD value for a Base wallet. Use when an agent asks what a Base address holds, or must size a trade against the actual balance instead of assuming one.",
     agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
     category: "on-chain",
     inputs: [
@@ -216,7 +163,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
   {
     id: "gas-tracker",
     name: "Gas Tracker",
-    description: "Live Base gas price + USD cost estimates for common actions.",
+    description: "Live Base gas price and USD cost estimates for common actions. Use when an agent asks what a Base transaction costs, or needs a fee figure before telling a user to sign.",
     agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
     category: "on-chain",
     inputs: [],
@@ -228,7 +175,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
   {
     id: "wallet-risk",
     name: "Wallet Risk",
-    description: "Is this address known to be dangerous? GoPlus flags (theft, phishing, sanctions, laundering, mixer) with their sources, the explorer's scam mark, and chain facts (wallet / contract / EIP-7702 account, nonce, balance). Verdict in code: FLAGGED, CAUTION or NO_KNOWN_FLAGS — never CLEAN. Feed unread → 502, not charged. Base 8453 or Robinhood Chain 4663. No LLM.",
+    description: "Is this address known to be dangerous? GoPlus flags (theft, phishing, sanctions, laundering, mixer) with their sources. Use when an agent asks whether a Base wallet is safe to pay or copy, or before routing funds to an unfamiliar address.",
     agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
     category: "security",
     inputs: [
@@ -239,22 +186,6 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     x402Url: `${X402_BASE}/wallet-risk`,
     x402Body: (v) => ({ address: v.address ?? "" }),
   },
-  {
-    id: "b20-analyze",
-    name: "B20 Analyze",
-    description: "B20 (Base Native Token Standard) guide — variants, roles, policies, integration tips. Powered by Beryl upgrade docs.",
-    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
-    category: "security",
-    inputs: [
-      { key: "action", label: "Action", placeholder: "guide / roles / policy / analyze / compare", required: false },
-      { key: "address", label: "Token address (optional)", placeholder: "0x…", required: false },
-      { key: "context", label: "Context (optional)", placeholder: "Describe your use case", required: false },
-    ],
-    isComposite: true,
-    price: "$0.05", priceUSDC: 50000,
-    x402Url: `${X402_BASE}/b20-analyze`,
-    x402Body: (v) => ({ action: v.action ?? "guide", address: v.address, context: v.context }),
-  },
   // `b20-tracker` ($0.05) RETIRED 2026-09-24. Half of what it sold — "B20-related
   // launches" — came from api.bankr.bot/token-launches, the last live Bankr call
   // left in this repo. That URL is public and still answers 200, so this was not
@@ -264,24 +195,9 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
   // never outlive the product it sells. Beryl activation status survives in
   // `b20-inspect` and `b20-analyze`, which read Base RPC and need no upstream.
   {
-    id: "b20-inspect",
-    name: "B20 Inspect",
-    description: "Live on-chain B20 token inspector — reads real state from Base RPC via multicall. Returns isB20 flag, name/symbol/decimals, totalSupply, supplyCap, variant (ASSET/STABLECOIN), pause status per feature, and policy IDs per transfer/mint scope. Zero LLM.",
-    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
-    category: "security",
-    inputs: [
-      { key: "address", label: "Token address", placeholder: "0x… (B20 token on Base)", required: true  },
-      { key: "network", label: "Network",        placeholder: "mainnet (default) or sepolia",             required: false },
-    ],
-    isComposite: true,
-    price: "$0.005", priceUSDC: 5000,
-    x402Url: `${X402_BASE}/b20-inspect`,
-    x402Body: (v) => ({ address: v.address ?? "", network: v.network ?? "mainnet" }),
-  },
-  {
     id: "liquidity-depth",
     name: "Liquidity Depth",
-    description: "Liquidity depth, slippage estimate and exit risk for a Base token.",
+    description: "Liquidity depth, slippage estimate and exit risk for a Base token. Use when an agent asks how much of a Base token it can sell without moving the price, or needs a slippage figure before a trade.",
     agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
     category: "security",
     inputs: [
@@ -292,268 +208,15 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     x402Url: `${X402_BASE}/liquidity-depth`,
     x402Body: (v) => ({ token: v.token ?? "", trade_size_usd: v.trade_size_usd ? Number(v.trade_size_usd) : undefined }),
   },
-  {
-    id: "narrative-pulse",
-    name: "Narrative Pulse",
-    description: "Live Base narrative phases, velocity and entry windows.",
-    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
-    category: "intelligence",
-    inputs: [
-      { key: "focus", label: "Focus (optional)", placeholder: "AI agents, RWA" },
-    ],
-    isComposite: true,
-    price: "$0.10", priceUSDC: 100000,
-    x402Url: `${X402_BASE}/narrative-pulse`,
-    x402Body: (v) => ({ focus: v.focus ?? "" }),
-  },
 
   // ── Intelligence ────────────────────────────────────────────────────────────
 
-  {
-    id: "token-pick-signal",
-    name: "Token Pick Signal",
-    // "AI consensus on…" until 2026-09-27. Consensus needs parties, and the
-    // handler makes exactly one `You are Blue Agent` call over tokens the code
-    // already scored on-chain. Naming the real input (liquidity/turnover/
-    // momentum from DexScreener) is both true and a stronger sell than the
-    // adjective was — see feedback_marketing-copy: prove, don't announce.
-    description: "The top Base token by an on-chain quality score (liquidity, turnover, momentum) — facts from live pools, no buy/sell call.",
-    agentHandle: "composite",
-    agentName: "Blue Agent",
-    agentType: "composite",
-    category: "intelligence",
-    skillId: "token-pick",
-    inputs: [
-      { key: "context", label: "Market context (optional)", placeholder: "optional — leave blank for best pick, or add a focus (e.g. rising volume, a sector)" },
-    ],
-    isComposite: true,
-    featured: true,
-    price: "$0.20",
-    priceUSDC: 200000,
-    x402Url: `${X402_BASE}/token-pick-signal`,
-    x402Body: (v) => ({ chain: "base", context: v.context ?? "" }),
-  },
-  {
-    id: "narrative-position",
-    name: "Narrative Position",
-    description: "Which narratives are building vs peaking on CT — and where to position.",
-    agentHandle: "composite",
-    agentName: "Blue Agent",
-    agentType: "composite",
-    category: "intelligence",
-    skillId: "narrative-tracker",
-    inputs: [
-      { key: "focus", label: "Narrative focus (optional)", placeholder: "e.g. AI agents, RWA, Base DeFi" },
-    ],
-    isComposite: true,
-    featured: true,
-    price: "$0.15",
-    priceUSDC: 150000,
-    x402Url: `${X402_BASE}/narrative-position`,
-    x402Body: (v) => ({ topic: v.focus ?? "", focus: v.focus ?? "" }),
-  },
-  {
-    id: "ecosystem-digest",
-    name: "Ecosystem Digest",
-    description: "Weekly Base ecosystem intelligence: top builders, protocols, and narratives.",
-    agentHandle: "composite",
-    agentName: "Blue Agent",
-    agentType: "composite",
-    category: "intelligence",
-    skillId: "digest",
-    // No inputs, and that is the handler's real shape, not an omission:
-    // `_handlers/ecosystem-digest.ts` is `handler(): Promise<Response>` — it
-    // takes no `req`, so it cannot read a body under any field name. A "Focus
-    // area" box was advertised here until 2026-09-24 and fed `{ focus }` over
-    // the wire; the handler never saw it, on the Hub or from a paying agent.
-    inputs: [],
-    isComposite: true,
-    price: "$0.20",
-    priceUSDC: 200000,
-    x402Url: `${X402_BASE}/ecosystem-digest`,
-    x402Body: () => ({}),
-  },
-  {
-    id: "market-fit",
-    name: "Market Fit Validator",
-    // "…with swarm intelligence across three personas" until 2026-09-27. There
-    // were never three personas here: _handlers/market-fit.ts runs two steps and
-    // both open `You are Blue Agent`. This one predates the Aeon/MiroShark
-    // retirement and was false on its own terms — it is listed here because it
-    // is the SAME failure mode (an unverifiable count used as a selling point),
-    // and a sweep that only grepped the two retired names would have left it.
-    description: "Score your product's market fit against live Base market context — verdict, gaps, and what to fix first.",
-    agentHandle: "composite",
-    agentName: "Blue Agent",
-    agentType: "composite",
-    category: "intelligence",
-    inputs: [
-      { key: "description", label: "Product description", placeholder: "What you're building, who it's for, and what problem it solves", required: true },
-      { key: "stage", label: "Stage", placeholder: "e.g. idea, MVP, live product" },
-    ],
-    isComposite: true,
-    featured: true,
-    price: "$0.25",
-    priceUSDC: 250000,
-    x402Url: `${X402_BASE}/market-fit`,
-    x402Body: (v) => ({ description: v.description ?? "", name: "", stage: v.stage ?? "idea" }),
-  },
-  {
-    id: "token-launch-readiness",
-    name: "Token Launch Readiness",
-    description: "Go/no-go signal on whether your project is ready to launch a token.",
-    agentHandle: "composite",
-    agentName: "Blue Agent",
-    agentType: "composite",
-    category: "intelligence",
-    inputs: [
-      { key: "name", label: "Project / token name", placeholder: "e.g. $MYTOKEN or your project name", required: true },
-      { key: "description", label: "Project description + traction", placeholder: "What the project does, current metrics, community size, any live product" },
-    ],
-    isComposite: true,
-    price: "$0.30",
-    priceUSDC: 300000,
-    x402Url: `${X402_BASE}/token-launch-readiness`,
-    x402Body: (v) => ({ name: v.name ?? "", project: v.name ?? "", description: v.description ?? "" }),
-  },
 
   // ── Builder ─────────────────────────────────────────────────────────────────
 
-  {
-    id: "competitor-scan",
-    name: "Competitor Scan",
-    description: "Identify direct/indirect competitors and surface your defensible edge.",
-    agentHandle: "composite",
-    agentName: "Blue Agent",
-    agentType: "composite",
-    category: "builder",
-    inputs: [
-      { key: "project", label: "Your project", placeholder: "What you build and your main value prop", required: true },
-      { key: "category", label: "Category", placeholder: "e.g. DeFi lending, AI agent, NFT marketplace" },
-    ],
-    isComposite: true,
-    price: "$0.20",
-    priceUSDC: 200000,
-    x402Url: `${X402_BASE}/competitor-scan`,
-    x402Body: (v) => ({ project: v.project ?? "", description: v.project ?? "", competitors: v.category ?? "" }),
-  },
-  {
-    id: "agent-performance",
-    name: "Agent Performance",
-    description: "Benchmark your AI agent's revenue, engagement, and retention metrics.",
-    agentHandle: "composite",
-    agentName: "Blue Agent",
-    agentType: "composite",
-    category: "builder",
-    inputs: [
-      { key: "handle", label: "Agent X/Twitter handle", placeholder: "@yourhandle", required: true },
-      { key: "repo", label: "GitHub repo (optional)", placeholder: "user/repo" },
-    ],
-    isComposite: true,
-    price: "$0.25",
-    priceUSDC: 250000,
-    x402Url: `${X402_BASE}/agent-performance`,
-    x402Body: (v) => ({ handle: v.handle ?? "", repo: v.repo ?? "" }),
-  },
-  {
-    id: "agent-collab-match",
-    name: "Agent Collab Match",
-    description: "Find agents that complement your tool and surface collab opportunities.",
-    agentHandle: "composite",
-    agentName: "Blue Agent",
-    agentType: "composite",
-    category: "builder",
-    inputs: [
-      { key: "agent_a", label: "Your agent", placeholder: "Your agent name and what it does", required: true },
-      { key: "agent_b", label: "Target agent", placeholder: "Agent name to evaluate collab with, or 'any'", required: true },
-      { key: "collab_goal", label: "Collab goal", placeholder: "e.g. joint tool, cross-promote, revenue share" },
-    ],
-    isComposite: true,
-    price: "$0.20",
-    priceUSDC: 200000,
-    x402Url: `${X402_BASE}/agent-collab-match`,
-    x402Body: (v) => ({ agent_a: v.agent_a ?? "", agent_b: v.agent_b ?? "", collab_goal: v.collab_goal ?? "" }),
-  },
-  {
-    id: "repo-health",
-    name: "Repo Health",
-    description: "Audit your GitHub repo health: code quality, docs, CI, contributor signals.",
-    agentHandle: "composite",
-    agentName: "Blue Agent",
-    agentType: "composite",
-    category: "builder",
-    inputs: [
-      { key: "repo", label: "GitHub repo", placeholder: "user/repo or full GitHub URL", required: true },
-    ],
-    isComposite: true,
-    price: "$0.20",
-    priceUSDC: 200000,
-    x402Url: `${X402_BASE}/repo-health`,
-    x402Body: (v) => ({ repo: v.repo ?? "", description: v.repo ?? "" }),
-  },
-  {
-    id: "defi-opportunity",
-    name: "DeFi Opportunity",
-    description: "Scan Base DeFi for emerging yield, liquidity, and protocol opportunities.",
-    agentHandle: "composite",
-    agentName: "Blue Agent",
-    agentType: "composite",
-    category: "builder",
-    inputs: [
-      { key: "focus", label: "Focus (optional)", placeholder: "e.g. stablecoin yield, LP, lending, new protocols" },
-      { key: "risk_tolerance", label: "Risk tolerance", placeholder: "low / medium / high" },
-    ],
-    isComposite: true,
-    price: "$0.25",
-    priceUSDC: 250000,
-    x402Url: `${X402_BASE}/defi-opportunity`,
-    x402Body: (v) => ({ strategy: v.focus ?? "yield farming", risk_tolerance: v.risk_tolerance ?? "medium" }),
-  },
-  {
-    id: "builder-deep-dd",
-    name: "Builder Deep DD",
-    description: "Full due diligence on a Base builder: onchain activity, shipped products, credibility.",
-    agentHandle: "composite",
-    agentName: "Blue Agent",
-    agentType: "composite",
-    category: "builder",
-    inputs: [
-      { key: "target", label: "Builder handle or address", placeholder: "@twitterhandle or 0x… wallet address", required: true },
-    ],
-    isComposite: true,
-    price: "$0.35",
-    priceUSDC: 350000,
-    x402Url: `${X402_BASE}/builder-deep-dd`,
-    x402Body: (v) => ({ target: v.target ?? "", type: "builder" }),
-  },
 
   // ── Trading & Alpha ──────────────────────────────────────────────────────────
 
-  {
-    id: "token-momentum-scanner",
-    name: "Token Momentum Scanner",
-    description: "Real-time momentum scan for Base tokens — breakouts, volume spikes, narrative alignment.",
-    agentHandle: "composite",
-    agentName: "Blue Agent",
-    agentType: "composite",
-    category: "trading",
-    // `min_mcap` is the ONLY field the handler reads (`_handlers/token-momentum-
-    // scanner.ts` — `body.min_mcap ?? searchParams.get("min_mcap")`). Until
-    // 2026-09-24 this advertised "Timeframe" and "Filter", which x402Body folded
-    // into `{ chain, context }`; the handler reads neither, so both boxes were
-    // inert on the Hub and in the published catalog. The scan window and the
-    // filtering are decided inside the handler, not by the caller — so the
-    // honest surface is one numeric floor, not two free-text boxes that imply
-    // control the tool does not offer.
-    inputs: [
-      { key: "min_mcap", label: "Minimum market cap (USD)", placeholder: "e.g. 50000" },
-    ],
-    isComposite: true,
-    price: "$0.20",
-    priceUSDC: 200000,
-    x402Url: `${X402_BASE}/token-momentum-scanner`,
-    x402Body: (v) => ({ min_mcap: Number(v.min_mcap ?? 0) || 0 }),
-  },
 
   // ── Content ─────────────────────────────────────────────────────────────────
 
@@ -563,70 +226,15 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
 
   // ── Base Ecosystem ───────────────────────────────────────────────────────────
 
-  {
-    id: "base-grant-finder",
-    name: "Base Grant Finder",
-    description: "Find active grants, hackathons, and funding programs for Base builders.",
-    agentHandle: "composite",
-    agentName: "Blue Agent",
-    agentType: "composite",
-    category: "base-ecosystem",
-    inputs: [
-      { key: "project", label: "Project type / description", placeholder: "What you're building — be specific about the category", required: true },
-      { key: "stage", label: "Stage", placeholder: "e.g. idea, MVP, live product with users" },
-    ],
-    isComposite: true,
-    price: "$0.20",
-    priceUSDC: 200000,
-    x402Url: `${X402_BASE}/base-grant-finder`,
-    x402Body: (v) => ({ project: v.project ?? "", stage: v.stage ?? "early", sector: "Base ecosystem" }),
-  },
-  {
-    id: "base-protocol-comparison",
-    name: "Base Protocol Comparison",
-    description: "Side-by-side comparison of Base protocols for integrations and partnerships.",
-    agentHandle: "composite",
-    agentName: "Blue Agent",
-    agentType: "composite",
-    category: "base-ecosystem",
-    inputs: [
-      { key: "protocol_a", label: "Protocol A", placeholder: "e.g. Aerodrome, Aave, Uniswap v4", required: true },
-      { key: "protocol_b", label: "Protocol B", placeholder: "e.g. Morpho, Curve, Seamless", required: true },
-      { key: "use_case", label: "Your use case", placeholder: "What do you need this protocol for?" },
-    ],
-    isComposite: true,
-    price: "$0.25",
-    priceUSDC: 250000,
-    x402Url: `${X402_BASE}/base-protocol-comparison`,
-    x402Body: (v) => ({ protocol_a: v.protocol_a ?? "", protocol_b: v.protocol_b ?? "", category: "Base DeFi", use_case: v.use_case ?? "" }),
-  },
 
   // ── On-chain Strategy ────────────────────────────────────────────────────────
 
-  {
-    id: "protocol-risk-monitor",
-    name: "Protocol Risk Monitor",
-    description: "Real-time risk assessment for your DeFi positions — exit signals, risk scores.",
-    agentHandle: "composite",
-    agentName: "Blue Agent",
-    agentType: "composite",
-    category: "on-chain",
-    inputs: [
-      { key: "protocol", label: "Protocol", placeholder: "e.g. Aerodrome, Aave Base, Uniswap v4, Morpho", required: true },
-      { key: "position", label: "Position details (optional)", placeholder: "e.g. ETH/USDC LP, $5k USDC lend — helps get specific risk analysis" },
-    ],
-    isComposite: true,
-    price: "$0.35",
-    priceUSDC: 350000,
-    x402Url: `${X402_BASE}/protocol-risk-monitor`,
-    x402Body: (v) => ({ protocol: v.protocol ?? "", position: v.position ?? "" }),
-  },
 
   // ── Console commands (paid x402) ────────────────────────────────────────────
   {
     id: "pre-trade-check",
     name: "Pre-Trade Check (PASS / WARN / BLOCK)",
-    description: "Call before signing. Is this address a real token or a pool, an impostor of a canonical stock token (Base B20 desk, Robinhood registry), a honeypot or a taxed token (tax read by eth_call), and is a stock token's DEX price adrift from its Chainlink oracle? Returns PASS / WARN / BLOCK plus machine-readable reason codes; the verdict is picked in code, no LLM. BLOCK only on evidence; an unread tax is a WARN that says so. For a send, pass recipient (and sender) and the address is checked too: zero address, the token's own contract, flagged for theft or sanctions (GoPlus), a contract, or a look-alike of an address the sender paid before (address poisoning). Base 8453 or Robinhood Chain 4663. The same check Blue Agent's own swap, send and bridge builders gate on. Free — safety checks should never be gated.",
+    description: "Call before signing. Is this address a real token or a pool, an impostor of a canonical stock token, or a contract that can take the funds? Use when an agent is about to swap or approve and must check the target first. Free.",
     agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
     category: "security",
     inputs: [
@@ -644,7 +252,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
   {
     id: "sign-check",
     name: "Sign Check (what will signing this do?)",
-    description: "Call before a wallet signs anything. A transaction is decoded (approve, permit, Permit2, setApprovalForAll, transfer) and simulated with eth_simulateV1, so the answer lists the assets that would leave and arrive. EIP-712 typed data is decoded — ERC-2612 and DAI permits, Permit2 single/batch/transfer-from/witness, Seaport orders — because an off-chain signature moves nothing until the spender uses it. An EIP-7702 authorization names who would run code as the account. Returns PASS / WARN / BLOCK with plain-language summary lines and reason codes, picked in code (no LLM). BLOCK only on evidence: a spender, operator or delegate flagged for theft or sanctions (GoPlus), or a Seaport order that gives items away for nothing. Unlimited or long-lived grants, grants to plain wallets, any 7702 delegation, reverting or out-only simulations, and anything unreadable are WARN. Base 8453 or Robinhood Chain 4663. Free — safety checks should never be gated.",
+    description: "Call before a wallet signs anything. A transaction is decoded (approve, permit, Permit2, setApprovalForAll, transfer) and checked against what it actually grants. Use when an agent must tell a user what a signature does before they sign. Free.",
     agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
     category: "security",
     inputs: [
@@ -664,7 +272,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
   {
     id: "approval-audit",
     name: "Approval Audit + Revoke",
-    description: "Everything a wallet has granted that is still live: ERC-20 allowances, NFT operator-for-all and Permit2 grants, each re-read from chain state so spent or revoked grants are not reported. For each: the amount exposed (min of allowance and balance), whether the spender is a contract or a plain wallet, GoPlus flags, a level picked in code (BLOCK = flagged spender, revoke now; WARN = unlimited, plain-wallet spender, operator-for-all, Permit2 valid >30 days; INFO = bounded to a contract), and an UNSIGNED revoke transaction the owner signs. An unread source is listed in `unread`, never shown as 'no approvals'. Base 8453 or Robinhood Chain 4663. No LLM. Free — safety checks should never be gated.",
+    description: "Everything a wallet has granted that is still live: ERC-20 allowances, NFT operator-for-all and Permit2 grants, each re-checked. Use when an agent asks what a wallet has approved, or whether an old approval can still drain it. Free.",
     agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
     category: "security",
     inputs: [
@@ -679,7 +287,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
   {
     id: "honeypot-check",
     name: "Honeypot Check",
-    description: "Detect honeypot tokens that can be bought but not sold. Transfer tax analysis + rug pattern detection on Base.",
+    description: "Detect honeypot tokens that can be bought but not sold, with transfer tax and rug pattern analysis on Base. Use when an agent asks whether a Base token is a honeypot, a scam, or safe to buy.",
     agentHandle: "composite",
     agentName: "Blue Agent",
     agentType: "composite",
@@ -700,7 +308,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
   {
     id: "risk-gate",
     name: "Risk Gate",
-    description: "Pre-transaction risk assessment — screen any address or swap for drainer patterns, AML signals, and malicious contracts.",
+    description: "Pre-transaction risk screen for any address or swap: drainer patterns, AML signals, malicious contracts. Use when an agent must clear a Base address or swap before money moves, and wants one verdict instead of five signals.",
     agentHandle: "composite",
     agentName: "Blue Agent",
     agentType: "composite",
@@ -721,53 +329,9 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     x402Body: (v) => ({ to: v.to ?? "", action: v.action ?? "transfer", value: v.value ?? "" }),
   },
   {
-    id: "deep-analysis",
-    name: "Deep Analysis",
-    description: "Full due diligence on any Base token — security score, market fundamentals, on-chain activity, and composite verdict.",
-    agentHandle: "composite",
-    agentName: "Blue Agent",
-    agentType: "composite",
-    category: "security",
-    inputs: [
-      { key: "token", label: "Token contract address", placeholder: "0x...", required: true },
-      { key: "context", label: "Additional context (optional)", placeholder: "e.g. new Uniswap v4 pool token", required: false },
-    ],
-    isComposite: true,
-    compositeSkills: [
-      { agentType: "blue", label: "Security deep dive" },
-      { agentType: "blue", label: "Market + community signal" },
-      { agentType: "blue", label: "On-chain fundamentals" },
-    ],
-    featured: false,
-    price: "$0.50", priceUSDC: 500000,
-    x402Url: `https://blueagent.dev/api/x402/deep-analysis`,
-    x402Body: (v) => ({ token: v.token ?? "", context: v.context ?? "" }),
-  },
-  {
-    id: "agent-score",
-    name: "Agent Score",
-    description: "Performance score for AI agents on Base — XP, interaction volume, uptime, ecosystem impact.",
-    agentHandle: "composite",
-    agentName: "Blue Agent",
-    agentType: "composite",
-    category: "builder",
-    inputs: [
-      { key: "handle", label: "Agent handle or name", placeholder: "blueagent_", required: true },
-    ],
-    isComposite: true,
-    compositeSkills: [
-      { agentType: "blue", label: "Agent performance" },
-      { agentType: "blue", label: "Ecosystem impact" },
-    ],
-    featured: false,
-    price: "$0.35", priceUSDC: 350000,
-    x402Url: `https://blueagent.dev/api/x402/agent-score`,
-    x402Body: (v) => ({ handle: v.handle ?? "" }),
-  },
-  {
     id: "contract-trust",
     name: "Contract Trust",
-    description: "Audit any Base contract before swapping or interacting. Basescan verification + security scan + community signal. Verdict: SAFE / CAUTION / RED_FLAG.",
+    description: "Audit any Base contract before swapping or interacting: Basescan verification plus a security scan and community signal. Use when an agent asks whether a Base contract can be trusted, or why a verified contract still looks wrong.",
     agentHandle: "composite",
     agentName: "Blue Agent",
     agentType: "composite",
@@ -787,100 +351,9 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     x402Body: (v) => ({ address: v.address ?? "", context: v.context ?? "" }),
   },
   {
-    id: "key-exposure",
-    name: "Key Exposure Check",
-    description: "Check if a wallet's public key is exposed on-chain (quantum vulnerability). Verdict computed from the real Base RPC nonce — never fabricated. EXPOSED means the key is visible, not that funds are at immediate risk.",
-    agentHandle: "composite",
-    agentName: "Blue Agent",
-    agentType: "composite",
-    category: "security",
-    inputs: [
-      { key: "address", label: "Wallet address", placeholder: "0x...", required: true },
-    ],
-    isComposite: true,
-    price: "$0.50", priceUSDC: 500000,
-    x402Url: `${X402_BASE}/key-exposure`,
-    x402Body: (v) => ({ address: v.address ?? "" }),
-  },
-  {
-    id: "blue-idea",
-    name: "Blue Idea",
-    description: "Turn a rough concept into a fundable brief — problem, why now, why Base, MVP scope, risks, 24h plan.",
-    agentHandle: "blue", agentName: "Blue Agent", agentType: "blue",
-    category: "builder",
-    inputs: [{ key: "prompt", label: "Your idea or concept", placeholder: "A USDC streaming payroll app for DAOs on Base", required: true }],
-    isComposite: false,
-    price: "$0.05", priceUSDC: 50000,
-    x402Url: `${X402_BASE}/blue-idea`,
-    x402Body: (v) => ({ prompt: v.prompt ?? "" }),
-  },
-  {
-    id: "blue-build",
-    name: "Blue Build",
-    description: "Architecture, stack, folder structure, integrations, test plan. Verified Base patterns, no hallucinations.",
-    agentHandle: "blue", agentName: "Blue Agent", agentType: "blue",
-    category: "builder",
-    inputs: [{ key: "prompt", label: "What you're building", placeholder: "Build a token-gated API with x402 payments on Base", required: true }],
-    isComposite: false,
-    price: "$0.50", priceUSDC: 500000,
-    x402Url: `${X402_BASE}/blue-build`,
-    x402Body: (v) => ({ prompt: v.prompt ?? "" }),
-  },
-  {
-    id: "blue-audit",
-    name: "Blue Audit",
-    description: "Security + product risk review. Reentrancy, oracle, MEV, x402, Coinbase Smart Wallet. Go/no-go.",
-    agentHandle: "blue", agentName: "Blue Agent", agentType: "blue",
-    category: "builder",
-    inputs: [{ key: "prompt", label: "Code, contract, or system to audit", placeholder: "Paste contract code or paste system description", required: true }],
-    isComposite: false,
-    price: "$1.00", priceUSDC: 1000000,
-    x402Url: `${X402_BASE}/blue-audit`,
-    x402Body: (v) => ({ prompt: v.prompt ?? "" }),
-  },
-  {
-    id: "blue-ship",
-    name: "Blue Ship",
-    description: "Deployment checklist, verification, release notes, monitoring. Everything you forget when excited to launch.",
-    agentHandle: "blue", agentName: "Blue Agent", agentType: "blue",
-    category: "builder",
-    inputs: [{ key: "prompt", label: "What you're shipping", placeholder: "Ship my Uniswap v4 hook to Base mainnet", required: true }],
-    isComposite: false,
-    price: "$0.10", priceUSDC: 100000,
-    x402Url: `${X402_BASE}/blue-ship`,
-    x402Body: (v) => ({ prompt: v.prompt ?? "" }),
-  },
-  {
-    id: "blue-raise",
-    name: "Blue Raise",
-    description: "Fundraising narrative, investor deck outline, smart money map, competitive landscape for your Base niche.",
-    agentHandle: "blue", agentName: "Blue Agent", agentType: "blue",
-    category: "builder",
-    inputs: [{ key: "prompt", label: "Project + raise context", placeholder: "Raise a pre-seed for my Base DeFi protocol", required: true }],
-    isComposite: false,
-    price: "$0.20", priceUSDC: 200000,
-    x402Url: `${X402_BASE}/blue-raise`,
-    x402Body: (v) => ({ prompt: v.prompt ?? "" }),
-  },
-  {
-    id: "blue-monitor",
-    name: "Blue Monitor",
-    description: "On-demand health + risk snapshot for a Base token/contract — live price, liquidity, verification, risk signals, and a watch plan with alert thresholds.",
-    agentHandle: "blue", agentName: "Blue Agent", agentType: "blue",
-    category: "security",
-    inputs: [
-      { key: "target", label: "Target", placeholder: "0x… token/contract address, or a protocol name", required: true },
-      { key: "focus", label: "Focus (optional)", placeholder: "e.g. liquidity, exit risk, contract changes" },
-    ],
-    isComposite: false,
-    price: "$0.20", priceUSDC: 200000,
-    x402Url: `${X402_BASE}/blue-monitor`,
-    x402Body: (v) => ({ target: v.target ?? "", focus: v.focus ?? "" }),
-  },
-  {
     id: "blue-registry",
     name: "Blue Registry",
-    description: "Discover the Blue Hub tool catalog — every callable x402 tool (first-party + community), filterable by query/category, with prices and how-to-call.",
+    description: "Discover this catalog: every callable x402 tool with its price, filterable by query, category or free/paid. Use when an agent asks what tools exist here, or needs the endpoint and price of one before paying for it.",
     agentHandle: "blue", agentName: "Blue Agent", agentType: "blue",
     category: "builder",
     inputs: [
@@ -892,110 +365,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     x402Url: `${X402_BASE}/blue-registry`,
     x402Body: (v) => ({ query: v.query ?? "", category: v.category ?? "" }),
   },
-  {
-    id: "blue-research",
-    name: "Blue Research",
-    description: "Deep DD memo on a Base project, narrative, or token — thesis, bull/bear, risks, contrarian take, verdict. Grounds in live market data when a token address is given.",
-    agentHandle: "blue", agentName: "Blue Agent", agentType: "blue",
-    category: "intelligence",
-    inputs: [
-      { key: "topic", label: "Topic / project", placeholder: "e.g. Base restaking, or a protocol name", required: true },
-      { key: "target", label: "Token address (optional)", placeholder: "0x… to ground in live market data" },
-    ],
-    isComposite: false,
-    price: "$1.00", priceUSDC: 1000000,
-    x402Url: `${X402_BASE}/blue-research`,
-    x402Body: (v) => ({ topic: v.topic ?? "", target: v.target ?? "" }),
-  },
-  {
-    id: "blue-compose",
-    name: "Blue Compose",
-    description: "Turn a goal into a runnable chain of Blue Hub tools — picks from the real catalog, orders them, suggests inputs, and estimates cost.",
-    agentHandle: "blue", agentName: "Blue Agent", agentType: "blue",
-    category: "builder",
-    inputs: [
-      { key: "goal", label: "Goal", placeholder: "e.g. take my Base DeFi idea from concept to audited + funded", required: true },
-    ],
-    isComposite: false,
-    price: "$0.10", priceUSDC: 100000,
-    x402Url: `${X402_BASE}/blue-compose`,
-    x402Body: (v) => ({ goal: v.goal ?? "" }),
-  },
-  {
-    id: "blue-deploy",
-    name: "Blue Deploy",
-    description: "Technical deploy mechanics for Base mainnet — deploy scripts, Basescan verify commands, env vars, gas notes, post-deploy checks. Never invents addresses.",
-    agentHandle: "blue", agentName: "Blue Agent", agentType: "blue",
-    category: "builder",
-    inputs: [
-      { key: "project", label: "What you're deploying", placeholder: "e.g. an ERC-20 + staking contract (Foundry)", required: true },
-      { key: "stack", label: "Stack (optional)", placeholder: "e.g. Foundry, Hardhat, viem" },
-    ],
-    isComposite: false,
-    price: "$0.10", priceUSDC: 100000,
-    x402Url: `${X402_BASE}/blue-deploy`,
-    x402Body: (v) => ({ project: v.project ?? "", stack: v.stack ?? "" }),
-  },
-  {
-    id: "blue-analytics",
-    name: "Blue Analytics",
-    description: "Performance/metrics read on a Base token — live price, momentum, liquidity health, volume/liquidity ratio, growth signals. Real DexScreener data.",
-    agentHandle: "blue", agentName: "Blue Agent", agentType: "blue",
-    category: "intelligence",
-    inputs: [
-      { key: "target", label: "Token address", placeholder: "0x… Base token contract", required: true },
-      { key: "focus", label: "Focus (optional)", placeholder: "e.g. momentum, liquidity, accumulation" },
-    ],
-    isComposite: false,
-    price: "$0.25", priceUSDC: 250000,
-    x402Url: `${X402_BASE}/blue-analytics`,
-    x402Body: (v) => ({ target: v.target ?? "", focus: v.focus ?? "" }),
-  },
-  {
-    id: "blue-simulate",
-    name: "Blue Simulate",
-    description: "Bull/base/bear scenario modeling for a Base decision — tokenomics, fee model, growth, runway — with assumptions, projections, and sensitivities.",
-    agentHandle: "blue", agentName: "Blue Agent", agentType: "blue",
-    category: "builder",
-    inputs: [
-      { key: "scenario", label: "What to simulate", placeholder: "e.g. fee model at 0.3% vs 1% over 12 months", required: true },
-      { key: "params", label: "Parameters (optional)", placeholder: "e.g. 10k users, $2M TVL, 5% monthly growth" },
-    ],
-    isComposite: false,
-    price: "$0.15", priceUSDC: 150000,
-    x402Url: `${X402_BASE}/blue-simulate`,
-    x402Body: (v) => ({ scenario: v.scenario ?? "", params: v.params ?? "" }),
-  },
-  {
-    id: "blue-stream",
-    name: "Blue Stream",
-    description: "Live snapshot feed of onchain activity on Base or Robinhood Chain — trending & new pools, TVL, real price/volume/liquidity. Pure real data, poll for a near-real-time feed.",
-    agentHandle: "blue", agentName: "Blue Agent", agentType: "blue",
-    category: "on-chain",
-    inputs: [
-      { key: "feed", label: "Feed", placeholder: "movers | new | all (default: movers)" },
-      { key: "chain", label: "Chain", placeholder: "base | robinhood (default: base)" },
-    ],
-    isComposite: false,
-    price: "$0.05", priceUSDC: 50000,
-    x402Url: `${X402_BASE}/blue-stream`,
-    x402Body: (v) => ({ feed: v.feed ?? "movers", chain: v.chain ?? "base" }),
-  },
 
-  {
-    id: "dex-flow",
-    name: "DEX Flow",
-    description: "DEX volume, buy/sell pressure and liquidity flow for any Base token — live DexScreener data.",
-    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
-    category: "on-chain",
-    inputs: [
-      { key: "token", label: "Token contract address or ticker", placeholder: "0x... or BRETT", required: true },
-    ],
-    isComposite: true,
-    price: "$0.15", priceUSDC: 150000,
-    x402Url: `${X402_BASE}/dex-flow`,
-    x402Body: (v) => ({ token: v.token ?? "" }),
-  },
 
   // ── Earn ─────────────────────────────────────────────────────────────────────
 
@@ -1029,36 +399,9 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
   // Data: docs.robinhood.com/chain/contracts + Chainlink RH mainnet feeds.
   // Public-good primitive layer for every builder embedding RH stock tokens.
   {
-    id: "rh-rwa-index",
-    name: "RH RWA Index",
-    description: "Full canonical Robinhood Chain RWA catalog — every token the RHJ factory has deployed (180+ tokenized stocks, 20+ ETFs), plus Chainlink-only feeds. Zero-input. A listing proves RHJ issued the token; it does not imply the token is tradable. For portfolio dashboards + sector basket builders.",
-    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
-    category: "on-chain",
-    inputs: [],
-    isComposite: false,
-    price: "$0.02", priceUSDC: 20000,
-    x402Url: `${X402_BASE}/rh-rwa-index`,
-    x402Body: () => ({}),
-  },
-  {
-    id: "rh-stock-search",
-    name: "RH Stock Search",
-    description: "Fuzzy search across the canonical Robinhood Chain RWA registry. Typo-tolerant (Levenshtein + prefix). Returns top-N ranked matches. Never fabricates a contract address.",
-    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
-    category: "on-chain",
-    inputs: [
-      { key: "query", label: "Partial ticker or name", placeholder: "micro, tesla, appl", required: true },
-      { key: "limit", label: "Max matches (optional)", placeholder: "5" },
-    ],
-    isComposite: false,
-    price: "$0.02", priceUSDC: 20000,
-    x402Url: `${X402_BASE}/rh-stock-search`,
-    x402Body: (v) => ({ query: v.query ?? "", limit: v.limit ? Number(v.limit) : 5 }),
-  },
-  {
     id: "rh-rwa-verify",
     name: "RH RWA Verify (Anti-Scam)",
-    description: "Given a contract address on Robinhood Chain, is it a canonical RHJ-issued stock token or an impersonator? Cross-checks registry + live ERC-20 metadata. Surfaces the real contract when a fake claims a matching ticker. Free — safety checks should never be gated.",
+    description: "Given a contract address on Robinhood Chain, is it a canonical RHJ-issued stock token or an impersonator? Use when an agent is handed a Robinhood Chain token address and must know whether it is the real stock token before trading. Free.",
     agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
     category: "security",
     inputs: [
@@ -1071,23 +414,9 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     x402Body: (v) => ({ contract: v.contract ?? "", expected_ticker: v.expected_ticker ?? "" }),
   },
   {
-    id: "rh-token-scan",
-    name: "RH Token Scan (Owner Powers)",
-    description: "What can the owner still do to this token? Reads a Virtuals AgentToken / AgentTokenV4 on Robinhood Chain 4663 straight off the bytecode: buy/sell tax in basis points, projectTaxRecipient, vault, owner and pendingOwner, the blacklists(address) lever, and the bot-protection window. Selector probes, not contract names — a deployer picks the name, not the bytecode. Every unread field stays null and is listed in `unread`, because on this template a zero owner, a zero pendingOwner and a zero bot window are all the reassuring answer. No LLM. Free — safety checks should never be gated.",
-    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
-    category: "security",
-    inputs: [
-      { key: "contract", label: "Contract address (RH 4663)", placeholder: "0x…", required: true },
-    ],
-    isComposite: false,
-    price: "$0.00", priceUSDC: 0,
-    x402Url: `${X402_BASE}/rh-token-scan`,
-    x402Body: (v) => ({ contract: v.contract ?? "" }),
-  },
-  {
     id: "rh-stock-quote",
     name: "RH Stock Quote (Chainlink)",
-    description: "Deterministic live quote for Robinhood Chain tokenized stocks. On-chain Chainlink AggregatorV3 latestRoundData → raw answer + decimals + updatedAt + staleness. Falls back to DEX spot only if no feed exists. The one embed-friendly price tool.",
+    description: "Live quote for Robinhood Chain tokenized stocks, read from Chainlink latestRoundData and the deepest pool. Use when an agent asks the price of a tokenized stock on Robinhood Chain, or needs oracle and pool price side by side.",
     agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
     category: "on-chain",
     inputs: [
@@ -1101,23 +430,9 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
 
   // ─── Base stocks — every Coinbase Tokenized Stock on Base 8453 (2026-11-03) ──
   {
-    id: "base-stock-search",
-    name: "Base Stock Search",
-    description: "Find Coinbase Tokenized Stocks on Base 8453 by ticker or company name, from every one Base publishes (base.org), each checked on chain (isB20, 8 decimals, exact symbol). Returns the contract to use; a ticker alone does not identify a token.",
-    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
-    category: "on-chain",
-    inputs: [
-      { key: "query", label: "Ticker or company", placeholder: "NVDA, nvidia, spacex", required: true },
-    ],
-    isComposite: false,
-    price: "$0.01", priceUSDC: 10000,
-    x402Url: `${X402_BASE}/base-stock-search`,
-    x402Body: (v) => ({ query: v.query ?? "" }),
-  },
-  {
     id: "base-stock-quote",
     name: "Base Stock Quote",
-    description: "Live quote for one Coinbase Tokenized Stock on Base 8453: deepest DEX pool price, 24h change, liquidity and volume, what a $1k and a $10k USDC buy would move the price (Aerodrome Quoter, since TVL alone misleads), plus the Chainlink share price and DEX-vs-oracle drift where a feed is held. Missing reads are null and said.",
+    description: "Live quote for one Coinbase Tokenized Stock on Base: deepest-pool price, 24h change, liquidity, volume, oracle share price and the drift between pool and oracle. Use when an agent asks a stock token's price, or wants the premium and buy impact before buying.",
     agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
     category: "on-chain",
     inputs: [
@@ -1129,39 +444,9 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     x402Body: (v) => ({ ticker: v.ticker ?? "" }),
   },
   {
-    id: "base-stock-ohlc",
-    name: "Base Stock OHLC",
-    description: "OHLCV candles (15m, 1h, 4h, 1d) for one Coinbase Tokenized Stock on Base 8453 from its deepest DEX pool, with a high / low / change / volume summary.",
-    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
-    category: "on-chain",
-    inputs: [
-      { key: "ticker", label: "Ticker", placeholder: "NVDA, TSLA, SNDK", required: true },
-      { key: "timeframe", label: "Timeframe", placeholder: "15m, 1h, 4h, 1d" },
-      { key: "limit", label: "Candles", placeholder: "48" },
-    ],
-    isComposite: false,
-    price: "$0.03", priceUSDC: 30000,
-    x402Url: `${X402_BASE}/base-stock-ohlc`,
-    x402Body: (v) => ({ ticker: v.ticker ?? "", ...(v.timeframe ? { timeframe: v.timeframe } : {}), ...(v.limit ? { limit: Number(v.limit) } : {}) }),
-  },
-  {
-    id: "base-stock-liquidity",
-    name: "Base Stock Liquidity",
-    description: "Where one Coinbase Tokenized Stock on Base 8453 can be traded: its deepest pools with liquidity, the top pool's 24h volume and turnover. Facts only; price impact is not modelled.",
-    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
-    category: "on-chain",
-    inputs: [
-      { key: "ticker", label: "Ticker", placeholder: "NVDA, TSLA, SNDK", required: true },
-    ],
-    isComposite: false,
-    price: "$0.02", priceUSDC: 20000,
-    x402Url: `${X402_BASE}/base-stock-liquidity`,
-    x402Body: (v) => ({ ticker: v.ticker ?? "" }),
-  },
-  {
     id: "base-stock-movers",
     name: "Base Stock Movers",
-    description: "24h gainers and losers among all Coinbase Tokenized Stocks on Base 8453, by the deepest pool's change. Pools under the liquidity floor (default $10k) cannot rank; unread tokens are counted.",
+    description: "24h gainers and losers among all Coinbase Tokenized Stocks on Base, by deepest-pool change, above a liquidity floor. Use when an agent asks for a daily stock screen, the day's stock picks, or which tokenized stocks moved.",
     agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
     category: "on-chain",
     inputs: [
@@ -1176,29 +461,9 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
 
   // ─── RH RWA Phase 2 — Market Analytics ─────────────────────────────────
   {
-    id: "rh-stock-ohlc",
-    name: "RH Stock OHLC",
-    description: "OHLC candle history for a Robinhood Chain tokenized stock. Timeframes: minute / hour / day. Backed by GeckoTerminal pool history — deepest-liquidity pool auto-selected. Returns candles + summary (high, low, total volume, % change).",
-    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
-    category: "on-chain",
-    inputs: [
-      { key: "ticker",    label: "Ticker",    placeholder: "MSTR, AAPL, TSLA", required: true },
-      { key: "timeframe", label: "Timeframe", placeholder: "minute / hour / day (default hour)" },
-      { key: "limit",     label: "Limit",     placeholder: "100 (max 500)" },
-    ],
-    isComposite: false,
-    price: "$0.05", priceUSDC: 50000,
-    x402Url: `${X402_BASE}/rh-stock-ohlc`,
-    x402Body: (v) => ({
-      ticker: v.ticker ?? "",
-      timeframe: v.timeframe ?? "hour",
-      limit: v.limit ? Number(v.limit) : 100,
-    }),
-  },
-  {
     id: "rh-stock-liquidity",
     name: "RH Stock Liquidity",
-    description: "Live DEX pool + TVL + slippage estimate for a Robinhood Chain tokenized stock. First-order xy=k slippage on ONE-side USD depth (reserve_usd / 2) — the total-TVL version under-estimates by ~2×. V4 concentrated-liquidity caveat included. All pools sorted by depth.",
+    description: "Live DEX pool, TVL and slippage estimate for a Robinhood Chain tokenized stock. Use when an agent asks how deep a Robinhood Chain stock trades, or how much it can sell before the price moves.",
     agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
     category: "on-chain",
     inputs: [
@@ -1212,7 +477,7 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
   {
     id: "rh-stock-movers",
     name: "RH Stock Movers (dust-filtered)",
-    description: "Top gainers / losers 24h among Robinhood Chain tokenized stocks & ETFs. Dust-pool filter (default min $5k TVL + $500 24h volume) drops noise pools that would otherwise quote AAPL at $868 via a $453-TVL pool. Sign-filtered so a token with -1.56% never lands in gainers. Filtered pools surface as filtered_out for transparency.",
+    description: "Top gainers and losers over 24h among Robinhood Chain tokenized stocks and ETFs, with a dust-pool filter. Use when an agent asks which Robinhood Chain stocks moved, or needs a screen of that venue.",
     agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
     category: "signal",
     inputs: [
@@ -1229,10 +494,74 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
       min_volume_24h_usd: v.min_volume_24h_usd ? Number(v.min_volume_24h_usd) : 500,
     }),
   },
+
+  // ─── RH RWA Phase 3 — Trading Execution ────────────────────────────────
+
+  // ─── RH RWA Phase 4 — Portfolio ────────────────────────────────────────
+
+  // ─── RH RWA Phase 5 — Discovery & Analytics ────────────────────────────
+  {
+    id: "rh-stock-holders",
+    name: "RH Stock Holders",
+    description: "Top holders and concentration score for a Robinhood Chain RWA token, from Blockscout. Use when an agent asks who holds a tokenized stock, or whether supply is concentrated enough to be a risk.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "on-chain",
+    inputs: [
+      { key: "ticker",   label: "Ticker",          placeholder: "MSTR (or use contract)" },
+      { key: "contract", label: "Contract (opt.)", placeholder: "0x…" },
+      { key: "limit",    label: "Limit",           placeholder: "10" },
+    ],
+    isComposite: false,
+    price: "$0.05", priceUSDC: 50000,
+    x402Url: `${X402_BASE}/rh-stock-holders`,
+    x402Body: (v) => ({ ticker: v.ticker ?? "", contract: v.contract ?? "", limit: v.limit ? Number(v.limit) : 10 }),
+  },
+
+  // ─── RH RWA Phase 6 — Agent Skills ─────────────────────────────────────
+
+  // ─── RH RWA Phase 7 — Bridge & Builder Kit (FINAL — 30/30) ──────────────,
+
+  {
+    id: "safe-trending",
+    name: "Safe Trending",
+    // SAFE means one specific thing and the description has to say which, or
+    // the name promises an audit the tool does not perform.
+    description:
+      "Trending Base tokens, each with its buy/sell tax read from the contract and its exit depth. SAFE here = tradeable with verified tax. A clean scan is not a buy signal. Use when an agent asks what is trending on Base, or wants a tax-checked list of moving tokens.",
+    agentHandle: "composite", agentName: "Blue Agent", agentType: "composite",
+    category: "on-chain",
+    inputs: [
+      { key: "min_liquidity_usd", label: "Min liquidity USD (optional)", placeholder: "500000" },
+      { key: "limit", label: "Limit (optional)", placeholder: "10" },
+    ],
+    isComposite: true,
+    price: "$0.15", priceUSDC: 150000,
+    x402Url: `${X402_BASE}/safe-trending`,
+    x402Body: (v) => ({
+      min_liquidity_usd: v.min_liquidity_usd ? Number(v.min_liquidity_usd) : 500000,
+      limit: v.limit ? Number(v.limit) : 10,
+    }),
+  },
+
+  {
+    id: "rh-stock-agent-brief",
+    name: "RH Stock Agent Brief",
+    description: "One JSON brief for a Robinhood Chain stock token: drift, oracle age, holdings, liquidity. Use when an agent wants a stock token's whole picture in a single call.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "signal",
+    inputs: [
+      { key: "ticker", label: "Ticker", placeholder: "AAPL", required: true },
+    ],
+    isComposite: false,
+    price: "$0.20", priceUSDC: 200000,
+    x402Url: `${X402_BASE}/rh-stock-agent-brief`,
+    x402Body: (v) => ({ ticker: v.ticker ?? "" }),
+  },
+
   {
     id: "rh-stock-arb",
     name: "RH Stock Arb (Chainlink vs DEX · market-hours aware)",
-    description: "Chainlink oracle vs deepest DEX pool spot for a Robinhood Chain tokenized stock. Market-hours-aware verdict: OPEN → ALIGNED / LONG_DEX / SHORT_DEX (real arb); CLOSED → FROZEN_ALIGNED / PREMARKET_DRIFT / AFTERHOURS_DRIFT (Chainlink is frozen, DEX drift ≠ arb). Warnings for feed-abnormally-stale + thin pool.",
+    description: "Chainlink oracle versus the deepest DEX pool for a Robinhood Chain stock token: the gap in percent, which side is rich. Use when an agent asks for the oracle-premium or arbitrage gap on a stock token.",
     agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
     category: "signal",
     inputs: [
@@ -1244,35 +573,31 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     x402Body: (v) => ({ ticker: v.ticker ?? "" }),
   },
 
-  // ─── RH RWA Phase 3 — Trading Execution ────────────────────────────────
   {
-    id: "rh-stock-swap-quote",
-    name: "RH Stock Swap Quote",
-    description: "Quote a buy/sell for a Robinhood Chain tokenized stock. Route + best-pool from on-chain V3 factory, spot from Chainlink (fallback DEX), expected & min out at your slippage, plus a first-order liquidity upper bound. Denom USDG (default) or WETH.",
+    id: "rh-stock-ohlc",
+    name: "RH Stock OHLC",
+    description: "OHLC candle history for a Robinhood Chain stock token. Use when an agent needs price history or a chart series, not just the current quote.",
     agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
-    category: "trading",
+    category: "on-chain",
     inputs: [
-      { key: "ticker",       label: "Ticker",        placeholder: "MSTR, AAPL, TSLA", required: true },
-      { key: "side",         label: "Side",          placeholder: "buy or sell", required: true },
-      { key: "amount",       label: "Amount",        placeholder: "100 (USDG) or 0.05 (WETH)", required: true },
-      { key: "denom",        label: "Denom",         placeholder: "USDG (default) or WETH" },
-      { key: "slippage_bps", label: "Slippage bps",  placeholder: "100 = 1%" },
+      { key: "ticker",    label: "Ticker",    placeholder: "MSTR, AAPL, TSLA", required: true },
+      { key: "timeframe", label: "Timeframe", placeholder: "minute / hour / day (default hour)" },
+      { key: "limit",     label: "Limit",     placeholder: "100 (max 500)" },
     ],
     isComposite: false,
     price: "$0.05", priceUSDC: 50000,
-    x402Url: `${X402_BASE}/rh-stock-swap-quote`,
+    x402Url: `${X402_BASE}/rh-stock-ohlc`,
     x402Body: (v) => ({
       ticker: v.ticker ?? "",
-      side: v.side ?? "buy",
-      amount: v.amount ?? "0",
-      denom: v.denom ?? "USDG",
-      slippage_bps: v.slippage_bps ? Number(v.slippage_bps) : 100,
+      timeframe: v.timeframe ?? "hour",
+      limit: v.limit ? Number(v.limit) : 100,
     }),
   },
+
   {
     id: "rh-stock-swap-prepare",
     name: "RH Stock Swap Prepare",
-    description: "Non-custodial: returns the unsigned tx sequence (approve + swap, or 2 approves + 2 swaps for multi-hop) the caller's wallet must sign to swap a Robinhood Chain tokenized stock. Router = verified RobinhoodSwapRouter. Client signs, tool never holds funds.",
+    description: "Non-custodial: returns the unsigned swap transactions for a Robinhood Chain stock token, for the user to sign. Use when an agent must hand a user a transaction to approve.",
     agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
     category: "trading",
     inputs: [
@@ -1296,58 +621,30 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     }),
   },
 
-  // ─── RH RWA Phase 4 — Portfolio ────────────────────────────────────────
-
-  // ─── RH RWA Phase 5 — Discovery & Analytics ────────────────────────────
   {
-    id: "rh-stock-holders",
-    name: "RH Stock Holders",
-    description: "Top holders + concentration score for a RH RWA token. Real Blockscout data. Returns top-N shares + HHI (0 = flat / 10 000 = single holder).",
+    id: "rh-stock-swap-quote",
+    name: "RH Stock Swap Quote",
+    description: "Quote a buy or sell of a Robinhood Chain stock token: expected fill, price impact, slippage. Use when an agent needs the fill before swapping, not the oracle price.",
     agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
-    category: "on-chain",
+    category: "trading",
     inputs: [
-      { key: "ticker",   label: "Ticker",          placeholder: "MSTR (or use contract)" },
-      { key: "contract", label: "Contract (opt.)", placeholder: "0x…" },
-      { key: "limit",    label: "Limit",           placeholder: "10" },
+      { key: "ticker",       label: "Ticker",        placeholder: "MSTR, AAPL, TSLA", required: true },
+      { key: "side",         label: "Side",          placeholder: "buy or sell", required: true },
+      { key: "amount",       label: "Amount",        placeholder: "100 (USDG) or 0.05 (WETH)", required: true },
+      { key: "denom",        label: "Denom",         placeholder: "USDG (default) or WETH" },
+      { key: "slippage_bps", label: "Slippage bps",  placeholder: "100 = 1%" },
     ],
     isComposite: false,
     price: "$0.05", priceUSDC: 50000,
-    x402Url: `${X402_BASE}/rh-stock-holders`,
-    x402Body: (v) => ({ ticker: v.ticker ?? "", contract: v.contract ?? "", limit: v.limit ? Number(v.limit) : 10 }),
+    x402Url: `${X402_BASE}/rh-stock-swap-quote`,
+    x402Body: (v) => ({
+      ticker: v.ticker ?? "",
+      side: v.side ?? "buy",
+      amount: v.amount ?? "0",
+      denom: v.denom ?? "USDG",
+      slippage_bps: v.slippage_bps ? Number(v.slippage_bps) : 100,
+    }),
   },
-  {
-    id: "rh-stock-new-listings",
-    name: "RH New Listings",
-    description: "Reads every `Deployed` event from the canonical RHJ token factory and diffs it against our registry. Provenance is structural — an impersonator cannot emit the real factory's events — so anything listed here is a genuine RH stock token, and anything missing from the registry is a real new listing.",
-    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
-    category: "on-chain",
-    inputs: [
-      { key: "since_days", label: "Since (days)", placeholder: "30" },
-      { key: "limit",      label: "Limit",        placeholder: "20" },
-    ],
-    isComposite: false,
-    price: "$0.05", priceUSDC: 50000,
-    x402Url: `${X402_BASE}/rh-stock-new-listings`,
-    x402Body: (v) => ({ since_days: v.since_days ? Number(v.since_days) : 30, limit: v.limit ? Number(v.limit) : 20 }),
-  },
-
-  // ─── RH RWA Phase 6 — Agent Skills ─────────────────────────────────────
-  {
-    id: "rh-stock-agent-brief",
-    name: "RH Stock Agent Brief",
-    description: "Agent-consumable JSON brief for a Robinhood Chain RWA. Deterministic market-hours-aware verdict: WATCH / ARB_LONG_DEX / ARB_SHORT_DEX (market OPEN) · FROZEN_ALIGNED / PREMARKET_DRIFT / AFTERHOURS_DRIFT (CLOSED) · THIN_LIQUIDITY / NO_ORACLE / INSUFFICIENT_DATA. Uses shared resolvePrimaryPool for cross-tool consistency. Model-recall context (no web search on this gateway) + risk flags.",
-    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
-    category: "signal",
-    inputs: [
-      { key: "ticker", label: "Ticker", placeholder: "AAPL", required: true },
-    ],
-    isComposite: false,
-    price: "$0.20", priceUSDC: 200000,
-    x402Url: `${X402_BASE}/rh-stock-agent-brief`,
-    x402Body: (v) => ({ ticker: v.ticker ?? "" }),
-  },
-
-  // ─── RH RWA Phase 7 — Bridge & Builder Kit (FINAL — 30/30) ──────────────
 ];
 
 // ─── v2 defaults ──────────────────────────────────────────────────────────────

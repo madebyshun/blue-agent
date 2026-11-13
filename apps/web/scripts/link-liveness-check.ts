@@ -297,8 +297,8 @@ check("public files were discovered", staticFiles.size > 5, `${staticFiles.size}
 check("links were discovered", found.size > 20, `${found.size} distinct published links`);
 check(
   "a known-good path resolves",
-  live("/hub", false) && live("/api/x402/blue-idea", false),
-  "/hub and /api/x402/blue-idea",
+  live("/hub", false) && live("/api/x402/token-price", false),
+  "/hub and /api/x402/token-price",
 );
 check(
   "a known-bad path does not",

@@ -271,7 +271,7 @@ export default async function handler(req: Request): Promise<Response> {
       data_sources: [
         "Blue Hood poll snapshot (Vercel KV) — Chainlink AggregatorV3 oracle + GeckoTerminal/DexScreener pool spot, stored by the 5-min cron",
       ],
-      note: "Prices are from the last completed poll cycle, not a fresh quote. Read `data_age_seconds` and `is_stale` before acting. Rows are UNGRADED — for the graded record and its hit-rate, call `hood-track-record`.",
+      note: "Prices are from the last completed poll cycle, not a fresh quote. Read `data_age_seconds` and `is_stale` before acting. Rows are UNGRADED — the graded record and its hit-rate were retired on 2026-11-13.",
       timestamp: new Date().toISOString(),
     });
   } catch (e) {

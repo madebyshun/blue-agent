@@ -82,16 +82,7 @@ export function blueagentTools(
         callTool("circuit-breaker", args as Record<string, unknown>, options),
     }),
 
-    key_exposure: tool({
-      description:
-        "Check if a wallet address has been flagged for private key exposure or compromise on Base. Price: $0.10 USDC.",
-      parameters: z.object({
-        address: z.string().describe("Wallet address to check (0x…)"),
-      }),
-      execute: async (args) => callTool("key-exposure", args as Record<string, unknown>, options),
-    }),
-
-    quantum_premium: tool({
+quantum_premium: tool({
       description:
         "Deep quantum-readiness analysis for a single wallet — full entropy, key strength, and migration report on Base. Price: $1.50 USDC.",
       parameters: z.object({
@@ -135,16 +126,7 @@ export function blueagentTools(
         callTool("quantum-timeline", args as Record<string, unknown>, options),
     }),
 
-    deep_analysis: tool({
-      description:
-        "Comprehensive deep-dive analysis of a token — fundamentals, tokenomics, on-chain activity, and risk score on Base. Price: $0.35 USDC.",
-      parameters: z.object({
-        token: z.string().describe("Token address (0x…) or symbol (e.g. USDC)"),
-      }),
-      execute: async (args) => callTool("deep-analysis", args as Record<string, unknown>, options),
-    }),
-
-    token_launch: tool({
+token_launch: tool({
       description:
         "Launch a new token on Base — deploys contract, sets metadata, and lists on DEX. Price: $1.00 USDC.",
       parameters: z.object({
@@ -265,29 +247,7 @@ export function blueagentTools(
         callTool("airdrop-check", args as Record<string, unknown>, options),
     }),
 
-    narrative_pulse: tool({
-      description:
-        "Get the current narrative trends and sentiment pulse in crypto — optionally filtered by topic. Price: $0.10 USDC.",
-      parameters: z.object({
-        topic: z
-          .string()
-          .describe("Optional topic to focus on (e.g. DeFi, AI agents, Base)")
-          .optional(),
-      }),
-      execute: async (args) =>
-        callTool("narrative-pulse", args as Record<string, unknown>, options),
-    }),
-
-    dex_flow: tool({
-      description:
-        "Analyze DEX trading flow and order book depth for a token on Base. Price: $0.10 USDC.",
-      parameters: z.object({
-        token: z.string().describe("Token address (0x…) or trading pair (e.g. ETH/USDC)"),
-      }),
-      execute: async (args) => callTool("dex-flow", args as Record<string, unknown>, options),
-    }),
-
-    yield_optimizer: tool({
+d_optimizer: tool({
       description:
         "Find the best yield opportunities across Base DeFi protocols for a wallet. Price: $0.10 USDC.",
       parameters: z.object({

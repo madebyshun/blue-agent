@@ -78,24 +78,12 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const before = prompts.length;
   ok("an empty KV → null", (await runAeonSkill("narrative-tracker", "anything")) === null && prompts.length === before);
 
-  console.log("\n4. the last Aeon reader, empty KV, stubbed model");
-  // gtm-brief and roadmap-validator were the subjects here until 2026-10-06,
-  // when the Aeon-backed advisory tools were retired. builder-deep-dd is the
-  // one handler left that reads Aeon KV; a non-GitHub target keeps it offline.
-  const { HANDLERS } = await import("../src/app/api/x402/_handlers/index");
-  for (const [id, body] of [
-    ["builder-deep-dd", { target: "Example project (offline test)" }],
-  ] as const) {
-    prompts.length = 0;
-    const res = await HANDLERS[id](new Request(`https://blueagent.dev/api/x402/${id}`, { method: "POST", body: JSON.stringify(body) }));
-    const j = (await res.json()) as { aeon_data?: { status?: string; note?: string } };
-    ok(`${id}: response says aeon_data.status "none", with the note`, j.aeon_data?.status === "none" && j.aeon_data?.note === AEON_NONE_NOTE, JSON.stringify(j.aeon_data));
-    const slots = prompts.filter((p) => /Research:|Project research:|Project:/.test(p));
-    ok(`${id}: every prompt with an Aeon slot says NONE`,
-      slots.length > 0 && slots.every((p) => p.includes(AEON_NONE_PROMPT.slice(0, 40))),
-      `${slots.length} prompt(s)`);
-  }
-
+  // 4. the last Aeon reader — REMOVED 2026-11-13.
+  // `builder-deep-dd` was the only handler that read Aeon KV, and it was retired
+  // with the 72 -> 29 cut. Sections 1-3 above still cover runAeonSkill itself
+  // (no GitHub SKILL.md fetches, no model draft, an empty KV answering null),
+  // which is the library half this suite was built for. Restore from git history
+  // if an Aeon-backed handler comes back.
   console.log(failures === 0 ? "\naeon-null-path-check: PASS" : `\naeon-null-path-check: FAIL — ${failures}`);
   process.exit(failures === 0 ? 0 : 1);
 })().catch((e) => { console.error(e); process.exit(1); });

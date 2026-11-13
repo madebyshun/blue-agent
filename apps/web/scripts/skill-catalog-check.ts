@@ -178,7 +178,12 @@ function render(): string {
 
 // ── 3. Guard the guard (first — everything below is vacuous without it) ──────
 console.log("\n1. generator has something to generate");
-check("AGENT_TOOLS has live x402 tools", LIVE.length >= 50, `${LIVE.length} tools`);
+// The floor catches "the catalog collapsed" (a broken import, an empty array),
+// not a size policy: it was 50 when the catalog held 72. The catalog was cut to
+// 29 on 2026-11-13, so the floor follows the shape of the cut — a regeneration
+// that yields fewer than 20 tools means something broke, not that someone
+// retired a batch.
+check("AGENT_TOOLS has live x402 tools", LIVE.length >= 20, `${LIVE.length} tools`);
 check("SKILL.md exists", existsSync(SKILL_MD), SKILL_MD.replace(REPO + "/", ""));
 
 const current = existsSync(SKILL_MD) ? readFileSync(SKILL_MD, "utf8") : "";

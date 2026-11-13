@@ -423,6 +423,7 @@ function veniceMaxTokens(modelId: string): number {
 // `HUB_TOOLS` below: this list minus `CHAT_HIDDEN_TOOLS` (lib/chat-hidden-tools.ts).
 
 const ALL_HUB_TOOLS = [
+
   {
     name: "prepare_yield",
     description: "Open the MOVE-TO-YIELD card so the user can supply idle USDC into Aave v3 on Base (earn lending yield) or withdraw it back — NON-custodial, the user SIGNS in their own wallet; Blue Agent never holds keys or funds. Use when the user wants to: 'earn yield', 'put my USDC to work', 'deposit/supply to Aave', 'move idle USDC to yield', 'stake my USDC for interest', OR 'withdraw/pull my USDC out of Aave'. The CARD collects and edits amount, network (Base Sepolia testnet by DEFAULT — safe to test — or Base mainnet), and the action (supply/withdraw); the user reviews and signs.\n\nCRITICAL — NEVER INVENT AN AMOUNT: pass `amount` ONLY if the user explicitly stated a number in THIS request; otherwise omit it and let the card collect it. Pass action='withdraw' only if the user explicitly asked to withdraw/pull out. Network defaults to testnet; pass network='base' ONLY if the user explicitly asked for mainnet / real funds.\n\nThis tool NEVER moves funds by itself — only the user's signature in the card executes anything. After calling, reply with ONE short line telling the user to review and sign in the card above; never claim funds were moved and never quote an APY figure you weren't given.",
@@ -451,20 +452,6 @@ const ALL_HUB_TOOLS = [
     },
   },
   {
-    name: "hub_token_pick",
-    description: "The top Base token by an on-chain quality score (liquidity health, turnover, momentum) from live pools — FACTS ONLY: price, market cap, liquidity, 24h volume and change, the score, caution flags, and the next-best rows. It gives NO buy/sell call, entry, target, sizing or kill criterion, and you must not add one: report the facts, and if the user wants to trade, they choose and you open the swap card. Use for 'best token today', 'what's trending with real liquidity', 'token pick'.",
-    input_schema: {
-      type: "object",
-      properties: { context: { type: "string", description: "Optional market context or narrative to consider" } },
-    },
-  },
-  // ── Discovery (G0, 2026-09-30 — plan §0b, §7 #17 "thêm") ────────────────
-  // Chat is where users discover (§7 #18), and until now it could swap a
-  // Robinhood Chain token but not FIND one: none of the RH discovery tools was
-  // offered here, and safe-trending was reachable only through x402. These six
-  // are existing, live handlers; each result card carries a Swap button per row,
-  // prefilled with that row's chain + contract (never a ticker).
-  {
     name: "hub_rh_movers",
     description: "Top 24h gainers and losers among ROBINHOOD CHAIN (4663) stock/ETF tokens — dollar-anchored pools only, dust pools filtered out. Facts: price, 24h change, volume, pool depth, contract. Use for 'what's moving on Robinhood', 'top RH stocks today'. Stock tokens on Robinhood Chain are debt securities issued by Robinhood Assets (Jersey) that track a US share — never call them shares.",
     input_schema: {
@@ -477,29 +464,6 @@ const ALL_HUB_TOOLS = [
     },
   },
   {
-    name: "hub_rh_new_listings",
-    description: "New stock/ETF tokens deployed by the canonical Robinhood (RHJ) token factory on ROBINHOOD CHAIN (4663), read from the factory's own events — impersonators cannot appear. Presence proves provenance, not liquidity: most new listings have no pool yet. Use for 'new Robinhood listings', 'what was just listed on RH'.",
-    input_schema: {
-      type: "object",
-      properties: {
-        since_days: { type: "number", description: "Window in days (default 30)." },
-        limit:      { type: "number", description: "Max rows (default 20)." },
-      },
-    },
-  },
-  {
-    name: "hub_rh_search",
-    description: "Find a ROBINHOOD CHAIN (4663) stock/ETF token by ticker or company name in the canonical registry (typo-tolerant). Returns ticker, name and the verified contract — never an invented address. Use before swapping when the user names a company or a ticker you have not resolved.",
-    input_schema: {
-      type: "object",
-      properties: {
-        query: { type: "string", description: "Ticker or company name, e.g. 'NVDA', 'nvidia', 'tesla'." },
-        limit: { type: "number", description: "Max matches (default 5)." },
-      },
-      required: ["query"],
-    },
-  },
-  {
     name: "hub_rh_quote",
     description: "Live Chainlink oracle quote for one ROBINHOOD CHAIN (4663) stock/ETF token by ticker: price, round time and staleness, plus the verified contract. Oracle feeds tick 24/5 — on weekends the price is Friday's close. Use for 'price of NVDA on Robinhood Chain'.",
     input_schema: {
@@ -507,11 +471,6 @@ const ALL_HUB_TOOLS = [
       properties: { ticker: { type: "string", description: "Ticker, e.g. NVDA." } },
       required: ["ticker"],
     },
-  },
-  {
-    name: "hub_rh_index",
-    description: "The full canonical catalog of ROBINHOOD CHAIN (4663) stock and ETF tokens (180+ stocks, 20+ ETFs) with contracts. Zero input. Use for 'what stocks are on Robinhood Chain', 'list the RH ETFs'. Prefer hub_rh_search for one name.",
-    input_schema: { type: "object", properties: {} },
   },
   {
     name: "hub_safe_trending",
@@ -524,9 +483,6 @@ const ALL_HUB_TOOLS = [
       },
     },
   },
-  // ── Crypto tokens + launchpads (2026-10-01) ─────────────────────────────
-  // Server-read, free, answered in code (lib/launchpads/format.ts). Until now
-  // RH crypto tokens had no reader at all and no tool knew a launchpad.
   {
     name: "check_token",
     description: "Overview of ONE token by contract address on Base (8453) or Robinhood Chain (4663): on-chain name/symbol/supply, whether it is a verified stock token, WHICH LAUNCHPAD it came from (Pons, Bankr, Doppler, Virtuals, Clanker, Zora) and whether it is still on its bonding curve or graduated, plus its deepest pools (GeckoTerminal). Use for 'what is 0x…', 'which launchpad is this token from', 'is it bonded/graduated', 'tell me about this Robinhood token', and as the first look at any crypto token on Robinhood Chain. It measures NO tax and gives NO verdict. If the user did not name a chain, omit `chain` — the server checks both.",
@@ -551,10 +507,6 @@ const ALL_HUB_TOOLS = [
       required: ["chain"],
     },
   },
-  // ── Price alerts (2026-10-01) — lib/watches. Checked every 5 min in code,
-  // free, max 20 per wallet; fired alerts land in Scheduled → Alerts and in the
-  // "Price alerts" chat. Chat only DRAFTS a watch: the card's Arm button is
-  // what saves it, under the user's own signed-in session.
   {
     name: "set_price_alert",
     description: "Draft a PRICE ALERT the user arms with one click: 'tell me when NVDA on robinhood drops below $220', 'alert me if ETH on base goes above 3000', 'báo tôi nếu ZIP tăng 20% trong 1 giờ', 'notify me when 0x… is down 10% in 24h'. Two kinds: price (above/below a USD level) and change (up/down N% over 1h or 24h). Checked every 5 minutes, free, up to 20 per wallet; alerts appear in Scheduled → Alerts and in the 'Price alerts' chat. Token: a 0x address, a verified stock ticker (NVDA, TSLA…) or ETH/USDC/WETH/cbBTC/USDG. NEVER invent a level or percentage the user did not state — ask. Chain is required: if the user did not say and the token could be on both, ask.",
@@ -594,36 +546,6 @@ const ALL_HUB_TOOLS = [
     name: "my_alerts",
     description: "The connected wallet's price alerts: each watch with its current price / 1h / 24h change, and the alerts fired in the last 24 hours. Use for 'my alerts', 'what am I watching', 'summarize my watchlist', and for a daily summary of watched tokens.",
     input_schema: { type: "object", properties: {} },
-  },
-  {
-    name: "hub_narrative",
-    description: "Get the current narrative map — mindshare scores, velocity, phase (Emerging/Rising/Peak/Fading), and position calls (FRONT-RUN/RIDE/FADE/WATCH). Use when user asks about narratives, trends, what's running on CT. Do NOT also call hub_narrative_pulse for the same question — they read the same trending source; pick one.",
-    input_schema: {
-      type: "object",
-      properties: { focus: { type: "string", description: "Specific narratives to focus on (optional)" } },
-    },
-  },
-  {
-    // Named by the always-on "Trader Intel" default skill (chat/integrations.ts).
-    // Reads the SAME GeckoTerminal trending set as hub_narrative and differs only
-    // in output shape (entry windows + avoid list vs position calls), so the two
-    // descriptions each tell the model not to call both — otherwise a single
-    // "what's running?" bills the user twice for one dataset.
-    name: "hub_narrative_pulse",
-    description: "Narrative pulse — the same live Base trending set as hub_narrative, but framed as entry windows (open/closing/closed), a single top opportunity, and an avoid list. Use when the user wants timing ('am I early?', 'is it too late to enter?') rather than a full narrative map. Do NOT also call hub_narrative for the same question.",
-    input_schema: {
-      type: "object",
-      properties: { focus: { type: "string", description: "Narrative to focus on, e.g. 'AI agents', 'RWA' (optional)" } },
-    },
-  },
-  {
-    name: "hub_deep_analysis",
-    description: "Comprehensive token fundamentals — on-chain activity, holder distribution, risk signals. USE WHEN: the user gives a token CONTRACT ADDRESS and asks for DD / due diligence / deep analysis. NOT FOR: analysing, reviewing, or debugging CODE; explaining concepts; or any request without a real token address — answer those directly without a tool.",
-    input_schema: {
-      type: "object",
-      properties: { token: { type: "string", description: "Token contract address" } },
-      required: ["token"],
-    },
   },
   {
     name: "hub_honeypot",
@@ -684,13 +606,6 @@ const ALL_HUB_TOOLS = [
       required: ["action", "to"],
     },
   },
-  // These two are named in the system prompt's audit recipe above ("an audit
-  // request = hub_risk_gate + hub_honeypot + hub_contract_trust +
-  // hub_key_exposure") but were never declared here, so the model could not
-  // call them: an audit silently ran two of the four tools the prompt asked
-  // for. Both have live, priced x402 handlers (contract-trust $0.15,
-  // key-exposure $0.50), so the fix is to declare them rather than to shrink
-  // the prompt. Same family as #166 — chat naming a tool it cannot reach.
   {
     name: "hub_contract_trust",
     description: "Audit a Base CONTRACT before interacting with it — Basescan verification + security scan + community trust signal. Verdict: SAFE / CAUTION / RED_FLAG. USE WHEN: the user asks whether a contract or protocol is trustworthy, or safe to approve. NOT FOR: plain wallets (use hub_key_exposure) or token sellability (use hub_honeypot).",
@@ -704,212 +619,12 @@ const ALL_HUB_TOOLS = [
     },
   },
   {
-    name: "hub_key_exposure",
-    description: "Check whether a WALLET's public key is exposed on-chain, computed from the real Base RPC nonce. Verdict EXPOSED (the wallet has sent a tx) or SAFE (nonce 0). USE WHEN: the user asks about quantum risk, key exposure, or cold-storage hygiene for an address. NOTE: EXPOSED means the public key is visible, NOT that funds are at immediate risk — the risk is theoretical and forward-looking.",
-    input_schema: {
-      type: "object",
-      properties: {
-        address: { type: "string", description: "Wallet address to check 0x..." },
-      },
-      required: ["address"],
-    },
-  },
-  {
-    name: "hub_market_fit",
-    description: "Market-fit analysis for a project — problem clarity, timing, competition, demand signals. USE WHEN: the user asks to VALIDATE / SCORE market fit or demand for a described product, or when the user asks for an idea brief. NOT FOR: writing code, building an app/game/frontend, explaining concepts, designing architecture, or debugging — answer those directly without a tool.",
-    input_schema: {
-      type: "object",
-      properties: {
-        project: { type: "string", description: "Project description" },
-        url: { type: "string", description: "Project URL (optional)" },
-      },
-      required: ["project"],
-    },
-  },
-  {
-    name: "hub_competitor_scan",
-    description: "Competitor analysis — direct/indirect competitors and defensible edge. USE WHEN: the user explicitly asks WHO the competitors are for their project. NOT FOR: writing code, building, explaining concepts, or architecture — answer those directly without a tool.",
-    input_schema: {
-      type: "object",
-      properties: {
-        project: { type: "string", description: "Project description" },
-        category: { type: "string", description: "Category e.g. DeFi lending, AI agent" },
-      },
-      required: ["project"],
-    },
-  },
-  {
-    name: "hub_base_grant",
-    description: "Find active grants and funding for Base projects. USE WHEN: the user asks about GRANTS / funding programs on Base, or when the user wants funding paths. NOT FOR: writing code, building, explaining concepts, or architecture — answer those directly without a tool.",
-    input_schema: {
-      type: "object",
-      properties: {
-        project: { type: "string", description: "Project description" },
-        stage: { type: "string", description: "idea | build | live" },
-      },
-      required: ["project"],
-    },
-  },
-  {
     name: "hub_builder_score",
     description: "Get Builder Score for an X/Twitter handle — on-chain activity, shipping history, community (0-100). Use when user asks about builder score or their reputation.",
     input_schema: {
       type: "object",
       properties: { handle: { type: "string", description: "X/Twitter handle without @" } },
       required: ["handle"],
-    },
-  },
-  {
-    name: "hub_repo_health",
-    description: "GitHub repo health — commit velocity, test coverage, dependency risk, bus factor. Use when user asks about code quality or repo metrics.",
-    input_schema: {
-      type: "object",
-      properties: { url: { type: "string", description: "GitHub repository URL" } },
-      required: ["url"],
-    },
-  },
-  {
-    // Named by the always-on "Base Builder" default skill (chat/integrations.ts)
-    // as the deep step after hub_builder_score / hub_repo_health.
-    name: "hub_builder_dd",
-    description: "Full due diligence on a Base builder or project — on-chain activity, shipped products, credibility signals. Use when the user wants a deeper verdict than hub_builder_score, or asks to vet/DD a builder before working with or funding them. Accepts an X/Twitter handle OR a 0x wallet address.",
-    input_schema: {
-      type: "object",
-      properties: {
-        target:  { type: "string", description: "Builder handle (@name or name) or 0x wallet address" },
-        type:    { type: "string", enum: ["builder", "project"], description: "Whether the target is a person or a project (default: project)" },
-        context: { type: "string", description: "Anything already known about them (optional)" },
-      },
-      required: ["target"],
-    },
-  },
-  {
-    name: "hub_ecosystem",
-    description: "Daily Base ecosystem digest — top launches, protocol updates, builder activity. USE WHEN: the user explicitly asks what's happening on Base TODAY / latest news / ecosystem updates. NOT FOR: writing code, building, explaining concepts, architecture, or idea/concept brainstorming — answer those directly without a tool.",
-    input_schema: {
-      type: "object",
-      properties: { focus: { type: "string", description: "Focus area e.g. DeFi, AI agents, NFT (optional)" } },
-    },
-  },
-  // ── Chips that had a trigger but no tool (fixed 2026-09-23) ────────────────
-  //
-  // The eight tools below are named by CURATED entries in app/chat/hub-skills.ts,
-  // which renders every one as a clickable chip in the chat Tools tab. Clicking a
-  // chip drops its `trigger` into the composer — so the user sends "Find DeFi
-  // opportunities on Base" having just clicked a card titled "DeFi Opportunity
-  // Scanner", and the model, which had no such tool, answered from its own
-  // weights. Same failure class as the Trader Intel / Base Builder default skills
-  // and `hub_b20_analyze` documented in TOOL_ENDPOINT below: the handler was live
-  // the whole time, only the chat wiring was missing. Two of the eleven orphans
-  // (community-sentiment, agent-collab-match) are NOT wired here — their triggers
-  // ask for measured facts no upstream can supply, so their chips were removed
-  // instead. `scripts/curated-trigger-check.ts` now fails CI if a chip is ever
-  // shipped without a tool again.
-  //
-  // Since 2026-09-30 most of these are in CHAT_HIDDEN_TOOLS, and since
-  // 2026-10-01 a hidden tool's chip is dropped from the Tools tab too (the same
-  // check fails if one is shown) — so "renders every one" above is history.
-  //
-  // Names match what /api/mcp already exposes for the same handlers, so one
-  // handler is not called two different things on two surfaces.
-  //
-  // Property names are the handler's OWN body fields — args are POSTed through
-  // verbatim (no normalizer in this route, unlike ARG_SHIMS in /api/mcp), so a
-  // renamed property here silently drops the value.
-  {
-    name: "hub_defi_opportunity",
-    description: "Scan LIVE Base DeFi pools for yield — real protocols, APYs and TVL from DefiLlama, ranked and risk-flagged. Use when the user asks where to earn yield, for DeFi/farming opportunities, or the best APY on Base. Returns real pools only; it never invents a protocol or a rate.",
-    input_schema: {
-      type: "object",
-      properties: {
-        strategy:       { type: "string", description: "What the user is after, e.g. 'yield', 'stables', 'LP', 'lending' (optional, default 'yield')" },
-        risk_tolerance: { type: "string", enum: ["low", "medium", "high"], description: "Only 'low' changes the scan — it restricts to stablecoin pools. 'medium' and 'high' scan the same pool set and differ in how the result is framed." },
-      },
-    },
-  },
-  {
-    name: "hub_protocol_risk",
-    description: "Risk read on one Base DeFi protocol, grounded in its live DefiLlama TVL and 1d/7d TVL change — outflow signals, thin-TVL fragility, plus contract/oracle/governance reasoning on top. Use when the user asks whether a protocol is safe, or to monitor risk on a position they hold. Takes a protocol NAME (Aerodrome, Aave, Uniswap), not an address.",
-    input_schema: {
-      type: "object",
-      properties: {
-        protocol: { type: "string", description: "Protocol name as DefiLlama lists it, e.g. 'Aerodrome', 'Aave', 'Moonwell'" },
-        position: { type: "string", description: "What the user has at stake there, e.g. '5 ETH in the WETH/USDC pool' (optional)" },
-      },
-      required: ["protocol"],
-    },
-  },
-  {
-    name: "hub_protocol_compare",
-    description: "Compare two Base protocols side by side on live DefiLlama data — TVL, 1d/7d change, category. Use when the user asks which of two protocols is better/safer/bigger. If only one is named, a real same-category Base competitor is picked from DefiLlama; never name the second protocol yourself.",
-    input_schema: {
-      type: "object",
-      properties: {
-        protocol_a: { type: "string", description: "First protocol name" },
-        protocol_b: { type: "string", description: "Second protocol name (optional — omit to have a real competitor chosen from live data)" },
-        category:   { type: "string", description: "Category hint used only when protocol_b is omitted, e.g. 'Dexes', 'Lending' (optional)" },
-        use_case:   { type: "string", description: "What the user wants to do with it, e.g. 'park stables for 3 months' (optional)" },
-      },
-      required: ["protocol_a"],
-    },
-  },
-  {
-    // NAMED DIFFERENTLY FROM /api/mcp ON PURPOSE. That surface calls this same
-    // handler `hub_token_launch`; here it must not contain "launch", because
-    // scripts/action-card-inventory-check.ts treats any launch-shaped chat tool
-    // name as a relapse of the retired Bankr launchpad — and it is right to. Chat
-    // is the surface that renders signable cards, so a tool called "token launch"
-    // sitting next to prepare_send and robinhood_swap invites exactly the reading
-    // the retirement removed. This tool scores TIMING; it cannot deploy anything.
-    // If the two surfaces are ever unified, unify on this name, not that one.
-    name: "hub_token_readiness",
-    description: "Launch-TIMING readiness for a token, scored against the live Base market regime (DefiLlama chain TVL + GeckoTerminal trending pools). Pass `address` ONLY if the token already trades — that adds its live DexScreener price/liquidity/volume. With no address this is a PRE-LAUNCH read and the score is an explicitly labelled estimate; relay that label. Use when the user asks if now is a good time to launch, or whether their token is launch-ready.",
-    input_schema: {
-      type: "object",
-      properties: {
-        name:        { type: "string", description: "Project or token name" },
-        ticker:      { type: "string", description: "Ticker symbol (optional)" },
-        address:     { type: "string", description: "0x… contract address — ONLY if the token is already live and trading. Never invent one; omit if unknown." },
-        description: { type: "string", description: "What it is and any traction so far (optional)" },
-      },
-      required: ["name"],
-    },
-  },
-  // hub_gtm, hub_stack, hub_pitch_intel and hub_multi_agent sat here until
-  // 2026-10-06: model-generated end to end on an expired Aeon cache, and sold
-  // as paid tools. Retired with their catalog ids (docs/plan-build-2026-10-06.md).
-  {
-    name: "hub_agent_score",
-    description: "Agent Score for AI agents on Base — XP, interactions, uptime. Use when user asks about an AI agent's score or performance.",
-    input_schema: {
-      type: "object",
-      properties: { handle: { type: "string", description: "Agent handle or name" } },
-      required: ["handle"],
-    },
-  },
-  {
-    name: "hub_dex_flow",
-    description: "Live DEX buy/sell pressure and liquidity flow for a token. Use when user asks about DEX volume, buy pressure, sell walls, liquidity.",
-    input_schema: {
-      type: "object",
-      properties: { token: { type: "string", description: "Token contract address on Base" } },
-      required: ["token"],
-    },
-  },
-  {
-    // Named by the always-on "Trader Intel" default skill (chat/integrations.ts).
-    // SCHEMA IS DELIBERATELY ONE FIELD: the token-momentum-scanner handler reads
-    // ONLY `min_mcap` (handler line 35-38). The Hub catalog entry sends
-    // {chain, context} built from "Timeframe"/"Filter" inputs the handler never
-    // reads — do not mirror that here. Advertising a timeframe the scanner
-    // ignores would make the model report a 1h scan it never ran.
-    name: "hub_token_momentum",
-    description: "Scan Base tokens for momentum right now — breakouts, volume spikes, narrative alignment. Use when the user asks what's moving/pumping/breaking out, with no specific token in mind. The scan window is fixed; it cannot be narrowed to a timeframe.",
-    input_schema: {
-      type: "object",
-      properties: {
-        min_mcap: { type: "number", description: "Minimum market cap in USD to include (optional, default 0 = no floor)" },
-      },
     },
   },
   {
@@ -984,50 +699,9 @@ Testnets are reachable by full id: base-sepolia, ethereum-sepolia, robinhood-tes
     },
   },
   {
-    name: "blue_monitor",
-    description: "Health + risk snapshot for a Base token/contract — live price, liquidity, Basescan verification, risk signals + watch plan. Use when user asks to 'monitor', 'watch', 'check the risk/health of' a token or contract.",
-    input_schema: { type: "object", properties: { target: { type: "string", description: "Base token/contract address (0x…) or protocol name" }, focus: { type: "string", description: "Optional focus" } }, required: ["target"] },
-  },
-  {
     name: "blue_registry",
     description: "Discover the Blue Hub tool catalog — every callable tool, filterable by query/category, with prices. Use when user asks 'what tools are there', 'what can you do', 'list the tools'.",
     input_schema: { type: "object", properties: { query: { type: "string" }, category: { type: "string" } } },
-  },
-  {
-    name: "blue_research",
-    description: "Deep DD memo on a Base project, narrative, or token — thesis, bull/bear, risks, contrarian take, verdict. Use when user asks for 'research', 'DD', 'a deep dive', 'a memo on X'.",
-    input_schema: { type: "object", properties: { topic: { type: "string" }, target: { type: "string", description: "Optional 0x token address to ground in live data" } }, required: ["topic"] },
-  },
-  {
-    name: "blue_compose",
-    description: "Plan a runnable chain of Blue Hub tools to hit a goal. Use when user describes a multi-step goal and asks 'how', 'what's the workflow', 'which tools should I run'.",
-    input_schema: { type: "object", properties: { goal: { type: "string" } }, required: ["goal"] },
-  },
-  {
-    name: "blue_deploy",
-    description: "Base mainnet deploy mechanics — scripts, Basescan verify commands, env, gas. Use when user asks how to 'deploy', 'ship to Base', 'verify on Basescan'.",
-    input_schema: { type: "object", properties: { project: { type: "string" }, stack: { type: "string" } }, required: ["project"] },
-  },
-  {
-    name: "blue_analytics",
-    description: "Live performance metrics for a Base token (DexScreener) + interpretation — momentum, liquidity health, growth signals. Use when user asks for 'analytics', 'metrics', 'stats', 'how is X performing'.",
-    input_schema: { type: "object", properties: { target: { type: "string", description: "Base token address (0x…)" }, focus: { type: "string" } }, required: ["target"] },
-  },
-  {
-    name: "blue_simulate",
-    description: "Bull/base/bear scenario modeling for a Base decision (tokenomics, fee model, growth). Use when user asks to 'simulate', 'model', 'what if', 'project outcomes'.",
-    input_schema: { type: "object", properties: { scenario: { type: "string" }, params: { type: "string" } }, required: ["scenario"] },
-  },
-  {
-    name: "blue_stream",
-    description: "Live snapshot feed of onchain activity on Base OR Robinhood Chain — trending/new pools, chain TVL, real prices (GeckoTerminal + DefiLlama, both index Robinhood Chain natively as network 'robinhood'). Use when user asks 'what's happening on Base now', 'live feed', 'what's moving', or 'what's trending on Robinhood Chain'.",
-    input_schema: {
-      type: "object",
-      properties: {
-        feed: { type: "string", description: "movers | new | all" },
-        chain: { type: "string", enum: ["base", "robinhood"], description: "Which chain to pull the feed for. Default base." },
-      },
-    },
   },
   {
     name: "hub_hood_arrow",
@@ -1041,25 +715,6 @@ Testnets are reachable by full id: base-sepolia, ethereum-sepolia, robinhood-tes
         chain:    { type: "string", enum: ["robinhood", "base"], description: "Which Blue Hood desk to search. Pass it whenever the user names a chain. Omit ONLY when the user did not — omitting means 'either desk', never 'Robinhood'. Ignored for arrow_id/serial, which already identify one arrow." },
       },
       required: [],
-    },
-  },
-  {
-    name: "hub_b20_analyze",
-    description: "Explain B20 token standard, variants (Asset/Stablecoin), roles, policies, and compliance features. Use when user asks about B20 architecture, how B20 works, B20 roles/policies, or wants to understand the Beryl upgrade.",
-    // ⚠️ This schema is BOUND to the handler contract in
-    // `api/x402/_handlers/b20-analyze.ts` — it reads `{ action, address, context }`
-    // and NOTHING else. The previous schema declared `{ question, mode }`, neither
-    // of which the handler reads: `mode` never reached `body.action`, so every call
-    // would have silently fallen back to `action = "guide"` and answered a generic
-    // guide while discarding what the user actually asked. Keep `action`'s enum
-    // identical to `type Action` in that file (5 values — there is no "full").
-    input_schema: {
-      type: "object",
-      properties: {
-        action:  { type: "string", enum: ["guide", "roles", "policy", "analyze", "compare"], description: "Which aspect to explain. guide = overview + deployment steps; roles = the 7 RBAC roles; policy = PolicyRegistry (ALLOWLIST/BLOCKLIST); analyze = read a specific token/address; compare = Asset vs Stablecoin. Defaults to guide." },
-        address: { type: "string", description: "Base address to analyse. Only meaningful with action=analyze." },
-        context: { type: "string", description: "The user's own question or extra context, passed through to the model. Use this to carry what the user actually asked." },
-      },
     },
   },
   {
@@ -1107,18 +762,6 @@ Testnets are reachable by full id: base-sepolia, ethereum-sepolia, robinhood-tes
         tokenSymbol: { type: "string", description: "OPTIONAL display hint — card prefers the on-chain symbol read from the token contract." },
       },
       required: ["fromChain", "toChain", "token", "amount"],
-    },
-  },
-  {
-    name: "hub_b20_inspect",
-    description: "Inspect a B20 token's live on-chain state — reads real data from Base RPC via multicall, zero LLM. Returns: isB20 flag, name/symbol/decimals, totalSupply, supplyCap (uncapped sentinel detected), variant (ASSET/STABLECOIN), pause status per feature (TRANSFER/MINT/BURN), and policy IDs per scope (transferSender/transferReceiver/transferExecutor/mintReceiver). Use when the user provides a token address and asks: 'is this B20?', 'check this token', 'is it paused?', 'what's the supply cap?', 'inspect B20 state', or 'what policy does this have?'.",
-    input_schema: {
-      type: "object",
-      properties: {
-        address: { type: "string", description: "0x-prefixed B20 token address on Base (40 hex chars), OR the ticker of a Base stock token (e.g. 'NVDA', 'NVDAc') — a ticker is resolved server-side from BlueAgent's verified Base stock registry only; anything else needs its address. Never invent an address." },
-        network: { type: "string", enum: ["mainnet", "sepolia"], description: "mainnet (default) or sepolia" },
-      },
-      required: ["address"],
     },
   },
   {
@@ -1208,32 +851,6 @@ Testnets are reachable by full id: base-sepolia, ethereum-sepolia, robinhood-tes
       required: ["tokenIn", "tokenOut", "amountIn"],
     },
   },
-  // blue_dca — OFFER WITHDRAWN 2026-09-06 (#92). The schema is not registered
-  // and prompt rule 6f is gone, so chat can no longer propose a DCA schedule.
-  //
-  // WHY, and why this specific scope. The card asks the user to sign a real
-  // `approve(keeper, totalAllowance)` on USDC — a standing allowance over the
-  // FULL run total, not one buy. The keeper that spends it runs on
-  // /api/cron/dca-executor, and that path has NEVER been in `apps/web/vercel.json`:
-  // `git log --all -S"dca-executor" -- apps/web/vercel.json` is empty across every
-  // branch. So the approve is real and the execution is not; every schedule
-  // created here has been a live allowance against a cron that has never ticked.
-  //
-  // Removing the OFFER is the risk-reducing half and is safe to do alone. The
-  // route, the `blue_dca` marker handler, `DcaCard`, and every stored schedule
-  // are deliberately LEFT IN PLACE — users with an outstanding allowance still
-  // need the UI that shows and revokes it, and per CLAUDE.md a path that moves
-  // real funds is not something to unilaterally rip out. Re-enabling is this
-  // block plus rule 6f, once `dca-executor` is actually scheduled and its first
-  // run is verified on chain.
-  //
-  // RETIRED 2026-09-30 (docs/rebuild-5-tang-2026-09-30.md §1 — execution is
-  // swap / send / bridge only). The entrances went: /api/dca/create, the
-  // executor route, lib/dca/execution and the gas top-up signer. The exit
-  // stayed: the marker handler below, DcaCard (now revoke-only, reading the
-  // keeper from /api/dca/list), and list / logs / cancel / whoami. KV schedules
-  // are kept. KEEPER_MASTER_KEY + GAS_TOP_UP_PRIVATE_KEY are unset by ShunTr
-  // only after the sweep described in /api/dca/whoami.
 ];
 
 // ─── Tools hidden from chat (ShunTr, 2026-09-30) ─────────────────────────────
@@ -1252,24 +869,13 @@ const VENICE_TOOLS = HUB_TOOLS.map(t => ({
 // ─── Tool → internal API mapping ──────────────────────────────────────────────
 
 const TOOL_ENDPOINT: Record<string, string> = {
-  hub_token_pick:       "token-pick-signal",
-  hub_narrative:        "narrative-position",
-  hub_deep_analysis:    "deep-analysis",
   hub_honeypot:         "honeypot-check",
   hub_risk_gate:        "risk-gate",
   hub_sign_check:       "sign-check",
   hub_pretrade:         "pre-trade-check",
   hub_approvals:        "approval-audit",
   hub_contract_trust:   "contract-trust",
-  hub_key_exposure:     "key-exposure",
-  hub_market_fit:       "market-fit",
-  hub_competitor_scan:  "competitor-scan",
-  hub_base_grant:       "base-grant-finder",
   hub_builder_score:    "builder-score",
-  hub_repo_health:      "repo-health",
-  hub_ecosystem:        "ecosystem-digest",
-  hub_agent_score:      "agent-score",
-  hub_dex_flow:         "dex-flow",
   // The three below back the always-on default skills in chat/integrations.ts
   // ("Trader Intel", "Base Builder"). Those packs are injected into every user's
   // localStorage with enabled+default true, so their text has been in every
@@ -1278,39 +884,20 @@ const TOOL_ENDPOINT: Record<string, string> = {
   // "synthesize all five into BUY / WATCH / AVOID", i.e. produce a five-tool
   // verdict from the three that existed. The handlers were live the whole time
   // under different ids; only the chat wiring was missing.
-  hub_narrative_pulse:  "narrative-pulse",
-  hub_builder_dd:       "builder-deep-dd",
-  hub_token_momentum:   "token-momentum-scanner",
   hub_crypto_rpc:       "crypto-rpc",
   hub_token_price:      "token-price",
   // Blue first-party suite
-  blue_monitor:         "blue-monitor",
   blue_registry:        "blue-registry",
-  blue_research:        "blue-research",
-  blue_compose:         "blue-compose",
-  blue_deploy:          "blue-deploy",
-  blue_analytics:       "blue-analytics",
-  blue_simulate:        "blue-simulate",
-  blue_stream:          "blue-stream",
-  hub_b20_inspect:      "b20-inspect",
   // Was advertised in HUB_TOOLS (and the system prompt explicitly instructs the
   // model to use it) but had no entry here, so every call fell through to the
   // `[Unknown tool: …]` string below — handing the model garbage and leaving it
   // to answer a factual B20 question from nothing. The handler existed and works.
-  hub_b20_analyze:      "b20-analyze",
   // Chips in the chat Tools tab whose trigger reached no tool until 2026-09-23.
   // Ids match /api/mcp's map for the same handlers, so one handler is not called
   // two different things on two surfaces. See the HUB_TOOLS block above.
-  hub_defi_opportunity: "defi-opportunity",
-  hub_protocol_risk:    "protocol-risk-monitor",
-  hub_protocol_compare: "base-protocol-comparison",
-  hub_token_readiness:  "token-launch-readiness",
   // Discovery (G0, 2026-09-30) — see the block in ALL_HUB_TOOLS.
   hub_rh_movers:        "rh-stock-movers",
-  hub_rh_new_listings:  "rh-stock-new-listings",
-  hub_rh_search:        "rh-stock-search",
   hub_rh_quote:         "rh-stock-quote",
-  hub_rh_index:         "rh-rwa-index",
   hub_safe_trending:    "safe-trending",
 };
 
@@ -1566,7 +1153,6 @@ function resolveSwapToken(token: string): string {
  *  default inside chat (route maxDuration is 120 s). Measured 2026-10-21:
  *  deep-analysis — three LLM calls plus two explorer reads — 504'd at 30 s. */
 const TOOL_TIMEOUT_MS: Readonly<Record<string, number>> = {
-  "deep-analysis": 75_000,
   // Reads every dollar-anchored RH pool; timed out at 30 s in chat 2026-10-21.
   "rh-stock-movers": 60_000,
 };

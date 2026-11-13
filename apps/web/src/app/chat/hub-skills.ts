@@ -107,19 +107,11 @@ const CATEGORY_ORDER: SkillCategory[] = [
 // entries stay so un-hiding a tool brings its chip back with no second edit.
 const CURATED: { id: string; tool: string; category: SkillCategory; trigger: string }[] = [
   // Market Intel
-  { id: "token-pick-signal",       tool: "hub_token_pick",       category: "Market Intel",  trigger: "/pick" },
-  { id: "narrative-position",      tool: "hub_narrative",        category: "Market Intel",  trigger: "What narratives are running on Base right now?" },
-  { id: "token-momentum-scanner",  tool: "hub_token_momentum",   category: "Market Intel",  trigger: "Scan top momentum tokens on Base" },
   // Due Diligence
-  { id: "deep-analysis",           tool: "hub_deep_analysis",    category: "Due Diligence", trigger: "/audit " },
   { id: "honeypot-check",          tool: "hub_honeypot",         category: "Due Diligence", trigger: "/scan " },
   { id: "risk-gate",               tool: "hub_risk_gate",        category: "Due Diligence", trigger: "Run a risk gate on " },
   { id: "contract-trust",          tool: "hub_contract_trust",   category: "Due Diligence", trigger: "What's the trust score for contract " },
-  { id: "protocol-risk-monitor",   tool: "hub_protocol_risk",    category: "Due Diligence", trigger: "Monitor risks for " },
   // Builder Tools
-  { id: "market-fit",              tool: "hub_market_fit",       category: "Builder Tools", trigger: "/idea " },
-  { id: "competitor-scan",         tool: "hub_competitor_scan",  category: "Builder Tools", trigger: "Who are the competitors for " },
-  { id: "repo-health",             tool: "hub_repo_health",      category: "Builder Tools", trigger: "Check repo health for " },
   // Does not render — see the `builder-score` note above. Left in place on purpose.
   { id: "builder-score",           tool: "hub_builder_score",    category: "Builder Tools", trigger: "What's the builder score for " },
   // Fundraise
@@ -130,14 +122,9 @@ const CURATED: { id: string; tool: string; category: SkillCategory; trigger: str
   // "Transform your deck into investor-grade pitch intelligence". The tool returns
   // pitch_angles / one_liner / investor_thesis for ONE project, so the trigger now
   // names a project the way the other Fundraise chips do.
-  { id: "base-grant-finder",       tool: "hub_base_grant",       category: "Fundraise",     trigger: "Find Base grants for " },
   // Launch
-  { id: "token-launch-readiness",  tool: "hub_token_readiness",  category: "Launch",        trigger: "Is my token ready to launch? " },
   // Agent Network
   // Ecosystem
-  { id: "ecosystem-digest",        tool: "hub_ecosystem",        category: "Ecosystem",     trigger: "What happened on Base today?" },
-  { id: "base-protocol-comparison",tool: "hub_protocol_compare", category: "Ecosystem",     trigger: "Compare these Base protocols: " },
-  { id: "defi-opportunity",        tool: "hub_defi_opportunity", category: "Ecosystem",     trigger: "Find DeFi opportunities on Base" },
 ];
 
 const toolById = new Map(AGENT_TOOLS.map(t => [t.id, t]));

@@ -35,15 +35,15 @@ export default function ApiDoc() {
       <CodeBlock title="with the x402 client" badge="recommended">{`import { createX402Client } from "@blueagent/x402";
 
 const client = createX402Client({ wallet }); // pays 402s for you
-const res = await client.post("https://blueagent.dev/api/x402/blue-idea", {
-  prompt: "DeFi protocol for Base",
+const res = await client.post("https://blueagent.dev/api/x402/token-price", {
+  token: "0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b", // $VIRTUAL on Base
 });
 console.log(res.data);`}</CodeBlock>
 
       <CodeBlock title="raw HTTP (handle 402 yourself)">{`# 1. first call returns 402 with payment requirements
-$ curl -i https://blueagent.dev/api/x402/blue-idea \\
+$ curl -i https://blueagent.dev/api/x402/token-price \\
     -H "Content-Type: application/json" \\
-    -d '{"prompt":"DeFi protocol for Base"}'
+    -d '{"token":"0x0b3e328455c4059eeb9e3f84b5543f74e24e7e1b"}'
 
 # 2. pay the quoted USDC on Base, then retry with the payment header`}</CodeBlock>
 

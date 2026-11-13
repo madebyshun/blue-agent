@@ -34,12 +34,10 @@ export const TOOL_SCHEMAS: Record<string, ToolSchema> = {
       { name: "action", label: "Action to Evaluate", placeholder: "transfer-all", type: "text", required: false },
     ],
   },
-  "key-exposure": { fields: [{ name: "address", label: "Wallet Address", placeholder: "0x…", type: "address", required: true }] },
   "quantum-premium": { fields: [{ name: "address", label: "Wallet Address", placeholder: "0x…", type: "address", required: true }] },
   "quantum-batch": { fields: [{ name: "addresses", label: "Addresses (comma-separated, max 10)", placeholder: "0x…, 0x…", type: "text", required: true }] },
   "quantum-migrate": { fields: [{ name: "address", label: "Wallet Address", placeholder: "0x…", type: "address", required: true }] },
   "quantum-timeline": { fields: [{ name: "address", label: "Wallet Address (optional)", placeholder: "0x…", type: "address", required: false }] },
-  "deep-analysis": { fields: [{ name: "token", label: "Token Address or Symbol", placeholder: "0x… or USDC", type: "text", required: true }] },
   "token-launch": {
     fields: [
       { name: "tokenName", label: "Token Name", placeholder: "e.g. Blue Agent", type: "text", required: true },
@@ -55,6 +53,4 @@ export const TOOL_SCHEMAS: Record<string, ToolSchema> = {
   "tokenomics-score": { fields: [{ name: "token", label: "Token Address or Symbol", placeholder: "0x… or TOKEN", type: "text", required: true }] },
   "whitepaper-tldr": { fields: [{ name: "url", label: "Whitepaper URL", placeholder: "https://…", type: "url", required: true }] },
   "vc-tracker": { fields: [{ name: "sector", label: "Sector or Address", placeholder: "DeFi, AI, 0x…", type: "text", required: true }] },
-  "narrative-pulse": { fields: [{ name: "topic", label: "Topic (optional)", placeholder: "DeFi, AI agents…", type: "text", required: false }] },
-  "dex-flow": { fields: [{ name: "token", label: "Token Address or Pair", placeholder: "0x… or ETH/USDC", type: "text", required: true }] },
 };

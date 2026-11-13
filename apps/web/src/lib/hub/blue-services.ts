@@ -14,12 +14,11 @@ import type { ResourceSample } from "@/lib/hub/exchange";
 
 export const BLUE_HIRE_IDS = [
   // Base token checks
-  "token-price", "honeypot-check", "liquidity-depth", "contract-trust", "dex-flow", "safe-trending", "pool-scan",
+  "token-price", "honeypot-check", "liquidity-depth", "contract-trust", "safe-trending", "pool-scan",
   // wallets and gas
   "wallet-risk", "gas-tracker",
   // stock tokens: Base B20 and Robinhood Chain
-  "b20-inspect", "base-stock-search", "base-stock-quote", "base-stock-ohlc", "base-stock-liquidity", "base-stock-movers",
-  "rh-stock-quote", "rh-stock-arb", "rh-stock-ohlc", "rh-stock-liquidity", "rh-stock-movers",
+  "base-stock-quote", "base-stock-movers", "rh-stock-quote", "rh-stock-arb", "rh-stock-ohlc", "rh-stock-liquidity", "rh-stock-movers",
 ] as const;
 
 /** A real, valid input per service, so "Check input and price" works first try:
@@ -29,15 +28,10 @@ export const BLUE_HIRE_EXAMPLES: Record<string, Record<string, unknown>> = {
   "honeypot-check": { token: "0x940181a94A35A4569E4529A3CDfB74e38FD98631" },
   "liquidity-depth": { token: "0x940181a94A35A4569E4529A3CDfB74e38FD98631" },
   "contract-trust": { address: "0x940181a94A35A4569E4529A3CDfB74e38FD98631" },
-  "dex-flow": { token: "0x940181a94A35A4569E4529A3CDfB74e38FD98631" },
   "safe-trending": { limit: 5 },
   "pool-scan": { limit: 5 },
   "wallet-risk": { address: "0x4200000000000000000000000000000000000006" },
-  "b20-inspect": { address: "0xb20000000000000000000078ee7ce2fE4908108C" },
-  "base-stock-search": { query: "NVDA" },
   "base-stock-quote": { ticker: "NVDA" },
-  "base-stock-ohlc": { ticker: "NVDA", timeframe: "1h", limit: 24 },
-  "base-stock-liquidity": { ticker: "NVDA" },
   "base-stock-movers": { limit: 5 },
   "rh-stock-quote": { ticker: "NVDA" },
   "rh-stock-arb": { ticker: "NVDA" },

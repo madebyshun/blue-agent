@@ -11,35 +11,38 @@ export const TOOL_PARAMS: Record<string, string[]> = {
   'blue ship':  ['prompt'],
   'blue raise': ['prompt'],
 
-  // Security x402
-  'honeypot-check':    ['token (0x...)'],
-  'contract-trust':    ['contractAddress (0x...)'],
-  'allowance-audit':   ['address (0x...)'],
-  'phishing-scan':     ['url or address'],
-  'mev-shield':        ['tokenIn (0x...)', 'tokenOut (0x...)', 'amountIn'],
-  'circuit-breaker':   ['agentId', 'action?'],
-  'aml-screen':        ['address (0x...)'],
-  'key-exposure':      ['address (0x...)'],
-  'quantum-premium':   ['address (0x...)'],
-  'quantum-batch':     ['addresses (comma-separated 0x...)'],
-  'quantum-migrate':   ['address (0x...)'],
-  'quantum-timeline':  ['address (0x...)?'],
-  'base-deploy-check': ['contractAddress (0x...)'],
-
-  // Research x402
-  'deep-analysis':    ['token (0x... or symbol)'],
-  'whale-tracker':    ['token (0x...)'],
-  'narrative-pulse':  ['topic?'],
-  'dex-flow':         ['token (0x... or pair)'],
-  'vc-tracker':       ['sector or address'],
-  'tokenomics-score': ['token (0x... or symbol)'],
-  'whitepaper-tldr':  ['url (https://...)'],
-  'x402-readiness':   ['apiUrl (https://...)'],
-  'grant-evaluator':  ['projectUrl or description'],
+  // Security, stocks, tokens, trading and health x402
+  // x402 tools — one line per tool, labels come from the 402 input schema
+  'token-price': ['token'],
+  'pool-scan': ['limit'],
+  'hood-live': ['chain'],
+  'weekend-scorecard': ['ticker', 'weekends'],
+  'wallet-holdings': ['address'],
+  'wallet-risk': ['address'],
+  'liquidity-depth': ['token'],
+  'pre-trade-check': ['token', 'chain', 'kind', 'recipient', 'sender'],
+  'sign-check': ['from', 'tx', 'typed_data', 'chain'],
+  'approval-audit': ['wallet', 'chain'],
+  'honeypot-check': ['token'],
+  'risk-gate': ['to', 'action', 'value'],
+  'contract-trust': ['address', 'context'],
+  'blue-registry': ['query', 'category'],
+  'rh-rwa-verify': ['contract', 'expected_ticker'],
+  'rh-stock-quote': ['ticker'],
+  'base-stock-quote': ['ticker'],
+  'base-stock-movers': ['limit', 'min_liquidity_usd'],
+  'rh-stock-liquidity': ['ticker'],
+  'rh-stock-movers': ['limit', 'min_tvl_usd', 'min_volume_24h_usd'],
+  'rh-stock-holders': ['ticker', 'contract', 'limit'],
+  'safe-trending': ['min_liquidity_usd', 'limit'],
+  'rh-stock-agent-brief': ['ticker'],
+  'rh-stock-arb': ['ticker'],
+  'rh-stock-ohlc': ['ticker', 'timeframe', 'limit'],
+  'rh-stock-swap-prepare': ['ticker', 'side', 'amount', 'recipient', 'denom', 'slippage_bps'],
+  'rh-stock-swap-quote': ['ticker', 'side', 'amount', 'denom', 'slippage_bps'],
 
   // Score
   'builder-score': ['X handle (e.g. madebyshun)'],
-  'agent-score':   ['github URL, npm:pkg, or @handle (e.g. github.com/user/repo)'],
 
   // Tasks
   'blue tasks':     [],
@@ -47,16 +50,8 @@ export const TOOL_PARAMS: Record<string, string[]> = {
   'blue accept':    ['taskId', 'handle'],
   'blue submit':    ['taskId', 'proof URL'],
 
-  // Data x402
-  'wallet-pnl':  ['address (0x...)'],
-  'lp-analyzer': ['address (0x...)'],
   'risk-gate':   ['action (transfer|swap|approve)', 'contractAddress (0x...)?', 'amount?'],
 
-  // Earn x402
-  'yield-optimizer': ['address (0x...)?'],
-  'airdrop-check':   ['address (0x...)'],
-  'tax-report':      ['address (0x...)', 'year'],
-  'alert-subscribe': ['address (0x...)', 'webhookUrl (https://...)'],
 
   // `swap`, `transfer`, `portfolio` and `launch-token` had param specs here until
   // 2026-09-18. They belonged to the Wallet category, which never ran anything — it

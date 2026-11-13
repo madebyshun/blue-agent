@@ -88,43 +88,19 @@ const FEATURED_IDS = ["pre-trade-check", "risk-gate", "safe-trending", "rh-rwa-v
  */
 const TOOL_EXAMPLES: Record<string, Record<string, string>> = {
   // ── Intelligence ─────────────────────────────────────────────────────────────
-  "token-pick-signal":         { context: "rising volume, real liquidity" },
-  "narrative-position":        { focus: "AI agents, Base DeFi" },
-  "ecosystem-digest":          { focus: "DeFi protocols and AI agents" },
-  "market-fit":                { description: "Pay-per-use AI research tool for Base builders — $0.50/report via x402 USDC micropayments", stage: "MVP" },
-  "token-launch-readiness":    { name: "EXAMPLEDAO", description: "Sample project (not real) — DeFi yield router on Base, pre-token, small private beta" },
   // ── Builder ───────────────────────────────────────────────────────────────────
-  "competitor-scan":           { project: "AI agent tool marketplace with x402 pay-per-call", category: "AI agent infrastructure" },
-  "agent-performance":         { handle: "@blueagent_" },
-  "agent-collab-match":        { agent_a: "Blue Agent — AI research + x402 tool execution on Base", agent_b: "any", collab_goal: "joint tool bundle or revenue share" },
-  "repo-health":               { repo: "madebyshun/blue-agent" },
-  "defi-opportunity":          { focus: "stablecoin yield above 8% APR on Base", risk_tolerance: "medium" },
-  "builder-deep-dd":           { target: "@madebyshun" },
   // ── Trading ───────────────────────────────────────────────────────────────────
-  "token-momentum-scanner":    { timeframe: "24h", filter: "min $50k volume, AI agent narrative" },
   // ── Content ───────────────────────────────────────────────────────────────────
   // ── Agent Economy ─────────────────────────────────────────────────────────────
   // ── Base Ecosystem ────────────────────────────────────────────────────────────
-  "base-grant-finder":         { project: "AI tool marketplace with x402 pay-per-call micropayments on Base", stage: "MVP — live product, early usage" },
-  "base-protocol-comparison":  { protocol_a: "Aerodrome", protocol_b: "Uniswap v4", use_case: "liquidity pool for BLUEAGENT/ETH pair" },
   // ── On-chain ─────────────────────────────────────────────────────────────────
-  "protocol-risk-monitor":     { protocol: "Aerodrome Finance", position: "ETH/USDC LP — $5k deployed" },
   "contract-trust":            { address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", context: "USDC token on Base" },
   // ── Console commands ──────────────────────────────────────────────────────────
-  "blue-idea":  { prompt: "gasless USDC tipping app for Base builders — reward good code reviews" },
-  "blue-build": { prompt: "x402 pay-per-call AI tool marketplace on Base with USDC micropayments" },
-  "blue-audit": { prompt: "ERC20 token with staking and revenue share — check for reentrancy and access control issues" },
-  "blue-ship":  { prompt: "Base mainnet launch of BLUEAGENT token with Uniswap v4 pool" },
-  "blue-raise": { prompt: "AI agent tool marketplace on Base — pre-revenue, raising a $750k pre-seed" },
   // ── Security ──────────────────────────────────────────────────────────────────
   "honeypot-check":  { token: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" },
   "risk-gate":       { action: "buy token on Uniswap", contractAddress: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", amount: "$50" },
-  "deep-analysis":   { token: "0xf895783b2931c919955e18b5e3343e7c7c456ba3" },
-  "agent-score":     { handle: "@blueagent_" },
   // ── Quantum ───────────────────────────────────────────────────────────────────
-  "key-exposure":    { address: "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045" },
   // ── On-chain Data ─────────────────────────────────────────────────────────────
-  "dex-flow":        { token: "0xf895783b2931c919955e18b5e3343e7c7c456ba3" },
   // ── Earn ──────────────────────────────────────────────────────────────────────
   // ── Alerts ────────────────────────────────────────────────────────────────────
   // ── Launch (extended) ─────────────────────────────────────────────────────────
@@ -1155,56 +1131,56 @@ const TOOL_GROUPS: { id: string; label: string; desc: string; color: string; ids
     label: "For Traders",
     desc: "Signals, market intel, portfolio tools",
     color: "#4FC3F7",
-    ids: ["token-pick-signal", "narrative-position", "defi-opportunity", "token-momentum-scanner", "ecosystem-digest", "protocol-risk-monitor", "narrative-pulse"],
+    ids: [],
   },
   {
     id: "founders",
     label: "For Founders",
     desc: "Launch, market fit, growth, fundraising",
     color: "#A78BFA",
-    ids: ["market-fit", "token-launch-readiness", "competitor-scan", "base-grant-finder"],
+    ids: [],
   },
   {
     id: "investors",
     label: "For Investors",
     desc: "Due diligence, memos, pitch intel",
     color: "#34D399",
-    ids: ["builder-deep-dd", "base-protocol-comparison", "agent-score"],
+    ids: [],
   },
   {
     id: "blue",
     label: "Blue Commands",
     desc: "Idea → build → audit → ship → raise",
     color: "#60A5FA",
-    ids: ["blue-idea", "blue-build", "blue-audit", "blue-ship", "blue-raise", "blue-research", "blue-compose", "blue-monitor", "blue-analytics", "blue-simulate", "blue-deploy", "blue-stream", "blue-registry"],
+    ids: ["blue-registry"],
   },
   {
     id: "security",
     label: "Security & Safety",
     desc: "Honeypot, risk gate, contract trust, wallet & token safety",
     color: "#F87171",
-    ids: ["honeypot-check", "risk-gate", "deep-analysis", "contract-trust", "key-exposure", "wallet-risk", "liquidity-depth"],
+    ids: ["honeypot-check", "risk-gate", "contract-trust", "wallet-risk", "liquidity-depth"],
   },
   {
     id: "onchain",
     label: "On-chain Data",
     desc: "Wallet PnL, AML, airdrops, whale tracking, DEX flow",
     color: "#FACC15",
-    ids: ["dex-flow", "token-price", "pool-scan", "wallet-holdings", "gas-tracker"],
+    ids: ["token-price", "pool-scan", "wallet-holdings", "gas-tracker"],
   },
   {
     id: "automation",
     label: "Analytics & Automation",
     desc: "Repo health, builder network, protocol monitoring",
     color: "#FB923C",
-    ids: ["repo-health"],
+    ids: [],
   },
   {
     id: "agents",
     label: "Agent Economy",
     desc: "Multi-agent workflows, revenue, collab",
     color: "#94A3B8",
-    ids: ["agent-performance", "agent-collab-match"],
+    ids: [],
   },
 ];
 

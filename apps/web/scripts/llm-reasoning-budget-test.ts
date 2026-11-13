@@ -270,7 +270,7 @@ async function main() {
     await settle(ask(asked));
     return sent[0]?.max_tokens ?? -1;
   };
-  const w800 = await wireFor(800); // b20-analyze's real budget
+  const w800 = await wireFor(800); // the largest per-call budget a model tool asks for
   const headroom = w800 - 800;
   check(
     `headroom clears the measured peak (${MEASURED_PEAK_REASONING})`,
@@ -278,7 +278,7 @@ async function main() {
     `headroom=${headroom}`,
   );
   {
-    const w1500 = await wireFor(1500); // builder-deep-dd's final synthesis
+    const w1500 = await wireFor(1500); // a long-form synthesis budget
     const wDefault = await wireFor(undefined); // llm.ts defaults the answer to 1000
     const wTiny = await wireFor(50); // below the floor
     check("scales with the caller's ask", w1500 - 1500 === headroom, `1500 → ${w1500}`);

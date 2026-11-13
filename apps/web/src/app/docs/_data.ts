@@ -131,7 +131,6 @@ export const COMMANDS_DOCS = [
   ]},
   { group: "REPUTATION", items: [
     { cmd: "blue score [handle]",       desc: "Builder Score for a wallet or X handle",                        example: "blue score @blueagent_" },
-    { cmd: "blue agent-score [input]",  desc: "Evaluate an agent's reliability score",                         example: "blue agent-score 0x…" },
     { cmd: "blue compare [a] [b]",      desc: "Compare two builders or agents side by side",                   example: "blue compare @a @b" },
   ]},
   // `search`, `trending`, `watch`, `history`, `launch` and `market` were listed here until
@@ -237,13 +236,6 @@ export const SKILLS_DOCS = [
 ];
 
 export const X402_SUITE = [
-  { id: "blue-research",  price: "$1.00", color: "#60a5fa", desc: "Deep DD memo — grounds in live market data" },
-  { id: "blue-compose",   price: "$0.10", color: "#34D399", desc: "Plan a runnable chain of Blue Hub tools" },
-  { id: "blue-monitor",   price: "$0.20", color: "#f87171", desc: "Health + risk snapshot for a token/contract" },
-  { id: "blue-deploy",    price: "$0.10", color: "#34D399", desc: "Base deploy mechanics — scripts, verify" },
-  { id: "blue-analytics", price: "$0.25", color: "#60a5fa", desc: "Live token metrics + interpretation" },
-  { id: "blue-simulate",  price: "$0.15", color: "#A78BFA", desc: "Bull/base/bear scenario modeling" },
-  { id: "blue-stream",    price: "$0.05", color: "#34D399", desc: "Live Base onchain activity feed" },
   { id: "blue-registry",  price: "$0.05", color: "#fbbf24", desc: "Discover the full tool catalog" },
 ];
 

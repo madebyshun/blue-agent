@@ -8,12 +8,18 @@ export interface BlueAgentProviderOptions extends BlueAgentClientOptions {
 /**
  * Creates a Blue Agent action provider compatible with Coinbase AgentKit's ActionProvider pattern.
  *
- * Exposes the 12 x402 tools on Base that actually resolve to a live handler.
+ * Exposes the 3 x402 tools on Base that actually resolve to a live handler.
+ *
  * This was 32 until v1.3.0; the other 20 ids existed in neither AGENT_TOOLS nor
  * HANDLERS and were refused by production (501 then, 404 UNKNOWN_TOOL_ID since
- * 2026-09-28), so they were never callable. Do not
- * add an action here without checking the id against
- * https://blueagent.dev/api/catalog — apps/web/scripts/docs-truth-check.ts pins it.
+ * 2026-09-28), so they were never callable.
+ *
+ * 2026-11-13: the tool surface was cut 72 -> 29 and four of the actions here —
+ * key_exposure, deep_analysis, narrative_pulse, dex_flow — called ids that no
+ * longer have a handler, so calling one would answer 404 UNKNOWN_TOOL_ID. They
+ * were removed rather than left advertised. Do not add an action here without
+ * checking the id against https://blueagent.dev/api/catalog —
+ * apps/web/scripts/docs-truth-check.ts pins it.
  */
 export function createBlueAgentProvider(options: BlueAgentProviderOptions = {}) {
   return {
@@ -62,53 +68,10 @@ export function createBlueAgentProvider(options: BlueAgentProviderOptions = {}) 
           callTool("contract-trust", args as Record<string, unknown>, options),
       },
 
-      {
-        name: "key_exposure",
-        description:
-          "Check if a wallet address has been flagged for private key exposure or compromise on Base. Price: $0.50 USDC.",
-        schema: z.object({
-          address: z.string().describe("Wallet address to check (0x…)"),
-        }),
-        invoke: async (args: { address: string }) =>
-          callTool("key-exposure", args as Record<string, unknown>, options),
-      },
-
-      {
-        name: "deep_analysis",
-        description:
-          "Comprehensive deep-dive analysis of a token — fundamentals, tokenomics, on-chain activity, and risk score on Base. Price: $0.50 USDC.",
-        schema: z.object({
-          token: z.string().describe("Token address (0x…) or symbol (e.g. USDC)"),
-        }),
-        invoke: async (args: { token: string }) =>
-          callTool("deep-analysis", args as Record<string, unknown>, options),
-      },
 
 
-      {
-        name: "narrative_pulse",
-        description:
-          "Get the current narrative trends and sentiment pulse in crypto — optionally filtered by topic. Price: $0.10 USDC.",
-        schema: z.object({
-          topic: z
-            .string()
-            .describe("Optional topic to focus on (e.g. DeFi, AI agents, Base)")
-            .optional(),
-        }),
-        invoke: async (args: { topic?: string }) =>
-          callTool("narrative-pulse", args as Record<string, unknown>, options),
-      },
 
-      {
-        name: "dex_flow",
-        description:
-          "Analyze DEX trading flow and order book depth for a token on Base. Price: $0.15 USDC.",
-        schema: z.object({
-          token: z.string().describe("Token address (0x…) or trading pair (e.g. ETH/USDC)"),
-        }),
-        invoke: async (args: { token: string }) =>
-          callTool("dex-flow", args as Record<string, unknown>, options),
-      },
+
 
     ],
   };

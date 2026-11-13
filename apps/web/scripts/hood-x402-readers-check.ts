@@ -1,25 +1,24 @@
 /**
- * The two free Blue Hood readers — `hood-live` and `hood-track-record`.
+ * The free Blue Hood reader `hood-live`.
+ *
+ * (`hood-track-record` was retired on 2026-11-13 — 72 tools -> 29 — so the
+ * `T.` group that watched it went with the handler. Its cases are in git
+ * history if the endpoint is ever reinstated.)
  *
  * Run: `npx tsx scripts/hood-x402-readers-check.ts` from `apps/web/`.
  * Also runs automatically under `npm test` (opt-out discovery in run-tests.ts).
  *
  * ═══ WHY THIS FILE EXISTS ═══
  *
- * Both handlers are deliberately THIN — they wrap library functions that already
- * encode the hard-won rules (`getPublicTrackRecordProbe` owns the outage shape,
- * `partitionBaseRows` owns chain attribution, `hit-rate-gate` owns the sample
- * threshold). Thin is the right shape and it is also the danger: every invariant
- * they depend on lives in a DIFFERENT file, so a wrapper can be rewritten into a
- * liar without touching a single line the other guards watch.
+ * The handler is deliberately THIN — it wraps library functions that already
+ * encode the hard-won rules (`partitionBaseRows` owns chain attribution,
+ * `hit-rate-gate` owns the sample threshold). Thin is the right shape and it is
+ * also the danger: every invariant it depends on lives in a DIFFERENT file, so
+ * a wrapper can be rewritten into a liar without touching a single line the
+ * other guards watch.
  *
  * Concretely, each of these is one small edit away and none of them fails to
  * compile:
- *   · swap `getPublicTrackRecordProbe` for the older `readPublicArrows` shape and
- *     a dead database starts reporting "we have never fired an arrow" — on the
- *     one endpoint whose entire purpose is to prove that we have;
- *   · emit `pct` from `pct_internal` and the withheld percentage is published
- *     below its own sample gate;
  *   · let `parseHoodChain` fall back to `"robinhood"` and a Base question gets
  *     answered with Robinhood rows;
  *   · call `chainOf` instead of testing `r.chain === "base"` and an unattributed
@@ -32,16 +31,10 @@
  *
  * ═══ HOW TO READ A CASE ═══
  *
- * Cases are grouped by handler (T = track record, L = live) and every one names
- * the single edit that must make it go red. A case with no such edit is
- * decoration and should be deleted rather than kept for the count.
+ * Every case names the single edit that must make it go red. A case with no
+ * such edit is decoration and should be deleted rather than kept for the count.
  *
  * NEGATIVE CONTROLS — make the change, this suite must go red:
- *   a. `hood-track-record`: return a record instead of 503 on `status !== "ok"` ... T1
- *   a'. `hood-track-record`: answer 503 unconditionally .......................... T1b
- *   b. `hood-track-record`: emit `pct` when `ready === false` ....................... T2
- *   c. `hood-track-record`: spread `pct_internal` into the response ................. T3
- *   d. `hood-track-record`: emit `confidence_interval` unconditionally .............. T4, T5
  *   e. `hood-live`: default an absent `chain` input to `"robinhood"` ................ L1
  *   f. `hood-live`: accept an unknown chain instead of 400ing ....................... L2
  *   g. `hood-live`: use `chainOf` in place of the `r.chain === "base"` test ......... L5
@@ -260,128 +253,6 @@ async function main() {
     process.exit(1);
   }
   console.log("  ✓ safety gate — no KV credentials; in-memory fallback\n");
-
-  // ══════════════════════════════════════════════════════════════════════════
-  // T. hood-track-record
-  // ══════════════════════════════════════════════════════════════════════════
-
-  // ── T1: an UNREADABLE feed is NOT an empty record ─────────────────────────
-  // The single most important assertion here. `getPublicTrackRecordProbe` can
-  // answer "unavailable"; the deleted shape it replaced answered `[]`, which
-  // `buildPublicTrackRecord` turns into a confident `total_graded: 0` — i.e.
-  // "Blue Hood has never fired an arrow" — on the one endpoint whose purpose is
-  // to prove that it has.
-  //
-  // The fault must be a THROW, not a missing key. That distinction is the whole
-  // point and it is easy to get wrong in the fixture rather than the code: the
-  // first draft of this case deleted the key and asserted 503, which failed
-  // against a CORRECT handler. A deleted key is a cold start, and a cold start
-  // really does have zero arrows — see T1b.
-  console.log("T1. the arrow feed cannot be READ (KV throws)");
-  {
-    await seedArrows([arrow(0, true), arrow(1, false)]);
-    const { status, body } = await withReadFailure(() => call("hood-track-record", {}));
-    check("answers 503, not 200", status === 503, `got ${status}`);
-    check("names the cause", body.error === "arrow_feed_unavailable", String(body.error));
-    check(
-      "does NOT ship a record",
-      body.headline === undefined && body.receipts === undefined,
-      "headline/receipts must be absent",
-    );
-    check(
-      "says the record is unknown rather than empty",
-      typeof body.note === "string" && /NOT a claim that zero arrows exist/i.test(body.note),
-      String(body.note),
-    );
-  }
-
-  // ── T1b: a COLD START is a real empty record, and answers 200 ─────────────
-  // The counterpart to T1, and load-bearing in the same way group C is in
-  // `track-record-read-test.ts`: without it, "always answer 503" would satisfy
-  // T1 forever while taking the proof endpoint permanently dark. An absent key
-  // is not an outage — it is the honest statement that nothing has been stored
-  // yet, and the gate already says `ready: false` rather than inventing a rate.
-  console.log("\nT1b. no arrow feed stored yet (cold start)");
-  {
-    await kvDel(KV_ARROW_HYDRATED);
-    const { status, body } = await call("hood-track-record", {});
-    check("answers 200 — absent is not unreadable", status === 200, `got ${status}`);
-    check("ships a real record", body.receipts !== undefined, "receipts must be present");
-    check(
-      "and still publishes no percentage",
-      dig(body, "headline", "hit_rate", "pct") === undefined,
-      JSON.stringify(dig(body, "headline", "hit_rate")),
-    );
-    check(
-      "does NOT report the outage cause",
-      body.error === undefined,
-      String(body.error),
-    );
-  }
-
-  // ── T2/T3: below the gate, there is no percentage anywhere ────────────────
-  // `statsFor` computes `pct_internal` unconditionally. The whole gate is the
-  // sanitize step that strips it. If the wrapper spreads the raw object, a
-  // percentage computed from 3 arrows gets published as a hit rate.
-  console.log("\nT2/T3. a sample BELOW the aggregate gate");
-  {
-    await seedArrows([arrow(0, true), arrow(1, true), arrow(2, false)]);
-    const { status, body } = await call("hood-track-record", {});
-    const hr = dig(body, "headline", "hit_rate");
-    check("still answers 200 — a small sample is data, not an outage", status === 200, `got ${status}`);
-    check("ready is false", hr?.ready === false, JSON.stringify(hr?.ready));
-    check("publishes NO percentage", hr?.pct === undefined, JSON.stringify(hr?.pct));
-    check(
-      "says how many more it needs",
-      hr?.needed === HIT_RATE_MIN_SAMPLE_AGGREGATE,
-      `${hr?.needed} vs ${HIT_RATE_MIN_SAMPLE_AGGREGATE}`,
-    );
-    check("pct_internal never reaches the wire", !("pct_internal" in (hr ?? {})), JSON.stringify(hr));
-    // T4 half: a CI is an attribute of a PUBLISHED percentage. Emitting one
-    // below the gate would republish the withheld number as an interval.
-    check(
-      "no confidence interval below the gate",
-      hr?.confidence_interval === undefined,
-      JSON.stringify(hr?.confidence_interval),
-    );
-  }
-
-  // ── T4/T5: above the gate, the interval appears and agrees with pct ───────
-  // Without this case, "never emit a CI" would pass T2 forever while the
-  // feature silently did nothing.
-  console.log("\nT4/T5. a sample ABOVE the aggregate gate");
-  {
-    const n = HIT_RATE_MIN_SAMPLE_AGGREGATE + 10;
-    await seedArrows(Array.from({ length: n }, (_, i) => arrow(i, i % 10 < 7)));
-    const { status, body } = await call("hood-track-record", {});
-    const hr = dig(body, "headline", "hit_rate");
-    check("answers 200", status === 200, `got ${status}`);
-    check("ready is true", hr?.ready === true, JSON.stringify(hr?.ready));
-    check("publishes a percentage", typeof hr?.pct === "number", JSON.stringify(hr?.pct));
-    const ci = hr?.confidence_interval;
-    check("ships a confidence interval", ci !== undefined, JSON.stringify(ci));
-    check("labels its basis", ci?.basis === "wilson_95", String(ci?.basis));
-    check(
-      "interval is inside [0,1] — the Wilson property the normal approximation lacks",
-      ci?.low >= 0 && ci?.high <= 1 && ci.low <= ci.high,
-      JSON.stringify(ci),
-    );
-    // The gate's integer must remain the published one. Re-deriving a sharper
-    // percentage here would put two different hit rates on two pages of one site.
-    check(
-      "pct sits inside its own interval",
-      hr.pct / 100 >= ci.low - 0.0001 && hr.pct / 100 <= ci.high + 0.0001,
-      `pct=${hr.pct} ci=${JSON.stringify(ci)}`,
-    );
-    check("pct_internal still never reaches the wire", !("pct_internal" in hr), JSON.stringify(hr));
-    // Receipts are the point of a free scoreboard: they must be recomputable.
-    check(
-      "returns receipts so the number can be recomputed",
-      Array.isArray(dig(body, "receipts", "arrows")),
-      JSON.stringify(Object.keys(dig(body, "receipts") ?? {})),
-    );
-    check("window says whether the record was truncated", typeof dig(body, "window", "truncated") === "boolean");
-  }
 
   // ══════════════════════════════════════════════════════════════════════════
   // L. hood-live

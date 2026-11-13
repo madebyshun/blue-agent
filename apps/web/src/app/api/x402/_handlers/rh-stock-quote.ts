@@ -92,7 +92,7 @@ export default async function handler(req: Request): Promise<Response> {
       ticker,
       price_usd: null,
       source: null,
-      error: "Ticker not found. Use rh-stock-search for fuzzy matches.",
+      error: "Ticker not found. Call rh-stock-movers or rh-stock-holders to list the tickers this chain trades.",
       network: RH_CHAIN,
       timestamp,
     }, { status: 404 });

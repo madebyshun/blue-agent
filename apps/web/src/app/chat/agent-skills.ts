@@ -83,9 +83,6 @@ const LOOP_SKILLS: AgentSkill[] = [
   { id: "discover-rh-movers", group: "discover", chains: ["robinhood"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR,
     name: "Robinhood movers", description: "Biggest 24h movers among Robinhood Chain stock tokens, from their pools",
     trigger: "Top movers on Robinhood Chain today", tools: ["hub_rh_movers"], meterIds: ["rh-stock-movers"] },
-  { id: "discover-rh-new", group: "discover", chains: ["robinhood"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR,
-    name: "New on Robinhood", description: "Stock tokens newly listed on Robinhood Chain",
-    trigger: "What's newly listed on Robinhood Chain?", tools: ["hub_rh_new_listings"], meterIds: ["rh-stock-new-listings"] },
   { id: "discover-price", group: "discover", chains: ["base", "robinhood"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR,
     name: "Token price", description: "Live price, 24h change, market cap and volume for a token",
     // No meterIds: chat calls /api/token-price directly (FREE_DIRECT in
@@ -129,12 +126,6 @@ const LOOP_SKILLS: AgentSkill[] = [
   { id: "stocks-rh-quote", group: "stocks", chains: ["robinhood"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR,
     name: "Oracle quote", description: "Chainlink price for a Robinhood Chain stock token, with the round's age and staleness",
     trigger: "Oracle price of NVDA on Robinhood Chain", tools: ["hub_rh_quote"], meterIds: ["rh-stock-quote"] },
-  { id: "stocks-rh-search", group: "stocks", chains: ["robinhood"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR,
-    name: "Find a stock token", description: "Look a company up in the Robinhood Chain token registry — by contract, never by a guessed address",
-    trigger: "Find Tesla on Robinhood Chain", tools: ["hub_rh_search"], meterIds: ["rh-stock-search"] },
-  { id: "stocks-b20", group: "stocks", chains: ["base"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR,
-    name: "B20 stock on Base", description: "Inspect a Coinbase B20 tokenized stock — read on-chain from its own contract",
-    trigger: "Inspect the NVDA B20 token on Base", tools: ["hub_b20_inspect"], meterIds: ["b20-inspect"] },
 ];
 
 /** Chat tools that carry NO tool fee: the native cards and readers, and the
@@ -317,24 +308,6 @@ export const AGENT_SKILLS: AgentSkill[] = [
   // (hub_repo_health, hub_base_grant, hub_builder_dd left chat —
   // docs/rebuild-5-tang-2026-09-30.md). The same pack is retired in
   // chat/integrations.ts.
-  {
-    id:          "bundle-trader-intel",
-    group:       "discover",
-    chains:      ["base"],
-    name:        "Trader Intel",
-    description: "Market facts — token pick, tax-checked trending, DEX flow",
-    provider:    "Bundled",
-    status:      "active",
-    trigger:     "Give me full trader intel on: ",
-    // Was 5 tools with hub_whale_signal, which left chat 2026-09-30 (Moralis
-    // upstream paused). hub_narrative_pulse and hub_token_momentum left on
-    // 2026-10-06 (model-written labels and LLM entry/target zones, outside the
-    // five-layer loop); hub_safe_trending replaces them with a measured feed.
-    badge:       "Bundle · 3 tools",
-    tools:       ["hub_token_pick", "hub_safe_trending", "hub_dex_flow"],
-    author:      BLUE_AUTHOR,
-    meterIds:    ["token-pick-signal", "safe-trending", "dex-flow"],
-  },
 
   {
     id:          "base-erc4337",

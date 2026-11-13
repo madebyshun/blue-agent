@@ -29,7 +29,9 @@
  *
  * Hermetic: KV env cleared (in-memory ledger), every fetch stubbed — the LLM
  * returns a scripted tool call, NEXT_PUBLIC_APP_URL points at an .invalid host,
- * and the tool used (rh-stock-search) is a pure registry lookup.
+ * and the tools used are network-free: blue-registry (a pure catalog read)
+ * for the success path, honeypot-check for the 400 path (it validates the
+ * token address before any RPC call).
  */
 for (const k of ["KV_REST_API_URL", "KV_REST_API_TOKEN", "UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN"]) {
   delete process.env[k];
@@ -42,11 +44,14 @@ import { NextRequest } from "next/server";
 import { getBalance, getLedgerHistory } from "../src/lib/credit-ledger";
 import { toolCreditCost, CREDIT_PRICE_OVERRIDE } from "../src/lib/credit-pricing";
 
-// rh-stock-search is free in chat since 2026-10-21 (data-only tools cost
-// nothing on top of the message). This suite tests the DEBIT RAIL, not a
-// price, and needs a paid tool that runs hermetically — so it prices this
-// pure registry lookup for its own run only.
-(CREDIT_PRICE_OVERRIDE as Record<string, number>)["rh-stock-search"] = 40;
+// The fixture tools. blue-registry is free in chat (data-only tools cost
+// nothing on top of the message) but it is the only catalog tool chat offers
+// that runs with no network at all — a pure read of AGENT_TOOLS plus an
+// in-memory job list. This suite tests the DEBIT RAIL, not a price, so it
+// prices both fixtures for its own run only.
+// (rh-stock-search served this role until it was retired on 2026-11-13.)
+(CREDIT_PRICE_OVERRIDE as Record<string, number>)["blue-registry"] = 40;
+(CREDIT_PRICE_OVERRIDE as Record<string, number>)["honeypot-check"] = 40;
 import { getTierInfo } from "../src/lib/credits";
 
 let passes = 0;
@@ -56,10 +61,16 @@ function check(label: string, pass: boolean, detail = "") {
   if (pass) passes++; else failures++;
 }
 
-const TOOL_NAME = "hub_rh_search";
-const TOOL_ID = "rh-stock-search";
+// Phase 1/3 use a tool that succeeds offline; phase 2 needs one that answers
+// 400 BEFORE touching the network (honeypot-check validates the address first).
+const OK_TOOL_NAME = "blue_registry";
+const OK_TOOL_ID = "blue-registry";
+const FAIL_TOOL_NAME = "hub_honeypot";
+const FAIL_TOOL_ID = "honeypot-check";
+let TOOL_NAME = OK_TOOL_NAME;
+let TOOL_ID = OK_TOOL_ID;
 
-// The tool call Phase 1 "decides" on — set per turn.
+// The tool call each phase "decides" on — set per turn.
 let scriptedArgs: Record<string, unknown> = {};
 const outbound: string[] = [];
 const realFetch = globalThis.fetch;
@@ -107,9 +118,9 @@ async function sseEvents(res: Response): Promise<Array<Record<string, unknown>>>
     .map((l) => { try { return JSON.parse(l.slice(6)) as Record<string, unknown>; } catch { return {}; } });
 }
 const x402Calls = () => outbound.filter((u) => u.includes("/api/x402/"));
-const toolKinds = async (who: string) =>
+const toolKinds = async (who: string, id = TOOL_ID) =>
   ((await getLedgerHistory(who))?.history ?? [])
-    .filter((e) => String((e as { reason?: string }).reason ?? "").startsWith(`tool:${TOOL_ID}`) || e.kind === "refund")
+    .filter((e) => String((e as { reason?: string }).reason ?? "").startsWith(`tool:${id}`) || e.kind === "refund")
     .map((e) => e.kind as string);
 
 (async () => {
@@ -126,7 +137,7 @@ const toolKinds = async (who: string) =>
     const USER = "0x1111111111111111111111111111111111111111";
     const before = (await getBalance(USER)).balance;
     outbound.length = 0;
-    scriptedArgs = { query: "tesla" };
+    scriptedArgs = { query: "registry" };
     const ev = await sseEvents(await CHAT(chatReq(asUser(USER))));
     const done = ev.find((e) => e.type === "tool_done" && e.tool === TOOL_NAME);
     const after = (await getBalance(USER)).balance;
@@ -142,9 +153,11 @@ const toolKinds = async (who: string) =>
   console.log("\n2. A paid tool that fails — debited, then refunded, reported as 0");
   {
     const USER = "0x2222222222222222222222222222222222222222";
+    TOOL_NAME = FAIL_TOOL_NAME;
+    TOOL_ID = FAIL_TOOL_ID;
     const before = (await getBalance(USER)).balance;
     outbound.length = 0;
-    scriptedArgs = {}; // no `query` → the handler answers 400 before any lookup
+    scriptedArgs = {}; // no `token` → honeypot-check answers 400 before any RPC call
     const ev = await sseEvents(await CHAT(chatReq(asUser(USER))));
     const done = ev.find((e) => e.type === "tool_done" && e.tool === TOOL_NAME);
     const after = (await getBalance(USER)).balance;
@@ -158,8 +171,10 @@ const toolKinds = async (who: string) =>
 
   console.log("\n3. A guest — no wallet, no free paid run");
   {
+    TOOL_NAME = OK_TOOL_NAME;
+    TOOL_ID = OK_TOOL_ID;
     outbound.length = 0;
-    scriptedArgs = { query: "tesla" };
+    scriptedArgs = { query: "registry" };
     const ev = await sseEvents(await CHAT(chatReq({})));
     check("3.1 no request went to /api/x402/*", x402Calls().length === 0, x402Calls().join(", "));
     check("3.2 the stream short-circuits to wallet_required",

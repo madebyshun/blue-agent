@@ -8,15 +8,9 @@ import { TOOL_COUNT } from "@/lib/agent-tools";
 export const metadata = { title: "Blue Chat — Blue Agent Docs" };
 
 const SLASH = [
-  { cmd: "/idea",   d: "Turn a concept into a fundable brief (also: market-fit check)." },
-  { cmd: "/build",  d: "Architecture, stack, and folder structure for a Base project." },
-  { cmd: "/audit",  d: "Security review + deep analysis — reentrancy, oracle, MEV." },
-  { cmd: "/ship",   d: "Deployment checklist, verification, and go-to-market brief." },
-  { cmd: "/raise",  d: "Pitch narrative + investor memo for a fundraise." },
-  { cmd: "/pick",   d: "Top Base token by on-chain quality score — facts only, no buy/sell call." },
-  { cmd: "/scan",   d: "Honeypot / contract safety scan on a token address." },
-  { cmd: "/wallet", d: "Full on-chain portfolio breakdown for a wallet." },
-  { cmd: "/launch", d: "Deploy a B20 token on Base — opens a form card you sign in your own wallet." },
+  { cmd: "/help",    d: "What this chat can do — tools, skills and credit tiers it will actually reach." },
+  { cmd: "/credits", d: "Your credit balance, tier and daily allowance." },
+  { cmd: "/skill",   d: "Pick an agent skill from the list and run it inline." },
 ];
 
 export default function BlueChatDoc() {
@@ -51,7 +45,11 @@ export default function BlueChatDoc() {
       </CardGrid>
 
       <H2 id="slash">Slash commands</H2>
-      <P>Type <code className="text-slate-300">/</code> in the composer to run a command inline — the same power as the CLI.</P>
+      <P>
+        Three commands are wired into this chat. The workflow tools — idea, build, audit, ship,
+        raise — are not slash commands here: ask for them in plain language and the agent runs them
+        the same way.
+      </P>
       <div className="rounded-2xl border border-[#1A1A2E] bg-[#0d0d12] overflow-hidden divide-y divide-[#1A1A2E] my-5">
         {SLASH.map((s) => (
           <div key={s.cmd} className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-4 px-5 py-3">

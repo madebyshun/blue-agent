@@ -235,236 +235,41 @@ const CONSOLE_TOOLS = [
 // Hub tools — call blueagent.dev/api/v1/{id}
 const HUB_TOOLS = [
   {
-    name: "hub_agent_score",
-    toolId: "agent-score",
-    description: "Agent Score — XP system for AI agents on Base. Tracks interactions, signals, uptime.",
-    inputSchema: { type: "object", properties: { handle: { type: "string", description: "Agent handle or name" } }, required: ["handle"] },
-  },
-  {
-    name: "hub_market_fit",
-    toolId: "market-fit",
-    description: "Market fit analysis for a Base project — problem clarity, timing, competition, demand signals.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        project: { type: "string", description: "Project description" },
-        url: { type: "string", description: "Project URL (optional)" },
+      name: "hub_risk_gate",
+      toolId: "risk-gate",
+      description: "Screen any transaction before execution — rug check, AML, malicious contract patterns.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          action: { type: "string", description: "transfer | swap | approve | call" },
+          to: { type: "string", description: "Target address 0x..." },
+          value: { type: "string", description: "Amount in Wei (optional)" },
+        },
+        required: ["action", "to"],
       },
-      required: ["project"],
     },
-  },
   {
-    name: "hub_token_pick",
-    toolId: "token-pick-signal",
-    description: "AI token pick — falsifiable thesis, entry, sizing, kill criterion. Returns NO_PICK when nothing clears the bar.",
-    inputSchema: {
-      type: "object",
-      properties: { context: { type: "string", description: "Market context or narrative to consider (optional)" } },
-    },
-  },
-  {
-    name: "hub_narrative",
-    toolId: "narrative-position",
-    description: "Narrative map — mindshare scores, velocity arrows, phase labels (Emerging/Rising/Peak/Fading), position calls.",
-    inputSchema: {
-      type: "object",
-      properties: { focus: { type: "string", description: "Specific narratives to track (optional)" } },
-    },
-  },
-  {
-    name: "hub_ecosystem",
-    toolId: "ecosystem-digest",
-    description: "Daily Base ecosystem digest — top launches, protocol updates, builder activity.",
-    inputSchema: {
-      type: "object",
-      properties: { focus: { type: "string", description: "Focus area e.g. DeFi, AI agents, NFT (optional)" } },
-    },
-  },
-  {
-    name: "hub_competitor_scan",
-    toolId: "competitor-scan",
-    description: "Competitor analysis — direct/indirect competitors and your defensible edge.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        project: { type: "string", description: "Your project description" },
-        category: { type: "string", description: "Category e.g. DeFi lending, AI agent" },
+      name: "hub_honeypot",
+      toolId: "honeypot-check",
+      description: "Detect honeypot tokens that cannot be sold after purchase.",
+      inputSchema: {
+        type: "object",
+        properties: { token: { type: "string", description: "Token contract address on Base" } },
+        required: ["token"],
       },
-      required: ["project"],
     },
-  },
   {
-    name: "hub_repo_health",
-    toolId: "repo-health",
-    description: "GitHub repo health — commit velocity, test coverage, dependency risk, bus factor.",
-    inputSchema: {
-      type: "object",
-      properties: { url: { type: "string", description: "GitHub repository URL" } },
-      required: ["url"],
+      name: "hub_contract_trust",
+      toolId: "contract-trust",
+      description: "Trust score for any smart contract — code quality, upgrade risk, ownership, audit history.",
+      inputSchema: { type: "object", properties: { contract: { type: "string", description: "Contract address 0x..." } }, required: ["contract"] },
     },
-  },
   {
-    name: "hub_base_grant",
-    toolId: "base-grant-finder",
-    description: "Find active grants and funding for your Base project.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        project: { type: "string", description: "Project description" },
-        stage: { type: "string", description: "idea | build | live" },
-      },
-      required: ["project"],
+      name: "blue_registry",
+      toolId: "blue-registry",
+      description: "Discover the Blue Hub tool catalog — every callable x402 tool (first-party + community), filterable by query/category, with prices and how-to-call.",
+      inputSchema: { type: "object", properties: { query: { type: "string", description: "Optional search term" }, category: { type: "string", description: "Optional category filter" } } },
     },
-  },
-  {
-    name: "hub_risk_gate",
-    toolId: "risk-gate",
-    description: "Screen any transaction before execution — rug check, AML, malicious contract patterns.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        action: { type: "string", description: "transfer | swap | approve | call" },
-        to: { type: "string", description: "Target address 0x..." },
-        value: { type: "string", description: "Amount in Wei (optional)" },
-      },
-      required: ["action", "to"],
-    },
-  },
-  {
-    name: "hub_honeypot",
-    toolId: "honeypot-check",
-    description: "Detect honeypot tokens that cannot be sold after purchase.",
-    inputSchema: {
-      type: "object",
-      properties: { token: { type: "string", description: "Token contract address on Base" } },
-      required: ["token"],
-    },
-  },
-  {
-    name: "hub_deep_analysis",
-    toolId: "deep-analysis",
-    description: "Comprehensive token fundamentals — on-chain activity, holder distribution, risk signals.",
-    inputSchema: {
-      type: "object",
-      properties: { token: { type: "string", description: "Token contract address" } },
-      required: ["token"],
-    },
-  },
-  // ── Security (extended) ────────────────────────────────────────────────────
-  {
-    name: "hub_contract_trust",
-    toolId: "contract-trust",
-    description: "Trust score for any smart contract — code quality, upgrade risk, ownership, audit history.",
-    inputSchema: { type: "object", properties: { contract: { type: "string", description: "Contract address 0x..." } }, required: ["contract"] },
-  },
-  {
-    name: "hub_key_exposure",
-    toolId: "key-exposure",
-    description: "Check if a wallet's public key is exposed on-chain (quantum vulnerability risk).",
-    inputSchema: { type: "object", properties: { address: { type: "string", description: "Wallet address 0x..." } }, required: ["address"] },
-  },
-  // ── Research (extended) ────────────────────────────────────────────────────
-  {
-    name: "hub_token_momentum",
-    toolId: "token-momentum-scanner",
-    description: "Token momentum scanner — price velocity, volume spikes, social acceleration for Base tokens.",
-    inputSchema: { type: "object", properties: { token: { type: "string" }, limit: { type: "number" } } },
-  },
-  // ── Builder (extended) ─────────────────────────────────────────────────────
-  {
-    name: "hub_token_launch",
-    toolId: "token-launch-readiness",
-    description: "Token launch readiness score (0-100) — narrative fit, liquidity, community, timing. GO/WAIT + action items.",
-    inputSchema: { type: "object", properties: { name: { type: "string" }, ticker: { type: "string" }, description: { type: "string" } }, required: ["name", "ticker", "description"] },
-  },
-  {
-    name: "hub_builder_dd",
-    toolId: "builder-deep-dd",
-    description: "Deep due diligence on a builder — onchain history, shipped projects, GitHub activity, reputation.",
-    inputSchema: { type: "object", properties: { handle: { type: "string" } }, required: ["handle"] },
-  },
-  // ── Premium ────────────────────────────────────────────────────────────────
-  {
-    name: "hub_defi_opportunity",
-    toolId: "defi-opportunity",
-    description: "Best DeFi yield opportunities on Base — APY rankings, risk-adjusted returns, protocol safety.",
-    inputSchema: { type: "object", properties: { amount: { type: "string" }, risk: { type: "string" } } },
-  },
-  {
-    name: "hub_protocol_risk",
-    toolId: "protocol-risk-monitor",
-    description: "Real-time risk monitor for a Base DeFi protocol — TVL changes, exploit signals, governance risks.",
-    inputSchema: { type: "object", properties: { protocol: { type: "string" } }, required: ["protocol"] },
-  },
-  // ── Multi-agent ────────────────────────────────────────────────────────────
-  {
-    name: "hub_agent_match",
-    toolId: "agent-collab-match",
-    description: "Find the best collaborator agent for a task — match your project with Base agents by capability.",
-    inputSchema: { type: "object", properties: { task: { type: "string" } }, required: ["task"] },
-  },
-  {
-    name: "hub_agent_perf",
-    toolId: "agent-performance",
-    description: "Performance analytics for an AI agent — response quality, task success rate, user satisfaction.",
-    inputSchema: { type: "object", properties: { agent: { type: "string" } }, required: ["agent"] },
-  },
-  // ── Community ──────────────────────────────────────────────────────────────
-  {
-    name: "hub_narrative_pulse",
-    toolId: "narrative-pulse",
-    description: "Real-time narrative pulse — what's being talked about right now on Base CT, velocity and sentiment.",
-    inputSchema: { type: "object", properties: { focus: { type: "string" } } },
-  },
-  // ── blue-* suite (extended console tools, x402-paid) ───────────────────────
-  {
-    name: "blue_monitor",
-    toolId: "blue-monitor",
-    description: "On-demand health + risk snapshot for a Base token/contract — live price, liquidity, Basescan verification, risk signals + a watch plan with alert thresholds.",
-    inputSchema: { type: "object", properties: { target: { type: "string", description: "Base token/contract address (0x…) or a protocol/token name" }, focus: { type: "string", description: "Optional focus, e.g. liquidity or exit risk" } }, required: ["target"] },
-  },
-  {
-    name: "blue_registry",
-    toolId: "blue-registry",
-    description: "Discover the Blue Hub tool catalog — every callable x402 tool (first-party + community), filterable by query/category, with prices and how-to-call.",
-    inputSchema: { type: "object", properties: { query: { type: "string", description: "Optional search term" }, category: { type: "string", description: "Optional category filter" } } },
-  },
-  {
-    name: "blue_research",
-    toolId: "blue-research",
-    description: "Deep DD memo on a Base project, narrative, or token — thesis, bull/bear, risks, contrarian take, verdict. Grounds in live DexScreener data when a token address is given.",
-    inputSchema: { type: "object", properties: { topic: { type: "string", description: "Project, narrative, or token to research" }, target: { type: "string", description: "Optional 0x token address to ground in live market data" } }, required: ["topic"] },
-  },
-  {
-    name: "blue_compose",
-    toolId: "blue-compose",
-    description: "Turn a goal into a runnable chain of Blue Hub tools — picks from the real catalog, orders the steps, suggests inputs, and estimates cost.",
-    inputSchema: { type: "object", properties: { goal: { type: "string", description: "What you want to accomplish on Base" } }, required: ["goal"] },
-  },
-  {
-    name: "blue_deploy",
-    toolId: "blue-deploy",
-    description: "Technical deploy mechanics for Base mainnet — deploy scripts, Basescan verify commands, env vars, gas notes, post-deploy checks. Never invents addresses.",
-    inputSchema: { type: "object", properties: { project: { type: "string", description: "What you're deploying (contract/app + stack)" }, stack: { type: "string", description: "Optional: Foundry, Hardhat, viem…" } }, required: ["project"] },
-  },
-  {
-    name: "blue_analytics",
-    toolId: "blue-analytics",
-    description: "Performance/metrics read on a Base token — live price, momentum, liquidity health, volume/liquidity ratio, growth signals. Real DexScreener data.",
-    inputSchema: { type: "object", properties: { target: { type: "string", description: "Base token contract address (0x…)" }, focus: { type: "string", description: "Optional focus" } }, required: ["target"] },
-  },
-  {
-    name: "blue_simulate",
-    toolId: "blue-simulate",
-    description: "Bull/base/bear scenario modeling for a Base decision — tokenomics, fee model, growth, runway — with assumptions, projections, and sensitivities.",
-    inputSchema: { type: "object", properties: { scenario: { type: "string", description: "The decision/model to simulate" }, params: { type: "string", description: "Optional parameters/values" } }, required: ["scenario"] },
-  },
-  {
-    name: "blue_stream",
-    toolId: "blue-stream",
-    description: "Live snapshot feed of Base onchain activity — trending & new pools, TVL, real price/volume/liquidity. Pure real data; poll for a near-real-time feed.",
-    inputSchema: { type: "object", properties: { feed: { type: "string", description: "movers | new | all (default movers)" } } },
-  },
 ];
 
 const ALL_TOOLS = [

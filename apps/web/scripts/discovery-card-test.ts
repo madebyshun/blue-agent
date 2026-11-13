@@ -25,12 +25,13 @@ const ROOT = process.cwd();
 const ROUTE = readFileSync(join(ROOT, "src/app/api/chat/route.ts"), "utf8");
 const CARDS = readFileSync(join(ROOT, "src/app/chat/components/ToolCards.tsx"), "utf8");
 
+// Only the discovery cards chat still offers. rh-stock-new-listings,
+// rh-stock-search and rh-rwa-index were retired on 2026-11-13 (72 -> 29 tools),
+// so their names are no longer in ALL_HUB_TOOLS and asserting the wiring for
+// them would test a tool nobody can reach.
 const TOOLS: Record<string, string> = {
   hub_rh_movers: "rh-stock-movers",
-  hub_rh_new_listings: "rh-stock-new-listings",
-  hub_rh_search: "rh-stock-search",
   hub_rh_quote: "rh-stock-quote",
-  hub_rh_index: "rh-rwa-index",
   hub_safe_trending: "safe-trending",
 };
 
@@ -73,22 +74,8 @@ ok("movers: labelled as a Robinhood (Jersey) stock token, not a share",
 ok("movers: a USDG pool opens USDG → token; a WETH pool opens ETH → token",
   movers?.rows[0].quoteVia === "USDG" && movers?.rows[1].quoteVia === "ETH");
 
-const listings = discoveryRows("hub_rh_new_listings", {
-  recent_deployments: [{ ticker: "NEW", contract: TSLA, deployed_at: "2026-09-29T00:00:00Z" }, { ticker: "OLD", contract: NVDA }],
-  new_only: [{ ticker: "NEW", contract: TSLA }],
-});
-ok("new listings: a deployment outside the registry gets no Swap",
-  listings?.rows[0].swappable === false && /registry/.test(listings?.rows[0].noSwapReason ?? ""));
-ok("new listings: a registered one does", listings?.rows[1].swappable === true);
-
 const quoteOnly = discoveryRows("hub_rh_quote", { ticker: "XYZ", contract: null, price_usd: 10 });
 ok("quote: a Chainlink-only ticker (no contract) gets no Swap", quoteOnly?.rows[0].swappable === false);
-
-const index = discoveryRows("hub_rh_index", {
-  stocks: Array.from({ length: 15 }, (_, i) => ({ ticker: `S${i}`, contract: `0x${String(i).padStart(40, "0")}`, kind: "stock" })),
-  etfs: [{ ticker: "E1", contract: `0x${"e".repeat(40)}`, kind: "etf" }],
-});
-ok("index: a long catalog is cut, and the rest is counted", index?.rows.length === 12 && index?.more === 4);
 
 const trending = discoveryRows("hub_safe_trending", {
   tokens: [
@@ -105,12 +92,6 @@ ok("safe-trending: the tax verdict is shown as a fact", /tax check SAFE/.test(tr
 // Labels come from the REGISTRY, not the payload's `kind` (absent from
 // rh-stock-quote / rh-stock-new-listings, and "stable"/"wrapped" for the
 // chain's two utility rows, which every tool can return).
-const search = discoveryRows("hub_rh_search", {
-  matches: [{ ticker: USDG.ticker, name: USDG.name, contract: USDG.contract, kind: "stable" }],
-});
-ok("search: USDG is NOT labelled a Robinhood (Jersey) stock token",
-  !/Stock token|Jersey/.test(search?.rows[0].label ?? "") && /Stablecoin/.test(search?.rows[0].label ?? ""), search?.rows[0].label);
-ok("search: …and gets no Swap (it would open USDG → USDG)", search?.rows[0].swappable === false);
 const etfQuote = discoveryRows("hub_rh_quote", { ticker: ETF.ticker, contract: ETF.contract, price_usd: 500 });
 ok(`quote: an ETF (${ETF.ticker}) with no \`kind\` in the payload is still labelled an ETF token`,
   /^ETF token \(Robinhood, Jersey\)/.test(etfQuote?.rows[0].label ?? ""), etfQuote?.rows[0].label);

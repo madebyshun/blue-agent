@@ -166,40 +166,12 @@ export class X402Client {
   }
 
   /** blue idea — fundable brief from rough concept ($0.05) */
-  async idea(prompt: string) {
-    return this.hub("blue-idea", { prompt });
-  }
-
   /** blue build — architecture + stack ($0.50) */
-  async build(prompt: string) {
-    return this.hub("blue-build", { prompt });
-  }
-
   /** blue audit — smart contract security review ($1.00) */
-  async audit(prompt: string) {
-    return this.hub("blue-audit", { prompt });
-  }
-
   /** blue ship — deployment checklist ($0.10) */
-  async ship(prompt: string) {
-    return this.hub("blue-ship", { prompt });
-  }
-
   /** blue raise — investor pitch narrative ($0.20) */
-  async raise(prompt: string) {
-    return this.hub("blue-raise", { prompt });
-  }
-
   /** token pick signal — asymmetric Base token pick ($0.25) */
-  async tokenPick(context?: string) {
-    return this.hub("token-pick-signal", context ? { context } : {});
-  }
-
   /** narrative position — CT narrative tracker ($0.20) */
-  async narrative(focus?: string) {
-    return this.hub("narrative-position", focus ? { focus } : {});
-  }
-
   // ── Pricing discovery ────────────────────────────────────────────────────────
 
   /** Fetch the machine-readable pricing manifest */

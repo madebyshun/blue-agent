@@ -146,21 +146,14 @@ function roundCredits(n: number): number {
 export const CREDIT_PRICE_OVERRIDE: Readonly<Record<string, number>> = {
   // data only
   "safe-trending": 0,
-  "token-pick-signal": 0,
   "blue-registry": 0,
   "token-price": 0,
   "rh-stock-movers": 0,
-  "rh-stock-new-listings": 0,
   "rh-stock-quote": 0,
-  "rh-stock-search": 0,
-  "rh-rwa-index": 0,
   // run a model call of their own
-  "deep-analysis": 0,
   "risk-gate": 0,
   "contract-trust": 0,
-  "dex-flow": 0,
   "honeypot-check": 0,
-  "blue-compose": 0,
 };
 
 export function toolCreditCost(toolId: string, tier: TierInfo): number {
