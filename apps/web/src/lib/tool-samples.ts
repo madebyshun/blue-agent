@@ -114,6 +114,45 @@ export const TOOL_SAMPLES: Record<string, ToolSample> = {
     },
   },
 
+  // ── stock-screen ($0.02)
+  "stock-screen": {
+    provenance: "shape",
+    input: {"max_abs_drift_pct": 0.5, "min_liquidity_usd": 10000, "limit": 5},
+    output: {
+      "tool": "stock-screen",
+      "chain": "base",
+      "chain_id": 8453,
+      "filters": {
+        "max_abs_drift_pct": 0.5,
+        "min_liquidity_usd": 10000,
+        "max_oracle_age_seconds": null,
+        "require_can_fire": false
+      },
+      "universe": {"listed": 9, "read": 9, "passed": 0, "failed_read": []},
+      "rows": [
+        {
+          "ticker": "AAPL",
+          "token": "<0x… the tokenized-stock contract on Base>",
+          "share_price_usd": 0.0,
+          "dex_price_usd": 0.0,
+          "drift_pct": 0.0,
+          "abs_drift_pct": 0.0,
+          "liquidity_usd": 0.0,
+          "volume_24h_usd": 0.0,
+          "oracle_age_seconds": 0,
+          "oracle_is_stale": false,
+          "price_in_band": true,
+          "can_fire": true,
+          "suppressed_reason": null,
+          "pool": "https://…"
+        }
+      ],
+      "rejected": [{"ticker": "MSFT", "failed_on": ["drift_over_max"], "drift_pct": 0.0}],
+      "ranked_by": "abs_drift_pct, widest first — a ranking, not a recommendation",
+      "note": "Facts about nine tokenized stocks, filtered by your own thresholds. A wide drift is as often a broken oracle read as a mispriced pool; read can_fire and suppressed_reason before acting. Not financial advice."
+    },
+  },
+
   // ── base-stock-quote ($0.02)
   "base-stock-quote": {
     provenance: "shape",

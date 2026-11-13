@@ -4,7 +4,7 @@
 > and signals over live reads on Base 8453 and Robinhood Chain 4663. Pay per
 > call in USDC over the x402 protocol. No API key, no signup, no subscription.
 
-Blue Hub exposes 29 tools: 22 paid and 7 free. Any x402-capable agent can call
+Blue Hub exposes 30 tools: 23 paid and 7 free. Any x402-capable agent can call
 a tool's endpoint directly and pay per request in USDC on Base (chain id 8453).
 When a paid request arrives without payment, the endpoint returns HTTP 402 with
 payment requirements; the agent signs an EIP-3009 authorization and retries with
@@ -18,7 +18,7 @@ weekend-scorecard, pre-trade-check, sign-check, approval-audit, rh-rwa-verify.
 ## Discovery
 - Machine-readable catalog (all tools, endpoints, prices, input schemas): https://blueagent.dev/api/catalog
 - MCP server (remote, no install): https://blueagent.dev/api/mcp
-  Its manifest advertises 15 tools, a curated subset of the 29 tools above. Seven
+  Its manifest advertises 15 tools, a curated subset of the 30 tools above. Seven
   are paid per call (swap_prepare, token_verdict, stock_signal, stock_quote,
   stock_movers, trending_safe, wallet_risk: $0.01-$0.05 USDC on Base over the
   x402 MCP transport); the rest are free. The catalog is not missing and not
@@ -49,6 +49,7 @@ weekend-scorecard, pre-trade-check, sign-check, approval-audit, rh-rwa-verify.
 ## Examples
 - Token price: https://blueagent.dev/api/x402/token-price
 - Tokenized stock quote: https://blueagent.dev/api/x402/base-stock-quote
+- Stock screen by your own thresholds: https://blueagent.dev/api/x402/stock-screen
 - Honeypot check: https://blueagent.dev/api/x402/honeypot-check
 - Pre-trade safety check (free): https://blueagent.dev/api/x402/pre-trade-check
 - The catalog itself: https://blueagent.dev/api/x402/blue-registry

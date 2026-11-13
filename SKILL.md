@@ -83,7 +83,7 @@ JSON Schema per tool) · [`llms.txt`](https://blueagent.dev/llms.txt) (short bri
      Source of truth: apps/web/src/lib/agent-tools.ts (AGENT_TOOLS).
      Body fields are the WIRE shape (post-x402Body), not the Hub form. -->
 
-Blue Hub exposes **29 tools** across 5 categories — 22 paid, 7 free.
+Blue Hub exposes **30 tools** across 5 categories — 23 paid, 7 free.
 
 Categories: on-chain · signal · security · builder · trading
 
@@ -114,7 +114,7 @@ transfer to make.
 | `token-price` | $0.01 | `token`* | Live price, market cap, volume and liquidity for any Base token. Use when an agent asks what a Base token costs right now, or needs a spot price before sizing a swap. |
 | `wallet-holdings` | $0.02 | `address`* | Live ERC-20 and ETH holdings with USD value for a Base wallet. Use when an agent asks what a Base address holds, or must size a trade against the actual balance instead of assuming one. |
 
-### signal (5)
+### signal (6)
 
 | id | price | body | what it does |
 |---|---|---|---|
@@ -122,6 +122,7 @@ transfer to make.
 | `rh-stock-agent-brief` | $0.20 | `ticker`* | One JSON brief for a Robinhood Chain stock token: drift, oracle age, holdings, liquidity. Use when an agent wants a stock token's whole picture in a single call. |
 | `rh-stock-arb` | $0.05 | `ticker`* | Chainlink oracle versus the deepest DEX pool for a Robinhood Chain stock token: the gap in percent, which side is rich. Use when an agent asks for the oracle-premium or arbitrage gap on a stock token. |
 | `rh-stock-movers` | $0.05 | `limit` `min_tvl_usd` `min_volume_24h_usd` | Top gainers and losers over 24h among Robinhood Chain tokenized stocks and ETFs, with a dust-pool filter. Use when an agent asks which Robinhood Chain stocks moved, or needs a screen of that venue. |
+| `stock-screen` | $0.02 | `max_abs_drift_pct` `min_liquidity_usd` `max_oracle_age_seconds` `limit` | Screen every Coinbase Tokenized Stock on Base at once against your own thresholds — drift versus the Chainlink oracle, pool liquidity, oracle staleness — and get only the rows that clear them, each with the number that decided it. Use when an agent asks for a daily stock screen or the day's stock picks and needs the filter applied, not nine separate quotes. |
 | `weekend-scorecard` | $0.00 | `ticker` `weekends` | Does the price Base trades a stock at over the weekend call Monday's open? Every Base stock on the desk, scored. Use when an agent asks whether tokenized stocks track the real thing, or needs weekend-vs-open accuracy before trusting an off-hours price. Free. |
 
 ### security (9)
@@ -184,7 +185,7 @@ surface you are actually calling.
 **Cut from 85 to 18 on 2026-09-26, and the cut removed no capability.** The 85-tool manifest
 was 32,160 bytes — roughly 8,000 tokens spent before the agent read a single word of the user's
 question — and published MCP research finds tool-selection accuracy degrades sharply past
-~40 always-loaded entries. All 29 catalog tools remain live at `/api/x402/<id>`; `blue_registry`
+~40 always-loaded entries. All 30 catalog tools remain live at `/api/x402/<id>`; `blue_registry`
 lists them and `blue_call` runs any of them, so the rest moved from "always in context" to
 "one lookup away". A manifest is a context budget, not an inventory.
 

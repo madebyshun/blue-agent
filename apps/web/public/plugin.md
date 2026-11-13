@@ -3,11 +3,11 @@
 > Source of truth: https://blueagent.dev/plugin.md
 > Hub UI: https://blueagent.dev/hub · Catalog (machine-readable): https://blueagent.dev/api/catalog
 
-29 AI tools for onchain builders and autonomous agents — audits, token signals,
+30 AI tools for onchain builders and autonomous agents — audits, token signals,
 stock signals, liquidity depth, contract trust and pre-trade safety and
-more. 22 are paid HTTP endpoints that speak **x402 v2** natively, so Base MCP
+more. 23 are paid HTTP endpoints that speak **x402 v2** natively, so Base MCP
 can call any of them and settle the USDC payment without extra wiring. The
-other 10 are priced $0.00, never answer 402 and never ask for a signature.
+other 7 are priced $0.00, never answer 402 and never ask for a signature.
 
 - **Reads:** Base mainnet (8453) and Robinhood Chain (4663) — the `rh-*`
   tokenized-stock tools are the Robinhood Chain desk; bridging between the
@@ -64,7 +64,7 @@ no auth. Returns:
   "network": "eip155:8453",
   "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
   "payTo": "0x02950ad38ada1d599375bd447e080cd404809205",
-  "count": 29,
+  "count": 30,
   "tools": [
     {
       "id": "base-stock-quote",
@@ -232,6 +232,7 @@ on its 402 response and in `/api/catalog`.
 | `token-price`             | $0.01  | Live price, mcap, volume and liquidity for a Base token      |
 | `base-stock-quote`        | $0.02  | Tokenized-stock price, oracle share price and the drift      |
 | `base-stock-movers`       | $0.03  | 24h gainers and losers among Base tokenized stocks           |
+| `stock-screen`            | $0.02  | Every tokenized stock filtered by your own drift, depth and oracle-age thresholds |
 | `liquidity-depth`         | $0.03  | How much you can sell before the price moves                 |
 | `wallet-risk`             | $0.05  | Known-theft, phishing and sanctions flags on a Base address  |
 | `rh-stock-agent-brief`    | $0.20  | A Robinhood Chain stock's whole picture in one call          |
@@ -261,7 +262,7 @@ on its 402 response and in `/api/catalog`.
 **Daily stock screen**
 > User: *"Which tokenized stocks moved today?"*
 >
-> 1. `POST /api/x402/base-stock-movers` with `{ "limit": 5 }` — $0.03.
+> 1. `POST /api/x402/stock-screen` with `{ "max_abs_drift_pct": 0.5, "min_liquidity_usd": 10000 }` — $0.02. One call screens all nine tokenized stocks and returns only the rows that clear your thresholds, each with the number that decided it.
 > 2. For any name worth a closer look, `POST /api/x402/base-stock-quote` with
 >    `{ "ticker": "AAPL" }` — price, oracle share price and the drift between them.
 

@@ -458,6 +458,28 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
     x402Url: `${X402_BASE}/base-stock-movers`,
     x402Body: (v) => ({ ...(v.limit ? { limit: Number(v.limit) } : {}), ...(v.min_liquidity_usd ? { min_liquidity_usd: Number(v.min_liquidity_usd) } : {}) }),
   },
+  {
+    id: "stock-screen",
+    name: "Tokenized Stock Screen",
+    description: "Screen every Coinbase Tokenized Stock on Base at once against your own thresholds — drift versus the Chainlink oracle, pool liquidity, oracle staleness — and get only the rows that clear them, each with the number that decided it. Use when an agent asks for a daily stock screen or the day's stock picks and needs the filter applied, not nine separate quotes.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "signal",
+    inputs: [
+      { key: "max_abs_drift_pct", label: "Max |drift| vs oracle (%)", placeholder: "0.5" },
+      { key: "min_liquidity_usd", label: "Min pool liquidity (USD)", placeholder: "10000" },
+      { key: "max_oracle_age_seconds", label: "Max oracle age (seconds)", placeholder: "3600" },
+      { key: "limit", label: "How many rows", placeholder: "10" },
+    ],
+    isComposite: false,
+    price: "$0.02", priceUSDC: 20000,
+    x402Url: `${X402_BASE}/stock-screen`,
+    x402Body: (v) => ({
+      ...(v.max_abs_drift_pct ? { max_abs_drift_pct: Number(v.max_abs_drift_pct) } : {}),
+      ...(v.min_liquidity_usd ? { min_liquidity_usd: Number(v.min_liquidity_usd) } : {}),
+      ...(v.max_oracle_age_seconds ? { max_oracle_age_seconds: Number(v.max_oracle_age_seconds) } : {}),
+      ...(v.limit ? { limit: Number(v.limit) } : {}),
+    }),
+  },
 
   // ─── RH RWA Phase 2 — Market Analytics ─────────────────────────────────
   {

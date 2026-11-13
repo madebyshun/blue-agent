@@ -36,6 +36,7 @@ import hRhStockQuote   from "./rh-stock-quote";
 // Base stocks (2026-11-03) — every Coinbase Tokenized Stock on Base 8453
 import hBaseStockQuote     from "./base-stock-quote";
 import hBaseStockMovers    from "./base-stock-movers";
+import hStockScreen        from "./stock-screen";
 // RH RWA Phase 2 (M2·M3·M4·M5) — market analytics
 import hRhStockLiquidity from "./rh-stock-liquidity";
 import hRhStockMovers    from "./rh-stock-movers";
@@ -68,6 +69,7 @@ export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "rh-stock-quote":     hRhStockQuote,
   "base-stock-quote":     hBaseStockQuote,
   "base-stock-movers":    hBaseStockMovers,
+  "stock-screen":         hStockScreen,
   "rh-stock-liquidity": hRhStockLiquidity,
   "rh-stock-movers":    hRhStockMovers,
   "rh-stock-holders":       hRhStockHolders,

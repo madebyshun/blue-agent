@@ -114,11 +114,12 @@ export const CATEGORIES: Category[] = [
   {
     label: 'Stocks',
     icon: '📈',
-    description: '9 tools   Base B20 · Robinhood Chain',
+    description: '10 tools   Base B20 · Robinhood Chain',
     type: 'x402',
     items: [
       { name: 'base-stock-quote', price: '$0.02', description: 'Coinbase stock token quote, DEX vs oracle' },
       { name: 'base-stock-movers', price: '$0.03', description: 'today's tokenized-stock gainers and losers' },
+      { name: 'stock-screen', price: '$0.02', description: 'all nine stocks filtered by your own thresholds' },
       { name: 'safe-trending', price: '$0.15', description: 'what is moving on Base, tax-checked' },
       { name: 'rh-stock-quote', price: '$0.03', description: 'Robinhood Chain stock token quote' },
       { name: 'rh-stock-ohlc', price: '$0.05', description: 'OHLC candles for a stock token' },
