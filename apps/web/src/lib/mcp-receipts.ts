@@ -6,10 +6,10 @@
  *     "Receipts" panel, each settled one linked to its Base tx;
  *   • per-day atomic counters (HINCRBY) — the 30-day stats and the chart.
  *
- * Outside buyers and the team are counted APART. A page that shows our own
- * test calls as demand would be the exact claim this product tells agents
- * not to make; the team wallets are named here, in code, so the split is
- * reviewable rather than a dashboard filter someone forgets to set.
+ * Outside buyers and the team are RECORDED apart (the split stays in the data
+ * for audit), but everything the services page shows aggregates them: every
+ * settled call counts, whoever paid (2026-10-27). Team wallets are named here,
+ * in code, so the classification stays reviewable.
  *
  * Stores no inputs, no outputs, no IP — tool, outcome, amount, payer, tx, time.
  * Best-effort: the USDC has already moved (or deliberately not), so a KV

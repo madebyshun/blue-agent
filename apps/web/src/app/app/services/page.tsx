@@ -3,9 +3,9 @@
 //
 // A SERVER component: the manifest (lib/mcp-tools) and the price table
 // (lib/mcp-paid) are read here so neither ships to the client, and the stats
-// and receipts come from the MCP receipt book (lib/mcp-receipts) — outside
-// buyers and team tests counted apart. A KV read that fails renders "—", never
-// a confident 0.
+// and receipts come from the MCP receipt book (lib/mcp-receipts). Every paid
+// call counts — outside buyers and team tests are aggregated on the page
+// (2026-10-27). A KV read that fails renders "—", never a confident 0.
 import { MCP_TOOLS } from "@/lib/mcp-tools";
 import { MCP_PRICES } from "@/lib/mcp-paid";
 import { readMcpStats, readMcpReceipts } from "@/lib/mcp-receipts";
