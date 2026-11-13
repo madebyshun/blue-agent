@@ -276,6 +276,26 @@ check(
   emptyInput.length ? `sample would 400: ${emptyInput.map((t) => t.id).join(", ")}` : "all filled",
 );
 
+// MEASURED 2026-11-13, after the samples shipped: eight tools carried
+// `input: {}`. Two earned it — blue-doctor and gas-tracker document no field at
+// all — but six document `limit`, `min_liquidity_usd`, `ticker` and still showed
+// an empty body, which reads as "this tool takes nothing" to the one reader the
+// sample exists for. The check above only looks at REQUIRED fields, so an
+// all-optional tool slipped through it. A sample for a tool that documents any
+// input field has to show at least one.
+const blankOnDocumented = LIVE.filter((t) => {
+  const props = Object.keys(wireSchema(t).properties ?? {});
+  const shown = Object.keys(TOOL_SAMPLES[t.id]?.input ?? {});
+  return props.length > 0 && shown.length === 0;
+});
+check(
+  "a tool that documents input fields shows one in its sample",
+  blankOnDocumented.length === 0,
+  blankOnDocumented.length
+    ? `sample body is empty but the tool documents fields: ${blankOnDocumented.map((t) => t.id).join(", ")}`
+    : "no blank sample on a tool with fields",
+);
+
 // ── 5. agent.json advertises only live ids, at the catalog's own price ───────
 //
 // MEASURED 2026-11-13: `.well-known/agent.json` carried five `skills` entries

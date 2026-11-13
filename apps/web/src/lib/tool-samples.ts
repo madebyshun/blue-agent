@@ -79,7 +79,7 @@ export const TOOL_SAMPLES: Record<string, ToolSample> = {
   // ── base-stock-movers ($0.03)
   "base-stock-movers": {
     provenance: "shape",
-    input: {},
+    input: {"limit": 5, "min_liquidity_usd": 100000},
     output: {
       "chain": "base",
       "chain_id": 8453,
@@ -200,7 +200,7 @@ export const TOOL_SAMPLES: Record<string, ToolSample> = {
   // ── blue-registry ($0.05)
   "blue-registry": {
     provenance: "shape",
-    input: {},
+    input: {"query": "stock quote", "category": "on-chain"},
     output: {
       "tool": "blue-registry",
       "timestamp": "2026-11-13T10:20:00.000Z",
@@ -386,7 +386,7 @@ export const TOOL_SAMPLES: Record<string, ToolSample> = {
   // ── pool-scan ($0.02)
   "pool-scan": {
     provenance: "shape",
-    input: {},
+    input: {"limit": 5},
     output: {
       "tool": "pool-scan",
       "chain": "base",
@@ -513,7 +513,7 @@ export const TOOL_SAMPLES: Record<string, ToolSample> = {
   // ── rh-stock-holders ($0.05)
   "rh-stock-holders": {
     provenance: "shape",
-    input: {},
+    input: {"ticker": "AAPL", "contract": "0xaF3D76f1834A1d425780943C99EaA608f8a93f9", "limit": 5},
     output: {
       "tool": "rh-stock-holders",
       "returned_count": 0,
@@ -543,7 +543,7 @@ export const TOOL_SAMPLES: Record<string, ToolSample> = {
   // ── rh-stock-movers ($0.05)
   "rh-stock-movers": {
     provenance: "shape",
-    input: {},
+    input: {"limit": 5, "min_tvl_usd": 100000, "min_volume_24h_usd": 50000},
     output: {
       "tool": "rh-stock-movers",
       "gainers": [],
@@ -647,7 +647,7 @@ export const TOOL_SAMPLES: Record<string, ToolSample> = {
   // ── safe-trending ($0.15)
   "safe-trending": {
     provenance: "shape",
-    input: {},
+    input: {"min_liquidity_usd": 100000, "limit": 5},
     output: {
       "tool": "safe-trending",
       "chain": "base",
