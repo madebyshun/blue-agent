@@ -317,6 +317,46 @@ check(
     : "all match",
 );
 
+// ── 6. every 402 the route can emit carries the sample ──────────────────────
+//
+// MEASURED 2026-11-13, after shipping: production answered POST /api/x402/
+// honeypot-check with a 402 whose `tool` had id/name/description/price/input
+// and no `sample`, while /api/catalog advertised one for that same id. The
+// route returns 402 from TWO places — the GET discovery branch and the POST
+// no-payment branch — and only GET had been given the field. The check above
+// asserts a sample EXISTS per tool; it cannot see whether the route hands it
+// over, so it stayed green on a live defect.
+//
+// A paying caller uses POST. Assert the field appears in EVERY 402 this file
+// can build, counted from the source, not from a list of branches I remember.
+const routePath = path.join(WEB, "src/app/api/x402/[tool]/route.ts");
+const routeSrc = readFileSync(routePath, "utf8");
+{
+  const label = "6. every 402 the route emits carries the sample";
+  console.log(`\n${label}`);
+
+  // Count the sites that build a 402 body: each one is an object literal with
+  // `error: "Payment Required"` — the string is what makes it a 402 body.
+  const bodies = routeSrc.split('error: "Payment Required"').length - 1;
+  const samples = routeSrc.split("sample: meta ? sampleFor(meta.id)").length - 1;
+  check(
+    "every 402 body the route builds offers a sample",
+    samples >= bodies,
+    `${bodies} 402 bodies, ${samples} carry the sample`
+  );
+
+  // The POST branch is the one a paying agent hits; name it explicitly so a
+  // future edit that only touches GET cannot satisfy this.
+  const postFn = routeSrc.slice(routeSrc.indexOf("async function handle("));
+  const postBodies = postFn.split('error: "Payment Required"').length - 1;
+  const postSamples = postFn.split("sample: meta ? sampleFor(meta.id)").length - 1;
+  check(
+    "the POST no-payment branch offers a sample",
+    postSamples >= postBodies,
+    `${postBodies} 402 bodies after handle(), ${postSamples} carry the sample`
+  );
+}
+
 console.log(
   failures === 0
     ? `\nALL ${checks} CHECKS PASSED\n`

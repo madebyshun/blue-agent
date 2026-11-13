@@ -350,6 +350,12 @@ async function handle(
           description: meta.description,
           price: meta.price,
           input: inputSchema,
+          // The POST path is the door a paying caller uses; GET is only
+          // discovery. MEASURED 2026-11-13: the sample shipped on both GET
+          // branches and this one was missed, so production answered a
+          // stranger's POST with a schema and no example while the catalog
+          // advertised one — the mismatch that makes a caller distrust both.
+          sample: meta ? sampleFor(meta.id) : undefined,
         } : undefined,
       },
       {
