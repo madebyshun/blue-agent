@@ -7,6 +7,11 @@
 
 import { AGENT_TOOLS } from "@/lib/agent-tools";
 import { listJobs, jobsForAgents } from "@/lib/jobs";
+// Imported for one reason: the sentence below used to hardcode "19 tools" while
+// the manifest served 15, so a caller was told the wrong size of the thing it
+// was about to reach for. A number in prose that nothing derives is a number
+// that will be wrong again.
+import { MCP_TOOL_COUNT } from "@/lib/mcp-tools";
 // Community listings retired 2026-10-28 with the builder registry; outside
 // x402 sellers are indexed from the chain at /api/hub/providers instead.
 
@@ -95,11 +100,11 @@ export default async function handler(req: Request): Promise<Response> {
       tools_truncated: matches.length > limited.length,
       how_to_call: {
         x402: "GET /api/x402/{id} for payment requirements, sign EIP-3009 USDC on Base (chain 8453), POST with X-Payment header.",
-        // Most ids listed here are NOT in the MCP manifest — that is 19 tools,
-        // not 113 — so "call it by name" is wrong for the great majority and
-        // sends an agent looking for a tool it cannot see. `blue_call` is how
-        // any id in this response is actually run.
-        mcp:  "Already connected: pass the `id` from this response to `blue_call`. Only 19 tools have their own MCP name; every other id here is reached through `blue_call`.",
+        // Most ids listed here are NOT in the MCP manifest — that is
+        // MCP_TOOL_COUNT, not the whole catalog — so "call it by name" is wrong
+        // for the great majority and sends an agent looking for a tool it
+        // cannot see. `blue_call` is how any id in this response is run.
+        mcp:  `Already connected: pass the \`id\` from this response to \`blue_call\`. Only ${MCP_TOOL_COUNT} tools have their own MCP name; every other id here is reached through \`blue_call\`.`,
         mcp_install: "claude mcp add --transport http blue-agent https://blueagent.dev/api/mcp",
         docs: "https://blueagent.dev/.well-known/openapi.json",
       },

@@ -125,13 +125,14 @@ export async function measureRhStockArb(req: Request): Promise<Response> {
 
     // Verdict — hard-mapped from sign + magnitude + market hours. Two modes:
     //   • arb (market OPEN):    LONG_DEX / SHORT_DEX / ALIGNED
-    //   • drift (market CLOSED): PREMARKET_DRIFT / AFTERHOURS_DRIFT / FROZEN_ALIGNED
+    //   • drift (market CLOSED): PREMARKET_DRIFT / AFTERHOURS_DRIFT /
+    //                            HOLIDAY_DRIFT / FROZEN_ALIGNED
     // Same numeric delta means very different things depending on whether
     // Wall Street is tickering — a downstream agent MUST see that context.
     const alignedThreshold = market.is_open ? ALIGNED_PCT_INHOURS : ALIGNED_PCT_CLOSED;
     let verdict:
       | "ALIGNED" | "LONG_DEX" | "SHORT_DEX"
-      | "FROZEN_ALIGNED" | "PREMARKET_DRIFT" | "AFTERHOURS_DRIFT";
+      | "FROZEN_ALIGNED" | "PREMARKET_DRIFT" | "AFTERHOURS_DRIFT" | "HOLIDAY_DRIFT";
     if (market.is_open) {
       if (Math.abs(pct_delta) < alignedThreshold) verdict = "ALIGNED";
       else if (pct_delta < 0) verdict = "LONG_DEX";
@@ -139,6 +140,7 @@ export async function measureRhStockArb(req: Request): Promise<Response> {
     } else {
       if (Math.abs(pct_delta) < alignedThreshold) verdict = "FROZEN_ALIGNED";
       else if (market.session === "premarket")   verdict = "PREMARKET_DRIFT";
+      else if (market.session === "holiday")     verdict = "HOLIDAY_DRIFT";
       else                                       verdict = "AFTERHOURS_DRIFT";
     }
 

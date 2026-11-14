@@ -337,6 +337,10 @@ export function cohortDefs(rows: { ticker: string; chain?: HoodChain }[] = []): 
     { key: "session:premarket", label: "session = premarket", dimension: "session", match: (a) => a.market_at_fire?.session === "premarket" },
     { key: "session:afterhours", label: "session = afterhours", dimension: "session", match: (a) => a.market_at_fire?.session === "afterhours" },
     { key: "session:weekend", label: "session = weekend", dimension: "session", match: (a) => a.market_at_fire?.session === "weekend" },
+    // Added with the holiday calendar. Without it an arrow that fired on a
+    // holiday belonged to no session cohort at all and its graded outcome
+    // silently left the session comparison.
+    { key: "session:holiday", label: "session = holiday", dimension: "session", match: (a) => a.market_at_fire?.session === "holiday" },
     { key: "market:open", label: "market open", dimension: "session", match: (a) => a.market_at_fire?.is_open === true },
     { key: "market:closed", label: "market closed", dimension: "session", match: (a) => a.market_at_fire?.is_open === false },
 

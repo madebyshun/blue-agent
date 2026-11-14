@@ -103,6 +103,40 @@ async function main() {
   const monPostS = nyseMarketStatus(monPost);
   must(monPostS.session === "afterhours" && !monPostS.is_open, "Mon 18:00 ET → afterhours",
        `session=${monPostS.session} is_open=${monPostS.is_open}`);
+
+  // ── EST cases. Every case above is July, i.e. EDT — and a test set that only
+  // ever sees UTC-4 cannot see a clock that hardcodes UTC-4. The old helper did
+  // exactly that and shipped one hour wrong from 2026-11-01 until this check
+  // existed. These three run in the five months New York is UTC-5.
+  //
+  // Fri 2026-11-13 14:00 UTC = 09:00 EST → premarket (the old clock said regular)
+  const estPre = new Date("2026-11-13T14:00:00Z");
+  const estPreS = nyseMarketStatus(estPre);
+  must(estPreS.session === "premarket" && !estPreS.is_open, "Fri 09:00 EST → premarket",
+       `session=${estPreS.session} is_open=${estPreS.is_open}`);
+
+  // Fri 2026-11-13 14:30 UTC = 09:30 EST → regular open (the real bell)
+  const estOpen = new Date("2026-11-13T14:30:00Z");
+  const estOpenS = nyseMarketStatus(estOpen);
+  must(estOpenS.session === "regular" && estOpenS.is_open, "Fri 09:30 EST → regular + open",
+       `session=${estOpenS.session} is_open=${estOpenS.is_open}`);
+
+  // Fri 2026-11-13 20:30 UTC = 15:30 EST → still regular (the old clock said afterhours)
+  const estMid = new Date("2026-11-13T20:30:00Z");
+  const estMidS = nyseMarketStatus(estMid);
+  must(estMidS.session === "regular" && estMidS.is_open, "Fri 15:30 EST → regular + open",
+       `session=${estMidS.session} is_open=${estMidS.is_open}`);
+
+  // Thanksgiving 2026-11-26 10:00 EST = 15:00 UTC → holiday, not a session
+  const thanksgiving = new Date("2026-11-26T15:00:00Z");
+  const thanksgivingS = nyseMarketStatus(thanksgiving);
+  must(thanksgivingS.session === "holiday" && !thanksgivingS.is_open, "Thanksgiving → holiday",
+       `session=${thanksgivingS.session} is_open=${thanksgivingS.is_open}`);
+
+  // Offset reflects the season, so `ny_time_iso` is a New York wall clock either way.
+  must(estMidS.utc_offset_hours === -5 && monOpenS.utc_offset_hours === -4,
+       "utc_offset_hours tracks EST/EDT",
+       `EST=${estMidS.utc_offset_hours} EDT=${monOpenS.utc_offset_hours}`);
 }
 
 // ── Section 2: Registry honest denominator (BLOCKER 2) ─────────────────────

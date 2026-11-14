@@ -155,6 +155,7 @@ export const SESSION_NOTE: Record<StockBriefData["session"], string> = {
   premarket: "US market is in pre-market: oracles hold the last close, DEX prices trade freely.",
   afterhours: "US market has closed for the day: oracles hold today's close, DEX prices trade freely.",
   weekend: "US market is closed for the weekend: oracles hold Friday's close while DEX prices keep trading, and any gap settles at Monday's open, in either direction.",
+  holiday: "US market is closed for a holiday: oracles hold the previous session's close while DEX prices keep trading, and any gap settles at the next open, in either direction.",
 };
 
 const px = (n: number | null) => (n == null ? "n/a" : n >= 1000 ? `$${Math.round(n).toLocaleString("en-US")}` : `$${n.toFixed(2)}`);

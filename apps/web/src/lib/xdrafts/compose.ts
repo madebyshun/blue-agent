@@ -81,7 +81,17 @@ type Record_ = { ready: boolean; hit_rate: number | null; hits: number; calls: n
 type Crypto = { btc_pct: number | null; eth_pct: number | null } | null;
 
 const sortAbs = <T,>(xs: T[], f: (x: T) => number) => [...xs].sort((a, b) => Math.abs(f(b)) - Math.abs(f(a)));
-const sessionWord = (s: string) => (s === "regular" ? "during market hours" : s === "premarket" ? "before the open" : s === "afterhours" ? "after the close" : s === "weekend" ? "over the weekend" : s);
+// Every session label the desk can emit needs a phrase here. A missing one
+// falls through as the raw enum, so the published post reads "traded 0.6%
+// above its chainlink feed holiday" — grammatical noise in a copy block, and
+// the compiler cannot see it because the chain is a ternary, not a Record.
+const sessionWord = (s: string) =>
+  s === "regular" ? "during market hours"
+  : s === "premarket" ? "before the open"
+  : s === "afterhours" ? "after the close"
+  : s === "weekend" ? "over the weekend"
+  : s === "holiday" ? "on a market holiday"
+  : s;
 
 export function preOpenText(rows: Gap[]): Draft {
   if (!rows.length) throw new Error("no Base rows on the board");

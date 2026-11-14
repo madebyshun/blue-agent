@@ -81,7 +81,7 @@ type ChainFilter = "all" | "base" | "robinhood";
 // copy here and another in HoodSidebar, and both read the F6 quarantine's
 // withheld DEX price as "no pool" — see that module's header.
 function isFrozenLike(v: TickerSnapshot["verdict"]): boolean {
-  return v === "FROZEN_ALIGNED" || v === "PREMARKET_DRIFT" || v === "AFTERHOURS_DRIFT";
+  return v === "FROZEN_ALIGNED" || v === "PREMARKET_DRIFT" || v === "AFTERHOURS_DRIFT" || v === "HOLIDAY_DRIFT";
 }
 
 /** Base P1 — `base_desk` is optional so a client running against an older
@@ -1446,6 +1446,7 @@ function VerdictBadge({
     FROZEN_ALIGNED:   { label: closedAlignedLabel(session), color: AMBER, bg: "rgba(245,179,66,0.10)" },
     PREMARKET_DRIFT:  { label: "PRE DRIFT", color: AMBER, bg: "rgba(245,179,66,0.10)" },
     AFTERHOURS_DRIFT: { label: isWeekend ? "WKND DRIFT" : "AH DRIFT", color: AMBER, bg: "rgba(245,179,66,0.10)" },
+    HOLIDAY_DRIFT:    { label: "HOL DRIFT", color: AMBER, bg: "rgba(245,179,66,0.10)" },
     INSUFFICIENT_DATA:{ label: "NO DATA",   color: MUTED, bg: "#0f1218" },
     ERROR:            { label: "ERR",       color: RED,   bg: "rgba(239,68,68,0.10)" },
   };

@@ -53,7 +53,7 @@ export type AssetType = "native" | "major" | "crypto" | "rh_stock_token" | "b20_
  *  WHY without reading prose. */
 export type ReasonCode =
   | "BRIDGE_COST" | "BRIDGE_COST_HIGH" | "NOT_ADDRESS" | "IMPOSTOR" | "HONEYPOT"
-  | "SELL_LEVER" | "TAX_UNREAD" | "TAX_CLEAN" | "RH_UNREGISTERED" | "WEEKEND"
+  | "SELL_LEVER" | "TAX_UNREAD" | "TAX_CLEAN" | "RH_UNREGISTERED" | "WEEKEND" | "HOLIDAY"
   | "RH_ORACLE_GAP_PAUSED" | "NO_ORACLE_FEED" | "ISSUER_POLICY" | "DRIFT" | "DRIFT_UNAVAILABLE"
   | "NOT_A_TOKEN" | "OWNER_POWERS"
   | RecipientCode;
@@ -123,6 +123,13 @@ function impostorNames(symbol: string): { shown: string; real: string } {
 
 function weekendReason(now: Date): Reason | null {
   const m = nyseMarketStatus(now);
+  // A holiday is not a weekend and does not read like one: the oracle holds a
+  // last close from the previous session, which can be four days old by Monday.
+  // Before the clock knew the calendar this case fell through as "regular", so
+  // a Thanksgiving swap got no note at all.
+  if (m.session === "holiday") {
+    return { level: "INFO", code: "HOLIDAY", text: "US market is closed for the holiday: the oracle holds the last close from the previous session while the DEX keeps trading." };
+  }
   return m.session === "weekend"
     // INFO since 2026-10-16: said on EVERY stock swap from Friday night to
     // Monday morning, the WARN was the one users learned to click through. The

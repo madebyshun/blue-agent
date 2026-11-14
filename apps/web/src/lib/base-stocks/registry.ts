@@ -411,6 +411,56 @@ export const BASE_STOCKS: readonly BaseStock[] = [
     saneBand: { lo: 36, hi: 588 },
     admittedAt: "2026-09-28",
   },
+  // ── Admitted 2026-11-14, three tickers the 2026-08/09 probe had refused ──────
+  // All three were rejected for thin liquidity on 2026-08-24 and re-measured on
+  // 2026-11-14 with market OPEN (oracle gate live, not INCONCLUSIVE):
+  //
+  //   ticker  liquidity    vol 24h     drift     anchor  public quote  Δ
+  //   SNDK    $1,711,023   $31,173,641  0.002%   $863.21   $866.00   0.32%
+  //   CRCL      $230,953      $168,588  0.064%    $62.16    $62.37   0.34%
+  //   INTC      $221,315      $131,746 -0.068%    $58.74    $58.85   0.19%
+  //
+  // Every row cleared the full gate: USDC-quoted pool, 72h candle scan with 0
+  // zero-volume and 0 flat-close hours, and a band anchor checked against an
+  // independent public quote (the step SPCX's own note says cannot be skipped).
+  //
+  // ⚠️ SNDK has a pending corporate action (memory, 2026-11-11: "18 pending
+  // actions", SNDKc among them). `multiplier()` is read at quote time, so a
+  // rebase is handled by the read path — but this `saneBand` is anchored on the
+  // PRE-action share price, so a split moves the true price outside it and the
+  // row will fail closed (`price_out_of_band`) until the band is re-anchored.
+  // That is the intended direction of failure, not a bug: re-run the probe and
+  // re-anchor after any action lands. Do NOT widen the band to "fix" it.
+  {
+    ticker: "SNDK",
+    name: "Sandisk Corporation",
+    token: "0xb200000000000000000000397293Cb8cda9a10c5",
+    symbol: "SNDKc",
+    chainlinkFeed: "0x388b0dC46C0Fb05A74BeE0994fa5b02c6Fcca2eA",
+    chainlinkHeartbeat: 86400,
+    saneBand: { lo: 215, hi: 3453 },
+    admittedAt: "2026-11-14",
+  },
+  {
+    ticker: "CRCL",
+    name: "Circle Internet Group, Inc.",
+    token: "0xB20000000000000000000019f6E7C675b73C2e4D",
+    symbol: "CRCLc",
+    chainlinkFeed: "0x0231cF2635D1E17bB5c2462cc7504Ba1fBd61f33",
+    chainlinkHeartbeat: 86400,
+    saneBand: { lo: 15, hi: 249 },
+    admittedAt: "2026-11-14",
+  },
+  {
+    ticker: "INTC",
+    name: "Intel Corporation",
+    token: "0xB2000000000000000000004AFF16039bA04bdFBc",
+    symbol: "INTCc",
+    chainlinkFeed: "0xAB657C39bac0D5886250D70849e2E3E008F2EECB",
+    chainlinkHeartbeat: 86400,
+    saneBand: { lo: 14, hi: 235 },
+    admittedAt: "2026-11-14",
+  },
 ] as const;
 
 /** Base mainnet USDC — the quote asset on every B20 stock's Aerodrome pool. */

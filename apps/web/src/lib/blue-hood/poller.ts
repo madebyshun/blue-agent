@@ -40,6 +40,7 @@ import type {
   TickerSnapshot,
 } from "./types";
 import { cacheAgeS } from "@/lib/robinhood/rwa-market";
+import { nyseMarketStatus } from "@/lib/market-hours";
 import { readSparkline } from "./sparkline";
 
 // M5 response shape (subset we care about — kept in this file so a change in
@@ -85,7 +86,13 @@ function staggerMs(): number {
   return Number.isFinite(n) && n >= 0 ? n : DEFAULT_STAGGER_MS;
 }
 
-async function pollOne(ticker: string, cycleStart: number): Promise<TickerSnapshot> {
+/** The NYSE clock right now, in the shape a snapshot row carries. */
+function marketClock(at: Date): TickerSnapshot["market"] {
+  const s = nyseMarketStatus(at);
+  return { is_open: s.is_open, session: s.session, ny_time_iso: s.ny_time_iso };
+}
+
+async function pollOne(ticker: string, cycleStart: number, clock: TickerSnapshot["market"]): Promise<TickerSnapshot> {
   const entry = HOOD_WATCHLIST.find((t) => t.ticker === ticker)!;
   const polled_at_ms = Date.now() - cycleStart;
   // The RAW reading, not HANDLERS["rh-stock-arb"]: that door publishes through
@@ -118,11 +125,11 @@ async function pollOne(ticker: string, cycleStart: number): Promise<TickerSnapsh
       drift_pct: null,
       pool_ref: null,
       is_v4_pool_id: false,
-      market: {
-        is_open: false,
-        session: "regular",
-        ny_time_iso: new Date().toISOString(),
-      },
+      // The clock, not a guess. This row used to hardcode
+      // `session: "regular"` with `is_open: false` — two fields that
+      // contradict each other, published on every upstream failure. A row
+      // that could not be read still knows what time it is.
+      market: clock,
       warnings: [],
       error: `${r.status}: ${r.error}`,
       polled_at_ms,
@@ -181,13 +188,17 @@ export async function runPollCycle(): Promise<HoodSnapshot> {
   const started_at = new Date();
   const rows: TickerSnapshot[] = [];
   const gap = staggerMs();
+  // One clock read per cycle, shared by every row and by the cycle fallback:
+  // a 24-token cycle spans ~72s, and two rows disagreeing about the session
+  // inside one cycle would be a worse answer than a second of skew.
+  const cycleClock = marketClock(started_at);
 
   console.log(`[poller] cycle=${Math.floor(started_at.getTime() / 1000)} strategy=sequential stagger_ms=${gap} count=${HOOD_WATCHLIST.length}`);
 
   for (let i = 0; i < HOOD_WATCHLIST.length; i++) {
     const token = HOOD_WATCHLIST[i];
     const t0 = Date.now();
-    const row = await pollOne(token.ticker, started_at.getTime());
+    const row = await pollOne(token.ticker, started_at.getTime(), cycleClock);
     const elapsed_ms = Date.now() - t0;
     const ageStr = row.data_age_s === null ? "cold" : `age=${row.data_age_s.toFixed(1)}s`;
     console.log(`[poller] seq=${i + 1}/${HOOD_WATCHLIST.length} ticker=${row.ticker} verdict=${row.verdict} elapsed_ms=${elapsed_ms} ${ageStr}`);
@@ -211,11 +222,10 @@ export async function runPollCycle(): Promise<HoodSnapshot> {
   const no_data_fetch_failed = rows.filter((r) => r.no_data_reason === "fetch_failed").length;
   console.log(`[poller] cycle-end no_data_by_reason no_pool=${no_data_no_pool} fetch_failed=${no_data_fetch_failed} errored=${tokens_errored}`);
   const first_ok = rows.find((r) => r.verdict !== "ERROR");
-  const market = first_ok?.market ?? {
-    is_open: false,
-    session: "regular" as MarketSession,
-    ny_time_iso: started_at.toISOString(),
-  };
+  // Fallback when every ticker errored: the same clock read, taken once at
+  // cycle start. It used to claim `session: "regular"` outright, so a cycle
+  // that returned no data at all still published "the market is open".
+  const market = first_ok?.market ?? cycleClock;
 
   return {
     cycle_id: Math.floor(started_at.getTime() / 1000),

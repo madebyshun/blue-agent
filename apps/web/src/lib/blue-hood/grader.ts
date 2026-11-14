@@ -39,6 +39,7 @@ import {
   TTL_TICKER_COOLDOWN,
 } from "./kv-keys";
 import { chainOf } from "./types";
+import { nyseMarketStatus } from "@/lib/market-hours";
 import type { Arrow, ArrowOutcome, M5Verdict, ArrowType } from "./types";
 // Base-stocks P3 — chain-aware grade-time reprice. A Base arrow MUST be graded
 // against the Base B20 quote, never against rh-stock-arb (the wrong-chain
@@ -65,19 +66,13 @@ const ARB_HIT_SPREAD_PCT = 0.5;
 const DRIFT_HIT_GAP_CLOSE_PCT = 0.5;
 
 // ── P0.1: NYSE regular-hours clock ─────────────────────────────────────
-// Rough conversion via fixed UTC-4 offset — ignores DST edges + market
-// holidays. Same approximation the rest of the codebase uses
-// (nyseMarketStatus in rwa-market.ts) so grader + M5 stay consistent.
-// Anyone tightening one should tighten the other.
-const REGULAR_OPEN_MIN = 9 * 60 + 30;  // 09:30 ET
-const REGULAR_CLOSE_MIN = 16 * 60;     // 16:00 ET
-
+// Same clock the rest of the codebase uses, so grader + M5 stay consistent:
+// `nyseMarketStatus` from lib/market-hours.ts. It used to be a local copy with
+// a fixed UTC-4 offset, and it was wrong for the five months New York is on
+// EST — every arrow fired between 09:30 and 10:30 ET was graded as if the
+// session had not opened, and the 15:00-16:00 ET hour as if it had closed.
 function nyseOpenAt(tMs: number): boolean {
-  const ny = new Date(tMs - 4 * 3600 * 1000);
-  const day = ny.getUTCDay(); // 0=Sun..6=Sat
-  if (day === 0 || day === 6) return false;
-  const minutes = ny.getUTCHours() * 60 + ny.getUTCMinutes();
-  return minutes >= REGULAR_OPEN_MIN && minutes < REGULAR_CLOSE_MIN;
+  return nyseMarketStatus(new Date(tMs)).is_open;
 }
 
 /**

@@ -32,6 +32,7 @@ import { cache } from "react";
 import { getPublicArrowBySerial, serialKey } from "@/lib/blue-hood/public-feed";
 import { resolveArrowToken } from "@/lib/blue-hood/chain-token";
 import type { Arrow } from "@/lib/blue-hood/types";
+import { nyUtcOffsetHours } from "@/lib/market-hours";
 
 export const runtime = "nodejs";
 export const revalidate = 300;
@@ -399,7 +400,9 @@ function formatDuration(ms: number): string {
 
 function formatEtTime(iso: string): string {
   const d = new Date(iso);
-  const et = new Date(d.getTime() - 4 * 3600 * 1000);
+  // EST is UTC-5 and EDT is UTC-4; a fixed -4 rendered every winter timestamp
+  // one hour late on a receipt a reader takes as the record.
+  const et = new Date(d.getTime() - nyUtcOffsetHours(d) * 3600 * 1000);
   const mm = String(et.getUTCMonth() + 1).padStart(2, "0");
   const dd = String(et.getUTCDate()).padStart(2, "0");
   const hh = String(et.getUTCHours()).padStart(2, "0");

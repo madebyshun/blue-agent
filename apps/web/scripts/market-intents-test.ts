@@ -59,6 +59,9 @@ ok("Wed 10:00 ET: open", /^Yes, the US stock market is open/.test(marketHoursTex
 ok("Wed 08:00 ET: pre-market", /pre-market/.test(marketHoursText(new Date("2026-10-21T12:00:00Z"))));
 ok("Sat: weekend", /weekend/.test(marketHoursText(new Date("2026-10-24T15:00:00Z"))));
 ok("after DST ends (Mon 2 Nov, 14:45 UTC = 9:45 EST): open", /^Yes/.test(marketHoursText(new Date("2026-11-02T14:45:00Z"))));
+// 2026-11-26 is Thanksgiving and 2026-11-27 closes early at 13:00 ET.
+ok("Thanksgiving 10:00 ET: closed for the holiday", /holiday/.test(marketHoursText(new Date("2026-11-26T15:00:00Z"))));
+ok("early close 13:30 ET the day after: after-hours, not open", /after-hours/.test(marketHoursText(new Date("2026-11-27T18:30:00Z"))));
 
 // Second test round, 2026-10-21 (share dec1dcf9).
 const forced = (q: string) => forcedToolFor([{ role: "user", content: q }]);

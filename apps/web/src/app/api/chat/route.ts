@@ -2106,7 +2106,11 @@ async function callHubTool(
         : await import("@/app/api/builder-score/route");
       const res = await mod.POST(new NextRequest(`https://app.invalid${FREE_DIRECT[toolName]}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        // The service key, because `/api/crypto-rpc` now refuses anonymous
+        // callers: it bills the owner's Venice credit, and an unauthenticated
+        // JSON-RPC proxy is a bill with no ceiling. Same key the x402 bypass
+        // and the credits routes use, so there is one knob to rotate.
+        headers: { "Content-Type": "application/json", "x-blue-internal": INTERNAL_KEY },
         body: JSON.stringify(args),
       }));
       status = res.status;

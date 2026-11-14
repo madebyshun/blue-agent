@@ -233,9 +233,25 @@ export async function GET(req: NextRequest) {
       chain_id: 8453,
       archive_start: BASE_SERIES_ARCHIVE_START,
       thresholds_abs_pct: { closed_drift: DRIFT_MIN_ABS_PCT, open_arb: ARB_MIN_ABS_PCT },
-      complete: unreadable.length === 0,
-      unreadable,
+      // MEASURED 2026-11-13: this endpoint answered `complete: true` while the
+      // archive held a 29-hour hole (2026-11-09T10 → 2026-11-10T14). Both facts
+      // were in the same body; a reader took the first one and stopped. The
+      // name promised "no gaps" and delivered "every day answered".
+      //
+      // So say both, and name them for what they measure:
+      //   readable — we could read every requested day (this is the old value)
+      //   whole    — readable AND the hours inside it are contiguous (the thing
+      //              a caller actually wants when they read "complete")
+      // `complete` stays for existing clients, redefined to the honest one.
+      readable: unreadable.length === 0,
       contiguous: holes.absent_hours.length === 0 && holes.missing_days.length === 0,
+      whole: unreadable.length === 0 && holes.absent_hours.length === 0 && holes.missing_days.length === 0,
+      // Deprecated alias with the honest meaning: `whole`. A client that reads
+      // `complete` to mean "I can trust the series as continuous" is now
+      // correct; one that read it as "the read succeeded" should move to
+      // `readable`.
+      complete: unreadable.length === 0 && holes.absent_hours.length === 0 && holes.missing_days.length === 0,
+      unreadable,
       gaps: { days: holes.missing_days, hours: holes.absent_hours },
       requested,
       totals: {

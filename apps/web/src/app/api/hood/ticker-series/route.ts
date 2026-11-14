@@ -222,9 +222,15 @@ export async function GET(req: NextRequest) {
       // has holes. A window can be perfectly readable and still be missing nine
       // hours, and those call for opposite reactions — retry, versus accept the
       // hole is permanent.
-      complete: unreadable.length === 0,
-      unreadable,
+      // Same split as the other two archive routes: `readable` is the read
+      // succeeding, `contiguous` is what was read having no holes, `whole` is
+      // both. `complete` is deprecated and now equals `whole`.
+      readable: unreadable.length === 0,
       contiguous: series.counts.gap_hours === 0,
+      whole: unreadable.length === 0 && series.counts.gap_hours === 0,
+      /** @deprecated Use `whole` or `readable`. */
+      complete: unreadable.length === 0 && series.counts.gap_hours === 0,
+      unreadable,
       plottable: isPlottable(series),
       note: chartNote(series),
       counts: series.counts,

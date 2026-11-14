@@ -113,7 +113,12 @@ async function main() {
   ok("totals count rows, not just points", r.body.totals.rows === 2, `rows=${r.body.totals.rows}`);
   ok("schema version travels with the day", r.body.days[0].v === 1, `v=${r.body.days[0].v}`);
   ok("prices survive the round trip", r.body.days[0].points[0].rows[0].oracle_usd === 213);
-  ok("complete when nothing failed to read", r.body.complete === true && r.body.unreadable.length === 0);
+  // The 2026-11-13 contract: `readable` = the read succeeded; `whole` = readable
+  // AND contiguous. `complete` is deprecated and equals `whole`. This fixture is
+  // readable (both written hours came back) but has a 14→20h hole, so it is
+  // deliberately NOT whole.
+  ok("readable when nothing failed to read", r.body.readable === true && r.body.unreadable.length === 0);
+  ok("a day with an unpriced hour is not whole", r.body.whole === false && r.body.complete === false && r.body.contiguous === false);
 
   // ── the three kinds of nothing stay distinct ─────────────────────────────
   r = await call(`?day=${dayOffset(3)}`);

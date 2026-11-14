@@ -65,7 +65,12 @@ export function baseVerdict(driftPct: number, market: MarketClock): M5Verdict {
     return driftPct < 0 ? "LONG_DEX" : "SHORT_DEX";
   }
   if (Math.abs(driftPct) < alignedThreshold) return "FROZEN_ALIGNED";
-  return market.session === "premarket" ? "PREMARKET_DRIFT" : "AFTERHOURS_DRIFT";
+  // `holiday` is its own verdict, not a flavour of after-hours: the reason the
+  // oracle is frozen differs (a closed exchange vs the end of a session), and
+  // an operator reading "AH DRIFT" on Thanksgiving is being told the wrong story.
+  if (market.session === "premarket") return "PREMARKET_DRIFT";
+  if (market.session === "holiday") return "HOLIDAY_DRIFT";
+  return "AFTERHOURS_DRIFT";
 }
 
 /**

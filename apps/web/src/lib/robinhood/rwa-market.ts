@@ -391,28 +391,16 @@ export async function resolvePrimaryPool(
 }
 
 // ─── Market-hours helper (used by M5 arb + A4 brief) ───────────────────────
-// NYSE regular hours: Mon-Fri 09:30-16:00 ET.
-// Rough conversion via fixed UTC-4 offset — ignores DST edges + market
-// holidays. Good enough to distinguish "in-hours drift" from "overnight
-// premarket". Any Chainlink RH stock feed will NOT tick outside these
-// hours, so `age_seconds` > ~15min during hours == abnormal.
-export function nyseMarketStatus(now: Date = new Date()): {
-  is_open: boolean;
-  session: "regular" | "premarket" | "afterhours" | "weekend";
-  ny_time_iso: string;
-  utc_offset_hours: number;
-} {
-  const ny = new Date(now.getTime() - 4 * 3600 * 1000);
-  const day = ny.getUTCDay(); // 0 Sun..6 Sat
-  const minutes = ny.getUTCHours() * 60 + ny.getUTCMinutes();
-  const isWeekend = day === 0 || day === 6;
-  if (isWeekend) return { is_open: false, session: "weekend", ny_time_iso: ny.toISOString(), utc_offset_hours: -4 };
-  const REGULAR_OPEN = 9 * 60 + 30;   // 09:30
-  const REGULAR_CLOSE = 16 * 60;      // 16:00
-  if (minutes < REGULAR_OPEN)  return { is_open: false, session: "premarket",  ny_time_iso: ny.toISOString(), utc_offset_hours: -4 };
-  if (minutes >= REGULAR_CLOSE) return { is_open: false, session: "afterhours", ny_time_iso: ny.toISOString(), utc_offset_hours: -4 };
-  return { is_open: true, session: "regular", ny_time_iso: ny.toISOString(), utc_offset_hours: -4 };
-}
+// NYSE regular hours: Mon-Fri 09:30-16:00 ET. Any Chainlink RH stock feed will
+// NOT tick outside these hours, so `age_seconds` > ~15min during hours ==
+// abnormal.
+//
+// The clock itself lives in `lib/market-hours.ts` and is re-exported here so
+// the five existing call sites keep their import. It used to be computed in
+// this file with a fixed UTC-4 offset, which was wrong for the five months a
+// year New York is on EST: every session label ran one hour early from
+// 2026-11-01 until the March switch. See that file for the calendar it carries.
+export { nyseMarketStatus, type NyseMarketStatus, type NyseSession } from "@/lib/market-hours";
 
 /** All pools for a token, sorted by deepest liquidity. Price is always for
  *  the queried token, whether it's the pool's base or quote side. */

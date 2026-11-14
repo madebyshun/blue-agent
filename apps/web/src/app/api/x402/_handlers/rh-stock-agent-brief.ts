@@ -29,7 +29,7 @@ import { publishRhFacts, RH_DESK_QUARANTINE } from "@/lib/blue-hood/quarantine";
 type Verdict =
   | "WATCH"
   | "ARB_LONG_DEX" | "ARB_SHORT_DEX"
-  | "PREMARKET_DRIFT" | "AFTERHOURS_DRIFT" | "FROZEN_ALIGNED"
+  | "PREMARKET_DRIFT" | "AFTERHOURS_DRIFT" | "HOLIDAY_DRIFT" | "FROZEN_ALIGNED"
   | "THIN_LIQUIDITY" | "NO_ORACLE" | "INSUFFICIENT_DATA";
 
 function verdictFromNumbers(args: {
@@ -38,7 +38,7 @@ function verdictFromNumbers(args: {
   dex_tvl_usd: number | null;
   dex_change_24h_pct: number | null;
   market_is_open: boolean;
-  market_session: "regular" | "premarket" | "afterhours" | "weekend";
+  market_session: "regular" | "premarket" | "afterhours" | "weekend" | "holiday";
   /** A DEX price existed and the F6 quarantine withheld it. */
   dex_withheld: boolean;
   /** The pool was read but has no dollar price: its anchor could not be valued
@@ -58,7 +58,12 @@ function verdictFromNumbers(args: {
   if (Math.abs(pct) < threshold) return market_is_open ? "WATCH" : "FROZEN_ALIGNED";
   if (market_is_open) return pct < 0 ? "ARB_LONG_DEX" : "ARB_SHORT_DEX";
   // Market closed → the drift is not arb, it's overnight price discovery.
-  return market_session === "premarket" ? "PREMARKET_DRIFT" : "AFTERHOURS_DRIFT";
+  // The clock now emits `holiday`, and this used to fold everything that was
+  // not premarket into AFTERHOURS_DRIFT — so a Thanksgiving gap was published
+  // as an after-hours one, which is a different claim about why it exists.
+  if (market_session === "premarket") return "PREMARKET_DRIFT";
+  if (market_session === "holiday") return "HOLIDAY_DRIFT";
+  return "AFTERHOURS_DRIFT";
 }
 
 export default async function handler(req: Request): Promise<Response> {
@@ -183,6 +188,7 @@ Do NOT invent numbers, headlines, or URLs. Empty values are acceptable and prefe
         WATCH: "Market OPEN + DEX/oracle aligned. No immediate directional signal.",
         PREMARKET_DRIFT: "Market CLOSED (premarket). Chainlink is frozen on the last regular-hours print; DEX has drifted — this is on-chain price discovery, NOT arb. Expect a snap toward the feed at 9:30 ET open.",
         AFTERHOURS_DRIFT: "Market CLOSED (afterhours/weekend). Chainlink frozen; DEX drift reflects overnight sentiment, not arb.",
+        HOLIDAY_DRIFT: "Market CLOSED (NYSE holiday). Chainlink holds the last close; DEX drift is on-chain only and there is no session behind it — wait for the next open before reading anything into it.",
         FROZEN_ALIGNED: "Market CLOSED. DEX still hugs the frozen Chainlink print — no notable drift.",
         THIN_LIQUIDITY: "DEX pool TVL below $5k — execution slippage will dominate any thesis.",
         NO_ORACLE: "No Chainlink feed available — cannot triangulate against DEX.",

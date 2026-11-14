@@ -59,6 +59,7 @@ function verdictDotColor(v: M5Verdict | "ERROR"): string {
       return RED;
     case "PREMARKET_DRIFT":
     case "AFTERHOURS_DRIFT":
+    case "HOLIDAY_DRIFT":
       return AMBER;
     case "FROZEN_ALIGNED":
       return "#4b5563";

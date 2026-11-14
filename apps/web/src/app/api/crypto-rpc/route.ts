@@ -138,7 +138,33 @@ function resolveNetwork(input: string, catalog: Set<string> | null): string {
   return input;
 }
 
+const INTERNAL_KEY = process.env.INTERNAL_SERVICE_KEY ?? "";
+
+/**
+ * This route spends the owner's Venice credit, so it answers only to callers
+ * that already hold our own service key — never to the open internet.
+ *
+ * It shipped with no check at all: any host could POST `eth_call`,
+ * `eth_getLogs` or `trace_block` through it on the owner's key, with no rate
+ * limit and no way to see who was doing it. The only reason it was not already
+ * abused is that Venice blacklists admin modules — a stranger's protection, not
+ * ours, and not a control this repo can reason about.
+ *
+ * Fail closed when the key is unset, like `credits/spend` does. The one
+ * in-repo caller (`api/chat/route.ts`) imports this module and calls `POST`
+ * directly, so it has to send the header too — it does.
+ */
+function isAuthorized(req: NextRequest): boolean {
+  if (!INTERNAL_KEY) return false;
+  const h = req.headers.get("x-blue-internal") ?? req.headers.get("X-Blue-Internal");
+  return h === INTERNAL_KEY;
+}
+
 export async function POST(req: NextRequest) {
+  if (!isAuthorized(req)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const keys = veniceKeys();
   if (keys.length === 0) {
     return NextResponse.json({ error: "Venice Crypto RPC not configured." }, { status: 503 });

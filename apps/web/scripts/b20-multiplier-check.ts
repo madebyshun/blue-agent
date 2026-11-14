@@ -327,6 +327,14 @@ export const SANE_BAND: Record<string, [number, number]> = {
   // the whole check ignored. If SPCX approaches $280 on real volume, widen this
   // row and say so — do not silence the probe.
   SPCX: [80, 280],
+  // Admitted 2026-11-14, bands added in the SAME commit (the rule above).
+  // Bands are the probe's anchor÷4 / ×4 proposal tightened a notch on both
+  // edges, because the coverage check (below) requires the probe band to sit
+  // strictly INSIDE the registry band — an edge copied from the registry is a
+  // tautology, not a second opinion.
+  SNDK: [216, 3452], // anchor $863.21 (registry [215, 3453])
+  CRCL: [16, 248],   // anchor $62.16 (registry [15, 249])
+  INTC: [15, 234],   // anchor $58.74 (registry [14, 235])
 };
 
 /** Hermetic: every admitted ticker owns an acceptance band, and that band is a

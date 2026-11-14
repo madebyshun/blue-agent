@@ -20,6 +20,7 @@
  */
 import { BASE_STOCKS } from "@/lib/base-stocks/registry";
 import { RWA_TOKENS } from "@/lib/robinhood/rwa-registry";
+import { nyseMarketStatus } from "@/lib/market-hours";
 
 export interface MarketCall { name: string; args: Record<string, unknown> }
 
@@ -157,24 +158,34 @@ export function looksLikeMarketData(text: string): boolean {
 export const NO_LIVE_SOURCE =
   "I couldn't match that to a live data source, so I won't answer it from memory. Try one of these: \"price of ETH\", \"stock tokens today\", \"what's trending on Base?\", \"what launched on Base in the last hour?\", \"top movers on Robinhood Chain\".";
 
-/** Pure: is the US stock market open, from the clock in New York (DST-aware). */
+/**
+ * Pure: is the US stock market open, from the clock in New York.
+ *
+ * This used to compute the answer itself from `Intl` parts and said in as many
+ * words that "US market holidays are not counted here" — so on Thanksgiving it
+ * answered "Yes, the US stock market is open". The session now comes from
+ * `lib/market-hours.ts`, the one clock the desk, the grader and the blocks
+ * above all read, so chat cannot disagree with them about what day it is.
+ */
 export function marketHoursText(now: Date = new Date()): string {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/New_York", weekday: "long", hour: "numeric", minute: "2-digit", hour12: true,
   }).formatToParts(now);
   const get = (k: string) => parts.find((p) => p.type === k)?.value ?? "";
-  const h24 = Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", hour: "numeric", hourCycle: "h23" }).format(now));
-  const min = Number(get("minute"));
-  const day = get("weekday");
-  const m = h24 * 60 + min;
-  const clock = `${get("hour")}:${get("minute")} ${get("dayPeriod")} ${day} in New York`;
-  const weekend = day === "Saturday" || day === "Sunday";
-  const tail = "Stock-token oracles hold the last close while it is closed; DEX prices on Base and Robinhood Chain trade around the clock. US market holidays are not counted here.";
-  if (weekend) return `No, the US stock market is closed for the weekend (it is ${clock}). It opens Monday at 9:30 AM ET. ${tail}`;
-  if (m < 4 * 60) return `No, the US stock market is closed (it is ${clock}). Pre-market starts at 4:00 AM ET and the regular session at 9:30 AM ET. ${tail}`;
-  if (m < 9 * 60 + 30) return `Not yet: it is pre-market (${clock}). The regular session opens at 9:30 AM ET. ${tail}`;
-  if (m < 16 * 60) return `Yes, the US stock market is open (it is ${clock}). The regular session closes at 4:00 PM ET.`;
-  if (m < 20 * 60) return `No, the regular session has closed; it is after-hours (${clock}). It opens again at 9:30 AM ET on the next trading day. ${tail}`;
+  const clock = `${get("hour")}:${get("minute")} ${get("dayPeriod")} ${get("weekday")} in New York`;
+  const st = nyseMarketStatus(now);
+  const tail = "Stock-token oracles hold the last close while it is closed; DEX prices on Base and Robinhood Chain trade around the clock.";
+  if (st.session === "weekend") return `No, the US stock market is closed for the weekend (it is ${clock}). It opens Monday at 9:30 AM ET. ${tail}`;
+  if (st.session === "holiday") return `No, the US stock market is closed for a public holiday (it is ${clock}). It opens at 9:30 AM ET on the next trading day. ${tail}`;
+  if (st.session === "premarket") {
+    const m = st.ny_time_iso.slice(11, 16);
+    const mins = Number(m.slice(0, 2)) * 60 + Number(m.slice(3, 5));
+    if (mins < 4 * 60) return `No, the US stock market is closed (it is ${clock}). Pre-market starts at 4:00 AM ET and the regular session at 9:30 AM ET. ${tail}`;
+    return `Not yet: it is pre-market (${clock}). The regular session opens at 9:30 AM ET. ${tail}`;
+  }
+  if (st.session === "regular") return `Yes, the US stock market is open (it is ${clock}).`;
+  const mins = Number(st.ny_time_iso.slice(11, 13)) * 60 + Number(st.ny_time_iso.slice(14, 16));
+  if (mins < 20 * 60) return `No, the regular session has closed; it is after-hours (${clock}). It opens again at 9:30 AM ET on the next trading day. ${tail}`;
   return `No, the US stock market is closed (it is ${clock}). It opens again at 9:30 AM ET on the next trading day. ${tail}`;
 }
 

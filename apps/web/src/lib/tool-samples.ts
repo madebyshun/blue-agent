@@ -311,6 +311,15 @@ export const TOOL_SAMPLES: Record<string, ToolSample> = {
       "tool": "gas-tracker",
       "chain": "base",
       "chainId": 8453,
+      "base_fee_gwei": 0.0,
+      "priority_fee_gwei": 0.0,
+      "estimated_cost": {
+        "simple_transfer_usd": 0.0,
+        "erc20_transfer_usd": 0.0,
+        "swap_usd": 0.0,
+        "contract_deploy_usd": 0.0
+      },
+      "congestion": "<low | medium | high | unknown>",
       "timestamp": "2026-11-13T10:20:00.000Z"
     },
   },
@@ -552,7 +561,7 @@ export const TOOL_SAMPLES: Record<string, ToolSample> = {
   // ── rh-stock-holders ($0.05)
   "rh-stock-holders": {
     provenance: "shape",
-    input: {"ticker": "AAPL", "contract": "0xaF3D76f1834A1d425780943C99EaA608f8a93f9", "limit": 5},
+    input: {"ticker": "AAPL", "contract": "0xaF3D76f1834A1d425780943C99Ea8A608f8a93f9", "limit": 5},
     output: {
       "tool": "rh-stock-holders",
       "returned_count": 0,

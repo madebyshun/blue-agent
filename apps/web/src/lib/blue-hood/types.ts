@@ -19,6 +19,7 @@ export type M5Verdict =
   | "FROZEN_ALIGNED"
   | "PREMARKET_DRIFT"
   | "AFTERHOURS_DRIFT"
+  | "HOLIDAY_DRIFT"
   | "INSUFFICIENT_DATA";
 
 export type MarketSession = "regular" | "premarket" | "afterhours" | "weekend" | "holiday";

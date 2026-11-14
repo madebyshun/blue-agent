@@ -211,17 +211,22 @@ export async function GET(req: NextRequest) {
       // with the reason; rows stamped `dex_source: "pool_rate"` are as
       // recorded. The oracle price and liquidity are always as recorded.
       ...rhArchiveProvenance(hits.flatMap((r) => (r.status === "hit" ? r.value.points : []))),
-      // False the moment any day in the window could not be read. A consumer
-      // that flattens `days[].points` into one array MUST check this first,
-      // or it will plot a hole it cannot see.
-      complete: unreadable.length === 0,
-      unreadable,
-      // `complete` answers "could we read every day?"; `contiguous` answers
-      // "does what we read have holes?". A window can be perfectly readable
-      // and still be missing nine hours, and the two failures call for
-      // opposite reactions — retry the read, versus accept the hole is
-      // permanent. Collapsing them into one boolean loses that.
+      // A consumer that flattens `days[].points` into one array MUST check
+      // these first, or it will plot a hole it cannot see. Two questions, two
+      // names. `readable` = we could read every requested
+      // day. `contiguous` = what we read has no holes. A window can be
+      // perfectly readable and still be missing nine hours, and the two
+      // failures call for opposite reactions — retry the read, versus accept
+      // the hole is permanent. Collapsing them into one boolean loses that,
+      // which is what `complete` did: it answered the first question while
+      // every caller read it as the second.
+      readable: unreadable.length === 0,
       contiguous: absentHours.length === 0 && missedDays.length === 0,
+      whole: unreadable.length === 0 && absentHours.length === 0 && missedDays.length === 0,
+      /** @deprecated Use `whole` (both questions) or `readable`. Kept equal to
+       *  `whole` so a caller who trusted the name is now correct. */
+      complete: unreadable.length === 0 && absentHours.length === 0 && missedDays.length === 0,
+      unreadable,
       gaps: { days: missedDays, hours: absentHours },
       requested,
       totals: { days_requested: requested.length, days_with_data: hits.length, points, rows },

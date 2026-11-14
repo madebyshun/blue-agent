@@ -157,12 +157,24 @@ const MARKS: Readonly<Record<string, { slug: string; accent: string }>> = {
   // row without this line is a guaranteed `hood-logo-check` failure
   // ("HALF-MARKED: SPCX"), by design.
   "base:SPCX": { slug: "spacex", accent: "#FFFFFF" },
+  // SNDK · CRCL · INTC joined `BASE_STOCKS` on 2026-11-14. Same one-commit rule
+  // as the two above: shipping the registry rows without these keys is a
+  // guaranteed `hood-logo-check` failure. SNDK has no mark file yet — it renders
+  // the neutral tile (listed, no mark) rather than a guessed logo; CRCL/INTC
+  // reuse the marks their Robinhood rows already ship.
+  "base:SNDK": { slug: "sandisk", accent: "#FFFFFF" },
+  "base:CRCL": { slug: "circle", accent: "#9880BA" },
+  "base:INTC": { slug: "intel", accent: "#4095D4" },
 
   // ── Robinhood Chain 4663 (RHJ) ──
   "robinhood:AAPL": { slug: "apple", accent: "#FFFFFF" },
   "robinhood:AMD": { slug: "amd", accent: "#F2555B" },
   "robinhood:COIN": { slug: "coinbase", accent: "#4D86FF" },
   "robinhood:CRCL": { slug: "circle", accent: "#9880BA" },
+  // SNDK joined the Base desk on 2026-11-14 and is dual-listed (RWA_TOKENS row
+  // at rwa-registry.ts:280), so the both-or-neither rule requires this key in
+  // the same commit as `base:SNDK`.
+  "robinhood:SNDK": { slug: "sandisk", accent: "#FFFFFF" },
   "robinhood:GOOGL": { slug: "google", accent: "#4B8BF5" },
   "robinhood:INTC": { slug: "intel", accent: "#4095D4" },
   "robinhood:META": { slug: "meta", accent: "#6FA8ED" },

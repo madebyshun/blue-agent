@@ -31,7 +31,10 @@ import { coinbaseCatalog, navPremiumPct, type CoinbaseStock } from "@/lib/base-s
 import type { BriefChain, HoldRow } from "./types";
 import { classifyDesk, cheaperVenue, type StockReport } from "./stock-report";
 
-export type Session = "regular" | "premarket" | "afterhours" | "weekend";
+/** Mirrors `MarketSession` from lib/blue-hood/types.ts — `holiday` included,
+ *  because `nyseMarketStatus` now answers it and a Record missing a member is a
+ *  crash waiting for the first Thanksgiving. */
+export type Session = "regular" | "premarket" | "afterhours" | "weekend" | "holiday";
 export type DeskState = "ok" | "stale" | "unread";
 
 export interface StockRow {
@@ -203,6 +206,7 @@ export function stockQuoteText(d: StockBriefData, ticker: string, chain: BriefCh
     premarket: "US market in pre-market: the oracle holds the last close.",
     afterhours: "US market closed for the day: the oracle holds today's close.",
     weekend: "US market closed for the weekend: the oracle holds Friday's close.",
+    holiday: "US market closed for the holiday: the oracle holds the last close.",
   };
   return `${lines.join("\n")}\n\n${SESSION[d.session]}`;
 }

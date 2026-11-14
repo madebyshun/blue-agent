@@ -141,7 +141,12 @@ type ApiOk = {
   ticker: string;
   chain: HoodChain;
   archive_start: string;
+  /** @deprecated equals `whole`. Kept because an older deploy only sends this. */
   complete: boolean;
+  /** Every requested day could be read. Newer deploys send this explicitly. */
+  readable?: boolean;
+  /** Readable AND no holes inside it. Newer deploys send this explicitly. */
+  whole?: boolean;
   contiguous: boolean;
   plottable: boolean;
   note: string | null;
@@ -710,9 +715,20 @@ export default function TickerChart({
           DEX price and drift withheld on hours recorded before the price-source fix. {data.provenance_note ?? ""}
         </p>
       )}
-      {!data.complete && (
+      {/* Two different failures, two different sentences. `readable` is a read
+          that failed (unknown contents); `contiguous` is a read that succeeded
+          and has a hole in it (known-empty hours). The old single `complete`
+          flag made the first sentence describe both, so a series with a real
+          nine-hour hole and a series we simply could not fetch read the same. */}
+      {(data.readable ?? data.complete) === false && (
         <p className="font-mono text-[13px] leading-relaxed" style={{ color: DRIFT }}>
           Part of this window could not be read. Its contents are unknown — not empty.
+        </p>
+      )}
+      {(data.readable ?? data.complete) !== false && !data.contiguous && (
+        <p className="font-mono text-[13px] leading-relaxed" style={{ color: DRIFT }}>
+          This window was read in full but has hours missing from the archive. Those hours were
+          never recorded — the gap is real, and it will not fill in later.
         </p>
       )}
       {series.counts.trailing_hours > 0 && (

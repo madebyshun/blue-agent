@@ -13,6 +13,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { usePolling } from "@/hooks/usePolling";
 import { chainOf, type Arrow } from "@/lib/blue-hood/types";
+import { nyUtcOffsetHours } from "@/lib/market-hours";
 import ArrowBriefBlock from "../ArrowBriefBlock";
 import HoodShellFrame from "../HoodShellFrame";
 import { useHoodShellData } from "../useHoodShellData";
@@ -597,9 +598,11 @@ function formatDuration(ms: number): string {
   return `${(h / 24).toFixed(1)}d`;
 }
 function formatEtTime(iso: string): string {
-  // ET = UTC-4 (during DST); for a receipt we render "MMM DD · HH:mm ET".
+  // For a receipt we render "MMM DD · HH:mm ET".
   const d = new Date(iso);
-  const et = new Date(d.getTime() - 4 * 3600 * 1000);
+  // EST is UTC-5 and EDT is UTC-4; a fixed -4 rendered every winter timestamp
+  // one hour late on a receipt a reader takes as the record.
+  const et = new Date(d.getTime() - nyUtcOffsetHours(d) * 3600 * 1000);
   const mm = String(et.getUTCMonth() + 1).padStart(2, "0");
   const dd = String(et.getUTCDate()).padStart(2, "0");
   const hh = String(et.getUTCHours()).padStart(2, "0");

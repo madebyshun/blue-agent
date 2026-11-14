@@ -41,16 +41,22 @@ export async function scorecardView(opts: { ticker?: string | null; limit?: numb
   const limit = opts.limit ?? 12;
   const pick = <T extends { rows: { ticker: string }[] }>(x: T): T => (ticker ? { ...x, rows: x.rows.filter((r) => r.ticker === ticker) } : x);
   const all = [...store.weekends].sort((a, b) => b.friday.localeCompare(a.friday)).map(pick);
+  // Summary and `weekends[]` describe the SAME window (2026-11-14): the summary
+  // used to run over every stored weekend while the list was sliced to `limit`,
+  // so a `weekends: 4` reply carried a lifetime stat without saying so. ShunTr,
+  // 2026-11-14: compute the summary over the returned window — shorter and
+  // honest; `weekends_total` still names the full record.
+  const window = all.slice(0, limit);
   const live = await liveView(new Date()).catch(() => null);
   return {
     chain: "base" as const,
     chain_id: 8453,
     ticker,
     method: METHOD,
-    summary: summarize(all),
+    summary: summarize(window),
     live: live ? pick(live) : null,
     pending: store.pending ? pick(publicCall(store.pending)) : null,
-    weekends: all.slice(0, limit).map(publicWeekend),
+    weekends: window.map(publicWeekend),
     weekends_total: all.length,
     page: WEEKEND_PAGE,
   };
