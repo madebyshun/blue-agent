@@ -339,7 +339,7 @@ const freeNames = new Set(freeDirect.map((m) => m[1]));
 // green-to-red flip on a change that fixed something.
 check(
   "G0 both chat dispatch maps parsed — G1-G3 are not vacuous",
-  chatEntries.length >= 40 && freeDirect.length >= 1
+  chatEntries.some((m) => m[1] === "hub_token_price" && m[2] === "token-price") && freeDirect.length >= 1
     ? []
     : [`TOOL_ENDPOINT=${chatEntries.length} FREE_DIRECT=${freeDirect.length}`],
   "a reindent of either literal silently empties the match and passes everything"

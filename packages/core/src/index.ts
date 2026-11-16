@@ -1,4 +1,6 @@
 // @blueagent/core — public API
+export { STOCK_OBSERVATION_VERSION, STOCK_SNAPSHOT_MAX_AGE_MS, requireFreshStockSnapshot, stockOracleState, lastClosedHourlyCandle } from "./stock-observations";
+export type { StockDraftEvidence } from "./stock-observations";
 
 // Grounded LLM runtime
 export { callWithGrounding, streamWithGrounding, diagnoseSkills } from "./runtime";
@@ -40,3 +42,6 @@ export type { ChainKey, ChainConfig } from "./chains";
 export function formatUsd(n: number): string {
   return `$${n.toFixed(2)}`;
 }
+
+export { advanceStockCoverage, finishCoverageAssessment, summarizeStockCoverage, runCoverageBatch, isStockCoverageInventory, selectCoveragePool } from "./stock-coverage";
+export type { CoverageStock, CoverageInventory, CoverageAssessment, CoverageCheck, CoveragePair, CoverageRunDependencies } from "./stock-coverage";

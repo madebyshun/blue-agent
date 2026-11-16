@@ -7,6 +7,11 @@ node_modules/
 dist/
 build/
 coverage/
+# Stock coverage source routes, not test coverage reports.
+!apps/web/src/app/api/stocks/coverage/
+!apps/web/src/app/api/stocks/coverage/**
+!apps/web/src/app/app/markets/drift/coverage/
+!apps/web/src/app/app/markets/drift/coverage/**
 .env
 .env.*
 !.env.example

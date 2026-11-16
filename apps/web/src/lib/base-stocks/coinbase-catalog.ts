@@ -70,20 +70,30 @@ let fetchImpl: typeof fetch = (...a) => fetch(...a);
 /** Tests inject a stub. */
 export function __setCatalogFetch(f: typeof fetch | null) { fetchImpl = f ?? ((...a) => fetch(...a)); }
 
-async function fetchCatalog(): Promise<CoinbaseStock[] | null> {
+export async function fetchCoinbaseCatalog(): Promise<CoinbaseStock[] | null> {
   const out: CoinbaseStock[] = [];
   let token: string | null = null;
+  const seenPages = new Set<string>();
+  const seenContracts = new Set<string>();
   for (let page = 0; page < MAX_PAGES; page++) {
-    const url = token ? `${API}?page_token=${encodeURIComponent(token)}` : API;
+    const url = `${API}?page_size=500${token ? `&page_token=${encodeURIComponent(token)}` : ""}`;
     let j: { tokens?: Raw[]; next_page_token?: string | null };
     try {
       const r = await fetchImpl(url, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(10_000) });
       if (!r.ok) return null;
       j = await r.json();
     } catch { return null; }
-    for (const raw of j.tokens ?? []) { const s = parseCatalogRow(raw); if (s) out.push(s); }
+    if (!Array.isArray(j.tokens) || !j.tokens.length) return null;
+    for (const raw of j.tokens) {
+      const s = parseCatalogRow(raw);
+      if (!s || seenContracts.has(s.contract)) return null;
+      seenContracts.add(s.contract);
+      out.push(s);
+    }
     token = j.next_page_token || null;
     if (!token) return out;
+    if (seenPages.has(token)) return null;
+    seenPages.add(token);
   }
   // Still paging at the cap: an incomplete catalog would miss tokens, and a
   // miss reads as "not a Coinbase stock". Refuse it rather than serve it.
@@ -96,7 +106,7 @@ export async function coinbaseCatalog(opts: { fresh?: boolean } = {}): Promise<C
     const hit = await kvGet<CoinbaseStock[]>(KEY).catch(() => null);
     if (Array.isArray(hit) && hit.length) return hit;
   }
-  const rows = await fetchCatalog();
+  const rows = await fetchCoinbaseCatalog();
   if (rows?.length) await kvSet(KEY, rows, TTL_S).catch(() => {});
   return rows?.length ? rows : null;
 }

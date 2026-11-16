@@ -1,6 +1,6 @@
 # @blueagent/agentkit
 
-Coinbase AgentKit plugin for [Blue Agent](https://blueagent.dev) — 7 x402-powered AI tools on Base.
+Coinbase AgentKit plugin for [Blue Agent](https://blueagent.dev) — 3 x402-powered AI tools on Base.
 
 Built by [Blocky Studio](https://blocky.studio).
 
@@ -96,10 +96,6 @@ const blueAgentProvider = createBlueAgentProvider({
 | `risk_gate` | Screen a transaction before execution — flags high-risk actions on Base | $0.20 |
 | `honeypot_check` | Detect honeypot tokens — checks if a token can be sold after purchase | $0.10 |
 | `contract_trust` | Score a smart contract's trustworthiness | $0.15 |
-| `key_exposure` | Check if a wallet has been flagged for key compromise | $0.50 |
-| `deep_analysis` | Comprehensive token analysis — fundamentals, tokenomics, risk score | $0.50 |
-| `narrative_pulse` | Get current narrative trends and sentiment in crypto | $0.10 |
-| `dex_flow` | Analyze DEX trading flow and order book depth | $0.15 |
 
 All payments are in USDC on Base (chain ID 8453), settled against
 `POST https://blueagent.dev/api/x402/{tool-id}`.

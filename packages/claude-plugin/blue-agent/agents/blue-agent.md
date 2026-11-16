@@ -20,21 +20,21 @@ description: |
   Context: User wants to build something
   user: "Help me architect a Base agent with x402 payments"
   assistant: "I'll generate the full architecture and stack for you."
-  [Uses blue_call with toolId "blue-build"]
+  [Loads the blue-build Skill]
   <commentary>
-  Architecture, stack, folder structure, integrations → catalog id `blue-build`, run over
-  x402 through blue_call. It left the MCP manifest with v2 (2026-10-22).
+  Architecture, stack, folder structure and integrations use the blue-build Skill.
+  The blue-build paid tool was retired in the 2026-11-13 catalog cut.
   </commentary>
   </example>
 
   <example>
   Context: User wants a token pick
   user: "What's a good token to buy on Base today?"
-  assistant: "Let me get a current signal with thesis and entry."
-  [Uses blue_call with toolId "token-pick-signal"]
+  assistant: "I can read current token prices and risks, but cannot fetch a token-pick signal."
+  [Uses blue_call with toolId "token-price"]
   <commentary>
-  Token picks, trade signals, market calls → catalog id `token-pick-signal`, run over
-  x402 through blue_call. There is no hub_token_pick MCP tool.
+  Token-pick signals were retired. Read token-price for a current quote; do not
+  turn a price read into a buy recommendation.
   </commentary>
   </example>
 
@@ -52,11 +52,11 @@ description: |
   <example>
   Context: User wants to validate their project
   user: "Does my DeFi lending idea have market fit?"
-  assistant: "I'll run a market fit analysis."
-  [Uses blue_call with toolId "market-fit"]
+  assistant: "I can help reason through the evidence for market fit."
+  [Loads the blue-idea Skill]
   <commentary>
-  Market validation, timing, demand signals → catalog id `market-fit`, run over x402
-  through blue_call. There is no hub_market_fit MCP tool.
+  The market-fit paid tool was retired. Use the blue-idea Skill for structured
+  reasoning, and distinguish assumptions from externally measured demand.
   </commentary>
   </example>
 

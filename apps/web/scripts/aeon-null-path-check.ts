@@ -53,8 +53,9 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const dir = path.resolve(__dirname, "../src/app/api/x402/_handlers");
   const readers = fs.readdirSync(dir).filter((f) => f.endsWith(".ts") && /getAeonOutput|runAeonSkill/.test(code(fs.readFileSync(path.join(dir, f), "utf8"))));
   // 14 readers until 2026-10-06; 13 of them were the Aeon-backed advisory tools
-  // retired that day. The floor only guards against this scan matching nothing.
-  ok(`found the Aeon readers (${readers.length})`, readers.length >= 1, readers.join(", "));
+  // retired that day; the final reader was retired 2026-11-13. Zero is now valid.
+  ok("handler scan covers the surviving catalog, including zero Aeon readers", fs.readdirSync(dir).includes("risk-gate.ts"), `${readers.length} Aeon readers`);
+  ok("the reader detector still recognizes a real call shape", /getAeonOutput|runAeonSkill/.test(code('const result = await runAeonSkill("fixture");')));
   for (const f of readers) {
     const src = code(fs.readFileSync(path.join(dir, f), "utf8"));
     // Variables that hold an Aeon read.

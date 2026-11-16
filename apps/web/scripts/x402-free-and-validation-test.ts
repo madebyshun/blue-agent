@@ -355,8 +355,15 @@ async function call(tool: string, body: unknown) {
       const d = t.priceUSDC! / 1_000_000;
       return Math.abs(d - Number(d.toFixed(2))) > 1e-9;
     });
-    check("the sub-cent price case still exists to be checked", odd.length > 0,
-          odd.map((t) => `${t.id}=${t.price}`).join(", "));
+    // The last sub-cent product was retired; retain the regression with a
+    // temporary price on a real live tool rather than inventing a new product.
+    const fixture = paid[0];
+    const originalPrice = fixture.priceUSDC;
+    try {
+      fixture.priceUSDC = 5000;
+      const fixtureSpec = await (await openapiGET()).json();
+      check("a synthetic sub-cent price remains exact", String(fixtureSpec.paths[`/api/x402/${fixture.id}`]?.post?.description).includes("$0.005 USDC"));
+    } finally { fixture.priceUSDC = originalPrice; }
     const misquoted = odd.filter((t) => {
       const desc = String(pathFor(t.id)?.description ?? "");
       return !desc.includes(`$${String(t.priceUSDC! / 1_000_000)} USDC`);

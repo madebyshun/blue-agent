@@ -15,8 +15,8 @@ const t0 = getTierInfo(0);
 const trending = toolCreditCost("safe-trending", t0);
 ok("trending costs nothing on top of the message", trending === 0, String(trending));
 ok("the free daily credits buy 50 fast-model answers with trending", Math.floor(WALLET_DAILY / (trending + 10)) === 50);
-for (const id of ["token-price", "rh-stock-movers", "rh-stock-quote", "rh-stock-ohlc", "blue-registry", "pool-scan"]) ok(`data tool ${id} is free in chat`, toolCreditCost(id, t0) === 0);
-for (const id of ["risk-gate", "contract-trust", "honeypot-check", "wallet-risk", "liquidity-depth"]) ok(`model-running tool ${id} is free in chat too`, toolCreditCost(id, t0) === 0);
+for (const id of ["token-price", "rh-stock-movers", "rh-stock-quote", "blue-registry"]) ok(`data tool ${id} is free in chat`, toolCreditCost(id, t0) === 0);
+for (const id of ["risk-gate", "contract-trust", "honeypot-check"]) ok(`model-running tool ${id} is free in chat too`, toolCreditCost(id, t0) === 0);
 
 // Every Hub tool chat actually offers costs nothing on top of the message —
 // a tool added to chat later without an override would silently charge twice.
@@ -30,7 +30,8 @@ for (const id of ["risk-gate", "contract-trust", "honeypot-check", "wallet-risk"
   }
 }
 ok("the x402 USDC price is unchanged ($0.15)", AGENT_TOOLS.find((t) => t.id === "safe-trending")?.price === "$0.15");
-ok("a tool chat does not offer still follows its USDC price", toolCreditCost("rh-stock-ohlc", t0) === Math.round(0.05 * CREDITS_PER_USDC));
+const outsideChat = AGENT_TOOLS.find((t) => t.id === "stock-screen")!;
+ok("a paid tool outside chat follows its catalog price", toolCreditCost(outsideChat.id, t0) === Math.round(outsideChat.priceUSDC! / 1_000_000 * CREDITS_PER_USDC));
 for (const id of Object.keys(CREDIT_PRICE_OVERRIDE)) ok(`override "${id}" names a real catalog id`, AGENT_TOOLS.some((t) => t.id === id));
 
 console.log(failures === 0 ? "\ncredit-price-override-test: PASS" : `\ncredit-price-override-test: FAIL — ${failures}`);

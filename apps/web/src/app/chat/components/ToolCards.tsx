@@ -2385,11 +2385,7 @@ export function ToolResultCard({ tool, result }: { tool: string; result: Record<
   switch (tool) {
     case "hub_honeypot":      return <HoneypotCard    result={r as HoneypotResult} />;
     case "hub_risk_gate":     return <RiskGateCard    result={r as RiskGateResult} />;
-    case "hub_deep_analysis": return <DeepAnalysisCard result={r as DeepAnalysisResult} />;
-    case "hub_token_pick":    return <TokenPickCard   result={r as TokenPickResult} />;
     case "hub_contract_trust": return <ContractTrustCard result={r as ContractTrustResult} />;
-    case "hub_market_fit":    return <MarketFitCard   result={r} />;
-    case "hub_key_exposure":  return <KeyExposureCard  result={r} />;
     case "hub_approvals": {
       if (!Array.isArray((r as { grants?: unknown }).grants)) return null;
       const a = r as unknown as AuditView;
@@ -2401,7 +2397,6 @@ export function ToolResultCard({ tool, result }: { tool: string; result: Record<
         </ActionStrip>
       );
     }
-    case "blue_stream":       return <BlueStreamCard   result={r} />;
     // No "hub_b20_launch" case — the tool was retired 2026-09-08 along with its
     // card. Chat has no token-deploy path; /app/b20 is the one that exists.
     case "hub_hood_arrow":       return <HoodArrowCard   result={r as unknown as HoodArrowResult} />;
@@ -2524,10 +2519,7 @@ export function ToolResultCard({ tool, result }: { tool: string; result: Record<
 
     // Discovery tools (G0) — one card, a Swap button per row.
     case "hub_rh_movers":
-    case "hub_rh_new_listings":
-    case "hub_rh_search":
     case "hub_rh_quote":
-    case "hub_rh_index":
     case "hub_safe_trending": {
       const d = discoveryRows(tool, r as Record<string, unknown>);
       if (!d) return null;

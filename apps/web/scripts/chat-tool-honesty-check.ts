@@ -96,7 +96,7 @@ const TOOL_NAMES = [...ROUTE.matchAll(/^\s{4}name:\s*"([a-z0-9_]+)",$/gm)]
 // If a prettier pass reindents them, the list silently empties and every
 // absence assertion below starts passing vacuously.
 check("tool names are derived from route.ts, not hand-listed",
-  TOOL_NAMES.length >= 40, `${TOOL_NAMES.length} schemas found`);
+  TOOL_NAMES.includes("prepare_swap") && TOOL_NAMES.includes("hub_token_price"), `${TOOL_NAMES.length} schemas found`);
 
 const withTools = buildBaseSystem({ hasWebSearch: false, hasTools: true });
 const noTools   = buildBaseSystem({ hasWebSearch: false, hasTools: false });
@@ -304,7 +304,7 @@ check("policy/pause reverts are still explained without a simulate step",
   /PolicyForbids/.test(b20Free) && /paused by the issuer/.test(b20Free));
 
 check("the dispatch table ships ONLY with tools",
-  !/Use hub_b20_inspect/.test(b20Free) && /Use hub_b20_inspect/.test(b20Full));
+  !/Use check_authorization/.test(b20Free) && /Use check_authorization/.test(b20Full));
 check("the Hood chain + age rules (#206) ride with the dispatch table",
   /CHAIN IS PART OF THE QUESTION/.test(b20Full)
   && /A GRADED ARROW IS HISTORY/.test(b20Full)

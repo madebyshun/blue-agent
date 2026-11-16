@@ -324,8 +324,8 @@ check("the prompt still points at /app/b20 as a place the user can go",
 // The knowledge that must NOT have been deleted along with the dispatch: reading
 // B20 state is a live capability and explaining the standard is allowed. If these
 // go, "we removed deploy" quietly became "we removed B20".
-check("the B20 read/explain tools survived the removal",
-  ROUTE.includes(`name: "hub_b20_inspect"`) && ROUTE.includes(`name: "hub_b20_analyze"`));
+check("B20 knowledge and the live scanner survive without retired chat tools",
+  PROMPT.includes("B20 Scanner") && existsSync(path.join(WEB, "src/app/app/b20/page.tsx")) && !ROUTE.includes(`name: "hub_b20_inspect"`) && !ROUTE.includes(`name: "hub_b20_analyze"`));
 check("the prompt kept the real B20 background",
   /PolicyRegistry/.test(PROMPT) && /Beryl/.test(PROMPT) && /createB20/.test(PROMPT));
 

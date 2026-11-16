@@ -181,7 +181,7 @@ console.log(
 
 check(
   "both halves of the predicate still match real code",
-  files.length > 100 && readsCatalog >= 6 && callsLlm >= 20,
+  files.length > 100 && readsCatalog >= 6 && callsLlm > 0 && files.some((x) => x.rel === "x402/_handlers/contract-trust.ts" && SYNTHESIZES.test(x.src)),
   `walked ${files.length} files: ${readsCatalog} catalog readers, ${callsLlm} LLM callers. ` +
     "A collapse here means the walk path or a pattern broke — the empty result " +
     "above would then be silence, not safety.",

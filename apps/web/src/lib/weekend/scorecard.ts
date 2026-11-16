@@ -43,6 +43,7 @@ import { binomialTestTwoSided, wilsonInterval } from "@/lib/blue-hood/cohort-sta
 import type { SeriesPoint } from "@/lib/blue-hood/types";
 import type { DiaryEntry } from "./diary";
 import { BASE_SERIES_ARCHIVE_START, yyyymmdd } from "@/lib/blue-hood/kv-keys";
+import { lastClosedHourlyCandle } from "../../../../../packages/core/src/stock-observations";
 
 export const CALL_MIN_ABS_PCT = 0.5;
 export const MIN_CALLS = 30;
@@ -83,7 +84,8 @@ export interface WeekendCall {
   source: "live" | "archive";
   rows: CallRow[];
   excluded: { ticker: string; reason: string }[];
-  crypto: { btc_pct: number | null; eth_pct: number | null; from: string; to: string } | null;
+  crypto: { btc_pct: number | null; eth_pct: number | null; from: string; to: string;
+    observations?: Record<string, { from: { close: number; closed_at: string }; to: { close: number; closed_at: string } } | null> } | null;
 }
 
 export interface GradedWeekend extends Omit<WeekendCall, "rows"> {
@@ -305,26 +307,26 @@ export async function readPoints(days: string[]): Promise<{ points: SeriesPoint[
 
 /** Context only: BTC and ETH move from `fromIso` to `toIso` (Coinbase Exchange hourly closes). */
 export async function cryptoMove(fromIso: string, toIso: string): Promise<WeekendCall["crypto"]> {
-  const one = async (pair: string): Promise<number | null> => {
+  const one = async (pair: string) => {
     const closeAt = async (iso: string) => {
       const t = Date.parse(iso);
-      const start = new Date(t - 3_600_000).toISOString();
+      const start = new Date(t - 2 * 3_600_000).toISOString();
       const u = `https://api.exchange.coinbase.com/products/${pair}/candles?granularity=3600&start=${start}&end=${iso}`;
       const r = await fetch(u, { headers: { accept: "application/json", "user-agent": "blueagent-weekend/1" }, signal: AbortSignal.timeout(8000) });
       if (!r.ok) return null;
       const rows = (await r.json()) as number[][];
-      const last = rows.filter((x) => x[0] * 1000 <= t).sort((a, b) => b[0] - a[0])[0];
-      return last ? last[4] : null;
+      return lastClosedHourlyCandle(rows, iso);
     };
     try {
       const [a, b] = await Promise.all([closeAt(fromIso), closeAt(toIso)]);
-      return a && b ? r4(pct(b, a)) : null;
+      return a && b ? { pct: r4(pct(b.close, a.close)), from: a, to: b } : null;
     } catch {
       return null;
     }
   };
   const [btc, eth] = await Promise.all([one("BTC-USD"), one("ETH-USD")]);
-  return { btc_pct: btc, eth_pct: eth, from: fromIso, to: toIso };
+  return { btc_pct: btc?.pct ?? null, eth_pct: eth?.pct ?? null, from: fromIso, to: toIso,
+    observations: { "BTC-USD": btc ? { from: btc.from, to: btc.to } : null, "ETH-USD": eth ? { from: eth.from, to: eth.to } : null } };
 }
 
 // ── chain fallback for an archive hole on the opening day ───────────────────

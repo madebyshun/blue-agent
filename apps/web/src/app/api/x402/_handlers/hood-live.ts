@@ -76,6 +76,8 @@ import {
 } from "@/lib/blue-hood/types";
 import { TX_CHAINS } from "@/lib/tx-chains";
 import { publishDeskRow } from "@/lib/blue-hood/quarantine";
+import { BASE_STOCKS } from "@/lib/base-stocks/registry";
+import { COINBASE_BASE_STOCKS, COINBASE_BASE_STOCKS_CHECKED_AT } from "@/lib/base-stocks/coinbase-list";
 
 /** Same 15-min threshold the /hood header banner uses. */
 const STALE_AFTER_S = 15 * 60;
@@ -185,12 +187,14 @@ export default async function handler(req: Request): Promise<Response> {
     // attribution check, so a stale blob never reaches the partition.
     let baseRows: TickerSnapshot[] = [];
     let baseStale = false;
+    let baseAsOf: string | null = null;
     let baseUnattributed = 0;
     try {
       const baseLatest = await kvGet<BaseDeskLatest>(KV_BASE_ROWS_LATEST);
       if (baseLatest?.rows?.length) {
         const ageMs = Date.now() - new Date(baseLatest.started_at).getTime();
-        if (Number.isFinite(ageMs) && ageMs <= BASE_ROWS_MAX_AGE_MS) {
+        if (Number.isFinite(ageMs) && ageMs >= 0 && ageMs <= BASE_ROWS_MAX_AGE_MS) {
+          baseAsOf = baseLatest.started_at;
           const split = partitionBaseRows(baseLatest.rows);
           baseRows = split.attributed;
           if (split.unattributed.length > 0) {
@@ -247,6 +251,16 @@ export default async function handler(req: Request): Promise<Response> {
       base_desk: {
         status: baseRows.length ? "live" : baseStale ? "stale" : "offline",
         count: baseRows.length,
+        as_of: baseAsOf,
+        coverage: {
+          catalog_total: COINBASE_BASE_STOCKS.length,
+          catalog_checked_at: COINBASE_BASE_STOCKS_CHECKED_AT,
+          catalog_source: "https://www.base.org/api/stocks",
+          watchlist_total: BASE_STOCKS.length,
+          observed: baseRows.length,
+          not_assessed: COINBASE_BASE_STOCKS.filter((s) => !BASE_STOCKS.some((b) => b.token.toLowerCase() === s.token.toLowerCase())).length,
+          scope: "Curated watchlist. Stocks outside it have not been assessed by this drift poller; they are not classified as illiquid or lacking an oracle.",
+        },
         // 0 in every healthy cycle. Non-zero means rows were polled that this
         // reader refused to attribute, so `count` is BELOW what the desk saw.
         unattributed: baseUnattributed,

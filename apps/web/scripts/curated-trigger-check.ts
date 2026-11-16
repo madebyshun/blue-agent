@@ -97,9 +97,9 @@ const declared = new Set(
 
 // ── 4. Guard the guard (run first — everything below is vacuous without it) ──
 check("TOOL_ENDPOINT parsed out of route.ts",
-  endpointOf.size >= 40, `${endpointOf.size} entries`);
+  endpointOf.get("hub_token_price") === "token-price", `${endpointOf.size} entries`);
 check("HUB_TOOLS schemas parsed out of route.ts",
-  declared.size >= 40, `${declared.size} schemas`);
+  declared.has("prepare_swap") && declared.has("hub_token_price"), `${declared.size} schemas`);
 
 // ── 1. No curated entry is dead config ───────────────────────────────────────
 // CURATED is module-private, so its ids are read from source and compared
@@ -126,7 +126,7 @@ const renderedIds = new Set(HUB_SKILLS.map((s) => s.id));
 // Floor, not a count: 24 entries until 2026-10-06, when six chips for the
 // retired Aeon-backed advisory tools went with their ids.
 check("CURATED ids parsed out of hub-skills.ts",
-  curatedIds.length >= 15, `${curatedIds.length} entries`);
+  curatedIds.length > 0 && curatedIds.includes("honeypot-check"), `${curatedIds.length} entries`);
 
 // `tool` per entry, read the same way. A hidden tool's chip is dropped on
 // purpose (check 5), so it is not "unrendered" in the sense below.

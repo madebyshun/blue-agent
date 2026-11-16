@@ -1,5 +1,5 @@
 /** X drafts: the copy linter and the slot schedule (lib/xdrafts/compose.ts). No network. */
-import { lint, telegramText } from "../src/lib/xdrafts/compose";
+import { lint, telegramText, weekendText, preOpenText, yesterdayText, callText, fridayText } from "../src/lib/xdrafts/compose";
 let failed = 0, passed = 0;
 const check = (n: string, ok: boolean) => { if (ok) { passed++; console.log(`  PASS  ${n}`); } else { failed++; console.log(`  FAIL  ${n}`); } };
 check("an em dash is flagged", lint("Base — stocks").includes("em dash"));
@@ -12,5 +12,17 @@ check("telegram text escapes HTML", msg.includes("a &lt; b &amp; c") && msg.incl
 check("telegram text says nothing is posted", /by hand/.test(msg));
 const err = telegramText({ kind: "yesterday", error: "archive miss" }, new Date());
 check("a failed draft says so instead of sending a post", /Not composed/.test(err) && !/<pre>/.test(err));
+const rows = [{ ticker: "MSTR", weekend_move_pct: -7.32 }, { ticker: "NVDA", weekend_move_pct: 3.09 }];
+const weekend = weekendText(rows, { btc_pct: -4.3, eth_pct: -4.9 }, "2026-11-13", true);
+check("weekend scope and price basis are explicit", weekend.text.includes("we track") && weekend.text.includes("pre-weekend chainlink references") && !weekend.text.includes("friday's close"));
+check("crypto does not claim the same window or causation", !/same window|part of the move may be crypto/.test(weekend.text));
+check("weekend does not claim feeds remain frozen", !/feeds still show|frozen feed/.test(weekend.text));
+check("weekend distinguishes oracle benchmark from auction", weekend.text.includes("not the opening auction"));
+const copies = [weekend, preOpenText([{ ticker: "NVDA", drift_pct: 3.09 }, { ticker: "MSTR", drift_pct: -7.32 }]), yesterdayText([{ ticker: "NVDA", drift_pct: 3.09, abs_drift_pct: 3.09, session: "weekend", is_open: false }], "2026-11-13"), callText(rows), fridayText(null, 25)];
+check("revised templates pass copy constraints", copies.every((d) => d.problems.length === 0));
+const fullBook = ["NVDA", "META", "GOOGL", "AAPL", "AMZN", "MSFT", "MSTR", "TSLA", "SPCX", "SNDK", "CRCL", "INTC"].map((ticker, i) => ({ ticker, weekend_move_pct: i % 2 ? -4.55 : 3.09 }));
+const dated = weekendText(fullBook, { btc_pct: -4.3, eth_pct: -4.9 }, "2026-11-13", true, "2026-11-15T23:55:00Z");
+check("full-book draft includes observation time and fits", dated.text.includes("23:55 utc on november 15") && dated.problems.length === 0);
+check("fixed-call copy fits the full tracked sample", callText(fullBook).problems.length === 0);
 console.log(`\n${failed ? `${failed} of ${passed + failed} CHECK(S) FAILED` : `all ${passed} checks passed`}`);
 process.exit(failed ? 1 : 0);

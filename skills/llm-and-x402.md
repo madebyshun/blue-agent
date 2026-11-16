@@ -148,7 +148,7 @@ The server answers an unpaid request with `402` and an `accepts[]` array. Pay on
 then retry with the `X-Payment` header:
 
 ```ts
-const url  = "https://blueagent.dev/api/x402/deep-analysis";
+const url  = "https://blueagent.dev/api/x402/contract-trust";
 const body = JSON.stringify({ token: "0x…" });
 
 let res = await fetch(url, { method: "POST", body });

@@ -7,7 +7,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import MarketsHeader from "../MarketsHeader";
 import StockMark from "@/components/blue-hood/StockMark";
+import { stockOracleState } from "../../../../../../../packages/core/src/stock-observations";
+import { BASE_STOCKS } from "@/lib/base-stocks/registry";
+import { COINBASE_BASE_STOCKS, COINBASE_BASE_STOCKS_CHECKED_AT } from "@/lib/base-stocks/coinbase-list";
 import hoodLive from "@/app/api/x402/_handlers/hood-live";
+import CoverageSummary from "./CoverageSummary";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
@@ -24,6 +28,7 @@ interface Row {
 
 const usd = (n: number | null) => (n == null ? "—" : n >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(1)}k` : `$${n.toFixed(2)}`);
 const px = (n: number | null) => (n == null ? "—" : `$${n.toFixed(2)}`);
+const oracleLabel = (s: number | null, asOf: string) => ({ unavailable: "unavailable", updated_since_weekend: "updated since weekend", pre_weekend_reference: "pre-weekend reference", dated_reference: "dated reference" })[stockOracleState(s, asOf)];
 const ago = (s: number | null) => {
   if (s == null) return "—";
   const m = Math.round((Date.now() / 1000 - s) / 60);
@@ -37,9 +42,9 @@ export default async function DriftPage() {
     const r = await hoodLive(new Request("https://blueagent.dev/api/x402/hood-live", { method: "POST", body: JSON.stringify({ chain: "base" }) }));
     if (!r.ok) failed = true;
     else {
-      const j = (await r.json()) as { rows?: Row[]; as_of?: string; is_stale?: boolean };
+      const j = (await r.json()) as { rows?: Row[]; as_of?: string; is_stale?: boolean; base_desk?: { as_of?: string | null; status?: string } };
       rows = (j.rows ?? []).sort((a, b) => Math.abs(b.drift_pct ?? 0) - Math.abs(a.drift_pct ?? 0));
-      asOf = j.as_of ?? null; stale = !!j.is_stale;
+      asOf = j.base_desk?.as_of ?? null; stale = !!j.is_stale || j.base_desk?.status !== "live";
     }
   } catch { failed = true; }
 
@@ -52,9 +57,17 @@ export default async function DriftPage() {
             <div className="text-[11px] tracking-[0.16em] text-[#64748B]">BASE 8453 · ORACLE VS DEX</div>
             <h1 className="mt-2 text-[26px] md:text-[32px] font-semibold text-[#F8FAFC] leading-tight">Where Base trades a stock away from its oracle.</h1>
             <p className="mt-2 text-[13px] text-[#94A3B8] leading-relaxed max-w-[760px]">
-              Each row is a Coinbase stock token on Base: its Chainlink price, the deepest Base pool&apos;s price and the gap between them, read every 5 minutes. Over a weekend the oracle holds Friday&apos;s price, so the gap is what Base is pricing for Monday; the <Link href="/markets/weekend" className="text-[#4FC3F7]">weekend scorecard</Link> grades it.
+              This board follows a curated sample of Coinbase stock tokens on Base, read every 5 minutes. Pool spot versus a multiplier-adjusted Chainlink reference measures a price gap, not a return from the official stock close or an executable trade quote. The <Link href="/markets/weekend" className="text-[#4FC3F7]">weekend scorecard</Link> compares the fixed Sunday call with the first recorded post-open oracle reading, not the opening auction.
             </p>
           </section>
+
+          <section className="rounded-[16px] border border-[#1A1A2E] bg-[#0B0F1E] px-4 py-3 text-[12px] text-[#94A3B8] leading-relaxed">
+            <p className="text-[#E2E8F0]">{BASE_STOCKS.length} tracked · {rows.length} observed · {COINBASE_BASE_STOCKS.length} in the verified catalog</p>
+            <p>Catalog checked {COINBASE_BASE_STOCKS_CHECKED_AT}; <a href="https://www.base.org/stocks" target="_blank" rel="noreferrer" className="text-[#4FC3F7]">the official list</a> may have grown. Stocks outside this watchlist have not been assessed here. They are not automatically illiquid or missing an oracle.</p>
+            <p>Oracle timestamps show when a reference updated, not why it held. A 24/5 feed can resume before the regular stock session opens.</p>
+          </section>
+          <CoverageSummary />
+          {stale && !failed && <p className="text-[13px] text-[#F59E0B]">The Base poll is stale or unavailable. Do not treat these readings as current.</p>}
 
           {failed ? (
             <p className="text-[13px] text-[#F59E0B]">The drift board could not be read right now. Nothing is shown rather than an empty board.</p>
@@ -64,7 +77,7 @@ export default async function DriftPage() {
                 <thead>
                   <tr className="text-left text-[#64748B] text-[11px] tracking-[0.08em]">
                     <th className="px-4 py-3">STOCK</th><th className="text-right">ORACLE</th><th className="text-right">BASE DEX</th>
-                    <th className="text-right">DRIFT</th><th className="text-right">POOL TVL</th><th className="text-right">24H VOL</th><th className="text-right pr-4">ORACLE AGE</th>
+                    <th className="text-right">DRIFT</th><th className="text-right">POOL TVL</th><th className="text-right">24H VOL</th><th className="text-right pr-4">ORACLE REFERENCE</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -82,7 +95,9 @@ export default async function DriftPage() {
                       </td>
                       <td className="text-right text-[#94A3B8]">{usd(r.total_tvl_usd)}</td>
                       <td className="text-right text-[#94A3B8]">{usd(r.volume_24h_usd)}</td>
-                      <td className="text-right pr-4 text-[#64748B]">{ago(r.oracle_updated_at)}</td>
+                      <td className="text-right pr-4 text-[#64748B]">{ago(r.oracle_updated_at)}
+                        <span className="block text-[10px]">{oracleLabel(r.oracle_updated_at, asOf ?? "")}</span>
+                        <span className="block text-[10px]">{r.oracle_updated_at ? new Date(r.oracle_updated_at * 1000).toISOString().replace("T", " ").slice(0, 19) + " UTC" : "unavailable"}</span></td>
                     </tr>
                   ))}
                   {rows.length === 0 && <tr><td colSpan={7} className="px-4 py-4 text-[#64748B]">No Base rows in the last poll.</td></tr>}
@@ -92,8 +107,8 @@ export default async function DriftPage() {
           )}
 
           <p className="text-[12px] text-[#64748B] leading-relaxed">
-            {asOf && <>Last poll {new Date(asOf).toUTCString().slice(17, 22)} UTC{stale ? " (stale)" : ""}. </>}
-            Sources: Chainlink feeds on Base 8453 (multiplier divided out) and each token&apos;s deepest pool via GeckoTerminal. Free for agents: POST /api/x402/hood-live. Drift arrows stopped publishing on 2026-09-30; <Link href="/hood/arrows" className="text-[#4FC3F7]">their record</Link> stays public.
+            {asOf && <>Last Base poll {new Date(asOf).toISOString().replace("T", " ").slice(0, 19)} UTC{stale ? " (stale)" : ""}. </>}
+            Sources: Chainlink feeds on Base 8453 (multiplier divided out) and pool spot from GeckoTerminal/DexScreener. Free for agents: POST /api/x402/hood-live. Drift arrows stopped publishing on 2026-09-30; <Link href="/hood/arrows" className="text-[#4FC3F7]">their record</Link> stays public.
           </p>
         </div>
       </div>

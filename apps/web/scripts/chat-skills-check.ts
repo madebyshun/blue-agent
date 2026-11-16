@@ -57,7 +57,7 @@ console.log("\n3. \"no tool fee\" is true");
 const endpointBlock = route.slice(route.indexOf("const TOOL_ENDPOINT"), route.indexOf("};", route.indexOf("const TOOL_ENDPOINT")));
 const endpointNames = new Set([...endpointBlock.matchAll(/^\s+([a-z0-9_]+):/gm)].map((m) => m[1]));
 const native = new Set([...route.matchAll(/toolName === "([a-z0-9_]+)"/g)].map((m) => m[1]).filter((t) => !endpointNames.has(t)));
-ok("TOOL_ENDPOINT was parsed (else every tool would look native)", endpointNames.size > 20, `${endpointNames.size}`);
+ok("TOOL_ENDPOINT was parsed (else every tool would look native)", endpointNames.size > 0 && endpointNames.has("hub_token_price"), `${endpointNames.size}`);
 for (const t of NO_FEE_CHAT_TOOLS) {
   ok(`${t} is a native card/reader or FREE_DIRECT in the route`, native.has(t) || freeDirect.has(t));
 }
