@@ -4,6 +4,7 @@
 // Built to be screenshotted: every card carries its own chain + source line.
 import type { Metadata } from "next";
 import Link from "next/link";
+import { MarketHero, MarketNav, WeekendHistory } from "../MarketVisuals";
 import MarketsHeader from "../MarketsHeader";
 import StockMark from "@/components/blue-hood/StockMark";
 import { diaryView, scorecardView, weekendReplay } from "@/lib/weekend/view";
@@ -22,8 +23,8 @@ const tone = (n: number) => (n > 0 ? "text-[#4ADE80]" : n < 0 ? "text-[#F87171]"
 const day = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 const addDays = (d: string, n: number) => new Date(Date.parse(`${d}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
 
-const CARD = "bg-[#0B0F1E] border border-[#1A1A2E] rounded-[16px]";
-const EYEBROW = "text-[11px] tracking-[0.16em] text-[#64748B]";
+const CARD = "bg-[#0d1421] border border-white/[0.09] rounded-[16px]";
+const EYEBROW = "text-[10px] tracking-[0.18em] text-[#8090aa]";
 
 function Big({ n, l, sub, accent }: { n: string; l: string; sub?: string; accent?: boolean }) {
   return (
@@ -62,27 +63,24 @@ export default async function WeekendPage({ searchParams }: { searchParams: Prom
   const replay = rw && rr ? await weekendReplay(rw.friday, rr.ticker).catch(() => []) : [];
 
   return (
-    <div className="flex flex-col h-full bg-[#050508] overflow-hidden font-mono [&_a]:font-mono">
+    <div className="flex flex-col h-full bg-[#070b12] overflow-hidden font-sans">
       <MarketsHeader active={null} chip="Weekend · Base 8453" />
       <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="px-5 py-6 w-full max-w-[1120px] mx-auto flex flex-col gap-6">
-          <section>
-            <Link href="/markets" className="text-[12px] text-[#64748B] hover:text-[#94A3B8]">← Markets</Link>
-            <div className={`${EYEBROW} mt-4`}>BASE 8453 · WEEKEND SCORECARD</div>
-            <h1 className="mt-2 text-[30px] md:text-[38px] font-semibold text-[#F8FAFC] leading-[1.1] tracking-[-0.02em]">
-              Stocks trade on Base all weekend.<br /><span className="text-[#4FC3F7]">Does Sunday&apos;s price call Monday?</span>
-            </h1>
-            <p className="mt-3 text-[13px] text-[#94A3B8] leading-relaxed max-w-[760px]">
-              Each Coinbase stock token&apos;s Chainlink feed freezes at Friday&apos;s last print while its Base pool keeps trading. At Sunday 22:00 UTC the gap between them is Base&apos;s call. After Monday&apos;s open we grade it. Moves under 0.5%, the feed&apos;s own step, count as flat.
-            </p>
-          </section>
+        <div className="px-5 py-6 w-full max-w-[1400px] mx-auto flex flex-col gap-6">
+          <MarketHero label="THE WEEKEND LAB" title="A call is only the beginning." description="When stock references pause, Base pools keep trading. We freeze a call on Sunday, then compare it with a recorded post-open oracle reading. The full record stays visible." stats={[
+            { label: "Graded weekends", value: String(s.weekends), detail: "Base 8453" },
+            { label: "Directional calls", value: String(s.calls), detail: "flat gaps excluded" },
+            { label: "Direction matched", value: s.ready && s.hit_rate !== null ? Math.round(s.hit_rate * 100) + "%" : "—", detail: `${s.hits} of ${s.calls} calls` },
+          ]} />
+          <MarketNav active="weekend" />
+          {card.weekends.length > 0 && <WeekendHistory weekends={card.weekends} />}
 
           <section className="flex gap-3 flex-wrap">
             <Big accent n={s.ready && s.hit_rate != null ? `${Math.round(s.hit_rate * 100)}%` : `${s.calls}/${s.needed}`}
               l={s.ready ? `direction right · ${s.hits} of ${s.calls} calls` : "graded calls before a rate is shown"}
               sub={s.ready && s.ci95 ? `95% CI ${Math.round(s.ci95.lo * 100)}–${Math.round(s.ci95.hi * 100)}% · p ${s.p_value_two_sided?.toFixed(2)}` : undefined} />
             <Big n={`${bigHits}/${bigCalls}`} l="right when Base moved ≥1%" sub="small sample" />
-            <Big n={`${s.dex_nearer} : ${s.flat_nearer}`} l="Base price vs Friday close, nearer the open"
+            <Big n={`${s.dex_nearer} : ${s.flat_nearer}`} l="Pool vs held oracle, nearer the post-open reading"
               sub={s.mean_dex_error_pct != null && s.mean_flat_error_pct != null ? `avg miss ${s.mean_dex_error_pct.toFixed(2)}% vs ${s.mean_flat_error_pct.toFixed(2)}%` : undefined} />
             <Big n={String(s.weekends)} l="weekends graded" sub={`${s.rows_graded} stock-weekends since Aug 28`} />
           </section>
@@ -148,8 +146,8 @@ export default async function WeekendPage({ searchParams }: { searchParams: Prom
                   </div>
                   <div className="mt-3 grid grid-cols-3 gap-2 text-[12px]">
                     <div><div className="text-[#64748B]">Base, Sunday</div><div className={`text-[18px] ${tone(rr.weekend_move_pct)}`}>{sp(rr.weekend_move_pct)}</div></div>
-                    <div><div className="text-[#64748B]">Open vs Friday</div><div className={`text-[18px] ${tone(rr.open_gap_pct)}`}>{sp(rr.open_gap_pct)}</div></div>
-                    <div><div className="text-[#64748B]">ETH, same window</div><div className={`text-[18px] ${tone(rw.crypto?.eth_pct ?? 0)}`}>{rw.crypto?.eth_pct != null ? sp(rw.crypto.eth_pct) : "—"}</div></div>
+                    <div><div className="text-[#64748B]">Post-open vs reference</div><div className={`text-[18px] ${tone(rr.open_gap_pct)}`}>{sp(rr.open_gap_pct)}</div></div>
+                    <div><div className="text-[#64748B]">ETH · context window</div><div className={`text-[18px] ${tone(rw.crypto?.eth_pct ?? 0)}`}>{rw.crypto?.eth_pct != null ? sp(rw.crypto.eth_pct) : "—"}</div></div>
                   </div>
                   <Stamp />
                 </div>
@@ -167,7 +165,7 @@ export default async function WeekendPage({ searchParams }: { searchParams: Prom
                     <StockMark ticker={r.ticker} chain="base" size={28} />
                     <div className="flex-1 min-w-0">
                       <div className="text-[13px] text-[#E2E8F0]">{r.ticker}c</div>
-                      <div className="text-[11px] text-[#64748B]">Fri {usd(r.close_usd)} → Base {usd(r.dex_usd)}</div>
+                      <div className="text-[11px] text-[#64748B]">Ref {usd(r.close_usd)} → Base {usd(r.dex_usd)}</div>
                     </div>
                     <div className="text-right">
                       <div className={`text-[15px] ${tone(r.weekend_move_pct)}`}>{sp(r.weekend_move_pct)}</div>
@@ -182,7 +180,7 @@ export default async function WeekendPage({ searchParams }: { searchParams: Prom
 
           <section>
             <div className={EYEBROW}>GRADED WEEKENDS</div>
-            <div className="mt-1 text-[12px] text-[#64748B]"><span className="inline-block w-3 h-[7px] rounded-sm bg-[#4FC3F7] mr-1.5" />Base weekend move <span className="inline-block w-3 h-[7px] rounded-sm bg-[#4ADE80] ml-3 mr-1.5" />open vs Friday close</div>
+            <div className="mt-1 text-[12px] text-[#64748B]"><span className="inline-block w-3 h-[7px] rounded-sm bg-[#4FC3F7] mr-1.5" />Base weekend move <span className="inline-block w-3 h-[7px] rounded-sm bg-[#4ADE80] ml-3 mr-1.5" />post-open vs held reference</div>
             <div className="mt-3 grid md:grid-cols-2 gap-3">
               {card.weekends.map((w) => (
                 <div key={w.friday} className={`${CARD} p-4`}>

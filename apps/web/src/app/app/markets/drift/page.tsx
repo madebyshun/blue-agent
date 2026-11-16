@@ -11,6 +11,7 @@ import { stockOracleState } from "../../../../../../../packages/core/src/stock-o
 import { BASE_STOCKS } from "@/lib/base-stocks/registry";
 import { COINBASE_BASE_STOCKS, COINBASE_BASE_STOCKS_CHECKED_AT } from "@/lib/base-stocks/coinbase-list";
 import hoodLive from "@/app/api/x402/_handlers/hood-live";
+import { MarketHero, MarketNav, DriftDistribution } from "../MarketVisuals";
 import CoverageSummary from "./CoverageSummary";
 
 export const dynamic = "force-dynamic";
@@ -49,17 +50,17 @@ export default async function DriftPage() {
   } catch { failed = true; }
 
   return (
-    <div className="flex flex-col h-full bg-[#050508] overflow-hidden font-mono [&_a]:font-mono">
+    <div className="flex flex-col h-full bg-[#070b12] overflow-hidden font-sans">
       <MarketsHeader active={null} chip="Drift · Base 8453" />
       <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="px-5 py-6 w-full max-w-[1120px] mx-auto flex flex-col gap-5">
-          <section>
-            <div className="text-[11px] tracking-[0.16em] text-[#64748B]">BASE 8453 · ORACLE VS DEX</div>
-            <h1 className="mt-2 text-[26px] md:text-[32px] font-semibold text-[#F8FAFC] leading-tight">Where Base trades a stock away from its oracle.</h1>
-            <p className="mt-2 text-[13px] text-[#94A3B8] leading-relaxed max-w-[760px]">
-              This board follows a curated sample of Coinbase stock tokens on Base, read every 5 minutes. Pool spot versus a multiplier-adjusted Chainlink reference measures a price gap, not a return from the official stock close or an executable trade quote. The <Link href="/markets/weekend" className="text-[#4FC3F7]">weekend scorecard</Link> compares the fixed Sunday call with the first recorded post-open oracle reading, not the opening auction.
-            </p>
-          </section>
+        <div className="px-5 py-6 w-full max-w-[1400px] mx-auto flex flex-col gap-5">
+          <MarketHero label="ORACLE DRIFT" title="Same stock. Different signals." description="See where Base pools trade away from their Chainlink references. Every gap is timestamped; a held reference and a live market tell different parts of the story." stats={[
+            { label: "Curated watchlist", value: String(BASE_STOCKS.length), detail: "Base stock tokens" },
+            { label: "Readable gaps", value: String(rows.filter((r) => r.drift_pct !== null).length), detail: "latest completed poll" },
+            { label: "Widest absolute gap", value: rows.some((r) => r.drift_pct !== null) ? Math.max(...rows.map((r) => Math.abs(r.drift_pct ?? 0))).toFixed(2) + "%" : "—", detail: "within this sample" },
+          ]} />
+          <MarketNav active="drift" />
+          <DriftDistribution rows={rows} asOf={asOf} />
 
           <section className="rounded-[16px] border border-[#1A1A2E] bg-[#0B0F1E] px-4 py-3 text-[12px] text-[#94A3B8] leading-relaxed">
             <p className="text-[#E2E8F0]">{BASE_STOCKS.length} tracked · {rows.length} observed · {COINBASE_BASE_STOCKS.length} in the verified catalog</p>

@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { MarketHero, MarketNav, CoverageMap } from "../../MarketVisuals";
 import MarketsHeader from "../../MarketsHeader";
 import { readStockCoverage } from "@/lib/base-stocks/coverage";
 import { summarizeStockCoverage } from "../../../../../../../../packages/core/src/stock-coverage";
@@ -24,13 +24,17 @@ export default async function StockCoveragePage() {
   const s = v ? summarizeStockCoverage(v) : null;
   const stale = v && Date.now() - Date.parse(v.updated_at) > 24 * 3600_000;
   return (
-    <div className="flex h-full flex-col bg-[#050508] text-[#E2E8F0] font-mono">
+    <div className="flex h-full flex-col bg-[#070b12] text-[#E2E8F0] font-sans">
       <MarketsHeader active={null} chip="Coverage · Base 8453" />
       <main className="min-h-0 flex-1 overflow-y-auto px-5 py-6">
         <div className="mx-auto max-w-[1400px] space-y-5">
-          <Link href="/markets/drift" className="text-sm text-[#4FC3F7]">Back to Drift</Link>
-          <h1 className="text-[28px] font-semibold">How much of Base&apos;s stock market can we read?</h1>
-          <p className="max-w-[1000px] text-[13px] leading-relaxed text-[#94A3B8]">This inventory matches the official Base and Coinbase catalogs by Base address, then checks token identity, supply, multiplier, transfer pause and indexed pool data. The issuer NAV and pool price below are both USD per token. Missing issuer NAV does not prove that no Chainlink feed exists. New rows remain outside the fixed grading cohort.</p>
+          <MarketHero label="COVERAGE ATLAS" title="A market, mapped honestly." description="From the official catalog to an observable market. Track issuance, references and pool availability across Base, with every unknown kept visible." stats={[
+            { label: "Officially listed", value: s ? String(s.listed) : "—", detail: "Base 8453" },
+            { label: "Supply issued", value: s ? String(s.issued) : "—", detail: "assessed addresses" },
+            { label: "Readable pool quotes", value: s ? String(s.pool_readable) : "—", detail: "indexed anchored pools" },
+          ]} />
+          <MarketNav active="coverage" />
+          {v && <CoverageMap catalog={v.catalog} rows={v.rows} />}
           {!v || !s ? <p className="text-sm text-amber-400">{p.status === "error" ? "Coverage storage is unreadable; its contents are unknown." : "The first coverage scan has not run yet. No assessment is being inferred from the 12-stock watchlist."}</p> : <>
             <section className="rounded-xl border border-[#1A1A2E] bg-[#0B0F1E] p-4 text-sm leading-relaxed">
               <p>{s.listed} listed · {s.assessed} assessed · {s.pending} pending · {s.issued} issued · {s.unissued} unissued · {s.issuance_unknown} supply unknown</p>

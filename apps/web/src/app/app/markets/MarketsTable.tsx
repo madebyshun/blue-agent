@@ -171,9 +171,9 @@ export default function MarketsTable({ rows, readAt, stats }: { rows: MarketRow[
   return (
     <div>
       {trade && <TradeModal chain={trade.chain} contract={trade.token} symbol={label(trade)} name={trade.name} onClose={() => setTrade(null)} />}
-      <div className="mb-3 grid gap-2.5 grid-cols-1 sm:grid-cols-2">
+      <div className="mb-4 hidden">
         {cards.map(([l, v, sub]) => (
-          <div key={l} className="rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] p-[14px]">
+          <div key={l} className="rounded-[16px] border border-white/[0.09] bg-[#0b111c] p-[14px]">
             <p className="text-[12px] tracking-[0.12em] text-[#64748B]">{l}</p>
             <p className="mt-1.5 text-[22px] font-semibold text-[#E2E8F0] tabular-nums">{v}</p>
             <p className="mt-0.5 text-[12px] text-[#64748B]">{sub}</p>
@@ -181,7 +181,7 @@ export default function MarketsTable({ rows, readAt, stats }: { rows: MarketRow[
         ))}
       </div>
       {/* 24h trending strip */}
-      <div className="flex items-center gap-3 overflow-x-auto rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] px-3 py-2 [scrollbar-width:none]">
+      <div className="flex items-center gap-3 overflow-x-auto rounded-[16px] border border-white/[0.09] bg-[#0b111c] px-3 py-2 [scrollbar-width:none]">
         <span className="shrink-0 flex items-center gap-1.5 text-[12px] font-semibold tracking-[0.12em] text-[#E2E8F0]"><span className="h-1.5 w-1.5 rounded-full bg-[#34D399]" />24H TRENDING</span>
         {trending.map((r) => (
           <Link key={`t${r.chain}${r.token}`} href={`/markets/${r.chain}/${r.token}`} className="shrink-0 flex items-center gap-2 rounded-lg px-2 py-1 hover:bg-[#0F121A]">
@@ -194,15 +194,15 @@ export default function MarketsTable({ rows, readAt, stats }: { rows: MarketRow[
         ))}
       </div>
 
-      <div className="mt-3 flex items-center gap-2 flex-wrap">
+      <div className="mt-7 mb-5 flex items-center gap-2 flex-wrap">
         {([["all", "All"], ["stocks", "Stock tokens"], ["crypto", "Trending crypto"], ["launches", "Launched on Blue Agent"]] as const).map(([id, l]) => (
           <button key={id} type="button" onClick={() => setKind(id)} className={chip(kind === id)}>{l}</button>
         ))}
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search markets, ticker or 0x…"
-          className="ml-auto w-[260px] bg-[#0D0D14] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-3 py-[7px] text-[14px] text-[#E2E8F0] placeholder:text-[#64748B] outline-none" />
+          className="ml-auto w-[260px] bg-[#0b111c] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg px-3 py-[7px] text-[14px] text-[#E2E8F0] placeholder:text-[#64748B] outline-none" />
       </div>
 
-      <div className="mt-3 overflow-x-auto rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14]">
+      <div className="mt-3 overflow-x-auto rounded-[16px] border border-white/[0.09] bg-[#0b111c]">
         <table className="w-full min-w-[1180px] text-[14px]">
           <thead>
             <tr className="text-left text-[12px] tracking-[0.08em] text-[#64748B] border-b border-[#1A1A2E]">

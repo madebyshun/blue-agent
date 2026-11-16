@@ -26,7 +26,7 @@ export async function generateMetadata({ params }: P): Promise<Metadata> {
 
 const usd = (n: number | null) => n === null ? "—" : n >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(1)}k` : n >= 1 ? `$${n.toFixed(2)}` : n > 0 ? `$${n.toPrecision(3)}` : "$0";
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
-const card = "rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14]";
+const card = "rounded-[16px] border border-white/[0.09] bg-[#0d1421]";
 const txUrl = (c: MarketChain, tx: string) => c === "base" ? `https://basescan.org/tx/${tx}` : `https://robinhoodchain.blockscout.com/tx/${tx}`;
 
 export default async function TokenPage({ params }: P) {
@@ -45,14 +45,14 @@ export default async function TokenPage({ params }: P) {
   const ch7 = first && last ? ((last - first) / first) * 100 : null;
 
   return (
-    <div className="flex flex-col h-full bg-[#050508] overflow-hidden font-mono [&_a]:font-mono [&_button]:font-mono">
-      <MarketsHeader active={null} chip={`${symbol} · ${CHAIN_NAME[chain]}`} />
+    <div className="flex flex-col h-full bg-[#070b12] overflow-hidden font-sans">
+      <MarketsHeader chain={chain} active={null} chip={`${symbol} · ${CHAIN_NAME[chain]}`} />
       <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="px-5 py-[18px] grid gap-4 w-full">
+        <div className="mx-auto px-5 md:px-8 py-7 grid gap-6 w-full max-w-[1520px]">
           <div>
             <Link href="/markets" className="text-[13px] tracking-[.14em] text-[#64748B] hover:text-[#4FC3F7]">← MARKETS</Link>
             <div className="mt-1 flex flex-wrap items-center gap-2.5">
-              <h1 className="text-[22px] font-semibold text-[#E2E8F0]">{symbol}</h1>
+              <h1 className="text-[40px] tracking-[-0.05em] font-medium text-[#E2E8F0]">{symbol}</h1>
               <span className="text-[14px] text-[#94A3B8] font-prose">{ov?.onchain.name ?? stock?.name ?? ""}</span>
               <span className="text-[12px] rounded-full border border-[#1A1A2E] px-[7px] py-[2px] text-[#94A3B8]">{CHAIN_NAME[chain]}</span>
               {stock

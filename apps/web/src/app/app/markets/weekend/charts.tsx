@@ -16,7 +16,7 @@ export function CallScatter({ dots }: { dots: Dot[] }) {
   const ticksY = [-lim, -lim / 2, 0, lim / 2, lim];
   const ticksX = [-xl, -xl / 2, 0, xl / 2, xl];
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label="Weekend move on Base versus Monday open gap">
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label="Sunday pool gap versus post-open oracle gap">
       <rect x={sx(0)} y={P} width={sx(xl) - sx(0)} height={sy(0) - P} fill={GREEN} opacity={0.05} />
       <rect x={P} y={sy(0)} width={sx(0) - P} height={H - P - sy(0)} fill={GREEN} opacity={0.05} />
       <rect x={sx(-0.5)} y={P} width={sx(0.5) - sx(-0.5)} height={H - 2 * P} fill={SOFT} opacity={0.05} />
@@ -31,7 +31,7 @@ export function CallScatter({ dots }: { dots: Dot[] }) {
         </circle>
       ))}
       <text x={W - P} y={H - 6} fill={SOFT} fontSize={11} textAnchor="end">Base weekend move →</text>
-      <text x={P} y={P - 12} fill={SOFT} fontSize={11}>↑ Monday open vs Friday close</text>
+      <text x={P} y={P - 12} fill={SOFT} fontSize={11}>↑ Post-open oracle vs held reference</text>
     </svg>
   );
 }
@@ -47,7 +47,7 @@ export function ReplayChart({ pts, openAt, openUsd, callAt }: { pts: ReplayPoint
   const lo = Math.min(...vals), hi = Math.max(...vals), pad = (hi - lo) * 0.12 || 1;
   const sx = (t: number) => P + ((t - t0) / (t1 - t0 || 1)) * (W - 2 * P);
   const sy = (v: number) => H - P - ((v - (lo - pad)) / (hi - lo + 2 * pad)) * (H - 2 * P);
-  const path = (k: "oracle" | "dex") => pts.map((p, i) => `${i ? "L" : "M"}${sx(Date.parse(p.at)).toFixed(1)},${sy(p[k]).toFixed(1)}`).join(" ");
+  const path = (k: "oracle" | "dex") => pts.map((p, i) => `${i && Date.parse(p.at) - Date.parse(pts[i - 1].at) <= 90 * 60_000 ? "L" : "M"}${sx(Date.parse(p.at)).toFixed(1)},${sy(p[k]).toFixed(1)}`).join(" ");
   const days: ReactNode[] = [];
   for (let t = Math.ceil(t0 / 86_400_000) * 86_400_000; t <= t1; t += 86_400_000) {
     days.push(<g key={t}><line x1={sx(t)} x2={sx(t)} y1={P} y2={H - P} stroke={GRID} /><text x={sx(t) + 4} y={H - P + 16} fill={DIM} fontSize={11}>{new Date(t).toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" })}</text></g>);
