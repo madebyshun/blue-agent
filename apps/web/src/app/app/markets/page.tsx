@@ -1,3 +1,4 @@
+import { MarketScroll, MarketContainer } from "./MarketLayout";
 // /markets — Markets mode home (R3): stock tokens on Base 8453 plus trending
 // Base crypto, in one sortable table (MarketsTable). Robinhood Chain rows were
 // taken off this list 2026-11-11 (Base focus); their token pages still resolve.
@@ -65,15 +66,15 @@ export default async function MarketsPage() {
   return (
     <div className="flex flex-col h-full bg-[#070b12] overflow-hidden font-mono">
       <MarketsHeader active="markets" chip={`${count("base")} stock tokens · ${rows.filter((r) => r.kind === "crypto").length} trending · Base 8453`} />
-      <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="mx-auto w-full max-w-[1520px] px-5 pb-8 md:px-8">
+      <MarketScroll>
+        <MarketContainer>
           <MarketHero label="THE ONCHAIN MARKET OBSERVATORY" title="The market never closes." description="Stock tokens, live pool prices and the signals between them. A closer look at what trades on Base, around the clock." stats={[
             { label: "Stock tokens in this view", value: String(count("base")), detail: "Base 8453" },
             { label: "Stock pool volume · 24h", value: volShow("base"), detail: "selected pools · snapshot" },
             { label: "Readable stock pools", value: String(stocks.rows.filter((r) => r.chain === "base" && r.read && r.pool).length), detail: "not a whole-chain census" },
           ]} />
           <MarketNav active="overview" />
-          <div className="my-6"><MarketPulse rows={rows} asOf={stocks.readAt} /></div>
+          <MarketPulse rows={rows} asOf={stocks.readAt} />
           <Link href="/markets/weekend" className="mb-3 flex items-center justify-between gap-3 bg-[#0B0F1E] border border-[#1A1A2E] hover:border-[#4FC3F7]/40 rounded-[10px] px-4 py-2.5 text-[13px]">
             <span className="text-[#E2E8F0]">Weekend lab <span className="text-[#94A3B8]">· a fixed Sunday call, compared with the first post-open oracle reading.</span></span>
             <span className="text-[#4FC3F7]">Open →</span>
@@ -86,8 +87,8 @@ export default async function MarketsPage() {
             Stock tokens come from our checked Coinbase B20 catalog on Base, matched by contract and checked on chain. See Coverage for the latest inventory. Trending crypto is GeckoTerminal&apos;s list as-is, <span className="text-[#F59E0B]">unchecked</span>: no tax or honeypot test runs here, and tokens using a major&apos;s symbol (BTC, ETH, USDC…) are left out.
             Prices, change, market cap, liquidity, volume and charts are read from each token&apos;s DEX pools (Aerodrome / Uniswap on Base 8453) through GeckoTerminal, every 5 minutes. A stock token tracks a share; it is not the share. Not financial advice.
           </p>
-        </div>
-      </div>
+        </MarketContainer>
+      </MarketScroll>
     </div>
   );
 }

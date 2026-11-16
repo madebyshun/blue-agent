@@ -1,3 +1,4 @@
+import { MarketScroll, MarketContainer } from "../MarketLayout";
 // /markets/weekend — Base's weekend price vs the Monday open, graded, plus
 // Blue's paper book. Same views as the free x402 ids weekend-scorecard and
 // weekend-diary (lib/weekend/view.ts), so the page and the API cannot disagree.
@@ -65,8 +66,8 @@ export default async function WeekendPage({ searchParams }: { searchParams: Prom
   return (
     <div className="flex flex-col h-full bg-[#070b12] overflow-hidden font-mono">
       <MarketsHeader active={null} chip="Weekend · Base 8453" />
-      <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="px-5 py-6 w-full max-w-[1400px] mx-auto flex flex-col gap-6">
+      <MarketScroll>
+        <MarketContainer>
           <MarketHero label="THE WEEKEND LAB" title="A call is only the beginning." description="When stock references pause, Base pools keep trading. We freeze a call on Sunday, then compare it with a recorded post-open oracle reading. The full record stays visible." stats={[
             { label: "Graded weekends", value: String(s.weekends), detail: "Base 8453" },
             { label: "Directional calls", value: String(s.calls), detail: "flat gaps excluded" },
@@ -229,8 +230,8 @@ export default async function WeekendPage({ searchParams }: { searchParams: Prom
           <p className="text-[12px] text-[#64748B] leading-relaxed">
             Sources: the Blue Hood Base desk archive (hourly since Aug 28), Chainlink feeds and B20 multiplier() read on Base 8453 where the archive has a hole, Coinbase Exchange candles for BTC and ETH. Free for agents: POST /api/x402/weekend-scorecard, no payment. A stock token tracks a share; it is not the share. Not financial advice.
           </p>
-        </div>
-      </div>
+        </MarketContainer>
+      </MarketScroll>
     </div>
   );
 }

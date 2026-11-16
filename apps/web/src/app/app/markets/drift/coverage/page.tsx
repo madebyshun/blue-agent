@@ -1,3 +1,4 @@
+import { MarketScroll, MarketContainer } from "../../MarketLayout";
 import { MarketHero, MarketNav, CoverageMap } from "../../MarketVisuals";
 import MarketsHeader from "../../MarketsHeader";
 import { readStockCoverage } from "@/lib/base-stocks/coverage";
@@ -26,8 +27,8 @@ export default async function StockCoveragePage() {
   return (
     <div className="flex h-full flex-col bg-[#070b12] text-[#E2E8F0] font-mono">
       <MarketsHeader active={null} chip="Coverage · Base 8453" />
-      <main className="min-h-0 flex-1 overflow-y-auto px-5 py-6">
-        <div className="mx-auto max-w-[1400px] space-y-5">
+      <MarketScroll>
+        <MarketContainer>
           <MarketHero label="COVERAGE ATLAS" title="A market, mapped honestly." description="From the official catalog to an observable market. Track issuance, references and pool availability across Base, with every unknown kept visible." stats={[
             { label: "Officially listed", value: s ? String(s.listed) : "—", detail: "Base 8453" },
             { label: "Supply issued", value: s ? String(s.issued) : "—", detail: "assessed addresses" },
@@ -60,8 +61,8 @@ export default async function StockCoveragePage() {
             {s.pending > 0 && <details className="text-xs text-[#94A3B8]"><summary className="cursor-pointer">{s.pending} stocks awaiting assessment</summary><p className="mt-3 leading-relaxed">{v.catalog.slice(v.cursor).map((r) => r.symbol).join(", ")}</p></details>}
           </>}
           <p className="text-xs text-[#94A3B8]">Sources: <a className="text-[#4FC3F7]" href="https://www.base.org/stocks">Base official catalog</a>, Coinbase Tokenized Stocks API, Base RPC, Basescan and DexScreener. <a className="text-[#4FC3F7]" href="https://blueagent.dev/api/stocks/coverage">Read coverage JSON</a>.</p>
-        </div>
-      </main>
+        </MarketContainer>
+      </MarketScroll>
     </div>
   );
 }

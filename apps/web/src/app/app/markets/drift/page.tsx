@@ -1,3 +1,4 @@
+import { MarketScroll, MarketContainer } from "../MarketLayout";
 // /markets/drift — the Blue Hood drift board, Base 8453 only (moved here from
 // /hood on 2026-11-12, which now redirects). Chainlink oracle vs the deepest
 // Base pool for each desk stock, from the poller's last 5-minute cycle: the
@@ -52,8 +53,8 @@ export default async function DriftPage() {
   return (
     <div className="flex flex-col h-full bg-[#070b12] overflow-hidden font-mono">
       <MarketsHeader active={null} chip="Drift · Base 8453" />
-      <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="px-5 py-6 w-full max-w-[1400px] mx-auto flex flex-col gap-5">
+      <MarketScroll>
+        <MarketContainer>
           <MarketHero label="ORACLE DRIFT" title="Same stock. Different signals." description="See where Base pools trade away from their Chainlink references. Every gap is timestamped; a held reference and a live market tell different parts of the story." stats={[
             { label: "Curated watchlist", value: String(BASE_STOCKS.length), detail: "Base stock tokens" },
             { label: "Readable gaps", value: String(rows.filter((r) => r.drift_pct !== null).length), detail: "latest completed poll" },
@@ -111,8 +112,8 @@ export default async function DriftPage() {
             {asOf && <>Last Base poll {new Date(asOf).toISOString().replace("T", " ").slice(0, 19)} UTC{stale ? " (stale)" : ""}. </>}
             Sources: Chainlink feeds on Base 8453 (multiplier divided out) and pool spot from GeckoTerminal/DexScreener. Free for agents: POST /api/x402/hood-live. Drift arrows stopped publishing on 2026-09-30; <Link href="/hood/arrows" className="text-[#4FC3F7]">their record</Link> stays public.
           </p>
-        </div>
-      </div>
+        </MarketContainer>
+      </MarketScroll>
     </div>
   );
 }
