@@ -8,7 +8,7 @@
  * handlers copied into _handlers/ (registry). Only tools in HANDLERS are live.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { buildRequirements, cdpVerify, cdpSettle } from "@/app/api/_lib/x402-cdp";
+import { buildRequirements, buildPermit2Requirements, cdpVerify, cdpSettle } from "@/app/api/_lib/x402-cdp";
 import { HANDLERS } from "@/app/api/x402/_handlers";
 import { AGENT_TOOLS } from "@/lib/agent-tools";
 import { wireSchema } from "@/lib/tool-wire-schema";
@@ -35,11 +35,15 @@ function buildPaymentRequired(
   tool: string,
   requirements: ReturnType<typeof buildRequirements>,
   meta: typeof AGENT_TOOLS[number] | undefined,
+  permit2Requirements?: ReturnType<typeof buildPermit2Requirements>,
 ) {
   const endpointUrl = `https://blueagent.dev/api/x402/${tool}`;
   return {
     x402Version: 2,
-    accepts: [requirements],
+    // accepts[0] stays EIP-3009: existing clients read the first entry.
+    // A permit2-aware client (smart accounts) picks the entry whose extra
+    // names assetTransferMethod — see buildPermit2Requirements.
+    accepts: permit2Requirements ? [requirements, permit2Requirements] : [requirements],
     resource: {
       url: endpointUrl,
       description: meta?.description ?? `Blue Agent tool: ${tool}`,
@@ -137,7 +141,9 @@ export async function GET(
   }
 
   const requirements = buildRequirements(String(priceUnits));
-  const paymentRequired = buildPaymentRequired(tool, requirements, meta);
+  // Both transfer methods advertised: EIP-3009 first (existing clients read
+  // accepts[0]), Permit2 second (smart accounts — see buildPermit2Requirements).
+  const paymentRequired = buildPaymentRequired(tool, requirements, meta, buildPermit2Requirements(String(priceUnits)));
 
   const paymentRequiredHeader = Buffer.from(JSON.stringify(paymentRequired)).toString("base64");
   return NextResponse.json(
@@ -145,7 +151,7 @@ export async function GET(
       x402Version: 2,
       error: "Payment Required",
       resource: paymentRequired.resource,
-      accepts: [requirements],
+      accepts: paymentRequired.accepts,
       tool: meta ? {
         id: meta.id,
         name: meta.name,
@@ -331,7 +337,7 @@ async function handle(
       }
     }
 
-    const paymentRequired = buildPaymentRequired(tool, requirements, meta);
+    const paymentRequired = buildPaymentRequired(tool, requirements, meta, buildPermit2Requirements(String(priceUnits)));
     const inputSchema = meta ? {
       type: "object",
       properties: Object.fromEntries(meta.inputs.map(i => [i.key, { type: "string", description: i.label }])),
@@ -343,7 +349,7 @@ async function handle(
         x402Version: 2,
         error: "Payment Required",
         resource: paymentRequired.resource,
-        accepts: [requirements],
+        accepts: paymentRequired.accepts,
         tool: meta ? {
           id: meta.id,
           name: meta.name,
@@ -376,6 +382,21 @@ async function handle(
     return NextResponse.json({ error: "Invalid X-Payment header" }, { status: 400 });
   }
 
+  // The requirements the caller accepted, not the ones we prefer. A permit2
+  // payload (payload.permit2Authorization — the shape @x402/evm answers when
+  // the quote advertised assetTransferMethod: "permit2") must be verified and
+  // settled against the permit2 requirements; running it through the EIP-3009
+  // requirements makes CDP verify a signature against the wrong method and
+  // refuse every smart-account payment. Same terms either way — only the
+  // transfer method differs.
+  const payloadIsPermit2 =
+    typeof paymentPayload === "object" && paymentPayload !== null &&
+    "permit2Authorization" in (paymentPayload as Record<string, unknown>) &&
+    !("authorization" in (paymentPayload as Record<string, unknown>));
+  const effectiveRequirements = payloadIsPermit2
+    ? buildPermit2Requirements(String(priceUnits))
+    : requirements;
+
   // Read tool params
   let body: Record<string, unknown> = {};
   try { body = await req.json(); } catch {}
@@ -394,7 +415,7 @@ async function handle(
     iconUrl: "https://blueagent.dev/icon.png",
   };
   const allExtensions = { bazaar: bazaarExt, "builder-code": BUILDER_CODE_EXT };
-  const verify = await cdpVerify(paymentPayload, requirements, resourceInfo, allExtensions);
+  const verify = await cdpVerify(paymentPayload, effectiveRequirements, resourceInfo, allExtensions);
   if (!verify.ok) {
     return NextResponse.json(
       { error: "Payment verification failed", status: verify.status, detail: verify.detail },
@@ -449,7 +470,7 @@ async function handle(
   // 3. SETTLE (charge) only after a successful run
   // Forward Bazaar + builder-code extensions so CDP catalogs the call and appends
   // the ERC-8021 suffix with bc_2ejr35xc attribution to the settlement calldata.
-  const settle = await cdpSettle(paymentPayload, requirements, resourceInfo, allExtensions);
+  const settle = await cdpSettle(paymentPayload, effectiveRequirements, resourceInfo, allExtensions);
   try { await kv.incr(`usage:${tool}`); } catch {}
   // Same call, recorded with its SURFACE and DAY. `usage:<tool>` above is shared
   // with the free MCP bypass and the Hub runner, so on its own it cannot say

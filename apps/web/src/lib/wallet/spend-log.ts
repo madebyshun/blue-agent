@@ -103,8 +103,17 @@ const ADDR_RE = /^0x[a-fA-F0-9]{40}$/;
  */
 export function payerFromPayload(payload: unknown): string | null {
   try {
-    const outer = payload as { payload?: { authorization?: { from?: unknown } } };
-    const from = outer?.payload?.authorization?.from;
+    const outer = payload as {
+      payload?: {
+        authorization?: { from?: unknown };
+        // Permit2 flow (smart accounts): the payer is still the `from` that
+        // signed, it just lives on the permit2Authorization. Reading only
+        // `authorization` filed every smart-account payment against nobody,
+        // so the payer's spend never appeared in their own history.
+        permit2Authorization?: { from?: unknown };
+      };
+    };
+    const from = outer?.payload?.authorization?.from ?? outer?.payload?.permit2Authorization?.from;
     if (typeof from !== "string" || !ADDR_RE.test(from)) return null;
     return from.toLowerCase();
   } catch {

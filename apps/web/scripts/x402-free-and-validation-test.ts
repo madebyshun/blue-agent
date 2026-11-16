@@ -245,9 +245,27 @@ async function call(tool: string, body: unknown) {
   // ── 5. A well-formed paid call gets its quote ────────────────────────────
   console.log("\n5. contract-trust called correctly, still unpaid");
   {
-    const { status, paymentHeader } = await call("contract-trust", { address: ADDR });
+    const { status, paymentHeader, body } = await call("contract-trust", { address: ADDR });
     check("answers 402 with a quote", status === 402, `got ${status}`);
     check("ships the payment-required header", typeof paymentHeader === "string" && paymentHeader.length > 0);
+    // ── Permit2 second accept (2026-11-16) ────────────────────────────────
+    // Smart accounts (Blocky Agent) cannot sign EIP-3009 — that authorization
+    // must come from the EOA that owns the USDC. accepts now carries a second
+    // entry with extra.assetTransferMethod: "permit2" so a permit2-aware
+    // client can pay from any address that holds the token.
+    const accepts = body.accepts as Array<{ scheme: string; extra?: Record<string, unknown>; payTo: string; amount: string }>;
+    check("two accepts entries: EIP-3009 first, permit2 second", accepts?.length === 2, `len=${accepts?.length}`);
+    check("accepts[0] is EIP-3009 (no assetTransferMethod) — existing clients read the first entry",
+      accepts?.[0]?.extra?.assetTransferMethod === undefined, JSON.stringify(accepts?.[0]?.extra));
+    check("accepts[1] advertises assetTransferMethod: permit2",
+      accepts?.[1]?.extra?.assetTransferMethod === "permit2", JSON.stringify(accepts?.[1]?.extra));
+    check("both entries quote the SAME amount and payTo — the method differs, not the terms",
+      accepts?.[0]?.amount === accepts?.[1]?.amount && accepts?.[0]?.payTo === accepts?.[1]?.payTo,
+      `${accepts?.[0]?.amount}/${accepts?.[1]?.amount}`);
+    // The header must carry both entries too: a client that parses only the
+    // header (v2 PAYMENT-SIGNATURE flow) would never see the permit2 option.
+    const hdr = paymentHeader ? JSON.parse(Buffer.from(paymentHeader, "base64").toString("utf-8")) as { accepts?: unknown[] } : null;
+    check("the payment-required header carries both accepts", Array.isArray(hdr?.accepts) && hdr.accepts.length === 2, `len=${hdr?.accepts?.length}`);
   }
 
   // ── 6. The DISCOVERY layer tells the same story as the endpoint ──────────

@@ -27,7 +27,9 @@ export type PaymentRequirements = {
   amount: string;
   payTo: string;
   maxTimeoutSeconds: number;
-  extra: { name: string; version: string };
+  /** `assetTransferMethod` is x402 v2's transfer-method hint; "permit2" opts a
+   *  smart-account client into the Permit2 flow instead of EIP-3009. */
+  extra: { name: string; version: string; assetTransferMethod?: string };
 };
 
 /** Build x402 v2 PaymentRequirements (amount in USDC micro-units). */
@@ -40,6 +42,34 @@ export function buildRequirements(amountUnits: string): PaymentRequirements {
     payTo: PAY_TO,
     maxTimeoutSeconds: 120,
     extra: { name: "USD Coin", version: "2" },
+  };
+}
+
+/**
+ * The second accepts entry: the same terms, but Permit2 instead of EIP-3009.
+ *
+ * WHY: smart accounts (Blocky Agent's among them) can't sign an EIP-3009
+ * transferWithAuthorization — that signature must come from the EOA that owns
+ * the USDC, and a 4337 account signs through its own flow. Permit2's
+ * signature-transfer works for any address that holds the token, smart account
+ * included. ShunTr, 2026-11-16, on Blocky failing to pay x402 from a smart
+ * account: add a permit2 accept.
+ *
+ * SHAPE (from @x402/evm 2.x, not guessed): the client that sees
+ * `extra.assetTransferMethod: "permit2"` signs a PermitWitnessTransferFrom
+ * over Permit2's own domain (name "Permit2", verifyingContract
+ * 0x0000…22D4), spender = the x402 exact proxy 0x4020…0001, witness.to =
+ * payTo, and answers payload.permit2Authorization. The CDP facilitator
+ * verifies/settles that shape; nothing server-side changes.
+ *
+ * accepts[0] stays EIP-3009 on purpose: existing clients read the FIRST entry
+ * and keep working unchanged. A permit2-aware client picks the entry whose
+ * extra names its transfer method.
+ */
+export function buildPermit2Requirements(amountUnits: string): PaymentRequirements {
+  return {
+    ...buildRequirements(amountUnits),
+    extra: { name: "USD Coin", version: "2", assetTransferMethod: "permit2" },
   };
 }
 
