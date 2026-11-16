@@ -63,7 +63,7 @@ export default async function MarketsPage() {
   const volRead = (c: MarketChain) => stocks.rows.some((r) => r.chain === c) && stocks.rows.filter((r) => r.chain === c).every((r) => r.read);
 
   return (
-    <div className="flex flex-col h-full bg-[#070b12] overflow-hidden font-sans">
+    <div className="flex flex-col h-full bg-[#070b12] overflow-hidden font-mono">
       <MarketsHeader active="markets" chip={`${count("base")} stock tokens · ${rows.filter((r) => r.kind === "crypto").length} trending · Base 8453`} />
       <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="mx-auto w-full max-w-[1520px] px-5 pb-8 md:px-8">

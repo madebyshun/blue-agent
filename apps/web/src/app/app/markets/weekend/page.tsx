@@ -63,7 +63,7 @@ export default async function WeekendPage({ searchParams }: { searchParams: Prom
   const replay = rw && rr ? await weekendReplay(rw.friday, rr.ticker).catch(() => []) : [];
 
   return (
-    <div className="flex flex-col h-full bg-[#070b12] overflow-hidden font-sans">
+    <div className="flex flex-col h-full bg-[#070b12] overflow-hidden font-mono">
       <MarketsHeader active={null} chip="Weekend · Base 8453" />
       <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="px-5 py-6 w-full max-w-[1400px] mx-auto flex flex-col gap-6">

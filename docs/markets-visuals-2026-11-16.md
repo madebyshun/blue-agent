@@ -9,7 +9,7 @@ Base mainnet (8453), 2026-11-16.
 
 ## Delivered
 
-- Shared visual language: sans-serif editorial headings, electric blue accents, quieter grid lines, rounded chart surfaces, deliberate spacing, contextual KPI labels and navigation across Overview / Oracle drift / Weekend lab / Coverage.
+- Shared visual language: Blue Agent typography (JetBrains Mono for headings, chrome, charts and numbers; Inter for running prose), electric blue accents, quieter grid lines, rounded chart surfaces, deliberate spacing, contextual KPI labels and navigation across Overview / Oracle drift / Weekend lab / Coverage.
 - Markets overview: selectable stock spotlight with hourly, four-hour and daily pool-candle views, date/value tooltips, and a depth ranking of six readable stock pools. The initial four-hour view shows the existing source's available history. Snapshot prices and 24h changes remain separately labeled.
 - Drift: diverging premium/discount bars centered on the oracle reference, with signed hover values, tracked-sample counts and poll timestamp.
 - Weekend: stacked right/wrong/flat counts for each archived weekend. It publishes counts rather than a percentage for each small weekly cohort. Existing confidence and sample-size gates remain intact. Replay paths break across missing hours.

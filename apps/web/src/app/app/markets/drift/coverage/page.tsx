@@ -24,7 +24,7 @@ export default async function StockCoveragePage() {
   const s = v ? summarizeStockCoverage(v) : null;
   const stale = v && Date.now() - Date.parse(v.updated_at) > 24 * 3600_000;
   return (
-    <div className="flex h-full flex-col bg-[#070b12] text-[#E2E8F0] font-sans">
+    <div className="flex h-full flex-col bg-[#070b12] text-[#E2E8F0] font-mono">
       <MarketsHeader active={null} chip="Coverage · Base 8453" />
       <main className="min-h-0 flex-1 overflow-y-auto px-5 py-6">
         <div className="mx-auto max-w-[1400px] space-y-5">

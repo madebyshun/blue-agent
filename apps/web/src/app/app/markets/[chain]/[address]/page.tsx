@@ -45,7 +45,7 @@ export default async function TokenPage({ params }: P) {
   const ch7 = first && last ? ((last - first) / first) * 100 : null;
 
   return (
-    <div className="flex flex-col h-full bg-[#070b12] overflow-hidden font-sans">
+    <div className="flex flex-col h-full bg-[#070b12] overflow-hidden font-mono">
       <MarketsHeader chain={chain} active={null} chip={`${symbol} · ${CHAIN_NAME[chain]}`} />
       <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="mx-auto px-5 md:px-8 py-7 grid gap-6 w-full max-w-[1520px]">
