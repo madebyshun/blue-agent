@@ -5,7 +5,7 @@
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { resolveActingWallet, actingWalletRefusal } from "@/lib/acting-wallet";
-import { LIMITS, clean, createJob, jobProblem, listJobs, publicJob } from "@/lib/jobs";
+import { LIMITS, clean, createJob, jobProblem, listJobs, publicJob, stockJobSpec } from "@/lib/jobs";
 
 export const runtime = "nodejs";
 export const maxDuration = 15;
@@ -22,13 +22,15 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const who = await resolveActingWallet(req);
   if (who.status !== "ok") return actingWalletRefusal(who);
-  const b = (await req.json().catch(() => ({}))) as { title?: unknown; brief?: unknown; budgetUsd?: unknown };
+  const b = (await req.json().catch(() => ({}))) as { title?: unknown; brief?: unknown; budgetUsd?: unknown; skill?: unknown; inputs?: { token?: unknown; ticker?: unknown } };
   const title = clean(b.title, LIMITS.title);
   const brief = clean(b.brief, LIMITS.brief);
   const budgetUsd = Number(b.budgetUsd);
   const why = jobProblem(title, brief, budgetUsd);
   if (why) return NextResponse.json({ error: why }, { status: 400 });
-  const job = await createJob(who.wallet, title, brief, Math.round(budgetUsd * 1e6));
+  const spec = stockJobSpec(b.skill, b.inputs?.token, b.inputs?.ticker);
+  if (typeof spec === "string") return NextResponse.json({ error: spec }, { status: 400 });
+  const job = await createJob(who.wallet, title, brief, Math.round(budgetUsd * 1e6), spec);
   if (typeof job === "string") return NextResponse.json({ error: job }, { status: 429 });
   return NextResponse.json({ job: publicJob(job) }, { status: 201 });
 }

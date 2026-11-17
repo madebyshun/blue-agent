@@ -49,3 +49,30 @@ console.log("worker-protocol: ok");
  assert.equal(r.status,409);assert.ok(!(await r.text()).includes("PRIVATE-RESEARCH-DO-NOT-LEAK"));
  console.log("worker-protocol: unsigned unlock replay cannot reveal purchased report");
 })();
+
+// Stock research jobs: contract.inputs, address-identified stocks, no widened delegation.
+(async () => {
+ const J=await import("../src/lib/jobs");
+ const W=await import("../../../packages/core/src/workers");
+ const nvda="0xb20000000000000000000078ee7ce2fE4908108C";
+ const spec=J.stockJobSpec("stock-weekend-gap",nvda.toLowerCase(),"nvdac");
+ assert.deepEqual(spec,{skill:"stock-weekend-gap",inputs:{ticker:"NVDA",token:nvda,chainId:8453}});
+ assert.equal(J.stockJobSpec(undefined,undefined),null,"free-text jobs stay free-text");
+ assert.equal(typeof J.stockJobSpec("stock-pool-depth",nvda),"string","no depth source: not a skill");
+ assert.equal(typeof J.stockJobSpec("stock-nav-premium","0x"+"1".repeat(40)),"string","address must be in Coinbase's Base list");
+ assert.equal(typeof J.stockJobSpec("stock-nav-premium",undefined,"NVDA"),"string","a ticker alone never identifies a stock");
+ assert.equal(typeof J.stockJobSpec("stock-nav-premium",nvda,"META"),"string","ticker must agree with the token");
+ if(!spec||typeof spec==="string")throw new Error("spec");
+ const job=await J.createJob("0x"+"9".repeat(40),"Weekend gap for NVDA on Base","A sufficiently long research brief",500000,spec);
+ if(typeof job==="string")throw new Error(job);
+ const pub=J.publicJob(job).contract;
+ assert.equal(pub.skill,"stock-weekend-gap");assert.deepEqual(pub.inputs,spec.inputs);assert.equal(pub.chainId,8453);
+ assert.equal(pub.paymentMode,"pay-on-unlock");assert.equal(pub.funded,false);assert.equal(pub.autonomousEligible,false);
+ assert.ok(pub.required.length>=3);
+ assert.deepEqual(J.jobsForAgents([job])[0].contract,pub,"feed carries the same contract");
+ for(const t of W.STOCK_JOB_TEMPLATES) assert.ok(W.isStockSkill(t.skill));
+ assert.ok(grantProblem({...g,skill:"stock-weekend-gap"}),"stock skills are not delegable until ShunTr widens grantProblem");
+ assert.ok(workerGrantMessage(g).includes("Permission: submit research deliveries only. No spending"));
+ assert.equal(workerJobContract({title:"Trending tokens on Base I can still exit",brief:""}).inputs,null);
+ console.log("worker-protocol: stock research contract, inputs and feed pass");
+})();

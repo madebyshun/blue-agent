@@ -8,13 +8,16 @@ import { useAccount } from "wagmi";
 import { ConnectButton } from "@/components/ConnectModal";
 import { useEnsureSession } from "@/hooks/useEnsureSession";
 import { sessionFetch } from "@/lib/session-client";
+import { COINBASE_BASE_STOCKS } from "@/lib/base-stocks/coinbase-list";
+import { STOCK_JOB_TEMPLATES } from "../../../../../../packages/core/src/workers";
 
-interface PubJob { id: string; title: string; brief: string; budgetUnits: number; poster: string; status: string; createdAt: string; deliveries: { id: string }[] }
+interface PubJob { id: string; title: string; brief: string; budgetUnits: number; poster: string; status: string; createdAt: string; deliveries: { id: string }[]; contract?: { skill: string | null; inputs: { ticker: string } | null } }
 
 const usd = (u: number) => `$${(u / 1e6).toFixed(u < 1e6 ? 2 : 2)}`;
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 const BORDER = "#1A1A2E";
 const input = "w-full rounded-lg border border-[#1A1A2E] bg-[#050508] px-3 py-2 text-[14px] text-[#E2E8F0] outline-none focus:border-[#4FC3F7]/40";
+const CATS = [["all", "All jobs"], ["stock", "Stock research"]] as const;
 const BUDGETS = [["all", "Any budget"], ["0.1", "≤ $0.10"], ["1", "≤ $1"], ["10", "≤ $10"]] as const;
 
 export default function JobBoardClient() {
@@ -24,7 +27,11 @@ export default function JobBoardClient() {
   const [q, setQ] = useState("");
   const [cap, setCap] = useState<(typeof BUDGETS)[number][0]>("all");
   const [open, setOpen] = useState(false);
-  const [f, setF] = useState({ title: "", brief: "", budget: "1" });
+  const [f, setF] = useState({ title: "", brief: "", budget: "1", skill: "", ticker: "" });
+  const [cat, setCat] = useState<(typeof CATS)[number][0]>("all");
+  // The token ADDRESS identifies the stock (a ticker also exists on Robinhood Chain); the server re-checks it.
+  const stock = f.skill ? COINBASE_BASE_STOCKS.find((s) => s.ticker === f.ticker.trim().toUpperCase().replace(/C$/, "") || s.ticker === f.ticker.trim().toUpperCase()) : undefined;
+  const fill = (t: string) => t.replaceAll("{TICKER}", stock?.ticker ?? "{TICKER}").replaceAll("{TOKEN}", stock?.token ?? "{TOKEN}");
   const [st, setSt] = useState<{ s: "idle" | "busy" | "error" | "done"; msg?: string }>({ s: "idle" });
 
   const load = useCallback(() => {
@@ -37,9 +44,10 @@ export default function JobBoardClient() {
     const t = q.trim().toLowerCase();
     return jobs
       .filter((j) => j.status === "open")
+      .filter((j) => cat === "all" || (j.contract?.skill ?? "").startsWith("stock-"))
       .filter((j) => cap === "all" || j.budgetUnits <= Number(cap) * 1e6)
       .filter((j) => !t || j.title.toLowerCase().includes(t) || j.brief.toLowerCase().includes(t));
-  }, [jobs, q, cap]);
+  }, [jobs, q, cap, cat]);
 
   async function post() {
     if (!address) return;
@@ -47,12 +55,14 @@ export default function JobBoardClient() {
     try {
       const r = await fetchWithSession(address, "/api/jobs", {
         method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ title: f.title, brief: f.brief, budgetUsd: Number(f.budget) }),
+        body: JSON.stringify(f.skill
+          ? { title: fill(f.title), brief: fill(f.brief), budgetUsd: Number(f.budget), skill: f.skill, inputs: { ticker: stock?.ticker, token: stock?.token } }
+          : { title: f.title, brief: f.brief, budgetUsd: Number(f.budget) }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error ?? `HTTP ${r.status}`);
       setSt({ s: "done", msg: "Posted." });
-      setF({ title: "", brief: "", budget: "1" });
+      setF({ title: "", brief: "", budget: "1", skill: "", ticker: "" });
       setOpen(false);
       load();
     } catch (e) {
@@ -70,6 +80,10 @@ export default function JobBoardClient() {
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search jobs…"
             className="w-full bg-[#0D0D14] border border-[#1A1A2E] focus:border-[#4FC3F7]/40 rounded-lg pl-9 pr-3 py-2 text-[14px] text-[#E2E8F0] placeholder:text-[#64748B] outline-none" />
         </div>
+        {CATS.map(([id, label]) => (
+          <button key={id} type="button" onClick={() => setCat(id)} className="text-[12px] rounded-full px-[11px] py-1 border"
+            style={cat === id ? { color: "#050508", background: "#4FC3F7", borderColor: "#4FC3F7", fontWeight: 600 } : { color: "#94A3B8", borderColor: BORDER }}>{label}</button>
+        ))}
         {BUDGETS.map(([id, label]) => (
           <button key={id} type="button" onClick={() => setCap(id)} className="text-[12px] rounded-full px-[11px] py-1 border"
             style={cap === id ? { color: "#050508", background: "#4FC3F7", borderColor: "#4FC3F7", fontWeight: 600 } : { color: "#94A3B8", borderColor: BORDER }}>{label}</button>
@@ -79,12 +93,25 @@ export default function JobBoardClient() {
         </button>
       </div>
 
-      <button type="button" className="mt-3 text-[13px] text-[#4FC3F7]" onClick={() => { setOpen(true); setF({title:"Trending tokens on Base I can still exit",budget:"0.50",brief:"Base 8453 only. Screen three currently trending tokens using supported pools. Return token addresses, 24h pool volume, TVL, tax and sell-risk flags, same-block $100/$500/$1,000 sell quotes and an approximate input bound under 5% loss including pool fees. Include sources, block, timestamp and missing-data limitations. No trade or guaranteed exit. I will review the preview and pay to unlock a result; this budget is not escrowed."}); }}>Hire a Base exit researcher → prefill a job</button>
+      <button type="button" className="mt-3 text-[13px] text-[#4FC3F7]" onClick={() => { setOpen(true); setF({skill:"",ticker:"",title:"Trending tokens on Base I can still exit",budget:"0.50",brief:"Base 8453 only. Screen three currently trending tokens using supported pools. Return token addresses, 24h pool volume, TVL, tax and sell-risk flags, same-block $100/$500/$1,000 sell quotes and an approximate input bound under 5% loss including pool fees. Include sources, block, timestamp and missing-data limitations. No trade or guaranteed exit. I will review the preview and pay to unlock a result; this budget is not escrowed."}); }}>Hire a Base exit researcher → prefill a job</button>
+      <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+        {STOCK_JOB_TEMPLATES.map((t) => (
+          <button key={t.skill} type="button" className="text-[13px] text-[#4FC3F7]" onClick={() => { setOpen(true); setF({ title: t.title, brief: t.brief, budget: t.budget, skill: t.skill, ticker: f.ticker }); }}>
+            Stock research: {t.title.replace(" for {TICKER} on Base", "")} →
+          </button>
+        ))}
+      </div>
       {open && (
         <div className="mt-3 rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] p-[14px] grid gap-2.5">
           <p className="text-[12px] font-medium tracking-[0.14em] text-[#64748B]">POST A JOB</p>
-          <input className={input} placeholder="Title (what you need, in a line)" maxLength={100} value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} />
-          <textarea className={`${input} min-h-[90px]`} placeholder="Brief: inputs, what a good result looks like, any chain or format" maxLength={2000} value={f.brief} onChange={(e) => setF({ ...f, brief: e.target.value })} />
+          {f.skill && (
+            <div className="grid gap-1">
+              <input className={input} placeholder="Stock ticker on Base, e.g. NVDA" value={f.ticker} onChange={(e) => setF({ ...f, ticker: e.target.value })} />
+              <p className="text-[12px] text-[#64748B]">{stock ? `${stock.name} · ${stock.symbol} · ${stock.token} (Base 8453, Coinbase list)` : "Not a Coinbase tokenized stock on Base yet."}</p>
+            </div>
+          )}
+          <input className={input} placeholder="Title (what you need, in a line)" maxLength={100} value={f.skill ? fill(f.title) : f.title} readOnly={!!f.skill} onChange={(e) => setF({ ...f, title: e.target.value })} />
+          <textarea className={`${input} min-h-[90px]`} placeholder="Brief: inputs, what a good result looks like, any chain or format" maxLength={2000} value={f.skill ? fill(f.brief) : f.brief} readOnly={!!f.skill} onChange={(e) => setF({ ...f, brief: e.target.value })} />
           <div className="flex items-center gap-2">
             <span className="text-[13px] text-[#94A3B8]">Budget, USDC on Base</span>
             <input className={`${input} w-[110px]`} value={f.budget} onChange={(e) => setF({ ...f, budget: e.target.value.trim() })} />
@@ -94,7 +121,7 @@ export default function JobBoardClient() {
             directly to that agent&apos;s wallet, and its result unlocks. No escrow, no fee to Blue Agent.
           </p>
           {!isConnected ? <ConnectButton label="Connect wallet to post" /> : (
-            <button type="button" onClick={post} disabled={st.s === "busy"} className="justify-self-start text-[13px] font-semibold text-[#050508] bg-[#4FC3F7] rounded-[8px] px-[13px] py-2 disabled:opacity-40">
+            <button type="button" onClick={post} disabled={st.s === "busy" || (!!f.skill && !stock)} className="justify-self-start text-[13px] font-semibold text-[#050508] bg-[#4FC3F7] rounded-[8px] px-[13px] py-2 disabled:opacity-40">
               {st.s === "busy" ? "Posting…" : "Post job"}
             </button>
           )}
