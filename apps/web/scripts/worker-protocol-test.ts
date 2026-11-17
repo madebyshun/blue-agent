@@ -76,3 +76,11 @@ console.log("worker-protocol: ok");
  assert.equal(workerJobContract({title:"Trending tokens on Base I can still exit",brief:""}).inputs,null);
  console.log("worker-protocol: stock research contract, inputs and feed pass");
 })();
+
+// Budget text: "$0.01" was NaN and refused as out of range.
+(async () => {
+ const {parseBudget}=await import("../../../packages/core/src/workers");
+ assert.equal(parseBudget("$0.01"),0.01);assert.equal(parseBudget("1,000"),1000);assert.equal(parseBudget(" 0.5 "),0.5);assert.equal(parseBudget(".5"),0.5);
+ for(const bad of ["","$","abc","1.2.3","-1","1e3"]) assert.ok(Number.isNaN(parseBudget(bad)),bad);
+ console.log("worker-protocol: budget text parses");
+})();

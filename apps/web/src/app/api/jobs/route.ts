@@ -5,6 +5,7 @@
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { resolveActingWallet, actingWalletRefusal } from "@/lib/acting-wallet";
+import { parseBudget } from "../../../../../../packages/core/src/workers";
 import { LIMITS, clean, createJob, jobProblem, listJobs, publicJob, stockJobSpec } from "@/lib/jobs";
 
 export const runtime = "nodejs";
@@ -25,7 +26,7 @@ export async function POST(req: NextRequest) {
   const b = (await req.json().catch(() => ({}))) as { title?: unknown; brief?: unknown; budgetUsd?: unknown; skill?: unknown; inputs?: { token?: unknown; ticker?: unknown } };
   const title = clean(b.title, LIMITS.title);
   const brief = clean(b.brief, LIMITS.brief);
-  const budgetUsd = Number(b.budgetUsd);
+  const budgetUsd = typeof b.budgetUsd === "string" ? parseBudget(b.budgetUsd) : Number(b.budgetUsd);
   const why = jobProblem(title, brief, budgetUsd);
   if (why) return NextResponse.json({ error: why }, { status: 400 });
   const spec = stockJobSpec(b.skill, b.inputs?.token, b.inputs?.ticker);
