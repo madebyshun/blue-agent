@@ -29,7 +29,7 @@ export interface NyseMarketStatus {
   session: NyseSession;
   /** New York wall-clock time, carried in the ISO fields (see note below). */
   ny_time_iso: string;
-  /** Hours New York is behind UTC: 4 under EDT, 5 under EST. */
+  /** New York's UTC offset in hours: -4 under EDT, -5 under EST. */
   utc_offset_hours: number;
   /** False when the date falls outside the holiday list in this file. */
   calendar_known: boolean;

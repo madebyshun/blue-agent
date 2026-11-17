@@ -78,6 +78,7 @@
  * as its own gate — a successful `approve()` proves nothing about eligibility.
  * Ref: docs.base.org/base-chain/asset-issuance/tokenized-stocks-on-base.
  */
+import { nyseMarketStatus } from "@/lib/market-hours";
 import { type Address } from "viem";
 import {
   chainlinkLatest,
@@ -379,6 +380,28 @@ export type BaseStockQuote = {
 };
 
 /**
+ * Seconds of the last `ageSeconds` that NYSE was in a weekend or holiday,
+ * counted hour by hour on the market clock. The 24/5 feed is closed for
+ * those hours, so they are not part of its staleness budget.
+ */
+export function closedSecondsWithin(ageSeconds: number, now: Date = new Date()): number {
+  let closed = 0;
+  const end = now.getTime();
+  for (let t = end - ageSeconds * 1000; t < end; t += 3_600_000) {
+    const s = nyseMarketStatus(new Date(t)).session;
+    if (s === "weekend" || s === "holiday") closed += Math.min(3600, (end - t) / 1000);
+  }
+  return closed;
+}
+
+export function feedStaleMarketAware(ageSeconds: number, heartbeat: number, now: Date = new Date()): boolean {
+  if (ageSeconds <= heartbeat * 2) return false;
+  // Cap the walk: past a week stale is stale whatever the calendar says.
+  if (ageSeconds > 7 * 86_400) return true;
+  return ageSeconds - closedSecondsWithin(ageSeconds, now) > heartbeat * 2;
+}
+
+/**
  * Full Base B20 stock quote: oracle share price (multiplier-adjusted), DEX spot,
  * drift, and every suppression gate. Never throws — a hazard becomes
  * `can_fire: false` + a `suppressed_reason` + a logged error, not an exception.
@@ -463,7 +486,11 @@ export async function readBaseStockQuote(
 
   const sequencer_ok = seq?.ok ?? false;
   const paused = tok.paused !== false; // true OR unreadable(null) ⟹ blocked
-  const feed_is_stale = feed?.is_stale ?? true;
+  // The B20 feeds are 24/5: they go quiet from Friday's close to Sunday night
+  // and on NYSE holidays by design, so a plain "older than 2x heartbeat" check
+  // flagged every weekend (gaps of 50-55h measured 2026-11). The heartbeat is
+  // right; the budget must not count the hours the feed is closed.
+  const feed_is_stale = feed ? feedStaleMarketAware(feed.age_seconds, stock.chainlinkHeartbeat) : true;
 
   // Sanity band — a magnitude break, not a market move. Deliberately checked on
   // BOTH legs: a decimals/multiplier fault corrupts the oracle, while a drained

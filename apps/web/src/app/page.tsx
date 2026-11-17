@@ -16,7 +16,9 @@ export const revalidate = 600;
 
 const live = unstable_cache(async (): Promise<Pick<LandingData, "scorecard" | "sessions" | "exchange">> => {
   const [card, sess, ex] = await Promise.all([
-    scorecardView({ limit: 1 }).catch(() => "error" as const),
+    // 52, not 1: the summary covers only the weekends returned, and this card
+    // shows the record, with the newest weekend as weekends[0].
+    scorecardView({ limit: 52 }).catch(() => "error" as const),
     readSessionVolume().catch(() => null),
     readExchange(30).catch(() => null),
   ]);
