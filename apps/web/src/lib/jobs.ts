@@ -15,7 +15,8 @@
  *
  * Results are stored here until unlocked, and are shown only to the poster.
  */
-import { workerJobContract } from "../../../../packages/core/src/workers";
+import { isStockSkill, workerJobContract, type StockInputs } from "../../../../packages/core/src/workers";
+import { COINBASE_BASE_STOCKS } from "@/lib/base-stocks/coinbase-list";
 import { kv, kvGetProbe, kvMutate } from "@/lib/kv";
 
 export const LIMITS = {
@@ -46,6 +47,9 @@ export interface Job {
   status: JobStatus;
   createdAt: string;
   deliveries: Delivery[];
+  /** Optional structured research job (stock skills). Absent on free-text jobs. */
+  skill?: string;
+  inputs?: StockInputs;
 }
 
 const K_INDEX = "jobs:index";
@@ -66,6 +70,22 @@ export function jobProblem(title: string, brief: string, budgetUsd: number): str
   const u = Math.round(budgetUsd * 1e6);
   if (!Number.isFinite(u) || u < LIMITS.minBudget || u > LIMITS.maxBudget) return "Budget: between $0.01 and $100 USDC.";
   return null;
+}
+
+/**
+ * Resolve a structured stock job. The token ADDRESS identifies the stock (a
+ * ticker exists on Base and Robinhood Chain); it must be in Coinbase's Base
+ * list (checked on chain). A ticker, if sent, must agree with that entry.
+ * Returns the stored skill+inputs, null for a free-text job, or a refusal.
+ */
+export function stockJobSpec(skill: unknown, token: unknown, ticker?: unknown): { skill: string; inputs: StockInputs } | null | string {
+  if (skill == null || skill === "") return null;
+  if (!isStockSkill(skill)) return "Unknown skill.";
+  if (typeof token !== "string" || !ADDR.test(token)) return "token: the stock's 0x address on Base 8453 is required.";
+  const hit = COINBASE_BASE_STOCKS.find((s) => s.token.toLowerCase() === token.toLowerCase());
+  if (!hit) return "token is not a Coinbase tokenized stock on Base 8453.";
+  if (ticker != null && ticker !== "" && String(ticker).toUpperCase().replace(/C$/, "") !== hit.ticker && String(ticker).toUpperCase() !== hit.ticker) return `ticker does not match token (that address is ${hit.ticker}).`;
+  return { skill, inputs: { ticker: hit.ticker, token: hit.token, chainId: 8453 } };
 }
 
 /** Why a delivery cannot be accepted, or null. Pure. */
@@ -97,10 +117,10 @@ export async function getJob(id: string): Promise<Job | null | undefined> {
   return p.status === "error" ? undefined : p.status === "hit" ? p.value : null;
 }
 
-export async function createJob(poster: string, title: string, brief: string, budgetUnits: number): Promise<Job | string> {
+export async function createJob(poster: string, title: string, brief: string, budgetUnits: number, spec?: { skill: string; inputs: StockInputs } | null): Promise<Job | string> {
   const open = ((await listJobs(LIMITS.indexMax)) ?? []).filter((j) => j.poster === poster && j.status === "open").length;
   if (open >= LIMITS.openPerPoster) return `You have ${open} open jobs; close one first.`;
-  const job: Job = { id: newId(), title, brief, budgetUnits, poster, status: "open", createdAt: new Date().toISOString(), deliveries: [] };
+  const job: Job = { id: newId(), title, brief, budgetUnits, poster, status: "open", createdAt: new Date().toISOString(), deliveries: [], ...(spec ?? {}) };
   await kv.set(itemKey(job.id), job, { ex: TTL });
   const r = await kvMutate<string[]>(K_INDEX, [], (cur) => [job.id, ...cur].slice(0, LIMITS.indexMax));
   if (r !== "ok") return "Could not save the job right now; nothing was posted.";
@@ -177,6 +197,7 @@ export function jobsForAgents(jobs: Job[], limit = 10) {
     brief: j.brief.slice(0, 400),
     budget_usd: j.budgetUnits / 1e6,
     deliveries: j.deliveries.length,
+    contract: workerJobContract(j),
     page: `https://app.blueagent.dev/jobs/${j.id}`,
     deliver: `POST https://blueagent.dev/api/jobs/${j.id}/deliveries`,
   }));
