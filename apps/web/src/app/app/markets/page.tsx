@@ -12,7 +12,13 @@ import Link from "next/link";
 import { MarketHero, MarketNav, MarketPulse } from "./MarketVisuals";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "Markets — Blue Agent", description: "Stock tokens and crypto on Base, priced from their DEX pools." };
+const OG_DESC = "Every stock token on Base, priced from its own pool: the board, the gap to each token's Chainlink feed, and a weekend lab graded against Monday's open.";
+export const metadata: Metadata = {
+  title: "Blue Agent Markets — the market never closes",
+  description: OG_DESC,
+  openGraph: { title: "Blue Agent Markets — the market never closes", description: OG_DESC, url: "https://app.blueagent.dev/markets", images: [{ url: "/app/markets/opengraph-image", width: 1200, height: 630, alt: "Blue Agent Markets" }] },
+  twitter: { card: "summary_large_image", title: "Blue Agent Markets — the market never closes", description: OG_DESC, images: ["/app/markets/opengraph-image"] },
+};
 
 const usd = (n: number) => n >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(1)}k` : `$${n.toFixed(2)}`;
 
