@@ -1,4 +1,6 @@
 "use client";
+import WorkspaceIntro from "@/components/workspace/WorkspaceIntro";
+
 
 // Client half of /exchange: search, filter, sort. Every number arrives
 // measured from the server (lib/hub/exchange); nothing is computed here but sums.
@@ -70,11 +72,12 @@ export default function ExchangeView({ ex, totalPaid, ours, oursPayTo, agentId, 
   const window = `${ex.daysCovered}d`;
 
   return (
-    <div className="flex flex-col h-full bg-[#050508] overflow-hidden">
+    <div className="workspace-surface flex flex-col h-full overflow-hidden">
       <ExchangeHeader active="sellers" chip={ex.providersListed ? `${ex.providersListed.toLocaleString("en-US")} listed · ${totalPaid} paid · ${window}` : undefined} />
 
-      <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="px-5 py-[18px] w-full">
+      <div className="workspace-scroll flex-1 min-h-0 overflow-y-auto">
+        <div className="workspace-content">
+          <WorkspaceIntro eyebrow="THE AGENT ECONOMY / BASE 8453" title="Discover the wider network." description="Explore indexed x402 sellers and compare their measured activity. Discovery alone does not verify a service or its delivery." />
 
           {/* Search + sort */}
           <div className="flex items-center gap-2.5 flex-wrap">

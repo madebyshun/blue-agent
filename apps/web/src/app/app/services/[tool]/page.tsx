@@ -46,14 +46,14 @@ export default async function ToolProfile({ params }: { params: Promise<{ tool: 
   const mine = (receipts ?? []).filter((r) => r.tool === tool).slice(0, 15);
 
   return (
-    <div className="flex flex-col h-full bg-[#050508] overflow-hidden font-mono [&_button]:font-mono [&_a]:font-mono [&_pre]:font-mono">
-      <div className="hidden lg:flex items-center gap-3.5 flex-wrap shrink-0 min-h-[56px] px-5 py-2 border-b border-[#1A1A2E]">
+    <div className="workspace-surface flex flex-col h-full overflow-hidden font-mono [&_button]:font-mono [&_a]:font-mono [&_pre]:font-mono">
+      <div className="workspace-header hidden lg:flex items-center gap-3.5 flex-wrap shrink-0 min-h-[56px] px-5 py-2 border-b border-[#1A1A2E]">
         <span className="text-[14px] font-semibold tracking-[0.16em] text-[#E2E8F0]">// SERVICES</span>
         <span className="text-[13px] text-[#64748B]">{tool} · measured from its own Base receipts</span>
         <Link href="/services" className="ml-auto text-[13px] text-[#94A3B8] hover:text-[#E2E8F0] border border-[#1A1A2E] rounded-[7px] px-2.5 py-[5px]">← All services</Link>
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto">
-      <div className="px-5 py-[18px] grid gap-5 w-full">
+      <div className="workspace-scroll flex-1 min-h-0 overflow-y-auto">
+      <div className="workspace-content grid gap-5">
         <div>
           <Link href="/services" className="text-[13px] tracking-[.14em] text-[#64748B] hover:text-[#4FC3F7] lg:hidden">← SERVICES</Link>
           <div className="mt-1 flex flex-wrap items-center gap-3">

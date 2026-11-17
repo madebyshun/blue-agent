@@ -473,7 +473,7 @@ export default function ChatMessages() {
   }, [messages]);
 
   return (
-    <div className="flex-1 overflow-y-auto flex flex-col">
+    <div className="workspace-scroll flex-1 min-h-0 overflow-y-auto flex flex-col">
       {isEmpty ? (
         /* ── Empty state ─────────────────────────────────────────────────── */
         <div
@@ -483,7 +483,7 @@ export default function ChatMessages() {
               "radial-gradient(ellipse 50% 40% at 50% 34%, rgba(79,195,247,0.06) 0%, rgba(79,195,247,0) 66%)",
           }}
         >
-          <div className="w-full max-w-[640px] flex flex-col items-center">
+          <div className="chat-welcome">
 
             {/* Logomark tile — the wordmark and brand line moved to the `// CHAT`
                 header bar (desktop) and MobileTopBar (mobile), so the hero is the
@@ -497,15 +497,18 @@ export default function ChatMessages() {
               style={{ background: "#0D0D14" }}
             />
 
+            <p className="workspace-eyebrow mt-5"><span aria-hidden />YOUR ONCHAIN WORKSPACE</p>
             {/* Heading */}
-            <h2 className="font-mono font-bold text-[28px] leading-[1.25] tracking-[-0.02em] text-[#E2E8F0] mt-5">
+            <h2 className="font-mono font-bold text-[28px] leading-[1.25] tracking-[-0.02em] text-[#E2E8F0]">
               {EMPTY_HEADING}
             </h2>
+
+            <p className="mt-4 max-w-[580px] font-prose text-[14px] leading-relaxed text-[#94A3B8]">Research a market, check a contract or prepare your next move on Base 8453 and Robinhood Chain 4663.</p>
 
             {/* Onchain quick-start chips — PREFILL the composer, never auto-send
                 (see ONCHAIN_CHIPS). Disabled when out of credits: prefilling a
                 composer that can't send is a dead end, not a helpful hint. */}
-            <div className="flex flex-wrap justify-center gap-1.5 mt-[18px]">
+            <div className="chat-starters">
               {ONCHAIN_CHIPS.map(c => (
                 <button
                   key={c.label}
@@ -523,9 +526,9 @@ export default function ChatMessages() {
                       el.setSelectionRange(len, len);
                     });
                   }}
-                  className="font-mono text-[14px] font-medium text-[#94A3B8] border border-[#1A1A2E] rounded-[20px] px-[13px] py-1.5 transition-colors hover:border-[#4FC3F7]/40 hover:text-[#E2E8F0] disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="chat-starter disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  {c.label}
+                  <span>{c.label}</span><span aria-hidden className="text-[#4FC3F7]">↗</span>
                 </button>
               ))}
             </div>

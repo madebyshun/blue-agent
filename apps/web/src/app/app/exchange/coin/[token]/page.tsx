@@ -37,9 +37,9 @@ export default async function CoinPage({ params }: { params: Promise<{ token: st
   if (!isAddress(token)) notFound();
   const shares = await sharesOf(token as `0x${string}`);
   return (
-    <div className="flex flex-col h-full bg-[#050508] overflow-hidden font-mono [&_button]:font-mono [&_a]:font-mono [&_input]:font-mono">
+    <div className="workspace-surface flex flex-col h-full overflow-hidden font-mono [&_button]:font-mono [&_a]:font-mono [&_input]:font-mono">
       <ExchangeHeader active="tokenize" chip="Quadra RevenueShare · Base 8453" />
-      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="workspace-scroll flex-1 min-h-0 overflow-y-auto">
         <div className="px-5 py-[18px] w-full">
           <CoinClient token={token} shares={shares} />
         </div>

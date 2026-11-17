@@ -1,3 +1,4 @@
+import WorkspaceIntro from "@/components/workspace/WorkspaceIntro";
 // /exchange/analytics — the whole x402 market on Base, per day, from the same
 // index as the seller list (lib/hub/exchange). Every bar is measured; today is
 // marked partial, and the first indexed day began mid-backfill.
@@ -34,7 +35,7 @@ export default async function AnalyticsPage() {
     { t: "PAID CALLS", s: "settlements", rows: [...ex.rows].sort((a, b) => b.paidCalls - a.paidCalls).slice(0, 10).map((r) => ({ r, v: r.paidCalls.toLocaleString("en-US") })) },
     { t: "GROWTH", s: gw < 1 ? "needs 2 whole days" : `last ${gw}d vs the ${gw}d before · min $5 before`, rows: growth.map((g) => ({ r: g.r, v: `+${Math.round((g.now / g.before - 1) * 100)}%` })) },
   ];
-  const card = "rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] p-[14px]";
+  const card = "workspace-card rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] p-[14px]";
   const L = ({ t, s }: { t: string; s?: string }) => (
     <div className="flex items-baseline gap-2.5 mt-[24px] mb-3 flex-wrap">
       <span className="text-[12px] font-medium tracking-[0.14em] text-[#64748B]">{t}</span>
@@ -43,10 +44,11 @@ export default async function AnalyticsPage() {
   );
 
   return (
-    <div className="flex flex-col h-full bg-[#050508] overflow-hidden font-mono [&_a]:font-mono">
+    <div className="workspace-surface flex flex-col h-full overflow-hidden font-mono [&_a]:font-mono">
       <ExchangeHeader active="analytics" chip={`${ex.daysCovered} day${ex.daysCovered === 1 ? "" : "s"} indexed · Base 8453`} />
-      <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="px-5 py-[18px] w-full">
+      <div className="workspace-scroll flex-1 min-h-0 overflow-y-auto">
+        <div className="workspace-content">
+          <WorkspaceIntro eyebrow="THE AGENT ECONOMY / BASE 8453" title="Follow the actual activity." description="Explore measured x402 settlements, paying wallets and the sellers behind them. Coverage and partial days stay visible." />
           <div className="grid gap-2.5 grid-cols-2 md:grid-cols-4">
             {[
               ["X402 VOLUME", usd(tot.usd), `${ex.daysCovered} day${ex.daysCovered === 1 ? "" : "s"}, every listed seller`],

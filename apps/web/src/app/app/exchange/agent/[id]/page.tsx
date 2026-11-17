@@ -68,10 +68,10 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
   ];
 
   return (
-    <div className="flex flex-col h-full bg-[#050508] overflow-hidden font-mono [&_a]:font-mono">
+    <div className="workspace-surface flex flex-col h-full overflow-hidden font-mono [&_a]:font-mono">
       <ExchangeHeader active="sellers" chip={`agent #${p.id} · Base 8453`} />
-      <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="px-5 py-[18px] w-full grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px] items-start">
+      <div className="workspace-scroll flex-1 min-h-0 overflow-y-auto">
+        <div className="workspace-content grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px] items-start">
           <div className="min-w-0">
             <Link href="/exchange" className="text-[13px] tracking-[.14em] text-[#64748B] hover:text-[#4FC3F7]">← AGENT EXCHANGE</Link>
             <div className="mt-2 flex items-start gap-4">

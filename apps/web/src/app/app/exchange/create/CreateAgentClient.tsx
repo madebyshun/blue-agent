@@ -1,4 +1,6 @@
 "use client";
+import WorkspaceIntro from "@/components/workspace/WorkspaceIntro";
+
 
 import { useState } from "react";
 import Link from "next/link";
@@ -91,21 +93,17 @@ export default function CreateAgentClient() {
   );
 
   return (
-    <div className="flex flex-col h-full bg-[#050508] overflow-hidden font-mono [&_button]:font-mono [&_a]:font-mono [&_input]:font-mono [&_textarea]:font-mono">
+    <div className="workspace-surface flex flex-col h-full overflow-hidden font-mono [&_button]:font-mono [&_a]:font-mono [&_input]:font-mono [&_textarea]:font-mono">
       <ExchangeHeader active="create" chip="ERC-8004 · Base 8453" />
-      <div className="flex-1 min-h-0 overflow-y-auto">
-      <div className="px-5 py-[18px] grid gap-5 w-full">
+      <div className="workspace-scroll flex-1 min-h-0 overflow-y-auto">
+      <div className="workspace-content grid gap-5">
         <div>
           <SubTabs tabs={CREATE_TABS} active="/exchange/create" />
-          <h1 className="text-[18px] font-semibold text-[#E2E8F0]">Create an agent</h1>
-          <p className="mt-1.5 max-w-[860px] text-[14px] leading-[1.7] text-[#94A3B8]">
-            Your agent as an ERC-8004 identity on Base 8453: an NFT that 8004scan, QuickNode&apos;s explorer and any agent directory can read.
-            The file describing it lives inside the NFT, so nobody hosts it, us included. Free: you only pay a few cents of gas, from your own wallet.
-          </p>
+          <WorkspaceIntro eyebrow="YOUR AGENT WORKSPACE / BASE 8453" title="Give your agent an identity." description="Create an ERC-8004 identity on Base 8453. Review your agent details below, then sign the registration from your own wallet." />
         </div>
 
         <div className="grid gap-5 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] items-start">
-          <section className="rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] px-4 py-4 grid gap-3">
+          <section className="workspace-card rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] px-4 py-4 grid gap-3">
             <h2 className="text-[12px] font-medium tracking-[0.14em] text-[#64748B]">YOUR AGENT</h2>
             <label className="grid gap-1"><span className={label}>Name *</span><input className={input} value={d.name} onChange={set("name")} maxLength={60} /></label>
             <label className="grid gap-1"><span className={label}>What it does</span><textarea className={`${input} min-h-[90px]`} value={d.description} onChange={set("description")} maxLength={600} /></label>
@@ -120,7 +118,7 @@ export default function CreateAgentClient() {
           </section>
 
           <div className="grid gap-5">
-            <section className="rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] px-4 py-4 grid gap-3">
+            <section className="workspace-card rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] px-4 py-4 grid gap-3">
               <h2 className="text-[12px] font-medium tracking-[0.14em] text-[#64748B]">CREATE</h2>
               <ol className="grid list-decimal gap-1 pl-4 text-[14px] text-[#94A3B8]">
                 <li>Connect a wallet on Base.</li>
@@ -137,7 +135,7 @@ export default function CreateAgentClient() {
               {mint.agentId && <Link className="text-[14px] text-[#4FC3F7]" href={`/exchange/agent/${mint.agentId}`}>Open agent #{mint.agentId}&apos;s profile →</Link>}
             </section>
 
-            <section className="rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] px-4 py-4 grid gap-3">
+            <section className="workspace-card rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] px-4 py-4 grid gap-3">
               <h2 className="text-[12px] font-medium tracking-[0.14em] text-[#64748B]">MANAGE AN AGENT YOU OWN</h2>
               <div className="flex gap-2">
                 <input className={input} value={mid} onChange={(e) => setMid(e.target.value.trim())} placeholder="Agent id, e.g. 1137821" />
@@ -177,7 +175,7 @@ export default function CreateAgentClient() {
               </p>
             </section>
 
-            <section className="rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] px-4 py-3.5">
+            <section className="workspace-card rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] px-4 py-3.5">
               <h2 className="mb-2 text-[12px] font-medium tracking-[0.14em] text-[#64748B]">FILE PREVIEW</h2>
               <pre className="max-h-[220px] overflow-auto whitespace-pre-wrap break-all text-[13px] text-[#cbd5e1]">{JSON.stringify(draftRegistration(clean), null, 2)}</pre>
             </section>

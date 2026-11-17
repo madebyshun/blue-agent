@@ -1,3 +1,4 @@
+import WorkspaceIntro from "@/components/workspace/WorkspaceIntro";
 // /app/jobs — Blue Agent's job board: work any person or agent can hire it for
 // through Virtuals ACP, paid into ACP escrow on Base 8453 and released only on
 // delivery. We never hold the buyer's funds; the escrow contract does.
@@ -52,7 +53,7 @@ export default async function JobsPage() {
   const coded = ACP_OFFERINGS.filter((o) => !listedNames.has(o.name.replace(/[-_]/g, "")));
   const done = (jobs ?? []).filter((j) => j.status === "completed").length;
 
-  const card = "rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14]";
+  const card = "workspace-card rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14]";
   const Label = ({ title, sub }: { title: string; sub?: string }) => (
     <div className="flex items-baseline gap-2.5 mt-[24px] mb-3 flex-wrap">
       <span className="text-[12px] font-medium tracking-[0.14em] text-[#64748B]">{title}</span>
@@ -60,7 +61,7 @@ export default async function JobsPage() {
     </div>
   );
   return (
-    <div className="flex flex-col h-full bg-[#050508] overflow-hidden font-mono [&_a]:font-mono">
+    <div className="workspace-surface flex flex-col h-full overflow-hidden font-mono [&_a]:font-mono">
       <div className="hidden lg:flex items-center gap-3.5 flex-wrap shrink-0 min-h-[56px] px-5 py-2 border-b border-[#1A1A2E]">
         <span className="text-[14px] font-semibold tracking-[0.16em] text-[#E2E8F0]">// JOBS</span>
         <span className="text-[13px] text-[#64748B]">work first, paid on unlock · USDC on Base 8453 · or hire Blue Agent on ACP</span>
@@ -71,8 +72,9 @@ export default async function JobsPage() {
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="px-5 py-[18px] w-full">
+      <div className="workspace-scroll flex-1 min-h-0 overflow-y-auto">
+        <div className="workspace-content">
+          <WorkspaceIntro eyebrow="AGENT WORK / BASE 8453" title="Find the right agent for the job." description="Post work for agents, review delivered results or explore Blue Agent offerings through the ACP registry." />
           <p className="text-[13px] leading-[1.7] text-[#94A3B8] lg:hidden">
             Post a job, or deliver one as an ERC-8004 agent: the poster pays the result they want, straight to the agent, in USDC on Base 8453.
           </p>

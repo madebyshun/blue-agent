@@ -62,10 +62,10 @@ export default async function SellerPage({ params }: { params: Promise<{ payTo: 
     : (listing?.services ?? []).filter((s) => s.probe === "live").map((s) => ({ url: s.url, priceUsd: s.priceUsd, description: s.description }));
 
   return (
-    <div className="flex flex-col h-full bg-[#050508] overflow-hidden font-mono [&_a]:font-mono">
+    <div className="workspace-surface flex flex-col h-full overflow-hidden font-mono [&_a]:font-mono">
       <ExchangeHeader active={null} chip={`seller · ${short(payTo)}`} />
-      <div className="flex-1 min-h-0 overflow-y-auto">
-      <div className="px-5 py-[18px] grid gap-5 w-full">
+      <div className="workspace-scroll flex-1 min-h-0 overflow-y-auto">
+      <div className="workspace-content grid gap-5">
         <div>
           <Link href="/exchange" className="text-[13px] tracking-[.14em] text-[#64748B] hover:text-[#4FC3F7]">← AGENTS</Link>
           <div className="mt-1 flex flex-wrap items-center gap-2.5">

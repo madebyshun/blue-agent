@@ -1,4 +1,6 @@
 "use client";
+import WorkspaceIntro from "@/components/workspace/WorkspaceIntro";
+
 
 import { useState } from "react";
 import {
@@ -19,8 +21,8 @@ import { useSkillUsage } from "../use-skill-usage";
 //     the model is told about those tools but no schema is registered, so listing
 //     them as callable would sell a capability that does not exist.
 
-const BORDER  = "#1A1A2E";
-const SURFACE = "#0D0D14";
+const BORDER  = "#253047";
+const SURFACE = "#0e1725";
 
 // The page's sections, in the order of the loop (ShunTr, 2026-10-01).
 const GROUPS: { id: SkillGroup; chip: string; title: string; sub: string }[] = [
@@ -100,12 +102,12 @@ export default function SkillsPanel({ onPick, onUse, costs }: {
   }
 
   return (
-    <div className="flex flex-col h-full bg-[#050508] overflow-hidden">
+    <div className="workspace-surface flex flex-col h-full overflow-hidden">
 
       {/* `// SKILLS` header — desktop only. Below lg the global MobileTopBar
           prints the surface title, so rendering this too would duplicate it. */}
-      <div className="hidden lg:flex items-center gap-3.5 flex-wrap shrink-0 min-h-[56px] px-5 py-2 border-b border-[#1A1A2E]">
-        <span className="font-mono text-[14px] font-semibold tracking-[0.16em] text-[#E2E8F0]">// SKILLS</span>
+      <div className="workspace-header hidden lg:flex items-center gap-3.5 flex-wrap shrink-0 min-h-[56px] px-5 py-2 border-b border-[#1A1A2E]">
+        <span className="font-mono text-[14px] font-semibold tracking-[0.16em] text-[#E2E8F0]">BLUE / SKILLS</span>
         <span className="font-mono text-[13px] text-[#64748B]">what Chat can do · each runs a real tool or builds a card you sign</span>
         <div className="ml-auto flex items-center gap-2">
           <span className="font-mono text-[13px] text-[#94A3B8] border border-[#1A1A2E] rounded-[7px] px-2.5 py-[5px]">
@@ -121,8 +123,9 @@ export default function SkillsPanel({ onPick, onUse, costs }: {
       </div>
 
       {/* Content */}
-      <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="px-5 py-[18px] w-full">
+      <div className="workspace-scroll flex-1 min-h-0 overflow-y-auto">
+        <div className="workspace-content">
+          <WorkspaceIntro eyebrow="YOUR CHAT WORKSPACE" title="Put a skill to work." description="Discover what Blue Agent can do. Pick a skill to start a conversation with the right tools already in reach." />
 
           {/* Search + group filter */}
           <div className="flex items-center gap-2.5 flex-wrap">

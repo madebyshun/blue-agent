@@ -1,4 +1,6 @@
 "use client";
+import WorkspaceIntro from "@/components/workspace/WorkspaceIntro";
+
 
 // Client half of /app/services — see page.tsx. Everything numeric arrives from
 // the server already measured; this file only filters, opens a schema and copies.
@@ -129,9 +131,9 @@ export default function ServicesDashboard({ rows, stats, receipts, http = [], hi
   const peak = Math.max(1, ...series.map((d) => d.n));
 
   return (
-    <div className="flex flex-col h-full bg-[#050508] overflow-hidden">
+    <div className="workspace-surface flex flex-col h-full overflow-hidden">
       {/* `// SERVICES` header — desktop only; below lg the MobileTopBar prints the title. */}
-      <div className="hidden lg:flex items-center gap-3.5 flex-wrap shrink-0 min-h-[56px] px-5 py-2 border-b border-[#1A1A2E]">
+      <div className="workspace-header hidden lg:flex items-center gap-3.5 flex-wrap shrink-0 min-h-[56px] px-5 py-2 border-b border-[#1A1A2E]">
         <span className="font-mono text-[14px] font-semibold tracking-[0.16em] text-[#E2E8F0]">// SERVICES</span>
         <span className="font-mono text-[13px] text-[#64748B]">what agents pay Blue Agent for · MCP + x402 · no account, no API key</span>
         <div className="ml-auto flex items-center gap-2">
@@ -143,8 +145,9 @@ export default function ServicesDashboard({ rows, stats, receipts, http = [], hi
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="px-5 py-[18px] w-full">
+      <div className="workspace-scroll flex-1 min-h-0 overflow-y-auto">
+        <div className="workspace-content">
+          <WorkspaceIntro eyebrow="AGENT SERVICES / BASE 8453" title="Tools that get to work." description="Explore Blue Agent services, inspect their inputs and connect through MCP or pay per call with x402." />
 
           {/* Search + filters */}
           <div className="flex items-center gap-2.5 flex-wrap">

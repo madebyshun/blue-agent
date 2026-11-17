@@ -5,9 +5,9 @@ import Link from "next/link";
 
 export default function SubTabs({ tabs, active }: { tabs: { href: string; label: string }[]; active: string }) {
   return (
-    <div className="mb-5 inline-flex rounded-[10px] border border-[#1A1A2E] bg-[#0D0D14] p-1">
+    <div className="workspace-tabs mb-5 inline-flex rounded-[10px] border border-[#1A1A2E] bg-[#0D0D14] p-1">
       {tabs.map((t) => (
-        <Link key={t.href} href={t.href}
+        <Link key={t.href} href={t.href} aria-current={t.href === active ? "page" : undefined}
           className={`rounded-[8px] px-4 py-2 text-[14px] transition-colors ${t.href === active ? "bg-[#4FC3F7] font-semibold text-[#050508]" : "text-[#94A3B8] hover:text-[#E2E8F0]"}`}>
           {t.label}
         </Link>

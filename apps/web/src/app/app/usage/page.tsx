@@ -1,4 +1,5 @@
 "use client";
+import WorkspaceIntro from "@/components/workspace/WorkspaceIntro";
 
 // /app/usage — everything the connected wallet has CONSUMED from BlueAgent,
 // rebuilt to the design handoff's two-column layout.
@@ -165,9 +166,9 @@ export default function UsagePage() {
   const dash = (v: string) => (data ? v : loading ? "…" : "—");
 
   return (
-    <div className="flex flex-col h-full bg-[#050508] text-white overflow-hidden">
+    <div className="workspace-surface flex flex-col h-full text-white overflow-hidden">
       {/* Header — desktop only; MobileTopBar prints "// USAGE" below lg. */}
-      <div className="hidden lg:flex items-center gap-3.5 flex-wrap shrink-0 min-h-[56px] px-5 py-2 border-b border-[#1A1A2E]">
+      <div className="workspace-header hidden lg:flex items-center gap-3.5 flex-wrap shrink-0 min-h-[56px] px-5 py-2 border-b border-[#1A1A2E]">
         <span className="font-mono text-[14px] font-semibold tracking-[0.16em] text-[#E2E8F0]">// USAGE</span>
         <span className="font-mono text-[13px] text-[#64748B]">
           credits &amp; agent spend · Coinbase x402{address ? ` · ${shortAddr(address)}` : ""}
@@ -191,7 +192,8 @@ export default function UsagePage() {
       </div>
 
       {/* Body */}
-      <div className="flex-1 min-h-0 overflow-y-auto">
+      <div className="workspace-scroll flex-1 min-h-0 overflow-y-auto">
+        <div className="workspace-content pb-0"><WorkspaceIntro eyebrow="YOUR CHAT WORKSPACE" title="Every credit, accounted for." description="Review your available credits, daily allowance and activity. Connect your wallet to see your own usage record." /></div>
         {!isConnected ? (
           // ── Connect gate ──────────────────────────────────────────────────
           <div className="max-w-sm mx-auto mt-16 sm:mt-24 px-5 text-center">

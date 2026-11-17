@@ -1,4 +1,6 @@
 "use client";
+import WorkspaceIntro from "@/components/workspace/WorkspaceIntro";
+
 
 import { useEffect, useMemo, useState } from "react";
 import { useChat } from "../ChatContext";
@@ -175,14 +177,14 @@ export default function ModelsPanel({ onPick }: { onPick?: (id: string) => void 
     : [];
 
   return (
-    <div className="flex flex-col h-full bg-[#050508] overflow-hidden">
+    <div className="workspace-surface flex flex-col h-full overflow-hidden">
 
       {/* ── Header bar — // MODELS, live counts, Presets/All toggle.
              Search moved into the filter pane (handoff). The toggle is the same
              load-bearing Presets↔All switch, restyled to the handoff pill; its
              counts are live (`data`), never the prototype's hardcoded 8 / 312. ── */}
-      <div className="flex items-center gap-3.5 flex-wrap shrink-0 min-h-[56px] px-5 py-2 border-b border-[#1A1A2E]">
-        <span className="font-mono text-[14px] font-semibold tracking-[0.16em] text-[#E2E8F0]">// MODELS</span>
+      <div className="workspace-header flex items-center gap-3.5 flex-wrap shrink-0 min-h-[56px] px-5 py-2 border-b border-[#1A1A2E]">
+        <span className="font-mono text-[14px] font-semibold tracking-[0.16em] text-[#E2E8F0]">BLUE / MODELS</span>
         <span className="font-mono text-[13px] text-[#64748B]">
           {presetCount} presets · {modelCount ?? "…"} models · routed through Virtuals + Venice · credits per message
         </span>
@@ -329,7 +331,8 @@ export default function ModelsPanel({ onPick }: { onPick?: (id: string) => void 
         </aside>
 
         {/* ── Table ── */}
-        <div className={`${showFilters ? "hidden" : "flex"} lg:flex flex-1 min-w-0 flex-col overflow-y-auto`}>
+        <div className={`${showFilters ? "hidden" : "flex"} lg:flex flex-1 min-w-0 flex-col overflow-y-auto workspace-scroll`}>
+          <div className="px-5 pt-6"><WorkspaceIntro eyebrow="YOUR CHAT WORKSPACE" title="Choose how you think." description="Compare live models and presets, review context and pricing, then carry your choice into Chat." /></div>
 
           {load.state === "loading" && (
             <p className="font-mono text-[14px] text-slate-600 px-5 py-6">Reading the live catalogs…</p>

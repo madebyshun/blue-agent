@@ -1,4 +1,6 @@
 "use client";
+import WorkspaceIntro from "@/components/workspace/WorkspaceIntro";
+
 import { useState, useEffect } from "react";
 import { useWatches } from "../use-watches";
 import AlertsTab from "./scheduled/AlertsTab";
@@ -197,18 +199,19 @@ export default function CronPanel() {
 
   return (
     <>
-    <div className="flex flex-col h-full bg-[#050508] overflow-y-auto">
+    <div className="workspace-surface flex flex-col h-full overflow-y-auto [scrollbar-gutter:stable]">
 
       {/* ── Header — desktop only. Below lg the app shell's MobileTopBar already
            prints "// SCHEDULED", so rendering this too would duplicate it; the
            two actions move into the body there. ─── */}
-      <div className="hidden lg:flex items-center gap-3.5 flex-wrap shrink-0 min-h-[56px] px-5 py-2 border-b border-[#1A1A2E]">
-        <span className="font-mono text-[14px] font-semibold tracking-[0.16em] text-[#E2E8F0]">// SCHEDULED</span>
+      <div className="workspace-header sticky top-0 z-20 hidden lg:flex items-center gap-3.5 flex-wrap shrink-0 min-h-[56px] px-5 py-2 border-b border-[#1A1A2E]">
+        <span className="font-mono text-[14px] font-semibold tracking-[0.16em] text-[#E2E8F0]">BLUE / SCHEDULED</span>
         <span className="font-mono text-[13px] text-[#64748B]">alerts · automations that prepare trades you sign · recurring runs</span>
         <span className="ml-auto flex gap-2">{actions}</span>
       </div>
 
-      <div className="px-5 py-5 w-full">
+      <div className="workspace-content">
+          <WorkspaceIntro eyebrow="YOUR CHAT WORKSPACE" title="Keep the work moving." description="Monitor alerts, prepare recurring work and review every run from one place. Transactions remain yours to sign." />
         <div className="flex lg:hidden gap-2 mb-4">{actions}</div>
 
         {/* ── Stat strip ─── */}

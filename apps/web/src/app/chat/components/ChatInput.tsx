@@ -266,7 +266,7 @@ export default function ChatInput() {
   const activeCmdDef = SLASH_COMMANDS.find(c => c.cmd === activeCmd);
 
   return (
-    <div className="border-t border-[#1A1A2E] bg-[#050508] px-4 sm:px-6 py-3 flex-shrink-0">
+    <div className="border-t border-[#202a3a] bg-[#070b12] px-4 sm:px-6 py-3 flex-shrink-0">
       <div className="max-w-4xl mx-auto relative">
 
         {/* ── Slash command menu (typed /) ─────────────────────────────────── */}
@@ -479,8 +479,8 @@ export default function ChatInput() {
 
         {/* ── Main input card ──────────────────────────────────────────────── */}
         <div
-          className="rounded-2xl border transition-colors overflow-hidden"
-          style={{ background: "#0D0D14", borderColor: outOfCredits ? "#EF444430" : "#1E1E30" }}
+          className="chat-composer rounded-2xl border transition-colors overflow-hidden"
+          style={{ background: "#0e1624", borderColor: outOfCredits ? "#EF444430" : "#2a3850" }}
         >
           {/* Textarea row */}
           <div className="flex items-end gap-2 px-4 pt-3.5 pb-3">
@@ -493,7 +493,7 @@ export default function ChatInput() {
               placeholder={outOfCredits ? "No credits left — resets daily" : t("chat.placeholder")}
               rows={1}
               disabled={streaming || outOfCredits}
-              className="flex-1 resize-none bg-transparent outline-none font-mono text-sm text-white placeholder:text-slate-700 leading-relaxed"
+              className="flex-1 resize-none bg-transparent outline-none font-mono text-sm text-white placeholder:text-slate-500 leading-relaxed"
               style={{ maxHeight: 160, overflowY: "auto" }}
               onInput={(e) => {
                 const el = e.currentTarget;

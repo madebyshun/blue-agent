@@ -254,10 +254,10 @@ export default function TokenizeClient({ markets = false, assets }: { markets?: 
   const balText = bal.balance != null ? `${bal.balance.toLocaleString("en-US", { maximumFractionDigits: isEth ? 5 : 4 })} ${pair.symbol}` : null;
 
   return (
-    <div className="flex flex-col h-full bg-[#050508] overflow-hidden font-mono [&_button]:font-mono [&_a]:font-mono [&_input]:font-mono [&_textarea]:font-mono">
+    <div className="workspace-surface flex flex-col h-full overflow-hidden font-mono [&_button]:font-mono [&_a]:font-mono [&_input]:font-mono [&_textarea]:font-mono">
       {markets ? <MarketsHeader active="launch" chip="Quadra launchpad v3 · Base 8453" /> : <ExchangeHeader active="tokenize" chip="Quadra launchpad v3 · Base 8453" />}
-      <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="px-5 py-[18px] grid gap-5 w-full">
+      <div className="workspace-scroll flex-1 min-h-0 overflow-y-auto">
+        <div className="workspace-content grid gap-5">
           <div>
             <h1 className="text-[18px] font-semibold text-[#E2E8F0]">{markets ? "Launch a token" : "Tokenize an agent"}</h1>
             <p className="mt-1.5 max-w-[860px] text-[14px] leading-[1.7] text-[#94A3B8]">

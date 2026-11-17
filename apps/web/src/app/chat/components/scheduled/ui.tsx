@@ -63,7 +63,7 @@ export const inputCls = "w-full bg-[#050508] border border-[#1A1A2E] focus:borde
 
 export function StatTile({ label, value, sub, tone }: { label: string; value: ReactNode; sub?: ReactNode; tone?: string }) {
   return (
-    <div className="rounded-2xl border border-[#1A1A2E] bg-[#0D0D14] px-4 py-3 min-w-0">
+    <div className="workspace-card rounded-2xl px-4 py-4 min-w-0">
       <p className="font-mono text-[12px] tracking-[0.14em] text-[#64748B]">{label}</p>
       <p className="font-mono text-[24px] font-semibold mt-1 truncate" style={{ color: tone ?? C.text }}>{value}</p>
       {sub && <p className="font-mono text-[13px] text-[#64748B] mt-0.5 truncate">{sub}</p>}

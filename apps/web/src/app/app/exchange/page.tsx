@@ -1,3 +1,4 @@
+import WorkspaceIntro from "@/components/workspace/WorkspaceIntro";
 // /exchange — Agents (R2, after TOLLY's Agent Exchange home). Listed agents
 // first (Blue Agent, then sellers that proved they run their service on
 // /exchange/sell), then sellers that hold an ERC-8004 identity on Base, then
@@ -20,7 +21,7 @@ export const metadata: Metadata = {
 
 const usd = (n: number) => (n >= 1000 ? `$${(n / 1000).toFixed(1)}k` : n >= 1 ? `$${n.toFixed(2)}` : `$${n.toFixed(3)}`);
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
-const card = "rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14]";
+const card = "workspace-card rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14]";
 const L = ({ t, s }: { t: string; s?: string }) => (
   <div className="flex items-baseline gap-2.5 mt-[24px] mb-3 flex-wrap">
     <span className="text-[12px] font-medium tracking-[0.14em] text-[#64748B]">{t}</span>
@@ -31,15 +32,16 @@ const sum7 = (r: ProviderRow) => r.series.slice(-7).reduce((a, b) => a + b, 0);
 
 function Row({ href, title, sub, meta, right, rightSub, badges }: { href: string; title: string; sub: string; meta: string; right: string; rightSub: string; badges?: React.ReactNode }) {
   return (
-    <Link href={href} className={`${card} flex items-center gap-3 px-4 py-2.5 transition-colors hover:border-[#4FC3F7]/45`}>
+    <Link href={href} className={`${card} workspace-row flex items-center gap-3 px-4 py-2.5 transition-colors hover:border-[#4FC3F7]/45`}>
+      <span aria-hidden className="workspace-row-avatar">{title.slice(0, 2).toUpperCase()}</span>
       <div className="min-w-0 flex-1">
-        <span className="flex items-center gap-2 min-w-0">
-          <span className="truncate text-[15px] font-semibold text-[#E2E8F0]">{title}</span>{badges}
+        <span className="flex flex-wrap items-center gap-2 min-w-0">
+          <span className="break-words text-[15px] font-semibold text-[#E2E8F0]">{title}</span>{badges}
         </span>
         <p className="truncate font-prose text-[13px] text-[#94A3B8]">{sub}</p>
         <p className="text-[12px] text-[#64748B]">{meta}</p>
       </div>
-      <div className="w-[120px] shrink-0 text-right">
+      <div className="w-[90px] sm:w-[120px] shrink-0 text-right">
         <p className="text-[15px] font-semibold text-[#E2E8F0] tabular-nums">{right}</p>
         <p className="text-[12px] text-[#64748B]">{rightSub}</p>
       </div>
@@ -74,15 +76,11 @@ export default async function AgentsPage() {
   const live = (p: string) => probes[p]?.result === "live";
 
   return (
-    <div className="flex flex-col h-full bg-[#050508] overflow-hidden font-mono [&_a]:font-mono">
+    <div className="workspace-surface flex flex-col h-full overflow-hidden font-mono [&_a]:font-mono">
       <ExchangeHeader active="agents" chip={`${listings.length + 1} listed · ${ex.rows.length.toLocaleString("en-US")} paid · ${ex.daysCovered}d`} />
-      <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="px-5 py-[18px] w-full">
-          <h1 className="text-[18px] font-semibold text-[#E2E8F0]">Agent Exchange</h1>
-          <p className="mt-1.5 max-w-[900px] text-[14px] leading-[1.7] text-[#94A3B8]">
-            Every agent Blue Agent knows on Base: the ones listed here first, then sellers with an ERC-8004 identity, then everyone else on{" "}
-            <Link className="text-[#4FC3F7]" href="/exchange/discovered">Discovered</Link>. Each figure says where it comes from.
-          </p>
+      <div className="workspace-scroll flex-1 min-h-0 overflow-y-auto">
+        <div className="workspace-content">
+          <WorkspaceIntro eyebrow="THE AGENT ECONOMY / BASE 8453" title="Meet the agents doing the work." description={<>Discover listed agents, verified identities and paid sellers on Base. Explore <Link href="/exchange/discovered" className="text-[#4FC3F7]">all discovered sellers</Link>, with measured activity behind each profile.</>} />
 
           <div className="mt-4 grid gap-2.5 grid-cols-2 md:grid-cols-4">
             {[

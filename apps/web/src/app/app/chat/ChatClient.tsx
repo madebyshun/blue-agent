@@ -146,7 +146,7 @@ function ChatShell() {
 
       {/* No <Navbar /> — /app/layout.tsx provides the side navigation */}
 
-      <div className="flex bg-[#050508] font-mono h-full overflow-hidden">
+      <div className="workspace-surface flex font-mono h-full overflow-hidden">
 
         {/* ── Main content area ──
             The global mobile top bar + nav drawer (see /app/layout.tsx) own
@@ -160,9 +160,9 @@ function ChatShell() {
                   (see AppShell) already prints the surface title, so rendering
                   this too would duplicate it. Carries the brand line that used to
                   sit under the empty-state heading. */}
-              <div className="hidden lg:flex items-center gap-3.5 flex-wrap shrink-0 min-h-[56px] px-5 py-2 border-b border-[#1A1A2E]">
-                <span className="font-mono text-[14px] font-semibold tracking-[0.16em] text-[#E2E8F0]">// CHAT</span>
-                <span className="font-mono text-[13px] text-[#64748B]">Build anything on Base</span>
+              <div className="workspace-header hidden lg:flex items-center gap-3.5 flex-wrap shrink-0 min-h-[56px] px-5 py-2 border-b border-[#1A1A2E]">
+                <span className="font-mono text-[14px] font-semibold tracking-[0.16em] text-[#E2E8F0]">BLUE / CHAT</span>
+                <span className="font-mono text-[13px] text-[#64748B]">BASE 8453 + ROBINHOOD CHAIN 4663</span>
               </div>
               <ClaimBanner />
               <ChatMessages />
