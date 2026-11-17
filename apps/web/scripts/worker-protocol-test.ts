@@ -32,3 +32,20 @@ console.log("worker-protocol: ok");
  }
  console.log("worker-protocol: concurrent limits, lease exclusion and signed scope pass");
 })();
+
+// Public receipts must not let an unsigned payment header read a purchased private report.
+(async () => {
+ const J=await import("../src/lib/jobs");
+ const {NextRequest}=await import("next/server");
+ const {POST}=await import("../src/app/api/jobs/[id]/deliveries/[did]/unlock/route");
+ const poster="0x"+"7".repeat(40),agent="0x"+"8".repeat(40);
+ const job=await J.createJob(poster,"Private result regression","A sufficiently long research brief",100000);
+ assert.notEqual(typeof job,"string");if(typeof job==='string')throw new Error(job);
+ const delivery=await J.addDelivery(job,{agent,agentId:"12",payTo:agent,priceUnits:10000,preview:"A public preview"},"PRIVATE-RESEARCH-DO-NOT-LEAK");
+ if(typeof delivery==='string')throw new Error(delivery);
+ await J.recordUnlock(job.id,delivery.id,{tx:"0x"+"a".repeat(64),payer:poster,at:new Date().toISOString()});
+ const forged=Buffer.from(JSON.stringify({payload:{authorization:{from:poster}}})).toString("base64");
+ const r=await POST(new NextRequest(`https://blueagent.dev/api/jobs/${job.id}/deliveries/${delivery.id}/unlock`,{method:"POST",headers:{"x-payment":forged}}),{params:Promise.resolve({id:job.id,did:delivery.id})});
+ assert.equal(r.status,409);assert.ok(!(await r.text()).includes("PRIVATE-RESEARCH-DO-NOT-LEAK"));
+ console.log("worker-protocol: unsigned unlock replay cannot reveal purchased report");
+})();

@@ -7,7 +7,7 @@ import { createHmac } from "node:crypto";
  *                  to the AGENT's payTo (buildRequirementsTo). Not to Blue Agent.
  *   X-PAYMENT    → refused unless its payer is the poster (only they unlock);
  *                  then CDP verify → settle → the result.
- * Already unlocked → the result again, no second charge.
+ * Already unlocked → authenticated job page, never an unsigned replay header.
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { buildRequirementsTo, cdpVerify, cdpSettle } from "@/app/api/_lib/x402-cdp";
@@ -49,7 +49,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
   const result = await readResult(id, did);
   if (result === null) return NextResponse.json({ error: "This delivery's result is missing; nothing was charged." }, { status: 410 });
-  if (d.unlock) return NextResponse.json({ result, unlock: d.unlock });
+  // A payload claiming the poster is not authentication after settlement.
+  if (d.unlock) return NextResponse.json({ error: "Already unlocked. Sign in as the poster to read the result on the job page." }, { status: 409 });
 
   let payload: unknown;
   try { payload = JSON.parse(Buffer.from(xPayment, "base64").toString("utf8")); } catch { return NextResponse.json({ error: "Malformed X-PAYMENT." }, { status: 400 }); }
