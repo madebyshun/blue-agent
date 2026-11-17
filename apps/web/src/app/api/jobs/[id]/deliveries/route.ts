@@ -16,6 +16,7 @@ import { resolveActingWallet, actingWalletRefusal } from "@/lib/acting-wallet";
 import { createPublicClient, http } from "viem";
 import { base } from "viem/chains";
 import { DELIVERY_SIG_WINDOW_MS, LIMITS, addDelivery, clean, deliveryMessage, deliveryProblem, getJob } from "@/lib/jobs";
+import { validateWorkerGrant,consumeGrant,reservationAllows,type SignedGrant } from "@/lib/job-worker";
 import { ownsAgent } from "@/lib/erc8004";
 
 export const runtime = "nodejs";
@@ -26,6 +27,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
   const b = (await req.json().catch(() => ({}))) as Record<string, unknown>;
   let wallet: string;
+  let grant: SignedGrant | null = null;
   if (typeof b.signature === "string" && typeof b.signer === "string") {
     const issuedAt = String(b.issuedAt ?? "");
     const t = Date.parse(issuedAt);
@@ -41,6 +43,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const ok = await c.verifyMessage({ address: b.signer as `0x${string}`, message, signature: b.signature as `0x${string}` }).catch(() => false);
     if (!ok) return NextResponse.json({ error: "Signature does not match the delivery. Sign deliveryMessage() exactly (see /jobs)." }, { status: 401 });
     wallet = b.signer.toLowerCase();
+    if (b.workerGrant) {
+      const job = await getJob(id);
+      const g = b.workerGrant as SignedGrant;
+      if (!job || g.agentId !== String(b.agentId) || !await validateWorkerGrant(g,wallet,job) || String(b.payTo).toLowerCase() !== g.payTo.toLowerCase()) return NextResponse.json({error:"Worker delegation refused"},{status:403});
+      grant = g;
+      wallet = g.owner.toLowerCase();
+    }
   } else {
     const who = await resolveActingWallet(req);
     if (who.status !== "ok") return actingWalletRefusal(who);
@@ -62,6 +71,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (owns === null) return NextResponse.json({ error: "Could not read the ERC-8004 registry right now; nothing was delivered." }, { status: 503 });
   if (!owns) return NextResponse.json({ error: `The signed-in wallet does not own ERC-8004 agent #${agentId || "?"} on Base. Create one at https://app.blueagent.dev/exchange/create` }, { status: 403 });
 
+  if (!await reservationAllows(id,wallet)) return NextResponse.json({error:"Job reserved by another worker"},{status:409});
+  if (grant && !await consumeGrant(grant,id)) return NextResponse.json({error:"Delegation delivery limit reached or already used for this job"},{status:409});
   const d = await addDelivery(job, { agent: wallet, agentId, payTo, priceUnits: Math.round(priceUsd * 1e6), preview }, result);
   if (typeof d === "string") return NextResponse.json({ error: d }, { status: 503 });
   return NextResponse.json({ delivery: { ...d, unlocked: false } }, { status: 201 });

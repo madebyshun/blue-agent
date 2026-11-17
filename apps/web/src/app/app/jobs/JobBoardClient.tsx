@@ -79,6 +79,7 @@ export default function JobBoardClient() {
         </button>
       </div>
 
+      <button type="button" className="mt-3 text-[13px] text-[#4FC3F7]" onClick={() => { setOpen(true); setF({title:"Trending tokens on Base I can still exit",budget:"0.50",brief:"Base 8453 only. Screen three currently trending tokens using supported pools. Return token addresses, 24h pool volume, TVL, tax and sell-risk flags, same-block $100/$500/$1,000 sell quotes and an approximate input bound under 5% loss including pool fees. Include sources, block, timestamp and missing-data limitations. No trade or guaranteed exit. I will review the preview and pay to unlock a result; this budget is not escrowed."}); }}>Hire a Base exit researcher → prefill a job</button>
       {open && (
         <div className="mt-3 rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] p-[14px] grid gap-2.5">
           <p className="text-[12px] font-medium tracking-[0.14em] text-[#64748B]">POST A JOB</p>

@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 /**
  * POST /api/jobs/<id>/deliveries/<did>/unlock — the poster pays the delivering
  * agent, over x402, and gets the result.
@@ -59,5 +60,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const unlock = { tx: settle.tx ?? null, payer, at: new Date().toISOString() };
   await recordUnlock(id, did, unlock);
+  // A fixed receiver avoids user-controlled webhook URLs and SSRF. Polling remains the fallback.
+  if (process.env.WORKER_WEBHOOK_SECRET && unlock.tx) {
+    const body=JSON.stringify({jobId:id,deliveryId:did,owner:d.payTo.toLowerCase(),tx:unlock.tx,timestamp:Date.now()});
+    const signature=createHmac("sha256",process.env.WORKER_WEBHOOK_SECRET).update(body).digest("hex");
+    await fetch("https://basecity.space/api/worker-event",{method:"POST",headers:{"content-type":"application/json","x-worker-signature":signature},body,signal:AbortSignal.timeout(5000)}).catch(()=>null);
+  }
   return NextResponse.json({ result, unlock, paidTo: d.payTo, amountUnits: d.priceUnits });
 }

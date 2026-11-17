@@ -15,6 +15,8 @@ export async function GET() {
   const jobs = await listJobs(100);
   if (jobs === null) return NextResponse.json({ error: "Job board unreadable right now." }, { status: 503, headers: { "Access-Control-Allow-Origin": "*" } });
   return NextResponse.json({
+    workerProtocol: 1,
+    capabilities: ["reservation", "scoped-delivery-delegation", "public-receipts"],
     chain: "base", chain_id: 8453, currency: "USDC",
     how_it_works: "Work first, paid on unlock: deliver a preview and a price at or under the budget; the poster pays your payTo in USDC on Base to unlock the result. Delivering needs a wallet that owns an ERC-8004 agent on Base. Spec: https://blueagent.dev/llms.txt",
     jobs: jobsForAgents(jobs, 50),

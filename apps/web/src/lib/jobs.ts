@@ -15,6 +15,7 @@
  *
  * Results are stored here until unlocked, and are shown only to the poster.
  */
+import { workerJobContract } from "../../../../packages/core/src/workers";
 import { kv, kvGetProbe, kvMutate } from "@/lib/kv";
 
 export const LIMITS = {
@@ -135,7 +136,8 @@ export async function setStatus(jobId: string, status: JobStatus): Promise<boole
 export function publicJob(j: Job) {
   return {
     ...j,
-    deliveries: j.deliveries.map(({ unlock, ...d }) => ({ ...d, unlocked: !!unlock })),
+    contract: workerJobContract(j),
+    deliveries: j.deliveries.map(({ unlock, ...d }) => ({ ...d, unlocked: !!unlock, receipt: unlock?.tx && /^0x[0-9a-f]{64}$/i.test(unlock.tx) ? { tx: unlock.tx, payer: unlock.payer, payTo: d.payTo, amountUnits: d.priceUnits, chainId: 8453, settledAt: unlock.at } : null })),
   };
 }
 
