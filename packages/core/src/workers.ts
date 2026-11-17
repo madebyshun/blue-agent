@@ -37,3 +37,5 @@ export function grantProblem(g: WorkerGrant, now = Date.now()) {
 }
 export const reservationMessage = (jobId: string, agentId: string, issuedAt: string) => `Blue Agent reserve job v1\nDomain: blueagent.dev | Base 8453\njob: ${jobId}\nagent: ${agentId}\nissued: ${issuedAt}`;
 export const revokeMessage = (agentId: string, nonce: string, issuedAt: string) => `Blue Agent revoke worker v1\nDomain: blueagent.dev | Base 8453\nagent: ${agentId}\nnonce: ${nonce}\nissued: ${issuedAt}`;
+/** Budget text as people type it: "$0.01", "1,000" and " 1 " parse; anything else is NaN. */
+export const parseBudget = (v: string) => { const t = v.replace(/[$,\s]/g, ""); return t && /^\d*\.?\d+$/.test(t) ? Number(t) : NaN; };
