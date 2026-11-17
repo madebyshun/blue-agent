@@ -37,7 +37,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readArrowFeed } from "@/lib/blue-hood/arrow-cache";
 import { isPublicArrow } from "@/lib/blue-hood/public-feed";
-import { computeHitRate } from "@/lib/blue-hood/hit-rate-gate";
+import { computeHitRate, HIT_RATE_WINDOW_MS } from "@/lib/blue-hood/hit-rate-gate";
+import { matchesChain, parseHoodChain } from "@/lib/blue-hood/types";
 import { parseArrowFieldMode, projectArrows, omittedFieldsNote } from "@/lib/blue-hood/arrow-fields";
 import { withholdDriftedBriefs } from "@/lib/blue-hood/brief-serving";
 
@@ -85,6 +86,18 @@ export async function GET(req: NextRequest) {
   // not a deletion. The CDN keys on the full URL, so the two modes cache apart.
   const fieldMode = parseArrowFieldMode(url.searchParams);
 
+  // `?chain=base|robinhood` (2026-11-17). Until then the param was silently
+  // ignored, so `chain=base` returned Robinhood arrows. An unknown value is a
+  // 400, never "all chains": answering a Base question with RH rows is the bug.
+  const rawChain = url.searchParams.get("chain");
+  const chain = parseHoodChain(rawChain?.trim().toLowerCase());
+  if (rawChain !== null && rawChain !== "" && chain === undefined) {
+    return NextResponse.json(
+      { ok: false, error: `Unknown chain "${rawChain}". Use "base" or "robinhood", or omit it for both.` },
+      { status: 400, headers: { "Cache-Control": "no-store" } },
+    );
+  }
+
   // ONE KV command (#148 ②). The blob already holds the newest
   // ARROW_HYDRATED_MAX records, so the old "over-read the id list ×3 so the
   // test-arrow filter can't starve the result" trick is gone — we filter the
@@ -121,13 +134,27 @@ export async function GET(req: NextRequest) {
   // not another. One definition, imported.
   const includeTest = url.searchParams.get("include_test") === "1"
     && process.env.NODE_ENV !== "production";
-  const arrows = includeTest ? all : all.filter(isPublicArrow);
+  const publicArrows = includeTest ? all : all.filter(isPublicArrow);
+  const arrows = publicArrows.filter((a) => matchesChain(a, chain));
 
   // P3.2 — aggregate + per-type gate now live in @/lib/blue-hood/hit-rate-gate
   // so /api/acp/arrows and both UI clients read the same shape. Aggregate
   // display gate is 30 valid arrows; per-type (arb / drift) gate is 15 own
   // samples. VOID + informational stay excluded from every denominator.
   const { hit_rate, per_type, graded_breakdown } = computeHitRate(arrows);
+
+  // The headline above is a 7-DAY window; the list below is the whole feed.
+  // With arrows frozen since 2026-09-30 the window is empty while the list is
+  // full of graded rows, which read as a contradiction (audit, 2026-11-13).
+  // Say which window each number covers, and give the list's own totals.
+  const gradedAll = arrows.filter((a) => a.status === "graded");
+  const all_time = {
+    hits: gradedAll.filter((a) => a.outcome === "hit").length,
+    misses: gradedAll.filter((a) => a.outcome === "miss").length,
+    voided: gradedAll.filter((a) => a.outcome === "void").length,
+    total_graded: gradedAll.length,
+    basis: "every public arrow in this feed, any grading date",
+  };
 
   const arrows_today = arrows.filter(
     (a) => new Date(a.fired_at).getTime() >= Date.now() - 24 * 3_600 * 1000,
@@ -157,10 +184,13 @@ export async function GET(req: NextRequest) {
       // An escape hatch nobody can discover is not an escape hatch.
       ...omittedFieldsNote(fieldMode),
       arrows_today,
+      chain: chain ?? "all",
       hit_rate,
       per_type,
       graded_breakdown,
-      test_arrows_hidden: includeTest ? 0 : all.length - arrows.length,
+      window: { days: HIT_RATE_WINDOW_MS / 86_400_000, applies_to: ["hit_rate", "per_type", "graded_breakdown"], basis: "arrows graded in the last 7 days" },
+      all_time,
+      test_arrows_hidden: includeTest ? 0 : all.length - publicArrows.length,
       // Blob provenance. Makes cache staleness OBSERVABLE instead of silent —
       // if write-time patching ever stops working, `feed_built_at` goes stale
       // in the response and anyone can see it without KV access.

@@ -237,7 +237,9 @@ export async function theCall(now = new Date()) {
 }
 
 export async function scorecard() {
-  const card = await scorecardView({ limit: 1 });
+  // The weekend from the newest window; the record from the whole store
+  // (scorecardView's summary covers only the window it returns).
+  const card = await scorecardView({ limit: 52 });
   if (card === "error") throw new Error("scorecard unreadable");
   const w = card.weekends[0];
   if (!w) throw new Error("no graded weekend");
