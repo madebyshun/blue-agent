@@ -160,7 +160,10 @@ export async function addDelivery(job: Job, d: Omit<Delivery, "id" | "at">, resu
     if (deliveryProblem(cur, { agent: d.agent, agentId: d.agentId, payTo: d.payTo, priceUsd: d.priceUnits / 1e6, preview: d.preview, result })) return null;
     return { ...cur, deliveries: [...cur.deliveries, delivery] };
   }, TTL);
-  return r === "ok" ? delivery : "Could not record the delivery right now.";
+  if (r !== "ok") return "Could not record the delivery right now.";
+  // Permanent per-agent record (lib/agent-ledger.ts), best effort.
+  await import("@/lib/agent-ledger").then((m) => m.recordLedger(d.agentId, m.entryOf(job, delivery))).catch(() => undefined);
+  return delivery;
 }
 
 export async function readResult(jobId: string, did: string): Promise<string | null> {
@@ -168,9 +171,15 @@ export async function readResult(jobId: string, did: string): Promise<string | n
 }
 
 export async function recordUnlock(jobId: string, did: string, unlock: NonNullable<Delivery["unlock"]>): Promise<void> {
+  let after: Job | null = null;
   await kvMutate<Job>(itemKey(jobId), {} as Job, (cur) => cur.id
-    ? { ...cur, deliveries: cur.deliveries.map((x) => (x.id === did ? { ...x, unlock } : x)) }
+    ? (after = { ...cur, deliveries: cur.deliveries.map((x) => (x.id === did ? { ...x, unlock } : x)) })
     : null, TTL);
+  const job = after as Job | null;
+  const d = job?.deliveries.find((x) => x.id === did);
+  if (job && d) await import("@/lib/agent-ledger").then((m) => m.recordLedger(d.agentId, m.entryOf(job, d))).catch(() => undefined);
+  // ERC-8004 feedback is written later by a cron (lib/agent-feedback.ts), never inline here.
+  if (job && d && unlock.tx) await import("@/lib/agent-feedback").then((m) => m.enqueueFeedback({ agentId: d.agentId, jobId: job.id, did: d.id, tx: unlock.tx!, payer: unlock.payer, payTo: d.payTo, priceUnits: d.priceUnits, at: unlock.at })).catch(() => undefined);
 }
 
 export async function setStatus(jobId: string, status: JobStatus): Promise<boolean> {
@@ -213,6 +222,46 @@ export async function deliveryMessage(f: { jobId: string; agentId: string; payTo
     `result-sha256: ${await sha256Hex(f.result)}`,
     `issued: ${f.issuedAt}`,
   ].join("\n");
+}
+
+// ── Posting without a browser session (agents) ───────────────────────────────
+//
+// BaseCity plan item 6 (ShunTr 2026-11-18). The poster signs this exact text
+// with its wallet (EOA, or a smart account via ERC-1271/6492) and sends
+// {signer, signature, issuedAt} with the job. It binds every field, so a
+// captured signature cannot post a different job; issuedAt must be within 10
+// minutes, and each signature posts once. Signed posts are limited per wallet
+// per UTC day (API_POSTS_PER_DAY), on top of LIMITS.openPerPoster.
+export const API_POSTS_PER_DAY = 10;
+/** The x402 anti-spam fee for posting without a session or signature: $0.02 (ShunTr 2026-11-18). */
+export const POST_FEE_UNITS = 20_000;
+
+export async function jobPostMessage(f: { title: string; brief: string; budgetUnits: number; skill?: string | null; token?: string | null; invitedAgentId?: string | null; issuedAt: string }): Promise<string> {
+  return [
+    "Blue Agent job post v1",
+    "Domain: blueagent.dev | Base 8453",
+    `title-sha256: ${await sha256Hex(f.title)}`,
+    `brief-sha256: ${await sha256Hex(f.brief)}`,
+    `budget: ${f.budgetUnits} (USDC micro-units, Base 8453)`,
+    `skill: ${f.skill || "-"}`,
+    `token: ${f.token ? f.token.toLowerCase() : "-"}`,
+    `invite: ${f.invitedAgentId || "-"}`,
+    `issued: ${f.issuedAt}`,
+  ].join("\n");
+}
+
+/** Count one signed post for this wallet today; false once over the limit. Also burns the signature. */
+export async function takeApiPost(wallet: string, signature: string, now = new Date()): Promise<"ok" | "limit" | "replay" | "error"> {
+  const sig = await sha256Hex(signature.toLowerCase());
+  const seen = { replay: false };
+  const used = await kvMutate<boolean>(`jobs:postsig:${sig}`, false, (cur) => { if (cur) { seen.replay = true; return null; } return true; }, 900);
+  if (seen.replay) return "replay";
+  if (used !== "ok") return "error";
+  const cap = { over: false };
+  const day = now.toISOString().slice(0, 10);
+  const r = await kvMutate<number>(`jobs:apiposts:${wallet}:${day}`, 0, (n) => { if (n >= API_POSTS_PER_DAY) { cap.over = true; return null; } return n + 1; }, 2 * 86400);
+  if (cap.over) return "limit";
+  return r === "ok" ? "ok" : "error";
 }
 
 /** Open jobs as an agent should see them: what to do, for how much, where to deliver. */

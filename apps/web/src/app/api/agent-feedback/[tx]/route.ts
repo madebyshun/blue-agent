@@ -9,6 +9,7 @@ import { NextResponse } from "next/server";
 import { findMcpReceipt } from "@/lib/mcp-receipts";
 import { BLUE_AGENT_ID, ERC8004_CHAIN_ID, ERC8004_IDENTITY } from "@/lib/erc8004";
 import { X402_PAY_TO } from "@/lib/x402-payee";
+import { readFeedbackFile } from "@/lib/agent-feedback";
 
 export const runtime = "nodejs";
 export const maxDuration = 10;
@@ -17,6 +18,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ tx: str
   const { tx } = await params;
   const headers = { "Access-Control-Allow-Origin": "*" };
   if (!/^0x[0-9a-fA-F]{64}$/.test(tx)) return NextResponse.json({ error: "not a tx hash" }, { status: 400, headers });
+  // A paid job unlock Blue wrote reputation feedback for (lib/agent-feedback.ts).
+  const job = await readFeedbackFile(tx);
+  if (job) return NextResponse.json(job, { headers: { ...headers, "Cache-Control": "public, max-age=3600" } });
   const r = await findMcpReceipt(tx);
   if (r === undefined) return NextResponse.json({ error: "receipts unreadable, try again" }, { status: 503, headers });
   if (!r || r.outcome !== "settled") return NextResponse.json({ error: "no settled Blue Agent call with this tx" }, { status: 404, headers });

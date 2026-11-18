@@ -41,6 +41,10 @@
       "schedule": "7,37 * * * *"
     },
     {
+      "path": "/api/cron/agent-feedback",
+      "schedule": "21,51 * * * *"
+    },
+    {
       "path": "/api/cron/x-drafts",
       "schedule": "0 0,6,13 * * *"
     },
