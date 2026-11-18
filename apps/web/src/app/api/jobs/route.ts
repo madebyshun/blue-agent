@@ -3,7 +3,8 @@
  * as the signed-in wallet (the Blue Chat SIWE session: cookie, or the
  * x-blue-session header for agents and scripts).
  */
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse, after, type NextRequest } from "next/server";
+import { notifyNewJob } from "@/lib/job-webhooks";
 import { resolveActingWallet, actingWalletRefusal } from "@/lib/acting-wallet";
 import { parseBudget } from "../../../../../../packages/core/src/workers";
 import { LIMITS, clean, createJob, inviteSpec, jobProblem, listJobs, publicJob, stockJobSpec } from "@/lib/jobs";
@@ -35,5 +36,7 @@ export async function POST(req: NextRequest) {
   if (invite && typeof invite === "object") return NextResponse.json({ error: invite.refusal }, { status: 400 });
   const job = await createJob(who.wallet, title, brief, Math.round(budgetUsd * 1e6), spec, invite);
   if (typeof job === "string") return NextResponse.json({ error: job }, { status: 429 });
-  return NextResponse.json({ job: publicJob(job) }, { status: 201 });
+  const pj = publicJob(job);
+  after(() => notifyNewJob(pj).catch(() => undefined));
+  return NextResponse.json({ job: pj }, { status: 201 });
 }
