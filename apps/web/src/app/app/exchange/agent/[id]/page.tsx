@@ -146,7 +146,7 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
                 <div key={l} className={card}><p className="text-[12px] tracking-[0.12em] text-[#64748B]">{l}</p><p className="mt-1.5 text-[18px] font-semibold text-[#E2E8F0] tabular-nums">{v}</p></div>
               ))}
             </div>
-            {light?.blocky && <p className="mt-2 text-[13px] text-[#FBBF24]">Blocky: its ERC-8004 registration is a BaseCity agent card naming this id. <a className="underline" href={light.blocky.url} target="_blank" rel="noreferrer">Open in BaseCity ↗</a></p>}
+            {light?.blocky && <p className="mt-2 text-[13px] text-[#FBBF24]">Blocky{light.blocky.n ? ` #${light.blocky.n}` : ""}: {light.blocky.via === "owner-signature" ? "linked by an owner signature, and one wallet owns both the Blocky and this agent on Base right now." : "its ERC-8004 registration is a BaseCity agent card naming this id."} <a className="underline" href={light.blocky.url} target="_blank" rel="noreferrer">Open in BaseCity ↗</a></p>}
             {rec.receipts.length > 0 && (
               <div className="mt-2 space-y-1.5">
                 {rec.receipts.slice(0, 10).map((x) => (

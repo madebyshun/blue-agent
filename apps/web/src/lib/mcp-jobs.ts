@@ -17,7 +17,7 @@
  */
 import { POST as postJob } from "@/app/api/jobs/route";
 import { LIMITS, clean, inviteSpec, jobPostMessage, jobProblem, stockJobSpec, INVITE_MS } from "@/lib/jobs";
-import { readAgentCard } from "@/lib/agent-ledger";
+import { readAgentCard, fetchBlockyCard, ownerProofHolds } from "@/lib/agent-ledger";
 import { parseBudget } from "../../../../packages/core/src/workers";
 
 const CARD = (n: string) => `https://www.basecity.space/api/agent-card?blocky=${n}`;
@@ -38,9 +38,14 @@ export async function resolveBlocky(raw: unknown): Promise<{ agentId: string; ca
     agentId = id != null && /^\d{1,12}$/.test(String(id)) ? String(id) : null;
   } catch { /* falls through */ }
   if (!agentId) return `Could not read Blocky #${n}'s agent card; pass invitedAgentId instead.`;
+  // Verified either way: (a) the agent's on-chain tokenURI is this Blocky's
+  // card, or (b) the card's owner signature links them and the same wallet
+  // owns both tokens on chain right now (lib/agent-ledger ownerProofHolds).
   const a = await readAgentCard(agentId);
-  if (!a?.blocky || !new RegExp(`[?&]blocky=${n}(&|$)`).test(a.uri)) {
-    return `Blocky #${n}'s card names agent #${agentId}, but that agent's on-chain tokenURI does not point at the card, so the link is not verified. Pass invitedAgentId: "${agentId}" if you trust it, or ask its owner to set the tokenURI to ${CARD(n)}&agent=${agentId}.`;
+  const viaUri = !!a?.blocky && a.blocky.via === "onchain-tokenURI" && new RegExp(`[?&]blocky=${n}(&|$)`).test(a.uri);
+  const viaSig = !viaUri && (await ownerProofHolds(await fetchBlockyCard(n), n, agentId));
+  if (!viaUri && !viaSig) {
+    return `Blocky #${n}'s card names agent #${agentId}, but the link is not verified: neither the agent's on-chain tokenURI points at the card, nor does a valid owner signature link them with the same wallet owning both. Pass invitedAgentId: "${agentId}" if you trust it, or link them on BaseCity.`;
   }
   return { agentId, card: `${CARD(n)}&agent=${agentId}` };
 }
