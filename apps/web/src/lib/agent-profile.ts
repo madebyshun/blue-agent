@@ -13,6 +13,7 @@
  * unreadable; a coin with no pair has no price, not a guessed one.
  */
 import { createPublicClient, http, parseAbiItem, type Address } from "viem";
+import { unstable_cache } from "next/cache";
 import { base } from "viem/chains";
 import { ERC8004_ABI, ERC8004_IDENTITY, readAgentReputation, type Reputation } from "@/lib/erc8004";
 import { QUADRA_FACTORY_V3, REVENUE_SHARE_DEPLOYER, REVENUE_SHARE_DEPLOY_BLOCK } from "@/lib/agent-coin";
@@ -67,10 +68,9 @@ async function readRegistration(uri: string): Promise<{ reg: Registration | null
   }
 }
 
-export async function readAgentProfile(id: string): Promise<AgentProfile | null> {
+export async function readAgentProfile(id: string, opts: { coins?: boolean } = {}): Promise<AgentProfile | null> {
   if (!/^\d{1,12}$/.test(id)) return null;
   const c = createPublicClient({ chain: base, transport: http(process.env.BASE_RPC_URL || "https://mainnet.base.org") });
-  const logs = createPublicClient({ chain: base, transport: http(process.env.HUB_RPC_URL || "https://base-rpc.publicnode.com") });
   const agentId = BigInt(id);
   let owner: string;
   try { owner = lc(await c.readContract({ address: ERC8004_IDENTITY, abi: ERC8004_ABI, functionName: "ownerOf", args: [agentId] })); }
@@ -85,6 +85,15 @@ export async function readAgentProfile(id: string): Promise<AgentProfile | null>
   const regPay = typeof reg?.payTo === "string" && /^0x[0-9a-fA-F]{40}$/.test(reg.payTo) ? lc(reg.payTo) : null;
   const payTo = regPay ?? agentWallet ?? owner;
 
+  // Coins need log scans from the launchpad deploy blocks (~40s measured
+  // 2026-11-18), so the profile page streams them separately (readAgentCoins).
+  const coins = opts.coins === false ? null : await readAgentCoins(owner, agentWallet);
+
+  return { id, owner, agentWallet, uri, reg, regError: error, payTo, reputation, coins };
+}
+
+async function scanCoins(owner: string, agentWallet: string | null): Promise<AgentCoin[] | null> {
+  const logs = createPublicClient({ chain: base, transport: http(process.env.HUB_RPC_URL || "https://base-rpc.publicnode.com") });
   let coins: AgentCoin[] | null = null;
   try {
     const who = [...new Set([owner, agentWallet].filter(Boolean))] as Address[];
@@ -98,6 +107,11 @@ export async function readAgentProfile(id: string): Promise<AgentProfile | null>
     for (const l of shared) byToken.set(lc(l.args.token!), { token: lc(l.args.token!), via: "shared", share: lc(l.args.share!), agentBps: Number(l.args.agentBps), market: null });
     coins = await Promise.all([...byToken.values()].slice(0, 6).map(async (k) => ({ ...k, market: await getTokenMarket(k.token).catch(() => null) })));
   } catch { coins = null; }
+  return coins;
+}
 
-  return { id, owner, agentWallet, uri, reg, regError: error, payTo, reputation, coins };
+const cachedCoins = unstable_cache(scanCoins, ["agent-coins:v1"], { revalidate: 600 });
+/** An agent's coins on the launchpad, cached 10 minutes (the scan is slow). */
+export async function readAgentCoins(owner: string, agentWallet: string | null): Promise<AgentCoin[] | null> {
+  try { return await cachedCoins(owner, agentWallet); } catch { return scanCoins(owner, agentWallet); }
 }

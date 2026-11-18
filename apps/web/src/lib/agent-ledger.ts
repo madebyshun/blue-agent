@@ -19,6 +19,8 @@ import { base } from "viem/chains";
 import { kv, kvGetProbe, kvMutate } from "@/lib/kv";
 import { ERC8004_ABI, ERC8004_IDENTITY } from "@/lib/erc8004";
 import { listJobs, type Job } from "@/lib/jobs";
+import { TEAM_WALLETS } from "@/lib/mcp-receipts";
+import { unstable_cache } from "next/cache";
 
 export interface LedgerEntry {
   jobId: string; did: string; title: string; skill: string | null; ticker: string | null;
@@ -111,7 +113,9 @@ export interface AgentRecord {
 
 /** Totals for an agent. `self` = its owner and payTo wallets. */
 export async function agentRecord(all: LedgerEntry[], self: string[]): Promise<AgentRecord> {
-  const mine = new Set(self.map(lc));
+  // Blue Agent team / test wallets are not outside demand (BaseCity note,
+  // 2026-11-18: ShunTr's first Hire now test was 0x00fd… → 0x92c0…).
+  const mine = new Set([...self.map(lc), ...TEAM_WALLETS]);
   // Instant calls are recorded only after their receipt verified; kept out of
   // job totals and counted on their own (self-paid excluded the same way).
   const instant = all.filter((e) => e.kind === "instant" && e.unlock && !mine.has(lc(e.unlock.payer)) && lc(e.unlock.payer) !== lc(e.payTo));
@@ -218,7 +222,17 @@ async function linkedBlockies(owner: string, agentId: string): Promise<string[]>
   } catch { return []; }
 }
 
+/**
+ * readAgentCard, cached 5 minutes: ~4s of RPC + card fetch per agent
+ * (measured 2026-11-18), and /agents reads up to 160 of them. A Blocky that
+ * changes hands keeps its badge at most 5 minutes longer.
+ */
+const cachedCard = unstable_cache((id: string) => readAgentCardUncached(id), ["agent-card:v1"], { revalidate: 300 });
 export async function readAgentCard(id: string): Promise<AgentCard | null> {
+  try { return await cachedCard(id); } catch { return readAgentCardUncached(id); }
+}
+
+async function readAgentCardUncached(id: string): Promise<AgentCard | null> {
   if (!/^\d{1,12}$/.test(id)) return null;
   const c = client();
   let owner: string;

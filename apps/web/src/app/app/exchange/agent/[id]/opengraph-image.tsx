@@ -10,7 +10,7 @@ export const alt = "An agent on Blue Agent Exchange";
 // Identity only: name, id, image. Earnings move daily, so they are not drawn.
 export default async function Image({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const p = await readAgentProfile(id).catch(() => null);
+  const p = await readAgentProfile(id, { coins: false }).catch(() => null);
   const name = p?.reg?.name?.trim() || `Agent #${id}`;
   const image = p?.reg?.image && /^https:\/\//.test(p.reg.image) ? p.reg.image : null;
   return renderCard({

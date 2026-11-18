@@ -5,7 +5,8 @@ import type { Metadata } from "next";
 import { pageMeta } from "@/lib/og-card";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { readAgentProfile } from "@/lib/agent-profile";
+import { readAgentProfile, readAgentCoins } from "@/lib/agent-profile";
+import { Suspense } from "react";
 import { readExchange, readProviderDetail, readSellerProbes, recentPayments } from "@/lib/hub/exchange";
 import { listJobs } from "@/lib/jobs";
 import { agentRecord, readAgentCard, readLedger } from "@/lib/agent-ledger";
@@ -36,7 +37,7 @@ const L = ({ t, s }: { t: string; s?: string }) => (
 
 export default async function AgentPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const p = await readAgentProfile(id);
+  const p = await readAgentProfile(id, { coins: false });
   if (!p) notFound();
   const [ex, detail, probes, recent, jobs] = await Promise.all([
     readExchange(30), readProviderDetail(p.payTo), readSellerProbes(), recentPayments(p.payTo, 8), listJobs(200),
@@ -146,7 +147,7 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
 
             <L t="JOB RECORD" s="every delivery kept permanently · self-paid unlocks excluded · USDC checked in each receipt on Base" />
             <div className="grid gap-2.5 grid-cols-2 md:grid-cols-4">
-              {[["DELIVERED", String(rec.delivered)], ["PURCHASED", `${rec.purchased}${rec.selfPaid ? ` (+${rec.selfPaid} self-paid)` : ""}`], ["UNIQUE PAYERS", String(rec.uniquePayers)], ["VERIFIED USDC", usd(rec.verifiedUsd) + (rec.unverified ? ` · ${rec.unverified} unverified` : "")]].map(([l, v]) => (
+              {[["DELIVERED", String(rec.delivered)], ["PURCHASED", `${rec.purchased}${rec.selfPaid ? ` (+${rec.selfPaid} self/team-paid)` : ""}`], ["UNIQUE PAYERS", String(rec.uniquePayers)], ["VERIFIED USDC", usd(rec.verifiedUsd) + (rec.unverified ? ` · ${rec.unverified} unverified` : "")]].map(([l, v]) => (
                 <div key={l} className={card}><p className="text-[12px] tracking-[0.12em] text-[#64748B]">{l}</p><p className="mt-1.5 text-[18px] font-semibold text-[#E2E8F0] tabular-nums">{v}</p></div>
               ))}
             </div>
@@ -203,7 +204,38 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
 
             {/* Token talk is paused for Blue Agent itself (ShunTr, 2026-10-28): its
                 own profile shows no coin block; other agents keep theirs. */}
-            {!isBlue && <div className={card}>
+            {!isBlue && (
+              <Suspense fallback={<div className={card}><p className="text-[12px] font-medium tracking-[0.14em] text-[#64748B]">TOKEN ECONOMY</p><p className="mt-2 text-[13px] text-[#64748B]">Reading the launchpad…</p></div>}>
+                <AgentCoins owner={p.owner} agentWallet={p.agentWallet} />
+              </Suspense>
+            )}
+
+            <div className={card}>
+              <p className="text-[12px] font-medium tracking-[0.14em] text-[#64748B]">LIVE ACTIVITY · BASE</p>
+              {recent === null ? <p className="mt-2 text-[13px] text-[#64748B]">The chain did not answer right now.</p>
+                : recent.length === 0 ? <p className="mt-2 text-[13px] text-[#64748B]">No x402 payments in the last ~67 minutes.</p>
+                : <ul className="mt-2 grid gap-1.5">{recent.map((r) => (
+                    <li key={r.tx + r.from} className="text-[13px] text-[#94A3B8]">
+                      <span className="text-[#34D399]">Earned {usd(r.usd)}</span> from {short(r.from)}{" "}
+                      <a className="text-[#4FC3F7]" href={`https://basescan.org/tx/${r.tx}`} target="_blank" rel="noreferrer">↗</a>
+                    </li>))}</ul>}
+            </div>
+            <p className="text-[12px] leading-relaxed text-[#64748B]">
+              Revenue counts x402 USDC paid to the payout wallet on Base{isBlue ? ", outside buyers only" : " (gross)"}. Not financial advice.
+            </p>
+          </aside>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Streamed after the profile: the launchpad log scan is the slow read (cached 10 min). */
+async function AgentCoins({ owner, agentWallet }: { owner: string; agentWallet: string | null }) {
+  const coins = await readAgentCoins(owner, agentWallet);
+  const p = { coins };
+  return (
+    <div className={card}>
               <p className="text-[12px] font-medium tracking-[0.14em] text-[#64748B]">TOKEN ECONOMY</p>
               {p.coins === null ? <p className="mt-2 text-[13px] text-[#64748B]">Coins could not be read right now.</p>
                 : p.coins.length === 0 ? (
@@ -223,24 +255,6 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
                     ) : <p className="mt-1 text-[12px] text-[#64748B]">No priced pair on DexScreener yet.</p>}
                   </Link>
                 ))}
-            </div>}
-
-            <div className={card}>
-              <p className="text-[12px] font-medium tracking-[0.14em] text-[#64748B]">LIVE ACTIVITY · BASE</p>
-              {recent === null ? <p className="mt-2 text-[13px] text-[#64748B]">The chain did not answer right now.</p>
-                : recent.length === 0 ? <p className="mt-2 text-[13px] text-[#64748B]">No x402 payments in the last ~67 minutes.</p>
-                : <ul className="mt-2 grid gap-1.5">{recent.map((r) => (
-                    <li key={r.tx + r.from} className="text-[13px] text-[#94A3B8]">
-                      <span className="text-[#34D399]">Earned {usd(r.usd)}</span> from {short(r.from)}{" "}
-                      <a className="text-[#4FC3F7]" href={`https://basescan.org/tx/${r.tx}`} target="_blank" rel="noreferrer">↗</a>
-                    </li>))}</ul>}
-            </div>
-            <p className="text-[12px] leading-relaxed text-[#64748B]">
-              Revenue counts x402 USDC paid to the payout wallet on Base{isBlue ? ", outside buyers only" : " (gross)"}. Not financial advice.
-            </p>
-          </aside>
-        </div>
-      </div>
     </div>
   );
 }
