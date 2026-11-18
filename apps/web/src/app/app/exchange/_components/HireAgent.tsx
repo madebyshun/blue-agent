@@ -23,14 +23,15 @@ type Phase =
   | { k: "free"; body: unknown }
   | { k: "paying" }
   | { k: "done"; body: unknown; tx: string | null; status: number }
-  | { k: "error"; msg: string; signed?: boolean };
+  | { k: "error"; msg: string; signed?: boolean; candidates?: { token: string; liquidityUsd: number | null }[] };
 
 const svcName = (s: ResourceSample) => s.name ?? s.url.replace(/^https?:\/\/[^/]+/, "").split("/").filter(Boolean).slice(-2).join(" ").replace(/[-_]/g, " ") ?? s.url;
 const price = (s: ResourceSample) => (s.priceUsd === null ? "price on request" : `$${s.priceUsd} per task`);
 /** BaseCity Blocky services: the fields their catalog schemas use, checked before any call. */
 const BLOCKY_X402 = "https://www.basecity.space/api/x402";
 const FIELD_RULES: Record<string, [RegExp, string]> = {
-  token: [/^0x[0-9a-fA-F]{40}$/, "a 0x token address on Base"],
+  // BaseCity resolves a symbol on Base (12ac44d); an ambiguous one comes back with candidates to pick.
+  token: [/^(0x[0-9a-fA-F]{40}|\$?[A-Za-z0-9.]{1,12})$/, "a 0x token address on Base, or its symbol"],
   address: [/^0x[0-9a-fA-F]{40}$/, "a 0x address on Base"],
   wallet: [/^0x[0-9a-fA-F]{40}$/, "a 0x wallet address on Base"],
   tx: [/^0x[0-9a-fA-F]{64}$/, "a 0x transaction hash (64 hex)"],
@@ -47,6 +48,20 @@ function inputProblem(url: string, input: Record<string, unknown>): string | nul
   }
   return null;
 }
+/**
+ * BaseCity's ambiguous_token 400 (2026-11-19): a symbol matching several tokens
+ * on Base comes back with candidates[] {token, pool, liquidityUsd}. Only
+ * well-formed addresses are offered, most liquid first; the buyer picks one.
+ */
+function tokenCandidates(body: unknown): { token: string; liquidityUsd: number | null }[] {
+  const c = (body as { candidates?: unknown } | null)?.candidates;
+  if (!Array.isArray(c)) return [];
+  return c.map((x) => x as { token?: unknown; liquidityUsd?: unknown })
+    .filter((x) => typeof x.token === "string" && /^0x[0-9a-fA-F]{40}$/.test(x.token))
+    .map((x) => ({ token: x.token as string, liquidityUsd: typeof x.liquidityUsd === "number" ? x.liquidityUsd : null }))
+    .sort((a, b) => (b.liquidityUsd ?? 0) - (a.liquidityUsd ?? 0)).slice(0, 5);
+}
+
 /** A seller's own 4xx explanation, when it sent one as JSON {message|error}. */
 function sellerMessage(body: unknown): string | null {
   const b = body as { message?: unknown; error?: unknown } | null;
@@ -83,7 +98,7 @@ export default function HireAgent({ payTo, name, services, blurb }: { payTo: str
     setPh({ k: "quoting" });
     const { http, d } = await call();
     if (http !== 200) return setPh({ k: "error", msg: d.error ?? `HTTP ${http}` });
-    if (d.status !== 402) return d.status && d.status < 300 ? setPh({ k: "free", body: d.body }) : setPh({ k: "error", msg: sellerMessage(d.body) ? `The seller refused the input: ${sellerMessage(d.body)}` : `The seller answered HTTP ${d.status} without a price.` });
+    if (d.status !== 402) return d.status && d.status < 300 ? setPh({ k: "free", body: d.body }) : setPh({ k: "error", msg: sellerMessage(d.body) ? `The seller refused the input: ${sellerMessage(d.body)}` : `The seller answered HTTP ${d.status} without a price.`, candidates: tokenCandidates(d.body) });
     const v = Number(d.quote?.x402Version ?? 2);
     const q = (d.quote?.accepts ?? []).map((a) => toQuote(a, v)).find((x): x is Quote => !!x);
     if (!q) return setPh({ k: "error", msg: "The seller does not take USDC on Base for this service." });
@@ -173,6 +188,17 @@ export default function HireAgent({ payTo, name, services, blurb }: { payTo: str
                 <p className="text-[13px] text-[#F87171] whitespace-pre-line">
                   {ph.msg}{ph.signed ? "\n\nYour wallet signed an authorization and it was sent to the seller. Whether USDC moved is decided by the seller's facilitator: check your wallet on Basescan before retrying, or you may pay twice." : ""}
                 </p>
+              )}
+              {ph.k === "error" && ph.candidates && ph.candidates.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <span className="text-[12px] text-[#94A3B8] w-full">Several tokens on Base use that symbol. Pick the contract:</span>
+                  {ph.candidates.map((c) => (
+                    <button key={c.token} type="button" onClick={() => { setJson(JSON.stringify({ ...(parsed ?? {}), token: c.token }, null, 2)); setPh({ k: "idle" }); }}
+                      className="text-[12px] text-[#4FC3F7] border border-[#4FC3F7]/30 rounded-[7px] px-2 py-1 hover:bg-[#4FC3F7]/10">
+                      {short(c.token)}{c.liquidityUsd != null ? ` · liq ${usd(Math.round(c.liquidityUsd * 1e6))}` : ""}
+                    </button>
+                  ))}
+                </div>
               )}
               {(ph.k === "done" || ph.k === "free") && (
                 <div>
