@@ -111,7 +111,7 @@ export async function POST(req: NextRequest) {
           const link = await resolveBlocky(blocky.n);
           if (typeof link === "string") return;
           const { recordLedger, verifyUnlock } = await import("@/lib/agent-ledger");
-          const e = { jobId: "instant", did: tx, title: `${blocky.tool} via Blocky #${blocky.n}`, skill: blocky.tool === "nav-premium" ? "stock-nav-premium" : "stock-after-hours-volume", ticker: typeof input.ticker === "string" ? input.ticker.toUpperCase().slice(0, 8) : null, at: new Date().toISOString(), priceUnits: units, payTo, kind: "instant" as const, unlock: { tx, payer, at: new Date().toISOString() } };
+          const e = { jobId: "instant", did: tx, title: `${blocky.tool} via Blocky #${blocky.n}`, skill: `stock-${blocky.tool}`, ticker: typeof input.ticker === "string" ? input.ticker.toUpperCase().slice(0, 8) : null, at: new Date().toISOString(), priceUnits: units, payTo, kind: "instant" as const, unlock: { tx, payer, at: new Date().toISOString() } };
           if (await verifyUnlock(e)) await recordLedger(link.agentId, e);
         });
       }

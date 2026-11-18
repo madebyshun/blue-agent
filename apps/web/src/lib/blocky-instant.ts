@@ -9,7 +9,7 @@
  *
  * Rules Blue enforces itself:
  *  - only per-Blocky URLs, exactly
- *    https://www.basecity.space/api/x402?tool=<nav-premium|after-hours-volume>&blocky=<n>
+ *    https://www.basecity.space/api/x402?tool=<nav-premium|after-hours-volume|weekend-gap>&blocky=<n>
  *    (BaseCity resolves "any" to an <n> before quoting; Blue never relays "any");
  *  - the payTo the buyer signs to must equal ownerOf(n) on the Blockies NFT,
  *    read on chain at quote time (/api/hire), and the browser's quote check
@@ -27,6 +27,9 @@ export const BLOCKY_X402 = "https://www.basecity.space/api/x402";
 /** Instant tools and the job skill each one replaces. Prices as BaseCity's catalog lists them (2026-11-18). */
 export const BLOCKY_TOOLS = [
   { id: "nav-premium", skill: "stock-nav-premium", priceUsd: 0.02, description: "How far a tokenized stock on Base trades from its Chainlink NAV, pool and oracle read at one block. Answered by a BaseCity Blocky (third-party data)." },
+  // weekend-gap (BaseCity, 2026-11-18): built on Blue Agent's FREE weekend
+  // scorecard; answers 422 insufficient_data on weekdays and charges nothing.
+  { id: "weekend-gap", skill: "stock-weekend-gap", priceUsd: 0.01, description: "A stock token's weekend gap on Base: Friday close vs the weekend pool price. Answered by a BaseCity Blocky from Blue Agent's free weekend scorecard (third-party; weekdays return insufficient data, uncharged)." },
   { id: "after-hours-volume", skill: "stock-after-hours-volume", priceUsd: 0.01, description: "A tokenized stock's on-chain volume on Base over 24h and 7d, and how much ran while NYSE was shut. Answered by a BaseCity Blocky (third-party data)." },
 ] as const;
 
