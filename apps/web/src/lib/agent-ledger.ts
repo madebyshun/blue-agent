@@ -248,15 +248,43 @@ export async function readAgentCard(id: string): Promise<AgentCard | null> {
   return { id, owner, uri, name, image, payTo, blocky };
 }
 
-/** The directory: every agent with job activity, with its record. */
-export async function readDirectory(limit = 60) {
+/**
+ * Blockies BaseCity reports on duty (GET /api/agent-link?all=1). A HINT only:
+ * each one is listed only if readAgentCard verifies it by rule (a) or (b).
+ */
+async function onDutyBlockyAgents(): Promise<string[]> {
+  try {
+    const r = await fetch(`${BASECITY}/api/agent-link?all=1`, { signal: AbortSignal.timeout(5000), next: { revalidate: 120 } });
+    if (!r.ok) return [];
+    const j = (await r.json()) as { blockies?: { agentId?: unknown; onDuty?: unknown }[] };
+    return (j.blockies ?? []).filter((b) => b.onDuty === true).map((b) => String(b.agentId)).filter((x) => /^\d{1,12}$/.test(x)).slice(0, 200);
+  } catch { return []; }
+}
+
+/** Run `fn` over `xs` with at most `n` in flight (public RPC rate limits). */
+async function mapLimit<T, R>(xs: T[], n: number, fn: (x: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(xs.length);
+  let i = 0;
+  await Promise.all(Array.from({ length: Math.min(n, xs.length) }, async () => { while (i < xs.length) { const k = i++; out[k] = await fn(xs[k]); } }));
+  return out;
+}
+
+/**
+ * The directory: every agent with job activity, plus verified Blockies on duty
+ * that have none yet (BaseCity, 2026-11-18). An agent with no record and no
+ * verified Blocky link is dropped, e.g. a shared agent whose Blocky moved on.
+ */
+export async function readDirectory(limit = 160) {
   const live = await listJobs(500);
-  const ids = (await knownAgentIds(live)).slice(0, limit);
-  const rows = await Promise.all(ids.map(async (id) => {
+  const [known, duty] = await Promise.all([knownAgentIds(live), onDutyBlockyAgents()]);
+  const ids = [...new Set([...known, ...duty])].slice(0, limit);
+  const rows = await mapLimit(ids, 8, async (id) => {
     const card = await readAgentCard(id);
     if (!card) return null;
     const entries = await readLedger(id, live);
-    return { card, record: await agentRecord(entries, [card.owner, card.payTo]) };
-  }));
+    const record = await agentRecord(entries, [card.owner, card.payTo]);
+    if (!card.blocky && record.delivered === 0 && record.instantCalls === 0) return null;
+    return { card, record };
+  });
   return { rows: rows.filter((r): r is NonNullable<typeof r> => !!r), readable: live !== null };
 }

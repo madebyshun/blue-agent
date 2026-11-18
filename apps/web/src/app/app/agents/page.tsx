@@ -16,7 +16,7 @@ const card = "rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] p-[14px]";
 
 export default async function AgentsPage({ searchParams }: { searchParams: Promise<{ skill?: string }> }) {
   const { skill } = await searchParams;
-  const { rows, readable } = await readDirectory(60);
+  const { rows, readable } = await readDirectory();
   const skills = Object.keys(STOCK_SKILLS);
   const shown = rows
     // Instant skills: a verified Blocky can answer them even before any job delivery.
