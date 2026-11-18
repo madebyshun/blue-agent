@@ -66,9 +66,26 @@ function pump() {
     job().finally(() => { running--; pump(); });
   }
 }
+// Base stock rows: one batched read of Blue's own hourly store
+// (/api/markets/sparks, lib/markets-sparks.ts) per page, so a page no longer
+// spends 25 GeckoTerminal calls. Rows it lacks fall back to pool candles.
+const batched = new Map<string, number[]>();
+const asked = new Set<string>();
+async function loadBatch(tokens: string[]): Promise<boolean> {
+  const want = tokens.map((t) => t.toLowerCase()).filter((t) => !asked.has(t));
+  if (!want.length) return false;
+  want.forEach((t) => asked.add(t));
+  const j = await fetch(`/api/markets/sparks?tokens=${want.join(",")}`).then((x) => x.json()).catch(() => null);
+  let any = false;
+  for (const [t, closes] of Object.entries((j?.sparks ?? {}) as Record<string, number[]>)) if (Array.isArray(closes) && closes.length > 1) { batched.set(t, closes); any = true; }
+  return any;
+}
+
 function Spark({ r, up }: { r: MarketRow; up: boolean | null }) {
   const key = `${r.chain}:${r.pool}:${r.side}`;
-  const [v, setV] = useState<number[] | null | undefined>(cache.get(key));
+  const pre = batched.get(r.token.toLowerCase());
+  const [v, setV] = useState<number[] | null | undefined>(pre ?? cache.get(key));
+  useEffect(() => { if (pre && v !== pre) setV(pre); }, [pre, v]);
   const [refused, setRefused] = useState(false);
   const el = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -76,16 +93,23 @@ function Spark({ r, up }: { r: MarketRow; up: boolean | null }) {
     const io = new IntersectionObserver(([e]) => {
       if (!e.isIntersecting) return;
       io.disconnect();
-      queue.push(async () => {
-        if (cache.has(key)) { setV(cache.get(key)); return; }
-        const j = await fetch(`/api/markets/candles?chain=${r.chain}&pool=${r.pool}&side=${r.side}&tf=1h`).then((x) => x.json()).catch(() => null);
-        // null = GeckoTerminal refused (rate limit): leave blank, never "no history".
-        const closes = Array.isArray(j?.candles) ? (j.candles as number[][]).slice(-24).map((c) => c[4]) : null;
-        if (closes) cache.set(key, closes);
-        setV(closes === null ? null : closes);
-        if (closes === null) setRefused(true);
-      });
-      pump();
+      // GeckoTerminal refuses bursts (keyless, ~30/min): retry a refused row
+      // after 20s, 40s, 80s instead of leaving it blank for good.
+      const attempt = (n: number) => {
+        queue.push(async () => {
+          if (batched.has(r.token.toLowerCase())) { setV(batched.get(r.token.toLowerCase())); return; }
+          if (cache.has(key)) { setV(cache.get(key)); return; }
+          const j = await fetch(`/api/markets/candles?chain=${r.chain}&pool=${r.pool}&side=${r.side}&tf=1h`).then((x) => x.json()).catch(() => null);
+          // null = GeckoTerminal refused (rate limit): blank for now, never "no history".
+          const closes = Array.isArray(j?.candles) ? (j.candles as number[][]).slice(-24).map((c) => c[4]) : null;
+          if (closes) { cache.set(key, closes); setV(closes); setRefused(false); return; }
+          setRefused(true);
+          if (n < 3) setTimeout(() => attempt(n + 1), 20_000 * 2 ** n);
+          else setV(null);
+        });
+        pump();
+      };
+      attempt(0);
     });
     io.observe(el.current);
     return () => io.disconnect();
@@ -142,6 +166,15 @@ export default function MarketsTable({ rows, readAt, stats }: { rows: MarketRow[
   }, [rows, kind, chain, q, sort]);
   const pages = Math.max(1, Math.ceil(shown.length / PAGE));
   const slice = shown.slice(page * PAGE, page * PAGE + PAGE);
+  // One batched sparkline read for this page's Base stock rows.
+  const [, bump] = useState(0);
+  const sliceTokens = slice.filter((r) => r.chain === "base" && (r.kind === "stock" || r.kind === "etf")).map((r) => r.token).join(",");
+  useEffect(() => {
+    if (!sliceTokens) return;
+    let live = true;
+    loadBatch(sliceTokens.split(",")).then((any) => { if (live && any) bump((x) => x + 1); });
+    return () => { live = false; };
+  }, [sliceTokens]);
   const trending = useMemo(() => [...rows].filter((r) => r.vol !== null && (chain === "all" || r.chain === chain)).sort((a, b) => (b.vol ?? 0) - (a.vol ?? 0)).slice(0, 16), [rows, chain]);
 
   // The stat cards follow the chain filter: one chain's numbers, or both added up with the split underneath.
