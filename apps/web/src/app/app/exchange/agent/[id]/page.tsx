@@ -60,7 +60,7 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
   const rec = await agentRecord(ledger, [p.owner, p.payTo]);
   // A verified Blocky sells instant answers paid straight to the Blocky's owner (lib/blocky-instant.ts).
   const blockyN = light?.blocky?.n ?? null;
-  const blockyPayTo = blockyN ? await blockyOwner(blockyN) : null;
+  const [blockyPayTo, blockySvcs] = blockyN ? await Promise.all([blockyOwner(blockyN), blockyServices(blockyN)]) : [null, []];
   const delivered = (jobs ?? []).flatMap((j) => j.deliveries.filter((d) => d.agentId === p.id).map((d) => ({ job: j, d })));
   const unlocked = delivered.filter((x) => x.d.unlock);
   const reg = p.reg;
@@ -151,10 +151,10 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
                 <div key={l} className={card}><p className="text-[12px] tracking-[0.12em] text-[#64748B]">{l}</p><p className="mt-1.5 text-[18px] font-semibold text-[#E2E8F0] tabular-nums">{v}</p></div>
               ))}
             </div>
-            {blockyN && blockyPayTo && (
+            {blockyN && blockyPayTo && blockySvcs.length > 0 && (
               <div id="hire" className="mt-3">
                 <p className="mb-2 text-[13px] text-[#94A3B8]">Hire now: Blocky #{blockyN} answers at once over x402, paid in USDC on Base straight to its owner ({blockyPayTo.slice(0, 6)}…{blockyPayTo.slice(-4)}). BaseCity settles only after a successful answer; the data is BaseCity&apos;s, not Blue Agent&apos;s.</p>
-                <HireAgent payTo={blockyPayTo} name={`Blocky #${blockyN}`} services={blockyServices(blockyN)} />
+                <HireAgent payTo={blockyPayTo} name={`Blocky #${blockyN}`} services={blockySvcs} />
               </div>
             )}
             {rec.instantCalls > 0 && <p className="mt-2 text-[13px] text-[#94A3B8]">Instant calls: {rec.instantCalls} paid by other wallets, {usd(rec.instantUsd)} verified on Base (kept apart from job deliveries).</p>}

@@ -5,6 +5,7 @@
 import Link from "next/link";
 import { pageMeta } from "@/lib/og-card";
 import { readDirectory } from "@/lib/agent-ledger";
+import { instantToolForSkill } from "@/lib/blocky-instant";
 import { STOCK_SKILLS } from "../../../../../../packages/core/src/workers";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +21,7 @@ export default async function AgentsPage({ searchParams }: { searchParams: Promi
   const skills = Object.keys(STOCK_SKILLS);
   const shown = rows
     // Instant skills: a verified Blocky can answer them even before any job delivery.
-    .filter((r) => !skill || r.record.skills.includes(skill) || (!!r.card.blocky?.n && ["stock-nav-premium", "stock-after-hours-volume", "stock-weekend-gap"].includes(skill)))
+    .filter((r) => !skill || r.record.skills.includes(skill) || (!!r.card.blocky?.n && !!instantToolForSkill(skill) && !!r.card.blocky.skills?.includes(instantToolForSkill(skill)!.id)))
     .sort((a, b) => b.record.verifiedUsd - a.record.verifiedUsd || b.record.delivered - a.record.delivered);
 
   return (
@@ -64,7 +65,7 @@ export default async function AgentsPage({ searchParams }: { searchParams: Promi
               {r.skills.length > 0 && <div className="flex flex-wrap gap-1">{r.skills.map((s) => <span key={s} className="text-[11px] text-[#94A3B8] border border-[#1A1A2E] rounded-[5px] px-[6px] py-[2px]">{s}</span>)}</div>}
               <div className="mt-auto flex gap-3 text-[13px]">
                 <Link href={`/exchange/agent/${a.id}`} className="text-[#4FC3F7]">Profile</Link>
-                {a.blocky?.n ? <Link href={`/exchange/agent/${a.id}#hire`} className="text-[#4FC3F7]">Hire now · from $0.01</Link> : null}
+                {a.blocky?.n ? <Link href={`/exchange/agent/${a.id}#hire`} className="text-[#4FC3F7]">Hire now</Link> : null}
                 <Link href={`/jobs?agent=${a.id}`} className="text-[#4FC3F7]">Post a job</Link>
                 {r.instantCalls > 0 && <span className="ml-auto text-[12px] text-[#64748B]">{r.instantCalls} instant</span>}
               </div>

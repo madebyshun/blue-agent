@@ -19,7 +19,7 @@
  * an open proxy. Answers are capped at 200 KB.
  */
 import { NextResponse, after, type NextRequest } from "next/server";
-import { blockyOwner, parseBlockyUrl, blockyServices } from "@/lib/blocky-instant";
+import { blockyOwner, parseBlockyUrl, blockyServices, skillForTool } from "@/lib/blocky-instant";
 import { readProviderDetail } from "@/lib/hub/exchange";
 import { readListing, recordHire } from "@/lib/hub/listings";
 import { blueHireServices } from "@/lib/hub/blue-services";
@@ -63,9 +63,9 @@ export async function POST(req: NextRequest) {
   // for an exact per-Blocky URL whose Blocky is owned, on chain right now, by
   // this payTo — so the buyer can only ever be quoted to the Blocky's owner.
   const blocky = !res ? parseBlockyUrl(url) : null;
-  const blockyRes = blocky && (await blockyOwner(blocky.n)) === payTo ? blockyServices(blocky.n).find((s) => s.url === url) : undefined;
+  const blockyRes = blocky && (await blockyOwner(blocky.n)) === payTo ? (await blockyServices(blocky.n)).find((s) => s.url === url) : undefined;
   const svc = res ?? blockyRes;
-  if (!svc || !/^https:\/\//.test(url)) return NextResponse.json({ error: blocky ? "That Blocky is not owned by this payTo on Base right now." : "That service is not in this seller's listing." }, { status: 404 });
+  if (!svc || !/^https:\/\//.test(url)) return NextResponse.json({ error: blocky ? "That Blocky does not sell this skill, or is not owned by this payTo on Base right now." : "That service is not in this seller's listing." }, { status: 404 });
 
   const method = svc.method === "GET" ? "GET" : "POST";
   const input = b.input && typeof b.input === "object" ? (b.input as Record<string, unknown>) : {};
@@ -111,7 +111,7 @@ export async function POST(req: NextRequest) {
           const link = await resolveBlocky(blocky.n);
           if (typeof link === "string") return;
           const { recordLedger, verifyUnlock } = await import("@/lib/agent-ledger");
-          const e = { jobId: "instant", did: tx, title: `${blocky.tool} via Blocky #${blocky.n}`, skill: `stock-${blocky.tool}`, ticker: typeof input.ticker === "string" ? input.ticker.toUpperCase().slice(0, 8) : null, at: new Date().toISOString(), priceUnits: units, payTo, kind: "instant" as const, unlock: { tx, payer, at: new Date().toISOString() } };
+          const e = { jobId: "instant", did: tx, title: `${blocky.tool} via Blocky #${blocky.n}`, skill: skillForTool(blocky.tool), ticker: typeof input.ticker === "string" ? input.ticker.toUpperCase().slice(0, 8) : null, at: new Date().toISOString(), priceUnits: units, payTo, kind: "instant" as const, unlock: { tx, payer, at: new Date().toISOString() } };
           if (await verifyUnlock(e)) await recordLedger(link.agentId, e);
         });
       }
