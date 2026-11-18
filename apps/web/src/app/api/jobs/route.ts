@@ -5,9 +5,11 @@
  */
 import { NextResponse, after, type NextRequest } from "next/server";
 import { notifyNewJob } from "@/lib/job-webhooks";
+import { createPublicClient, http } from "viem";
+import { base } from "viem/chains";
 import { resolveActingWallet, actingWalletRefusal } from "@/lib/acting-wallet";
 import { parseBudget } from "../../../../../../packages/core/src/workers";
-import { LIMITS, clean, createJob, inviteSpec, jobProblem, listJobs, publicJob, stockJobSpec } from "@/lib/jobs";
+import { DELIVERY_SIG_WINDOW_MS, LIMITS, clean, createJob, inviteSpec, jobPostMessage, jobProblem, takeApiPost, listJobs, publicJob, stockJobSpec } from "@/lib/jobs";
 
 export const runtime = "nodejs";
 export const maxDuration = 15;
@@ -21,10 +23,20 @@ export async function GET() {
   return NextResponse.json({ jobs: jobs.map(publicJob), chain: "base", chain_id: 8453 });
 }
 
+/**
+ * POST — as the signed-in wallet (SIWE), OR as an agent with no session:
+ * {signer, signature, issuedAt} over jobPostMessage() (lib/jobs.ts). Same
+ * validation either way; the signed path is also limited per wallet per day.
+ */
 export async function POST(req: NextRequest) {
-  const who = await resolveActingWallet(req);
-  if (who.status !== "ok") return actingWalletRefusal(who);
-  const b = (await req.json().catch(() => ({}))) as { title?: unknown; brief?: unknown; budgetUsd?: unknown; skill?: unknown; inputs?: { token?: unknown; ticker?: unknown }; invitedAgentId?: unknown };
+  const b = (await req.json().catch(() => ({}))) as { title?: unknown; brief?: unknown; budgetUsd?: unknown; skill?: unknown; inputs?: { token?: unknown; ticker?: unknown }; invitedAgentId?: unknown; signer?: unknown; signature?: unknown; issuedAt?: unknown };
+  const signed = typeof b.signature === "string" && typeof b.signer === "string";
+  let poster: string;
+  if (!signed) {
+    const who = await resolveActingWallet(req);
+    if (who.status !== "ok") return actingWalletRefusal(who);
+    poster = who.wallet;
+  } else poster = "";
   const title = clean(b.title, LIMITS.title);
   const brief = clean(b.brief, LIMITS.brief);
   const budgetUsd = typeof b.budgetUsd === "string" ? parseBudget(b.budgetUsd) : Number(b.budgetUsd);
@@ -34,7 +46,22 @@ export async function POST(req: NextRequest) {
   if (typeof spec === "string") return NextResponse.json({ error: spec }, { status: 400 });
   const invite = inviteSpec(b.invitedAgentId);
   if (invite && typeof invite === "object") return NextResponse.json({ error: invite.refusal }, { status: 400 });
-  const job = await createJob(who.wallet, title, brief, Math.round(budgetUsd * 1e6), spec, invite);
+  if (signed) {
+    const signer = String(b.signer), issuedAt = String(b.issuedAt ?? "");
+    if (!/^0x[0-9a-fA-F]{40}$/.test(signer)) return NextResponse.json({ error: "signer must be a 0x address." }, { status: 400 });
+    const t = Date.parse(issuedAt);
+    if (!Number.isFinite(t) || Math.abs(Date.now() - t) > DELIVERY_SIG_WINDOW_MS) return NextResponse.json({ error: "issuedAt must be an ISO time within 10 minutes of now." }, { status: 400 });
+    const message = await jobPostMessage({ title, brief, budgetUnits: Math.round(budgetUsd * 1e6), skill: spec?.skill ?? null, token: spec?.inputs.token ?? null, invitedAgentId: invite, issuedAt });
+    const c = createPublicClient({ chain: base, transport: http(process.env.BASE_RPC_URL || "https://mainnet.base.org") });
+    const ok = await c.verifyMessage({ address: signer as `0x${string}`, message, signature: String(b.signature) as `0x${string}` }).catch(() => false);
+    if (!ok) return NextResponse.json({ error: "Signature does not match the job. Sign jobPostMessage() exactly (see /llms.txt).", message }, { status: 401 });
+    poster = signer.toLowerCase();
+    const take = await takeApiPost(poster, String(b.signature));
+    if (take === "replay") return NextResponse.json({ error: "This signature already posted a job." }, { status: 409 });
+    if (take === "limit") return NextResponse.json({ error: "Signed posts are limited to 10 per wallet per UTC day." }, { status: 429 });
+    if (take === "error") return NextResponse.json({ error: "Could not check the posting limit right now; nothing was posted." }, { status: 503 });
+  }
+  const job = await createJob(poster, title, brief, Math.round(budgetUsd * 1e6), spec, invite);
   if (typeof job === "string") return NextResponse.json({ error: job }, { status: 429 });
   const pj = publicJob(job);
   after(() => notifyNewJob(pj).catch(() => undefined));

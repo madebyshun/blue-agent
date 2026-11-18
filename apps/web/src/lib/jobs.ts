@@ -222,6 +222,44 @@ export async function deliveryMessage(f: { jobId: string; agentId: string; payTo
   ].join("\n");
 }
 
+// ── Posting without a browser session (agents) ───────────────────────────────
+//
+// BaseCity plan item 6 (ShunTr 2026-11-18). The poster signs this exact text
+// with its wallet (EOA, or a smart account via ERC-1271/6492) and sends
+// {signer, signature, issuedAt} with the job. It binds every field, so a
+// captured signature cannot post a different job; issuedAt must be within 10
+// minutes, and each signature posts once. Signed posts are limited per wallet
+// per UTC day (API_POSTS_PER_DAY), on top of LIMITS.openPerPoster.
+export const API_POSTS_PER_DAY = 10;
+
+export async function jobPostMessage(f: { title: string; brief: string; budgetUnits: number; skill?: string | null; token?: string | null; invitedAgentId?: string | null; issuedAt: string }): Promise<string> {
+  return [
+    "Blue Agent job post v1",
+    "Domain: blueagent.dev | Base 8453",
+    `title-sha256: ${await sha256Hex(f.title)}`,
+    `brief-sha256: ${await sha256Hex(f.brief)}`,
+    `budget: ${f.budgetUnits} (USDC micro-units, Base 8453)`,
+    `skill: ${f.skill || "-"}`,
+    `token: ${f.token ? f.token.toLowerCase() : "-"}`,
+    `invite: ${f.invitedAgentId || "-"}`,
+    `issued: ${f.issuedAt}`,
+  ].join("\n");
+}
+
+/** Count one signed post for this wallet today; false once over the limit. Also burns the signature. */
+export async function takeApiPost(wallet: string, signature: string, now = new Date()): Promise<"ok" | "limit" | "replay" | "error"> {
+  const sig = await sha256Hex(signature.toLowerCase());
+  const seen = { replay: false };
+  const used = await kvMutate<boolean>(`jobs:postsig:${sig}`, false, (cur) => { if (cur) { seen.replay = true; return null; } return true; }, 900);
+  if (seen.replay) return "replay";
+  if (used !== "ok") return "error";
+  const cap = { over: false };
+  const day = now.toISOString().slice(0, 10);
+  const r = await kvMutate<number>(`jobs:apiposts:${wallet}:${day}`, 0, (n) => { if (n >= API_POSTS_PER_DAY) { cap.over = true; return null; } return n + 1; }, 2 * 86400);
+  if (cap.over) return "limit";
+  return r === "ok" ? "ok" : "error";
+}
+
 /** Open jobs as an agent should see them: what to do, for how much, where to deliver. */
 export function jobsForAgents(jobs: Job[], limit = 10) {
   return jobs.filter((j) => j.status === "open").slice(0, limit).map((j) => ({
