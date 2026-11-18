@@ -167,6 +167,7 @@ export const zh: Dict = {
     jobs: "任务",
     analytics: "分析",
     discovered: "已发现",
+    workers: "执行代理",
     sell_services: "出售服务",
     my_usage: "我的用量",
     following: "关注",

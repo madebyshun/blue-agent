@@ -203,7 +203,7 @@ const MODES: Mode[] = [
   {
     id: "agents",
     home: "/exchange",
-    prefixes: ["/exchange", "/jobs", "/services"],
+    prefixes: ["/exchange", "/jobs", "/services", "/agents"],
     groups: [
       {
         id: "group_exchange",
@@ -215,6 +215,8 @@ const MODES: Mode[] = [
           { id: "discovered", href: "/exchange/discovered", icon: IconDiscovered },
           { id: "services", href: "/services", icon: IconServices },
           { id: "jobs", href: "/jobs", icon: IconJobs },
+          // Workers (2026-11-18): ERC-8004 agents that do the jobs, incl. BaseCity Blockies.
+          { id: "workers", href: "/agents", icon: IconAgents },
           { id: "analytics", href: "/exchange/analytics", icon: IconAnalytics },
           { id: "create", href: "/exchange/create", icon: IconCreate, also: ["/exchange/sell"] },
           { id: "my_account", href: "/exchange/usage", icon: IconUsage, also: ["/exchange/following"] },

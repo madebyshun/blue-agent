@@ -108,6 +108,12 @@ export function servicesFrom(n: string, catalog: CatalogTool[], info: BlockyInfo
   return out;
 }
 
+/** BaseCity's tool catalog (id, guild, task, input schema), cached 2 minutes. */
+export async function readBlockyCatalog(): Promise<CatalogTool[]> {
+  const c = await getJson<{ tools?: CatalogTool[] }>(BLOCKY_X402);
+  return (c?.tools ?? []).filter((t) => TOOL_ID.test(t.id));
+}
+
 /** The services Blocky n sells right now, priced for that Blocky (BaseCity catalog + /api/x402?blocky=n). */
 export async function blockyServices(n: string): Promise<ResourceSample[]> {
   if (!/^\d{1,6}$/.test(n)) return [];

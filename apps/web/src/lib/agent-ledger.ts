@@ -141,7 +141,7 @@ export async function agentRecord(all: LedgerEntry[], self: string[]): Promise<A
 
 // ── identity, light: owner + registration, no log scans ─────────────────────
 
-export interface AgentCard { id: string; owner: string; uri: string; name: string; image: string | null; payTo: string; blocky: { url: string; via: "onchain-tokenURI" | "owner-signature"; n?: string; skills?: string[] } | null }
+export interface AgentCard { id: string; owner: string; uri: string; name: string; image: string | null; payTo: string; blocky: { url: string; via: "onchain-tokenURI" | "owner-signature"; n?: string; skills?: string[]; guild?: string; level?: number; prices?: Record<string, number> } | null }
 
 const BLOCKY_CARD = /^https:\/\/(www\.)?basecity\.space\/api\/agent-card\?/;
 
@@ -227,7 +227,7 @@ async function linkedBlockies(owner: string, agentId: string): Promise<string[]>
  * (measured 2026-11-18), and /agents reads up to 160 of them. A Blocky that
  * changes hands keeps its badge at most 5 minutes longer.
  */
-const cachedCard = unstable_cache((id: string) => readAgentCardUncached(id), ["agent-card:v1"], { revalidate: 300 });
+const cachedCard = unstable_cache((id: string) => readAgentCardUncached(id), ["agent-card:v2"], { revalidate: 300 });
 export async function readAgentCard(id: string): Promise<AgentCard | null> {
   try { return await cachedCard(id); } catch { return readAgentCardUncached(id); }
 }
@@ -263,8 +263,11 @@ async function readAgentCardUncached(id: string): Promise<AgentCard | null> {
   if (blocky?.n) {
     try {
       const r = await fetch(`${BASECITY}/api/x402?blocky=${blocky.n}`, { signal: AbortSignal.timeout(5000), next: { revalidate: 120 } });
-      const j = r.ok ? ((await r.json()) as { skills?: unknown }) : null;
-      if (Array.isArray(j?.skills)) blocky = { ...blocky, skills: j.skills.map(String).filter((x) => /^[a-z0-9-]{2,32}$/.test(x)) };
+      const j = r.ok ? ((await r.json()) as { skills?: unknown; guild?: unknown; level?: unknown; prices?: unknown }) : null;
+      if (Array.isArray(j?.skills)) {
+        const prices = j.prices && typeof j.prices === "object" ? Object.fromEntries(Object.entries(j.prices as Record<string, unknown>).filter(([k, v]) => /^[a-z0-9-]{2,32}$/.test(k) && typeof v === "number" && v > 0 && v <= 0.1)) as Record<string, number> : {};
+        blocky = { ...blocky, skills: j.skills.map(String).filter((x) => /^[a-z0-9-]{2,32}$/.test(x)), guild: typeof j.guild === "string" ? j.guild.slice(0, 20) : undefined, level: typeof j.level === "number" ? j.level : undefined, prices };
+      }
     } catch { /* skills unknown: filters fall back to job history */ }
   }
   return { id, owner, uri, name, image, payTo, blocky };

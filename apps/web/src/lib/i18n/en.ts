@@ -171,6 +171,7 @@ export const en = {
     jobs: "Jobs",
     analytics: "Analytics",
     discovered: "Discovered",
+    workers: "Workers",
     sell_services: "Sell services",
     my_usage: "My usage",
     following: "Following",
