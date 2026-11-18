@@ -116,7 +116,7 @@ export async function GET() {
   // delivering agent's wallet; Blue Agent takes no fee and holds nothing.
   const jobs = {
     board: "https://app.blueagent.dev/jobs",
-    post: { method: "POST", endpoint: `${BASE}/api/jobs`, auth: "SIWE session (cookie or x-blue-session)", body: "{title, brief, budgetUsd, skill?, inputs?: {token}, invitedAgentId?}" },
+    post: { method: "POST", endpoint: `${BASE}/api/jobs`, auth: "SIWE session, a signed jobPostMessage() (free), or X-PAYMENT for the posting fee", fee: { priceUsd: 0.02, priceUsdcUnits: 20_000, payTo: PAY_TO, refundable: false, note: "anti-spam; not escrow, budgets stay pay-on-unlock" }, spec: `${BASE}/api/jobs/openapi.json`, body: "{title, brief, budgetUsd, skill?, inputs?: {token}, invitedAgentId?}" },
     feed: `${BASE}/api/jobs/feed`,
     paymentMode: "pay-on-unlock",
     currency: "USDC", network: "eip155:8453",
