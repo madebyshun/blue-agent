@@ -9,6 +9,8 @@ import { ConnectButton } from "@/components/ConnectModal";
 import { useEnsureSession } from "@/hooks/useEnsureSession";
 import { sessionFetch } from "@/lib/session-client";
 import { COINBASE_BASE_STOCKS } from "@/lib/base-stocks/coinbase-list";
+import HireAgent from "../exchange/_components/HireAgent";
+import type { ResourceSample } from "@/lib/hub/exchange";
 import { STOCK_JOB_TEMPLATES, parseBudget } from "../../../../../../packages/core/src/workers";
 
 interface PubJob { id: string; title: string; brief: string; budgetUnits: number; poster: string; status: string; createdAt: string; deliveries: { id: string }[]; invitedAgentId?: string; inviteUntil?: string; contract?: { skill: string | null; inputs: { ticker: string } | null } }
@@ -34,6 +36,19 @@ export default function JobBoardClient() {
   // ERC-8004 agent. The server re-checks the id; only that agent may deliver
   // for 48h, then the job opens to everyone.
   const [invite, setInvite] = useState("");
+  // The invited agent's instant skills, when it is a verified Blocky (/api/agents/<id>/instant).
+  const [instant, setInstant] = useState<{ n: string; guild: string | null; skills: string[]; payTo: string | null; services: ResourceSample[] } | null>(null);
+  useEffect(() => {
+    setInstant(null);
+    if (!invite) return;
+    let live = true;
+    fetch(`/api/agents/${invite}/instant`).then((r) => (r.ok ? r.json() : null)).then((d) => {
+      if (live && d?.blocky) setInstant({ n: String(d.blocky.n), guild: d.blocky.guild ?? null, skills: d.blocky.skills ?? [], payTo: d.payTo ?? null, services: d.services ?? [] });
+    }).catch(() => undefined);
+    return () => { live = false; };
+  }, [invite]);
+  // Stock job types the invited Blocky cannot do are disabled (2026-11-19).
+  const blockyLacks = (skill: string) => !!instant && !instant.skills.includes(skill.replace(/^stock-/, ""));
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
     const agent = (p.get("agent") ?? "").trim().replace(/^#/, "");
@@ -124,6 +139,13 @@ export default function JobBoardClient() {
       {open && (
         <div className="mt-3 rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] p-[14px] grid gap-2.5">
           <p className="text-[12px] font-medium tracking-[0.14em] text-[#64748B]">POST A JOB</p>
+          {instant && instant.payTo && instant.services.length > 0 && (
+            <div className="rounded-lg border border-[#FBBF24]/30 bg-[#FBBF24]/[0.04] p-3 grid gap-2">
+              <p className="text-[13px] text-[#E2E8F0]">Get it now from Blocky #{instant.n}{instant.guild ? ` (${instant.guild} guild)` : ""}: an instant answer over x402, paid straight to its owner, no review. BaseCity settles only after a successful answer; the data is BaseCity&apos;s.</p>
+              <HireAgent payTo={instant.payTo} name={`Blocky #${instant.n}`} services={instant.services} />
+              <p className="text-[12px] text-[#64748B]">Need something it does not sell? Post the job below as free text instead.</p>
+            </div>
+          )}
           {invite && (
             <div className="flex items-center gap-2 flex-wrap rounded-lg border border-[#4FC3F7]/30 bg-[#4FC3F7]/[0.06] px-3 py-2 text-[13px] text-[#94A3B8]">
               <span>Direct hire for <Link href={`/exchange/agent/${invite}`} className="text-[#4FC3F7]">agent #{invite}</Link>: only it can deliver for 48 hours, then the job opens to every agent.</span>
@@ -133,7 +155,7 @@ export default function JobBoardClient() {
           <label className="grid gap-1 text-[13px] text-[#94A3B8]">Job type
             <select className={input} value={f.skill} onChange={(e) => setType(e.target.value)}>
               <option value="">Free text</option>
-              {STOCK_JOB_TEMPLATES.map((t) => <option key={t.skill} value={t.skill}>Stock: {t.title.replace(" for {TICKER} on Base", "").toLowerCase()}</option>)}
+              {STOCK_JOB_TEMPLATES.map((t) => <option key={t.skill} value={t.skill} disabled={blockyLacks(t.skill)}>Stock: {t.title.replace(" for {TICKER} on Base", "").toLowerCase()}{blockyLacks(t.skill) ? ` (Blocky #${instant?.n} doesn't do this)` : ""}</option>)}
             </select>
           </label>
           {f.skill && (
