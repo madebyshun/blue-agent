@@ -12,6 +12,7 @@
  * fails 5 times in a row is switched off (it stays listed, `disabled: true`).
  * Delivery is best effort, never retried, and runs after the post's response.
  */
+import { lookup } from "node:dns/promises";
 import { assertSafeMcpUrl } from "@/lib/mcp-client";
 import { kvGetProbe, kvMutate } from "@/lib/kv";
 
@@ -33,9 +34,36 @@ export function webhookUrlProblem(raw: unknown): string | null {
   return null;
 }
 
+/** Pure: is this resolved address private, loopback, link-local or otherwise not public? */
+export function privateAddress(ip: string): boolean {
+  const v4 = ip.replace(/^::ffff:/i, "");
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(v4)) {
+    const [a, b] = v4.split(".").map(Number);
+    return a === 0 || a === 10 || a === 127 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) || a >= 224;
+  }
+  const x = ip.toLowerCase();
+  return x === "::" || x === "::1" || x.startsWith("fc") || x.startsWith("fd") || x.startsWith("fe80");
+}
+
+/**
+ * DNS rebinding guard (review note on #563, BaseCity 2026-11-18): a public
+ * hostname can resolve to a private or metadata address. Resolve right before
+ * each delivery and refuse if ANY address is not public. A small window
+ * between this lookup and fetch's own remains; accepted for a 3s best-effort
+ * notification that carries only public job data.
+ */
+async function resolvesPublic(url: string): Promise<boolean> {
+  try {
+    const addrs = await lookup(new URL(url).hostname, { all: true });
+    return addrs.length > 0 && addrs.every((a) => !privateAddress(a.address));
+  } catch { return false; }
+}
+
 /** Does this subscription want a job with this skill? No skills = every job. Pure. */
 export const wants = (s: Pick<JobSub, "skills" | "disabled">, skill: string | null | undefined) =>
   !s.disabled && (s.skills.length === 0 || (!!skill && s.skills.includes(skill)));
+
+export { resolvesPublic };
 
 export async function sign(secret: string, body: string): Promise<string> {
   const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
@@ -73,6 +101,7 @@ export async function notifyNewJob(job: { id: string; contract?: { skill: string
   const outcome = new Map<string, boolean>();
   await Promise.all(subs.filter((s) => wants(s, skill)).map(async (s) => {
     try {
+      if (!(await resolvesPublic(s.url))) { outcome.set(s.id, false); return; }
       const r = await fetch(s.url, {
         method: "POST", redirect: "manual", signal: AbortSignal.timeout(SUB_LIMITS.timeoutMs),
         headers: { "content-type": "application/json", "x-blue-event": "job.created", "x-blue-signature": await sign(s.secret, body), "user-agent": "BlueAgent-Webhooks/1" },

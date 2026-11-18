@@ -160,7 +160,10 @@ export async function addDelivery(job: Job, d: Omit<Delivery, "id" | "at">, resu
     if (deliveryProblem(cur, { agent: d.agent, agentId: d.agentId, payTo: d.payTo, priceUsd: d.priceUnits / 1e6, preview: d.preview, result })) return null;
     return { ...cur, deliveries: [...cur.deliveries, delivery] };
   }, TTL);
-  return r === "ok" ? delivery : "Could not record the delivery right now.";
+  if (r !== "ok") return "Could not record the delivery right now.";
+  // Permanent per-agent record (lib/agent-ledger.ts), best effort.
+  await import("@/lib/agent-ledger").then((m) => m.recordLedger(d.agentId, m.entryOf(job, delivery))).catch(() => undefined);
+  return delivery;
 }
 
 export async function readResult(jobId: string, did: string): Promise<string | null> {
@@ -168,9 +171,13 @@ export async function readResult(jobId: string, did: string): Promise<string | n
 }
 
 export async function recordUnlock(jobId: string, did: string, unlock: NonNullable<Delivery["unlock"]>): Promise<void> {
+  let after: Job | null = null;
   await kvMutate<Job>(itemKey(jobId), {} as Job, (cur) => cur.id
-    ? { ...cur, deliveries: cur.deliveries.map((x) => (x.id === did ? { ...x, unlock } : x)) }
+    ? (after = { ...cur, deliveries: cur.deliveries.map((x) => (x.id === did ? { ...x, unlock } : x)) })
     : null, TTL);
+  const job = after as Job | null;
+  const d = job?.deliveries.find((x) => x.id === did);
+  if (job && d) await import("@/lib/agent-ledger").then((m) => m.recordLedger(d.agentId, m.entryOf(job, d))).catch(() => undefined);
 }
 
 export async function setStatus(jobId: string, status: JobStatus): Promise<boolean> {

@@ -8,6 +8,7 @@ import { notFound } from "next/navigation";
 import { readAgentProfile } from "@/lib/agent-profile";
 import { readExchange, readProviderDetail, readSellerProbes, recentPayments } from "@/lib/hub/exchange";
 import { listJobs } from "@/lib/jobs";
+import { agentRecord, readAgentCard, readLedger } from "@/lib/agent-ledger";
 import { readMcpStats } from "@/lib/mcp-receipts";
 import { X402_PAY_TO } from "@/lib/x402-payee";
 import ExchangeHeader from "../../ExchangeHeader";
@@ -53,6 +54,8 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
   const d0 = full.length >= 2 ? full[full.length - 2] : null;
   const delta = d1 !== null && d0 ? Math.round(((d1 - d0) / d0) * 1000) / 10 : null;
   const probe = probes[p.payTo] ?? null;
+  const [ledger, light] = await Promise.all([readLedger(p.id, jobs), readAgentCard(p.id)]);
+  const rec = await agentRecord(ledger, [p.owner, p.payTo]);
   const delivered = (jobs ?? []).flatMap((j) => j.deliveries.filter((d) => d.agentId === p.id).map((d) => ({ job: j, d })));
   const unlocked = delivered.filter((x) => x.d.unlock);
   const reg = p.reg;
@@ -136,6 +139,26 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
                 ))}
               </div>
             ) : <p className="text-[13px] text-[#64748B]">No x402 services found for {short(p.payTo)}.</p>}
+
+            <L t="JOB RECORD" s="every delivery kept permanently · self-paid unlocks excluded · USDC checked in each receipt on Base" />
+            <div className="grid gap-2.5 grid-cols-2 md:grid-cols-4">
+              {[["DELIVERED", String(rec.delivered)], ["PURCHASED", `${rec.purchased}${rec.selfPaid ? ` (+${rec.selfPaid} self-paid)` : ""}`], ["UNIQUE PAYERS", String(rec.uniquePayers)], ["VERIFIED USDC", usd(rec.verifiedUsd) + (rec.unverified ? ` · ${rec.unverified} unverified` : "")]].map(([l, v]) => (
+                <div key={l} className={card}><p className="text-[12px] tracking-[0.12em] text-[#64748B]">{l}</p><p className="mt-1.5 text-[18px] font-semibold text-[#E2E8F0] tabular-nums">{v}</p></div>
+              ))}
+            </div>
+            {light?.blocky && <p className="mt-2 text-[13px] text-[#FBBF24]">Blocky: its ERC-8004 registration is a BaseCity agent card naming this id. <a className="underline" href={light.blocky.url} target="_blank" rel="noreferrer">Open in BaseCity ↗</a></p>}
+            {rec.receipts.length > 0 && (
+              <div className="mt-2 space-y-1.5">
+                {rec.receipts.slice(0, 10).map((x) => (
+                  <div key={x.tx || x.jobId} className={`${card} flex flex-wrap items-center gap-3 py-2 text-[13px]`}>
+                    <Link href={`/jobs/${x.jobId}`} className="text-[#E2E8F0] hover:text-[#4FC3F7]">{x.title}</Link>
+                    <span className="text-[#64748B]">{usd(x.usd)} from {short(x.payer)}</span>
+                    <span className={x.verified ? "text-[#34D399]" : "text-[#94A3B8]"}>{x.verified ? "verified" : x.verified === false ? "not found in receipt" : "unverified"}</span>
+                    {x.tx && <a className="ml-auto text-[#4FC3F7]" href={`https://basescan.org/tx/${x.tx}`} target="_blank" rel="noreferrer">Basescan ↗</a>}
+                  </div>
+                ))}
+              </div>
+            )}
 
             <L t="JOBS DELIVERED" s="from the Blue Agent job board" />
             {delivered.length === 0 ? <p className="text-[13px] text-[#64748B]">None yet. <Link className="text-[#4FC3F7]" href="/jobs">Open jobs →</Link></p> : (

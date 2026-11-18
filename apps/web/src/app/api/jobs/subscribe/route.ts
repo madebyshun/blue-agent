@@ -8,7 +8,7 @@
 import { NextResponse, after, type NextRequest } from "next/server";
 import { resolveActingWallet, actingWalletRefusal } from "@/lib/acting-wallet";
 import { EXIT_SKILL, isStockSkill } from "../../../../../../../packages/core/src/workers";
-import { addSub, listSubs, removeSub, webhookUrlProblem, sign, type JobSub } from "@/lib/job-webhooks";
+import { addSub, listSubs, removeSub, resolvesPublic, webhookUrlProblem, sign, type JobSub } from "@/lib/job-webhooks";
 
 export const runtime = "nodejs";
 export const maxDuration = 15;
@@ -33,10 +33,12 @@ export async function POST(req: NextRequest) {
   const skills = Array.isArray(b.skills) ? [...new Set(b.skills.map(String))] : [];
   const bad = skills.find((s) => !isStockSkill(s) && s !== EXIT_SKILL);
   if (bad) return NextResponse.json({ error: `Unknown skill: ${bad.slice(0, 40)}` }, { status: 400 });
+  if (!(await resolvesPublic(String(b.url)))) return NextResponse.json({ error: "url: the hostname must resolve to public addresses only." }, { status: 400 });
   const sub = await addSub(who.wallet, String(b.url), skills);
   if (typeof sub === "string") return NextResponse.json({ error: sub }, { status: 429 });
   // One ping so the subscriber can check its signature code at once.
   after(async () => {
+    if (!(await resolvesPublic(sub.url))) return;
     const body = JSON.stringify({ event: "subscription.created", id: sub.id, sent_at: new Date().toISOString() });
     await fetch(sub.url, { method: "POST", redirect: "manual", signal: AbortSignal.timeout(3000), headers: { "content-type": "application/json", "x-blue-event": "subscription.created", "x-blue-signature": await sign(sub.secret, body) }, body }).catch(() => null);
   });
