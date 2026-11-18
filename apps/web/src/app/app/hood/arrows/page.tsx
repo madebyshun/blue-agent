@@ -9,17 +9,10 @@
  * closes the first arb window.
  */
 import type { Metadata } from "next";
+import { pageMeta } from "@/lib/og-card";
 import TrackRecordClient from "./TrackRecordClient";
 
-export const metadata: Metadata = {
-  title: "Blue Hood · Track record",
-  description:
-    "Every graded arrow, forever. Chainlink-vs-DEX signals with a receipt: brief · outcome · facts at fire.",
-  openGraph: {
-    title: "Blue Hood · Track record",
-    description: "Every graded arrow. Chainlink-vs-DEX signals with a receipt.",
-  },
-};
+export const metadata: Metadata = pageMeta("/hood/arrows", "Blue Hood · Track record", "Every graded arrow, forever. Chainlink-vs-DEX signals with a receipt: brief · outcome · facts at fire.");
 
 export const revalidate = 0;
 export const dynamic = "force-dynamic";

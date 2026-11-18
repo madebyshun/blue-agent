@@ -5,6 +5,7 @@ import { MarketScroll, MarketContainer } from "../MarketLayout";
 // same rows the free `hood-live` x402 id serves. Arrows stopped publishing on
 // 2026-09-30; their record stays at /hood/arrows.
 import type { Metadata } from "next";
+import { pageMeta } from "@/lib/og-card";
 import Link from "next/link";
 import MarketsHeader from "../MarketsHeader";
 import StockMark from "@/components/blue-hood/StockMark";
@@ -16,10 +17,7 @@ import { MarketHero, MarketNav, DriftDistribution } from "../MarketVisuals";
 import CoverageSummary from "./CoverageSummary";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = {
-  title: "Drift — Blue Agent",
-  description: "Chainlink oracle vs Base DEX price for stock tokens on Base 8453, every 5 minutes.",
-};
+export const metadata: Metadata = pageMeta("/markets/drift", "Oracle drift — Blue Agent Markets", "Chainlink feed vs Base pool price for stock tokens on Base, every 5 minutes, with pool depth, volume and when the feed last moved.");
 
 interface Row {
   ticker: string; contract: string; explorer: string;

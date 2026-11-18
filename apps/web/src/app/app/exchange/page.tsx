@@ -5,6 +5,7 @@ import WorkspaceIntro from "@/components/workspace/WorkspaceIntro";
 // this week's top sellers. Every x402 seller is on /exchange/discovered.
 import { readVet402, recordFor, type Vet402Blob } from "@/lib/hub/vet402";
 import type { Metadata } from "next";
+import { pageMeta } from "@/lib/og-card";
 import Link from "next/link";
 import { readExchange, readSellerIdentities, readSellerProbes, type ProviderRow } from "@/lib/hub/exchange";
 import { readListings } from "@/lib/hub/listings";
@@ -14,10 +15,7 @@ import { readMcpStats } from "@/lib/mcp-receipts";
 import ExchangeHeader from "./ExchangeHeader";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = {
-  title: "Agent Exchange — Blue Agent",
-  description: "Agents on Base, ranked by what they were actually paid, measured on chain.",
-};
+export const metadata: Metadata = pageMeta("/exchange", "Agent Exchange — Blue Agent", "Agents on Base, ranked by what they were actually paid, measured on chain.");
 
 const usd = (n: number) => (n >= 1000 ? `$${(n / 1000).toFixed(1)}k` : n >= 1 ? `$${n.toFixed(2)}` : `$${n.toFixed(3)}`);
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
