@@ -178,6 +178,8 @@ export async function recordUnlock(jobId: string, did: string, unlock: NonNullab
   const job = after as Job | null;
   const d = job?.deliveries.find((x) => x.id === did);
   if (job && d) await import("@/lib/agent-ledger").then((m) => m.recordLedger(d.agentId, m.entryOf(job, d))).catch(() => undefined);
+  // ERC-8004 feedback is written later by a cron (lib/agent-feedback.ts), never inline here.
+  if (job && d && unlock.tx) await import("@/lib/agent-feedback").then((m) => m.enqueueFeedback({ agentId: d.agentId, jobId: job.id, did: d.id, tx: unlock.tx!, payer: unlock.payer, payTo: d.payTo, priceUnits: d.priceUnits, at: unlock.at })).catch(() => undefined);
 }
 
 export async function setStatus(jobId: string, status: JobStatus): Promise<boolean> {
