@@ -29,7 +29,7 @@ const APP_PUBLIC = new Set(["share", "badge", "waitlist"]);
 // and blueagent.dev/markets did too, the day the article linked Markets).
 const MODE_ALIASES: Record<string, string> = {
   markets: "markets", market: "markets", portfolio: "portfolio", portfolios: "portfolio",
-  exchange: "exchange", agents: "exchange", jobs: "jobs", job: "jobs", services: "services",
+  exchange: "exchange", agent: "agents", jobs: "jobs", job: "jobs", services: "services",
 };
 
 const APP_SEGMENTS = new Set([
@@ -69,6 +69,7 @@ const APP_SEGMENTS = new Set([
   "services",     // Blue Agent services — the MCP v2 tools, priced (2026-10-22)
   "exchange",     // Agent Exchange — every x402 seller on Base, measured (2026-10-28)
   "jobs",         // hire Blue Agent via Virtuals ACP (2026-10-27)
+  "agents",       // ERC-8004 agents on the job board, verified record (2026-11-18; was an alias of exchange)
   "markets",      // Markets mode — stock + crypto tokens on Base and RH Chain (2026-10-28)
   "portfolio",    // Markets mode — a wallet's holdings on both chains (2026-10-28)
   "connectors",   // MCP servers / integrations gallery (ConnectorsPanel)
