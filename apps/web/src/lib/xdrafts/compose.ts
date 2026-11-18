@@ -20,7 +20,7 @@
  *          07:00                     20:00
  *   Mon    weekend, last read        base's call for the open
  *   Tue    weekend scorecard         pre-open gaps
- *   Wed    yesterday's widest gap    pre-open gaps
+ *   Wed    share of 24h volume       widest gaps, as a list
  *   Thu    volume by nyse session    corporate actions ahead
  *   Fri    yesterday's widest gap    feeds freeze tonight
  *   Sat    weekend so far            weekend so far
@@ -37,6 +37,7 @@ import { cryptoMove, fridayOf } from "@/lib/weekend/scorecard";
 import { readSessionVolume } from "@/lib/weekend/sessions";
 import { COINBASE_BASE_STOCKS } from "@/lib/base-stocks/coinbase-list";
 import { actionIds, actionsFor } from "@/lib/base-stocks/corporate-actions";
+import { readStockMarkets } from "@/lib/markets";
 
 import { requireFreshStockSnapshot, type StockDraftEvidence } from "../../../../../packages/core/src/stock-observations";
 
@@ -187,6 +188,30 @@ export function fridayText(last: Graded[] | null, weekendShare: number | null): 
     `${SITE}/markets/weekend`, TAG_XEN);
 }
 
+// List posts (ShunTr 2026-11-18, after @checkrsocial's "base attention:"):
+// a header line and five ranked rows, nothing else. The numbers carry the
+// post, so there is no "so" clause; the header names the chain.
+const signed = (n: number, d = 1) => `${n >= 0 ? "+" : "-"}${Math.abs(n).toFixed(d)}%`;
+
+type Vol = { ticker: string; volume24hUsd: number };
+export function volumeShareText(rows: Vol[]): Draft {
+  const live = rows.filter((r) => r.volume24hUsd > 0);
+  const total = live.reduce((a, r) => a + r.volume24hUsd, 0);
+  if (live.length < 5 || total <= 0) throw new Error("fewer than 5 base stock pools traded in 24h");
+  const top = [...live].sort((a, b) => b.volume24hUsd - a.volume24hUsd).slice(0, 5);
+  return draft("volume-share",
+    `base stock tokens, share of 24h volume:\n${top.map((r) => `- ${tok(r.ticker)} ${(100 * r.volume24hUsd / total).toFixed(1)}%`).join("\n")}`,
+    `${SITE}/markets`, "none");
+}
+
+export function gapListText(rows: Gap[]): Draft {
+  if (rows.length < 3) throw new Error("fewer than 3 readable gaps on the board");
+  const top = sortAbs(rows, (r) => r.drift_pct).slice(0, 5);
+  return draft("gap-list",
+    `widest gaps, base pool vs chainlink:\n${top.map((r) => `- ${tok(r.ticker)} ${signed(r.drift_pct)}`).join("\n")}`,
+    `${SITE}/markets/drift`, Math.abs(top[0].drift_pct) >= 1 ? TAG_XEN : "none");
+}
+
 // ── readers ────────────────────────────────────────────────────────────────
 
 async function boardRows(now: Date) {
@@ -265,6 +290,23 @@ export async function corporateActions() {
   return evidenced(actionsText(items), "base-corporate-actions", new Date().toISOString(), items, "Currently announced actions in the read record; no execution date inferred.");
 }
 
+export async function volumeShare() {
+  const m = await readStockMarkets();
+  const base = m.rows.filter((r) => r.chain === "base");
+  const unread = base.filter((r) => !r.read).length;
+  // A share needs the whole denominator: an unread pool would inflate every
+  // other row, so a partial read is not composed.
+  if (unread) throw new Error(`${unread} base stock pools unread; share would be overstated`);
+  const rows = base.filter((r): r is typeof r & { volume24hUsd: number } => r.volume24hUsd != null && Number.isFinite(r.volume24hUsd));
+  return evidenced(volumeShareText(rows), "markets:stocks:base", m.readAt, rows.map((r) => ({ ticker: r.ticker, contract: r.contract, volume24hUsd: r.volume24hUsd })),
+    "Each token's GeckoTerminal 24h USD volume over the sum across every listed Base stock token; all rows read.");
+}
+
+export async function gapList(now = new Date()) {
+  const b = await boardRows(now);
+  return evidenced(gapListText(b.rows), "hood-live:base", b.asOf, b.raw, "Top 5 readable tracked Base rows by absolute DEX vs oracle gap, signed.");
+}
+
 export async function fridayFreeze() {
   const [card, v] = await Promise.all([scorecardView({ limit: 1 }), readSessionVolume().catch(() => null)]);
   const last = card !== "error" && card.weekends[0] ? card.weekends[0].rows : null;
@@ -279,7 +321,7 @@ export async function draftsFor(now: Date, slot: 0 | 13): Promise<(Draft | Faile
         0: ["weekend", () => weekendSoFar(now)],
         1: ["weekend-last", () => weekendSoFar(now, true)],
         2: ["scorecard", scorecard],
-        3: ["yesterday", () => yesterdayGaps(now)],
+        3: ["volume-share", volumeShare],
         4: ["sessions", sessions],
         5: ["yesterday", () => yesterdayGaps(now)],
         6: ["weekend", () => weekendSoFar(now)],
@@ -288,7 +330,7 @@ export async function draftsFor(now: Date, slot: 0 | 13): Promise<(Draft | Faile
         0: ["weekend", () => weekendSoFar(now)],
         1: ["call", () => theCall(now)],
         2: ["pre-open", () => preOpen(now)],
-        3: ["pre-open", () => preOpen(now)],
+        3: ["gap-list", () => gapList(now)],
         4: ["actions", corporateActions],
         5: ["friday", fridayFreeze],
         6: ["weekend", () => weekendSoFar(now)],
