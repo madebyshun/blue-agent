@@ -26,6 +26,7 @@
 import { createPublicClient, http } from "viem";
 import { base } from "viem/chains";
 import { BASECITY_BLOCKIES } from "@/lib/agent-ledger";
+import { ERC8004_IDENTITY } from "@/lib/erc8004";
 import type { ResourceSample } from "@/lib/hub/exchange";
 
 export const BLOCKY_X402 = "https://www.basecity.space/api/x402";
@@ -71,7 +72,7 @@ export async function blockyOwner(n: string): Promise<string | null> {
   } catch { return null; }
 }
 
-export interface CatalogTool { id: string; guild?: string; task?: string; priceUsd?: number; input?: { properties?: Record<string, { description?: string }>; required?: string[] }; contentType?: string }
+export interface CatalogTool { id: string; guild?: string; task?: string; priceUsd?: number; input?: { properties?: Record<string, { description?: string }>; required?: string[] }; contentType?: string; example?: Record<string, unknown> }
 interface BlockyInfo { guild?: string; role?: string; rarity?: string; level?: number; skills?: string[]; prices?: Record<string, number> }
 
 async function getJson<T>(url: string): Promise<T | null> {
@@ -81,12 +82,24 @@ async function getJson<T>(url: string): Promise<T | null> {
   } catch { return null; }
 }
 
-/** Example inputs for the Hire modal. Real values only where one is unambiguous; otherwise blank for the buyer to fill. */
-function exampleFor(field: string, n: string): string {
-  if (field === "ticker") return "NVDA";
-  if (field === "blocky") return n;
-  if (field === "query") return "token safety check on Base";
-  return "";
+/**
+ * Example inputs for the Hire modal (BaseCity, 2026-11-19: an empty field got a
+ * 400). Only real, verifiable values: USDC on Base, the ERC-8004 Identity
+ * registry, an existing agent id. `wallet` is filled with the buyer's own
+ * connected wallet in the modal; `tx` stays blank because Blue will not
+ * invent a hash.
+ */
+const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+export function exampleFor(field: string, n: string): string {
+  switch (field) {
+    case "ticker": return "NVDA";
+    case "token": return USDC_BASE;
+    case "address": return ERC8004_IDENTITY;
+    case "agentId": return "1205445";
+    case "query": return "stock price on Base";
+    case "blocky": return n;
+    default: return "";
+  }
 }
 
 /** Pure: build this Blocky's services from BaseCity's catalog and its own skill/price list. */
@@ -102,7 +115,8 @@ export function servicesFrom(n: string, catalog: CatalogTool[], info: BlockyInfo
       url: blockyUrl(id, n), priceUsd: price, method: "POST", bodyType: "json", exampleIn: "body",
       name: `${id} · Blocky #${n}`,
       description: `${t.task ?? id}. Answered by BaseCity Blocky #${n} (${info.guild ?? "guild"} guild, level ${info.level ?? 1}); third-party data.`,
-      example: Object.fromEntries(fields.map((f) => [f, exampleFor(f, n)])),
+      // Our own verified examples win; BaseCity's catalog example fills any field we have none for (strings only).
+      example: Object.fromEntries(fields.map((f) => { const own = exampleFor(f, n); const theirs = t.example?.[f]; return [f, own || (typeof theirs === "string" ? theirs.slice(0, 120) : "")]; })),
     });
   }
   return out;
