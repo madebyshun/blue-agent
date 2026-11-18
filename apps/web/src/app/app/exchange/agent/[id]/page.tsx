@@ -9,6 +9,7 @@ import { readAgentProfile } from "@/lib/agent-profile";
 import { readExchange, readProviderDetail, readSellerProbes, recentPayments } from "@/lib/hub/exchange";
 import { listJobs } from "@/lib/jobs";
 import { agentRecord, readAgentCard, readLedger } from "@/lib/agent-ledger";
+import { blockyOwner, blockyServices } from "@/lib/blocky-instant";
 import { readMcpStats } from "@/lib/mcp-receipts";
 import { X402_PAY_TO } from "@/lib/x402-payee";
 import ExchangeHeader from "../../ExchangeHeader";
@@ -56,6 +57,9 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
   const probe = probes[p.payTo] ?? null;
   const [ledger, light] = await Promise.all([readLedger(p.id, jobs), readAgentCard(p.id)]);
   const rec = await agentRecord(ledger, [p.owner, p.payTo]);
+  // A verified Blocky sells instant answers paid straight to the Blocky's owner (lib/blocky-instant.ts).
+  const blockyN = light?.blocky?.n ?? null;
+  const blockyPayTo = blockyN ? await blockyOwner(blockyN) : null;
   const delivered = (jobs ?? []).flatMap((j) => j.deliveries.filter((d) => d.agentId === p.id).map((d) => ({ job: j, d })));
   const unlocked = delivered.filter((x) => x.d.unlock);
   const reg = p.reg;
@@ -146,6 +150,13 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
                 <div key={l} className={card}><p className="text-[12px] tracking-[0.12em] text-[#64748B]">{l}</p><p className="mt-1.5 text-[18px] font-semibold text-[#E2E8F0] tabular-nums">{v}</p></div>
               ))}
             </div>
+            {blockyN && blockyPayTo && (
+              <div id="hire" className="mt-3">
+                <p className="mb-2 text-[13px] text-[#94A3B8]">Hire now: Blocky #{blockyN} answers at once over x402, paid in USDC on Base straight to its owner ({blockyPayTo.slice(0, 6)}…{blockyPayTo.slice(-4)}). BaseCity settles only after a successful answer; the data is BaseCity&apos;s, not Blue Agent&apos;s.</p>
+                <HireAgent payTo={blockyPayTo} name={`Blocky #${blockyN}`} services={blockyServices(blockyN)} />
+              </div>
+            )}
+            {rec.instantCalls > 0 && <p className="mt-2 text-[13px] text-[#94A3B8]">Instant calls: {rec.instantCalls} paid by other wallets, {usd(rec.instantUsd)} verified on Base (kept apart from job deliveries).</p>}
             {light?.blocky && <p className="mt-2 text-[13px] text-[#FBBF24]">Blocky{light.blocky.n ? ` #${light.blocky.n}` : ""}: {light.blocky.via === "owner-signature" ? "linked by an owner signature, and one wallet owns both the Blocky and this agent on Base right now." : "its ERC-8004 registration is a BaseCity agent card naming this id."} <a className="underline" href={light.blocky.url} target="_blank" rel="noreferrer">Open in BaseCity ↗</a></p>}
             {rec.receipts.length > 0 && (
               <div className="mt-2 space-y-1.5">

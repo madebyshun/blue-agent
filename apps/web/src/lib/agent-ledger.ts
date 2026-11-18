@@ -24,6 +24,8 @@ export interface LedgerEntry {
   jobId: string; did: string; title: string; skill: string | null; ticker: string | null;
   at: string; priceUnits: number; payTo: string;
   unlock?: { tx: string | null; payer: string; at: string };
+  /** "instant": a paid x402 call answered at once (lib/blocky-instant.ts), not a job delivery. */
+  kind?: "instant";
 }
 
 const USDC = "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913";
@@ -103,11 +105,17 @@ export interface AgentRecord {
   uniquePayers: number;
   skills: string[];
   receipts: { tx: string; usd: number; payer: string; verified: boolean | null; title: string; jobId: string }[];
+  instantCalls: number;
+  instantUsd: number;
 }
 
 /** Totals for an agent. `self` = its owner and payTo wallets. */
-export async function agentRecord(entries: LedgerEntry[], self: string[]): Promise<AgentRecord> {
+export async function agentRecord(all: LedgerEntry[], self: string[]): Promise<AgentRecord> {
   const mine = new Set(self.map(lc));
+  // Instant calls are recorded only after their receipt verified; kept out of
+  // job totals and counted on their own (self-paid excluded the same way).
+  const instant = all.filter((e) => e.kind === "instant" && e.unlock && !mine.has(lc(e.unlock.payer)) && lc(e.unlock.payer) !== lc(e.payTo));
+  const entries = all.filter((e) => e.kind !== "instant");
   const unlocked = entries.filter((e) => e.unlock);
   // Self-paid: the payer is the agent's owner, its registered payTo, or the
   // delivery's own payTo (paying yourself moves no money).
@@ -122,6 +130,8 @@ export async function agentRecord(entries: LedgerEntry[], self: string[]): Promi
     uniquePayers: new Set(bought.map((e) => lc(e.unlock!.payer))).size,
     skills: [...new Set(entries.map((e) => e.skill).filter((s): s is string => !!s))],
     receipts: bought.map((e, i) => ({ tx: e.unlock!.tx ?? "", usd: e.priceUnits / 1e6, payer: e.unlock!.payer, verified: checks[i], title: e.title, jobId: e.jobId })),
+    instantCalls: instant.length,
+    instantUsd: instant.reduce((a, e) => a + e.priceUnits / 1e6, 0),
   };
 }
 
@@ -228,7 +238,7 @@ export async function readAgentCard(id: string): Promise<AgentCard | null> {
   const image = typeof reg?.image === "string" && /^https:\/\//.test(reg.image) ? reg.image : null;
   const payTo = typeof reg?.payTo === "string" && /^0x[0-9a-fA-F]{40}$/.test(reg.payTo) ? lc(reg.payTo) : owner;
   const safeUrl = (u: unknown) => (typeof u === "string" && /^https:\/\/(www\.)?basecity\.space\//.test(u) ? u : BASECITY);
-  let blocky: AgentCard["blocky"] = isBlockyCard(uri, reg, id) ? { url: safeUrl(reg?.url), via: "onchain-tokenURI" } : null;
+  let blocky: AgentCard["blocky"] = isBlockyCard(uri, reg, id) ? { url: safeUrl(reg?.url), via: "onchain-tokenURI", n: uri.match(/[?&]blocky=(\d{1,6})(&|$)/)?.[1] } : null;
   if (!blocky) {
     for (const n of await linkedBlockies(owner, id)) {
       const card = await fetchBlockyCard(n);

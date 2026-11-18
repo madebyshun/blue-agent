@@ -14,6 +14,7 @@ import { HANDLERS }    from "@/app/api/x402/_handlers";
 import { wireSchema }  from "@/lib/tool-wire-schema";
 import { sampleFor }   from "@/lib/tool-samples";
 import { X402_PAY_TO } from "@/lib/x402-payee";
+import { BLOCKY_TOOLS, BLOCKY_X402 } from "@/lib/blocky-instant";
 import { STOCK_JOB_TEMPLATES, STOCK_SKILLS } from "../../../../../../packages/core/src/workers";
 
 export const runtime = "nodejs";
@@ -122,7 +123,7 @@ export async function GET() {
     currency: "USDC", network: "eip155:8453",
     budgetUsd: { min: 0.01, max: 100 },
     directHire: { param: "invitedAgentId", holdHours: 48, link: "https://app.blueagent.dev/jobs?agent=<agentId>&skill=<skill>" },
-    skills: STOCK_JOB_TEMPLATES.map((t) => ({ id: t.skill, task: "stock-research", title: t.title, defaultBudgetUsd: Number(t.budget), inputs: { token: "Coinbase stock token address on Base" }, required: [...STOCK_SKILLS[t.skill]] })),
+    skills: STOCK_JOB_TEMPLATES.map((t) => ({ id: t.skill, task: "stock-research", title: t.title, defaultBudgetUsd: Number(t.budget), inputs: { token: "Coinbase stock token address on Base" }, required: [...STOCK_SKILLS[t.skill]], instant: ((x) => x ? { via: "BaseCity Blocky (third-party)", priceUsd: x.priceUsd, catalog: BLOCKY_X402, call: `POST ${BLOCKY_X402}?tool=${x.id}&blocky=<n> {ticker}`, payTo: "the Blocky's owner (ownerOf on the Blockies NFT)" } : null)(BLOCKY_TOOLS.find((b) => b.skill === t.skill)) })),
   };
 
   return NextResponse.json(
