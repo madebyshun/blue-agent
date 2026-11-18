@@ -71,6 +71,32 @@ export async function enqueueFeedback(i: FeedbackItem): Promise<void> {
   await kvMutate<FeedbackItem[]>(K_QUEUE, [], (cur) => (cur.some((x) => x.tx === i.tx) ? null : [...cur, i].slice(-500)));
 }
 
+/**
+ * Backfill (2026-11-18): unlocks settled before this queue existed were never
+ * enqueued (e.g. job 30e6f6d987b0, unlocked 2026-11-17 19:18Z, before #569
+ * deployed). Re-scan the live board at most once every 6 hours and enqueue
+ * every unlocked delivery with a tx. Safe to repeat: enqueue dedupes by tx,
+ * the done-marker stops a second feedback, and every send re-verifies.
+ */
+export async function backfillFromBoard(force = false): Promise<number> {
+  const stamp = "agents:feedback:backfill-at:v1";
+  const last = await kv.get<string>(stamp).catch(() => null);
+  if (!force && last && Date.now() - Date.parse(last) < 6 * 3600_000) return 0;
+  const { listJobs } = await import("@/lib/jobs");
+  const jobs = await listJobs(500);
+  if (!jobs) return 0;
+  let n = 0;
+  for (const j of jobs) for (const d of j.deliveries) {
+    if (!d.unlock?.tx) continue;
+    const item = { agentId: d.agentId, jobId: j.id, did: d.id, tx: d.unlock.tx, payer: d.unlock.payer, payTo: d.payTo, priceUnits: d.priceUnits, at: d.unlock.at };
+    if (!queueable(item) || (await kv.get(kDone(item.tx)).catch(() => null))) continue;
+    await enqueueFeedback(item);
+    n++;
+  }
+  await kv.set(stamp, new Date().toISOString()).catch(() => undefined);
+  return n;
+}
+
 /** The file for a tx Blue wrote feedback for, or null. */
 export async function readFeedbackFile(tx: string): Promise<FeedbackFile | null | undefined> {
   const p = await kvGetProbe<{ file: FeedbackFile }>(kDone(tx));
@@ -83,6 +109,8 @@ type Outcome = { tx: string; agentId: string; result: string };
 export async function runFeedbackQueue(max = 5): Promise<{ status: string; signer?: string; balanceEth?: string; lowGas?: boolean; outcomes: Outcome[] }> {
   const key = (process.env.AGENT_FEEDBACK_PRIVATE_KEY ?? "").trim();
   const enabled = process.env.AGENT_FEEDBACK_ENABLED === "1";
+  // Best effort: a failed backfill leaves the queue as it was; nothing is reported as a count.
+  if (enabled) await backfillFromBoard().catch(() => undefined);
   const q = await kvGetProbe<FeedbackItem[]>(K_QUEUE);
   const queue = q.status === "hit" ? q.value : [];
   if (!enabled) return { status: "disabled (AGENT_FEEDBACK_ENABLED is not 1)", outcomes: queue.map((i) => ({ tx: i.tx, agentId: i.agentId, result: "queued" })) };
