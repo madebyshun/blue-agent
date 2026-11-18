@@ -40,7 +40,7 @@ import { NextRequest, NextResponse, after } from "next/server";
 import { kvGetProbe } from "@/lib/kv";
 import { sendMessage, esc, shortAddr, BOT_USERNAME, type TgUpdate, type TgUser } from "@/lib/telegram/bot";
 import { kvSet, kvDel } from "@/lib/kv";
-import { KV_DRAFTS_CHAT } from "@/lib/xdrafts/compose";
+import { KV_DRAFTS_CHAT, allDrafts, telegramText } from "@/lib/xdrafts/compose";
 import { checkReply, txReply } from "@/lib/telegram/check";
 import { rateLimit } from "@/lib/rate-limit";
 import {
@@ -475,8 +475,19 @@ async function handleDrafts(arg: string, chatId: number, fromId: number | undefi
   if (String(fromId) !== owner) return `Drafts are for the @blueagent_ owner only. Your Telegram id is <code>${fromId}</code>; if that is you, set X_DRAFTS_OWNER_TG_ID to exactly that number in Vercel and redeploy.`;
   const a = arg.trim().toLowerCase();
   if (a === "off") { await kvDel(KV_DRAFTS_CHAT); return "Drafts off. Nothing will be sent until /drafts on."; }
-  if (a === "on" || a === "") { await kvSet(KV_DRAFTS_CHAT, { chatId, since: new Date().toISOString() }); return "Drafts on. You will get @blueagent_ drafts here at 07:00 and 20:00 Vietnam time (00:00 and 13:00 UTC). Nothing is posted for you."; }
-  return "Use /drafts on or /drafts off.";
+  if (a === "on" || a === "") { await kvSet(KV_DRAFTS_CHAT, { chatId, since: new Date().toISOString() }); return "Drafts on. You will get @blueagent_ drafts here at 07:00, 13:00 and 20:00 Vietnam time (00:00, 06:00 and 13:00 UTC). Send /drafts now for every draft at once. Nothing is posted for you."; }
+  if (a === "now") {
+    // Composing all kinds takes longer than a webhook reply should wait.
+    after(async () => {
+      const now = new Date();
+      const ds = await allDrafts(now);
+      for (const d of ds.filter((x) => !("error" in x))) await sendMessage(chatId, telegramText(d, now)).catch(() => undefined);
+      const skipped = ds.filter((x) => "error" in x).map((x) => x.kind);
+      if (skipped.length) await sendMessage(chatId, `Not composed right now (no fresh data): ${skipped.join(", ")}.`).catch(() => undefined);
+    });
+    return "Composing every draft kind now; they arrive here one by one in about a minute.";
+  }
+  return "Use /drafts on, /drafts now or /drafts off.";
 }
 
 export async function POST(req: NextRequest) {

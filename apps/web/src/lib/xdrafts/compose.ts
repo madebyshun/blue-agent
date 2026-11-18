@@ -16,15 +16,17 @@
  * after, the implication introduced by "so", and what the data cannot show.
  * Neutral analyst tone; never a buy or sell call.
  *
- * Calendar (Vietnam time; UTC 00:00 and 13:00):
- *          07:00                     20:00
- *   Mon    weekend, last read        base's call for the open
- *   Tue    weekend scorecard         pre-open gaps
- *   Wed    share of 24h volume       widest gaps, as a list
- *   Thu    volume by nyse session    corporate actions ahead
- *   Fri    yesterday's widest gap    feeds freeze tonight
- *   Sat    weekend so far            weekend so far
- *   Sun    weekend so far            weekend so far
+ * Calendar (Vietnam time; UTC 00:00, 06:00 and 13:00). The 13:00 column
+ * (ShunTr 2026-11-18, "only 2 a day, add more") carries the short list posts.
+ * `/drafts now` composes every kind at once (allDrafts).
+ *          07:00                     13:00                20:00
+ *   Mon    weekend, last read        volume share         base's call for the open
+ *   Tue    weekend scorecard         gap list             pre-open gaps
+ *   Wed    share of 24h volume       yesterday's gap      widest gaps, as a list
+ *   Thu    volume by nyse session    volume share         corporate actions ahead
+ *   Fri    yesterday's widest gap    gap list             feeds freeze tonight
+ *   Sat    weekend so far            volume share         weekend so far
+ *   Sun    weekend so far            gap list             weekend so far
  *
  * Copy rules, enforced in `lint`: lowercase, no em dash, no chain id, no
  * emoji, at most 700 characters. Every number comes from a source read
@@ -313,10 +315,45 @@ export async function fridayFreeze() {
   return evidenced(fridayText(last, v?.share.weekend ?? null), "weekend-history", new Date().toISOString(), { weekend: card !== "error" ? card.weekends[0] ?? null : null, volume: v }, "Historical sample context, not a promise of feed freeze times.");
 }
 
-/** What the cron sends for this slot. `slot` is the UTC hour, 0 or 13. */
-export async function draftsFor(now: Date, slot: 0 | 13): Promise<(Draft | Failed)[]> {
+export type Slot = 0 | 6 | 13;
+
+/** Compose one draft, refuse it on a copy-check failure, keep its evidence. */
+async function finalize(kind: string, fn: () => Promise<Draft>): Promise<Draft | Failed> {
+  try {
+    const d = await fn();
+    if (d.problems.length) throw new Error(`draft failed copy checks: ${d.problems.join(", ")}`);
+    const { saveDraftSnapshot } = await import("./snapshots");
+    d.snapshot_id = await saveDraftSnapshot(d, new Date());
+    return d;
+  } catch (e) { return { kind, error: (e as Error).message.slice(0, 160) }; }
+}
+
+/** Every kind at once, for `/drafts now`. Sequential: they share upstreams. */
+export async function allDrafts(now: Date): Promise<(Draft | Failed)[]> {
+  const kinds: [string, () => Promise<Draft>][] = [
+    ["volume-share", volumeShare], ["gap-list", () => gapList(now)], ["pre-open", () => preOpen(now)],
+    ["yesterday", () => yesterdayGaps(now)], ["weekend", () => weekendSoFar(now)], ["call", () => theCall(now)],
+    ["scorecard", scorecard], ["sessions", sessions], ["actions", corporateActions], ["friday", fridayFreeze],
+  ];
+  const out: (Draft | Failed)[] = [];
+  for (const [k, fn] of kinds) out.push(await finalize(k, fn));
+  return out;
+}
+
+/** What the cron sends for this slot. `slot` is the UTC hour, 0, 6 or 13. */
+export async function draftsFor(now: Date, slot: Slot): Promise<(Draft | Failed)[]> {
   const dow = now.getUTCDay(); // 0 Sun .. 6 Sat
-  const plan: Record<number, [string, () => Promise<Draft>]> = slot === 0
+  const plan: Record<number, [string, () => Promise<Draft>]> = slot === 6
+    ? {
+        0: ["gap-list", () => gapList(now)],
+        1: ["volume-share", volumeShare],
+        2: ["gap-list", () => gapList(now)],
+        3: ["yesterday", () => yesterdayGaps(now)],
+        4: ["volume-share", volumeShare],
+        5: ["gap-list", () => gapList(now)],
+        6: ["volume-share", volumeShare],
+      }
+    : slot === 0
     ? {
         0: ["weekend", () => weekendSoFar(now)],
         1: ["weekend-last", () => weekendSoFar(now, true)],
@@ -336,13 +373,7 @@ export async function draftsFor(now: Date, slot: 0 | 13): Promise<(Draft | Faile
         6: ["weekend", () => weekendSoFar(now)],
       };
   const [kind, fn] = plan[dow];
-  try {
-    const d = await fn();
-    if (d.problems.length) throw new Error(`draft failed copy checks: ${d.problems.join(", ")}`);
-    const { saveDraftSnapshot } = await import("./snapshots");
-    d.snapshot_id = await saveDraftSnapshot(d, new Date());
-    return [d];
-  } catch (e) { return [{ kind, error: (e as Error).message.slice(0, 160) }]; }
+  return [await finalize(kind, fn)];
 }
 
 // ── delivery ───────────────────────────────────────────────────────────────
