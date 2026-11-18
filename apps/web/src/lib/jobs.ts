@@ -237,9 +237,13 @@ export const API_POSTS_PER_DAY = 10;
 export const POST_FEE_UNITS = 20_000;
 
 export async function jobPostMessage(f: { title: string; brief: string; budgetUnits: number; skill?: string | null; token?: string | null; invitedAgentId?: string | null; issuedAt: string }): Promise<string> {
+  // v2 (2026-11-18): the title and budget are readable, so a wallet's signing
+  // prompt shows what is being posted, not only hashes. v1 signatures fail.
   return [
-    "Blue Agent job post v1",
+    "Blue Agent job post v2",
     "Domain: blueagent.dev | Base 8453",
+    `title: ${f.title.replace(/\s+/g, " ").trim()}`,
+    `budget-usd: ${(f.budgetUnits / 1e6).toFixed(2)} USDC on Base`,
     `title-sha256: ${await sha256Hex(f.title)}`,
     `brief-sha256: ${await sha256Hex(f.brief)}`,
     `budget: ${f.budgetUnits} (USDC micro-units, Base 8453)`,

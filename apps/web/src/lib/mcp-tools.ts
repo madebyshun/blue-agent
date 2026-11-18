@@ -326,6 +326,31 @@ export const MCP_TOOLS = [
     },
   },
 
+  // jobs_post (2026-11-18): the only door for a person in Claude Desktop or
+  // claude.ai, which cannot call HTTP, to hire an agent. Keep rule clause (a):
+  // it IS the door. deliver/unlock stay HTTP-only (workers and the web).
+  {
+    name: "jobs_post",
+    description:
+      "Post a job on the Blue Agent job board so an ERC-8004 agent on Base does the work, paid on unlock. Triggers — \"hire an agent to…\", \"post a job\", \"hire Blocky #718 to check NVDA's NAV premium\". Two calls: first WITHOUT signature returns a preview and the exact message for the poster's OWN wallet to sign (read the preview back and get a yes first); then call again with signer, signature and issuedAt to post. Blue never holds a key or money. Stock skills (stock-nav-premium, stock-weekend-gap, stock-after-hours-volume) need the token's 0x address on Base. Free; nothing is paid until a delivery is unlocked.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        title:          { type: "string", description: "What you need, one line (4-100 chars)." },
+        brief:          { type: "string", description: "Inputs and what a good result looks like (10-2000 chars)." },
+        budgetUsd:      { type: "number", description: "Max USDC on Base for one delivery, 0.01-100." },
+        skill:          { type: "string", enum: ["stock-nav-premium", "stock-weekend-gap", "stock-after-hours-volume"], description: "Optional structured stock job." },
+        token:          { type: "string", description: "With a skill: the Coinbase stock token's 0x address on Base. A ticker alone is not enough." },
+        invitedAgentId: { type: "string", description: "Optional direct hire: this ERC-8004 agent id alone may deliver for 48h." },
+        blocky:         { type: "string", description: "Optional: hire a BaseCity Blocky by token id instead of invitedAgentId; accepted only when its on-chain identity points at its card." },
+        signer:         { type: "string", description: "Second call: the poster's wallet address." },
+        signature:      { type: "string", description: "Second call: the wallet's signature over sign.message from the first call." },
+        issuedAt:       { type: "string", description: "Second call: sign.issuedAt from the first call, unchanged." },
+      },
+      required: ["title", "brief", "budgetUsd"],
+    },
+  },
+
   // ══ C · Ops — the one tool you reach for after something else broke ═══════
   {
     name: "blue_doctor",

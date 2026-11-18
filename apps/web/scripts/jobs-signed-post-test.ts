@@ -9,7 +9,7 @@ const check = (name: string, ok: boolean) => { if (ok) passed++; else failed++; 
 (async () => {
   const f = { title: "NAV premium for NVDA on Base", brief: "Base 8453 only, token 0xb2.", budgetUnits: 500_000, skill: "stock-nav-premium", token: "0xB20000000000000000000078ee7ce2fE4908108C", invitedAgentId: "1205445", issuedAt: "2026-11-18T10:00:00.000Z" };
   const m = await jobPostMessage(f);
-  check("message starts with the versioned header", m.startsWith("Blue Agent job post v1\nDomain: blueagent.dev | Base 8453\n"));
+  check("message starts with the versioned header", m.startsWith("Blue Agent job post v2\nDomain: blueagent.dev | Base 8453\ntitle: NAV premium for NVDA on Base\nbudget-usd: 0.50 USDC on Base\n"));
   check("token is lowercased, invite and budget bound", m.includes("token: 0xb20000000000000000000078ee7ce2fe4908108c") && m.includes("invite: 1205445") && m.includes("budget: 500000 "));
   check("free-text job uses '-' placeholders", (await jobPostMessage({ ...f, skill: null, token: null, invitedAgentId: null })).includes("skill: -\ntoken: -\ninvite: -"));
   check("changing the budget changes the message", (await jobPostMessage({ ...f, budgetUnits: 600_000 })) !== m);
