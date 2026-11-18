@@ -6,7 +6,7 @@
  */
 import { NextResponse } from "next/server";
 import { readAgentCard } from "@/lib/agent-ledger";
-import { blockyOwner, blockyServices } from "@/lib/blocky-instant";
+import { blockyPayee, blockyServices } from "@/lib/blocky-instant";
 
 export const runtime = "nodejs";
 export const maxDuration = 20;
@@ -18,6 +18,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const card = await readAgentCard(id);
   const n = card?.blocky?.n;
   if (!n) return NextResponse.json({ agentId: id, blocky: null });
-  const [payTo, services] = await Promise.all([blockyOwner(n), blockyServices(n)]);
+  const [payee, services] = await Promise.all([blockyPayee(n), blockyServices(n)]);
+  const payTo = payee?.payTo ?? null;
   return NextResponse.json({ agentId: id, blocky: { n, guild: card!.blocky!.guild ?? null, level: card!.blocky!.level ?? null, skills: card!.blocky!.skills ?? [] }, payTo, services: payTo ? services : [] });
 }

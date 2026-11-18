@@ -19,7 +19,7 @@
  * an open proxy. Answers are capped at 200 KB.
  */
 import { NextResponse, after, type NextRequest } from "next/server";
-import { blockyOwner, parseBlockyUrl, blockyServices, skillForTool } from "@/lib/blocky-instant";
+import { blockyPayee, parseBlockyUrl, blockyServices, skillForTool } from "@/lib/blocky-instant";
 import { readProviderDetail } from "@/lib/hub/exchange";
 import { readListing, recordHire } from "@/lib/hub/listings";
 import { blueHireServices } from "@/lib/hub/blue-services";
@@ -63,7 +63,9 @@ export async function POST(req: NextRequest) {
   // for an exact per-Blocky URL whose Blocky is owned, on chain right now, by
   // this payTo — so the buyer can only ever be quoted to the Blocky's owner.
   const blocky = !res ? parseBlockyUrl(url) : null;
-  const blockyRes = blocky && (await blockyOwner(blocky.n)) === payTo ? (await blockyServices(blocky.n)).find((s) => s.url === url) : undefined;
+  // payTo must be the Blocky's owner, or the payout EOA the owner signed for (blockyPayee verifies it).
+  const payee = blocky ? await blockyPayee(blocky.n) : null;
+  const blockyRes = blocky && payee && (payTo === payee.owner || payTo === payee.payTo) ? (await blockyServices(blocky.n)).find((s) => s.url === url) : undefined;
   const svc = res ?? blockyRes;
   if (!svc || !/^https:\/\//.test(url)) return NextResponse.json({ error: blocky ? "That Blocky does not sell this skill, or is not owned by this payTo on Base right now." : "That service is not in this seller's listing." }, { status: 404 });
 
