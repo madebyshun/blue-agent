@@ -65,7 +65,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const preview = clean(b.preview, LIMITS.preview);
   const result = clean(b.result, LIMITS.result);
 
-  const why = deliveryProblem(job, { agent: wallet, payTo, priceUsd, preview, result });
+  const why = deliveryProblem(job, { agent: wallet, agentId, payTo, priceUsd, preview, result });
   if (why) return NextResponse.json({ error: why }, { status: 400 });
   const owns = await ownsAgent(wallet, agentId);
   if (owns === null) return NextResponse.json({ error: "Could not read the ERC-8004 registry right now; nothing was delivered." }, { status: 503 });

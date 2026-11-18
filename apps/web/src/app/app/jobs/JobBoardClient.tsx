@@ -11,7 +11,7 @@ import { sessionFetch } from "@/lib/session-client";
 import { COINBASE_BASE_STOCKS } from "@/lib/base-stocks/coinbase-list";
 import { STOCK_JOB_TEMPLATES, parseBudget } from "../../../../../../packages/core/src/workers";
 
-interface PubJob { id: string; title: string; brief: string; budgetUnits: number; poster: string; status: string; createdAt: string; deliveries: { id: string }[]; contract?: { skill: string | null; inputs: { ticker: string } | null } }
+interface PubJob { id: string; title: string; brief: string; budgetUnits: number; poster: string; status: string; createdAt: string; deliveries: { id: string }[]; invitedAgentId?: string; inviteUntil?: string; contract?: { skill: string | null; inputs: { ticker: string } | null } }
 
 const usd = (u: number) => `$${(u / 1e6).toFixed(u < 1e6 ? 2 : 2)}`;
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
@@ -29,6 +29,20 @@ export default function JobBoardClient() {
   const [open, setOpen] = useState(false);
   const [f, setF] = useState({ title: "", brief: "", budget: "1", skill: "", token: "" });
   const [cat, setCat] = useState<(typeof CATS)[number][0]>("all");
+  // Direct hire: /jobs?agent=<id>[&skill=<skill>] (the "Hire this agent"
+  // button, and BaseCity's "Hire Blocky #N") opens the form addressed to one
+  // ERC-8004 agent. The server re-checks the id; only that agent may deliver
+  // for 48h, then the job opens to everyone.
+  const [invite, setInvite] = useState("");
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    const agent = (p.get("agent") ?? "").trim().replace(/^#/, "");
+    if (!/^\d{1,12}$/.test(agent)) return;
+    setInvite(agent);
+    setOpen(true);
+    const t = STOCK_JOB_TEMPLATES.find((x) => x.skill === p.get("skill"));
+    if (t) setF((cur) => ({ ...cur, title: t.title, brief: t.brief, budget: t.budget, skill: t.skill }));
+  }, []);
   // The token ADDRESS identifies the stock (a ticker also exists on Robinhood Chain); the server re-checks it.
   const stock = f.skill ? COINBASE_BASE_STOCKS.find((s) => s.token === f.token) : undefined;
   const budgetUsd = parseBudget(f.budget);
@@ -61,13 +75,14 @@ export default function JobBoardClient() {
       const r = await fetchWithSession(address, "/api/jobs", {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify(f.skill
-          ? { title: fill(f.title), brief: fill(f.brief), budgetUsd, skill: f.skill, inputs: { ticker: stock?.ticker, token: stock?.token } }
-          : { title: f.title, brief: f.brief, budgetUsd }),
+          ? { title: fill(f.title), brief: fill(f.brief), budgetUsd, skill: f.skill, inputs: { ticker: stock?.ticker, token: stock?.token }, invitedAgentId: invite || undefined }
+          : { title: f.title, brief: f.brief, budgetUsd, invitedAgentId: invite || undefined }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error ?? `HTTP ${r.status}`);
       setSt({ s: "done", msg: "Posted." });
       setF({ title: "", brief: "", budget: "1", skill: "", token: "" });
+      setInvite("");
       setOpen(false);
       load();
     } catch (e) {
@@ -109,6 +124,12 @@ export default function JobBoardClient() {
       {open && (
         <div className="mt-3 rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14] p-[14px] grid gap-2.5">
           <p className="text-[12px] font-medium tracking-[0.14em] text-[#64748B]">POST A JOB</p>
+          {invite && (
+            <div className="flex items-center gap-2 flex-wrap rounded-lg border border-[#4FC3F7]/30 bg-[#4FC3F7]/[0.06] px-3 py-2 text-[13px] text-[#94A3B8]">
+              <span>Direct hire for <Link href={`/exchange/agent/${invite}`} className="text-[#4FC3F7]">agent #{invite}</Link>: only it can deliver for 48 hours, then the job opens to every agent.</span>
+              <button type="button" className="ml-auto text-[12px] text-[#64748B] hover:text-[#E2E8F0]" onClick={() => setInvite("")}>Open to all instead</button>
+            </div>
+          )}
           <label className="grid gap-1 text-[13px] text-[#94A3B8]">Job type
             <select className={input} value={f.skill} onChange={(e) => setType(e.target.value)}>
               <option value="">Free text</option>
@@ -162,6 +183,9 @@ export default function JobBoardClient() {
                     <span className="shrink-0 text-[11px] font-medium text-[#4FC3F7] border border-[#4FC3F7]/30 rounded-full px-[7px] py-[2px]">up to {usd(j.budgetUnits)}</span>
                   </div>
                   <p className="font-prose text-[13px] leading-[1.6] text-[#94A3B8] mt-2 flex-1 line-clamp-3">{j.brief}</p>
+                  {j.invitedAgentId && j.inviteUntil && Date.parse(j.inviteUntil) > Date.now() && (
+                    <div className="text-[12px] text-[#4FC3F7] mt-[9px]">Direct hire · agent #{j.invitedAgentId} until {j.inviteUntil.slice(0, 16).replace("T", " ")} UTC</div>
+                  )}
                   <div className="text-[12px] text-[#64748B] mt-[9px]">{j.deliveries.length} deliver{j.deliveries.length === 1 ? "y" : "ies"} · by {short(j.poster)} · {j.createdAt.slice(0, 10)}</div>
                 </Link>
               ))}

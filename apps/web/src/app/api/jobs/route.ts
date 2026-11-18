@@ -6,7 +6,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { resolveActingWallet, actingWalletRefusal } from "@/lib/acting-wallet";
 import { parseBudget } from "../../../../../../packages/core/src/workers";
-import { LIMITS, clean, createJob, jobProblem, listJobs, publicJob, stockJobSpec } from "@/lib/jobs";
+import { LIMITS, clean, createJob, inviteSpec, jobProblem, listJobs, publicJob, stockJobSpec } from "@/lib/jobs";
 
 export const runtime = "nodejs";
 export const maxDuration = 15;
@@ -23,7 +23,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const who = await resolveActingWallet(req);
   if (who.status !== "ok") return actingWalletRefusal(who);
-  const b = (await req.json().catch(() => ({}))) as { title?: unknown; brief?: unknown; budgetUsd?: unknown; skill?: unknown; inputs?: { token?: unknown; ticker?: unknown } };
+  const b = (await req.json().catch(() => ({}))) as { title?: unknown; brief?: unknown; budgetUsd?: unknown; skill?: unknown; inputs?: { token?: unknown; ticker?: unknown }; invitedAgentId?: unknown };
   const title = clean(b.title, LIMITS.title);
   const brief = clean(b.brief, LIMITS.brief);
   const budgetUsd = typeof b.budgetUsd === "string" ? parseBudget(b.budgetUsd) : Number(b.budgetUsd);
@@ -31,7 +31,9 @@ export async function POST(req: NextRequest) {
   if (why) return NextResponse.json({ error: why }, { status: 400 });
   const spec = stockJobSpec(b.skill, b.inputs?.token, b.inputs?.ticker);
   if (typeof spec === "string") return NextResponse.json({ error: spec }, { status: 400 });
-  const job = await createJob(who.wallet, title, brief, Math.round(budgetUsd * 1e6), spec);
+  const invite = inviteSpec(b.invitedAgentId);
+  if (invite && typeof invite === "object") return NextResponse.json({ error: invite.refusal }, { status: 400 });
+  const job = await createJob(who.wallet, title, brief, Math.round(budgetUsd * 1e6), spec, invite);
   if (typeof job === "string") return NextResponse.json({ error: job }, { status: 429 });
   return NextResponse.json({ job: publicJob(job) }, { status: 201 });
 }
