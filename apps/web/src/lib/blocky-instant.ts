@@ -122,6 +122,45 @@ export function servicesFrom(n: string, catalog: CatalogTool[], info: BlockyInfo
   return out;
 }
 
+/**
+ * Pure: does this BaseCity payout message name `owner`, Blocky `n` and `payout`?
+ * Format (blocky-game e5ec814): "BaseCity: payout for Blocky Agents\n\nWallet <owner>\n
+ * Blockies <n,n,…>\nPayout <0x EOA>\nIssued <ISO>…".
+ */
+export function payoutMessageNames(message: string, owner: string, n: string, payout: string): boolean {
+  const line = (k: string) => message.match(new RegExp(`^${k} (.+)$`, "m"))?.[1]?.trim() ?? "";
+  return message.startsWith("BaseCity: payout for Blocky Agents")
+    && line("Wallet").toLowerCase() === owner.toLowerCase()
+    && line("Payout").toLowerCase() === payout.toLowerCase()
+    && line("Blockies").split(/[\s,]+/).includes(n);
+}
+
+/**
+ * Who a buyer may pay for Blocky n: its owner (ownerOf on chain), or a payout
+ * EOA the owner signed for (BaseCity, approved by ShunTr 2026-11-19, because
+ * wallets flag the owner's EIP-7702 account). The payout is accepted only when
+ * Blue itself verifies: the owner's signature over the card's payoutProof
+ * (EOA or ERC-1271/6492), the message names that owner, that payout and n,
+ * and the payout has no contract code. A sale changes ownerOf, so the old
+ * owner's proof stops matching on its own.
+ */
+export async function blockyPayee(n: string): Promise<{ owner: string; payTo: string; via: "owner" | "payout" } | null> {
+  const owner = await blockyOwner(n);
+  if (!owner) return null;
+  const card = await getJson<{ payout?: unknown; payoutProof?: { message?: unknown; signature?: unknown } }>(`https://www.basecity.space/api/agent-card?blocky=${n}`);
+  const payout = typeof card?.payout === "string" && /^0x[0-9a-fA-F]{40}$/.test(card.payout) ? card.payout.toLowerCase() : null;
+  const msg = card?.payoutProof?.message, sig = card?.payoutProof?.signature;
+  if (!payout || typeof msg !== "string" || typeof sig !== "string" || !/^0x[0-9a-fA-F]+$/.test(sig) || !payoutMessageNames(msg, owner, n, payout)) return { owner, payTo: owner, via: "owner" };
+  try {
+    const c = createPublicClient({ chain: base, transport: http(process.env.BASE_RPC_URL || "https://mainnet.base.org") });
+    const [ok, code] = await Promise.all([
+      c.verifyMessage({ address: owner as `0x${string}`, message: msg, signature: sig as `0x${string}` }),
+      c.getCode({ address: payout as `0x${string}` }),
+    ]);
+    return ok && (!code || code === "0x") ? { owner, payTo: payout, via: "payout" } : { owner, payTo: owner, via: "owner" };
+  } catch { return { owner, payTo: owner, via: "owner" }; }
+}
+
 /** BaseCity's tool catalog (id, guild, task, input schema), cached 2 minutes. */
 export async function readBlockyCatalog(): Promise<CatalogTool[]> {
   const c = await getJson<{ tools?: CatalogTool[] }>(BLOCKY_X402);

@@ -1,5 +1,5 @@
 // Instant Blocky hire: exact per-Blocky URLs only; skills and prices per Blocky.
-import { parseBlockyUrl, blockyUrl, servicesFrom, instantToolForSkill, skillForTool, MAX_PRICE_USD, type CatalogTool } from "../src/lib/blocky-instant";
+import { payoutMessageNames, parseBlockyUrl, blockyUrl, servicesFrom, instantToolForSkill, skillForTool, MAX_PRICE_USD, type CatalogTool } from "../src/lib/blocky-instant";
 import { agentRecord, type LedgerEntry } from "../src/lib/agent-ledger";
 
 let passed = 0, failed = 0;
@@ -29,6 +29,12 @@ const check = (name: string, ok: boolean) => { if (ok) passed++; else failed++; 
   check("blocky field prefilled with the Blocky number", JSON.stringify(card[0].example) === '{"blocky":"7"}');
   check("stock tools map to job skills; others keep their id", instantToolForSkill("stock-weekend-gap")?.id === "weekend-gap" && skillForTool("nav-premium") === "stock-nav-premium" && skillForTool("token-safety") === "token-safety");
 
+  const o = "0x" + "a".repeat(40), pay = "0x" + "e".repeat(40);
+  const msg = `BaseCity: payout for Blocky Agents\n\nWallet ${o}\nBlockies 717,759\nPayout ${pay.toUpperCase().replace("0X", "0x")}\nIssued 2026-11-19T00:00:00Z`;
+  check("payout message names owner, Blocky and payout", payoutMessageNames(msg, o, "759", pay));
+  check("payout message refused for a Blocky it does not list", !payoutMessageNames(msg, o, "75", pay));
+  check("payout message refused for another owner or payout", !payoutMessageNames(msg, "0x" + "b".repeat(40), "759", pay) && !payoutMessageNames(msg, o, "759", "0x" + "f".repeat(40)));
+  check("payout message must be BaseCity's", !payoutMessageNames(msg.replace("BaseCity:", "Other:"), o, "759", pay));
   const owner = "0x" + "a".repeat(40), payTo = owner;
   const e = (did: string, payer: string): LedgerEntry => ({ jobId: "instant", did, title: "t", skill: "token-safety", ticker: null, at: "", priceUnits: 10_000, payTo, kind: "instant", unlock: { tx: null, payer, at: "" } });
   const r = await agentRecord([e("1", "0x" + "b".repeat(40)), e("2", owner), e("3", "0x00fd29b7d6dbf13afb879afbb239db1d48ce746f")], [owner]);

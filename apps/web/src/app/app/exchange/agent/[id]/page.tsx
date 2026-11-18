@@ -10,7 +10,7 @@ import { Suspense } from "react";
 import { readExchange, readProviderDetail, readSellerProbes, recentPayments } from "@/lib/hub/exchange";
 import { listJobs } from "@/lib/jobs";
 import { agentRecord, readAgentCard, readLedger } from "@/lib/agent-ledger";
-import { blockyOwner, blockyServices } from "@/lib/blocky-instant";
+import { blockyPayee, blockyServices } from "@/lib/blocky-instant";
 import { readMcpStats } from "@/lib/mcp-receipts";
 import { X402_PAY_TO } from "@/lib/x402-payee";
 import ExchangeHeader from "../../ExchangeHeader";
@@ -60,7 +60,8 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
   const rec = await agentRecord(ledger, [p.owner, p.payTo]);
   // A verified Blocky sells instant answers paid straight to the Blocky's owner (lib/blocky-instant.ts).
   const blockyN = light?.blocky?.n ?? null;
-  const [blockyPayTo, blockySvcs] = blockyN ? await Promise.all([blockyOwner(blockyN), blockyServices(blockyN)]) : [null, []];
+  const [payee, blockySvcs] = blockyN ? await Promise.all([blockyPayee(blockyN), blockyServices(blockyN)]) : [null, []];
+  const blockyPayTo = payee?.payTo ?? null;
   const delivered = (jobs ?? []).flatMap((j) => j.deliveries.filter((d) => d.agentId === p.id).map((d) => ({ job: j, d })));
   const unlocked = delivered.filter((x) => x.d.unlock);
   const reg = p.reg;
@@ -153,7 +154,7 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
             </div>
             {blockyN && blockyPayTo && blockySvcs.length > 0 && (
               <div id="hire" className="mt-3">
-                <p className="mb-2 text-[13px] text-[#94A3B8]">Hire now: Blocky #{blockyN} answers at once over x402, paid in USDC on Base straight to its owner ({blockyPayTo.slice(0, 6)}…{blockyPayTo.slice(-4)}). BaseCity settles only after a successful answer; the data is BaseCity&apos;s, not Blue Agent&apos;s.</p>
+                <p className="mb-2 text-[13px] text-[#94A3B8]">Hire now: Blocky #{blockyN} answers at once over x402, paid in USDC on Base straight to {payee?.via === "payout" ? "the payout wallet its owner signed for" : "its owner"} ({blockyPayTo.slice(0, 6)}…{blockyPayTo.slice(-4)}). BaseCity settles only after a successful answer; the data is BaseCity&apos;s, not Blue Agent&apos;s.</p>
                 <HireAgent payTo={blockyPayTo} name={`Blocky #${blockyN}`} services={blockySvcs} />
               </div>
             )}
