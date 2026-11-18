@@ -20,7 +20,7 @@ export default async function AgentsPage({ searchParams }: { searchParams: Promi
   const skills = Object.keys(STOCK_SKILLS);
   const shown = rows
     // Instant skills: a verified Blocky can answer them even before any job delivery.
-    .filter((r) => !skill || r.record.skills.includes(skill) || (!!r.card.blocky?.n && (skill === "stock-nav-premium" || skill === "stock-after-hours-volume")))
+    .filter((r) => !skill || r.record.skills.includes(skill) || (!!r.card.blocky?.n && ["stock-nav-premium", "stock-after-hours-volume", "stock-weekend-gap"].includes(skill)))
     .sort((a, b) => b.record.verifiedUsd - a.record.verifiedUsd || b.record.delivered - a.record.delivered);
 
   return (
