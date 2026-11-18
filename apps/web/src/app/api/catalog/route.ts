@@ -14,6 +14,7 @@ import { HANDLERS }    from "@/app/api/x402/_handlers";
 import { wireSchema }  from "@/lib/tool-wire-schema";
 import { sampleFor }   from "@/lib/tool-samples";
 import { X402_PAY_TO } from "@/lib/x402-payee";
+import { STOCK_JOB_TEMPLATES, STOCK_SKILLS } from "../../../../../../packages/core/src/workers";
 
 export const runtime = "nodejs";
 // Vercel kills serverless functions at 60s by default — explicit budget so
@@ -56,6 +57,20 @@ function priceUnits(price?: string): number | null {
  */
 const AGENTS = ["blue"] as const;
 
+/**
+ * Tools grouped by the task an agent is doing (BaseCity plan item 7, ShunTr
+ * 2026-11-18), so a caller can pick by intent and see the price before it
+ * calls. Additive: the flat `tools` list stays as directories index it.
+ * A category missing here falls into "other" rather than vanishing.
+ */
+const TASKS: Record<string, { task: string; summary: string }> = {
+  security: { task: "check-before-you-sign", summary: "Screen a token, contract, wallet or signature before money moves." },
+  "on-chain": { task: "read-on-chain-data", summary: "Prices, pools, holders and contract facts read from chain or indexers." },
+  signal: { task: "market-signals", summary: "Stock token and market readings computed from pool and oracle data." },
+  trading: { task: "trade", summary: "Quotes and unsigned transactions you sign in your own wallet." },
+  builder: { task: "build", summary: "Builder workflow tools." },
+};
+
 export async function GET() {
   // `HANDLERS[t.id]` is a regression guard, not a fix: measured 2026-08-28 all
   // 112 catalog entries have a handler, so this changes nothing today. It is
@@ -88,7 +103,27 @@ export async function GET() {
       // tool — a body that works and the response keys it returns — not a
       // second copy of the schema; see lib/tool-samples.ts for provenance.
       sample: sampleFor(t.id) ?? null,
+      priceUsd: priceUnits(t.price) == null ? null : priceUnits(t.price)! / 1e6,
+      task: (TASKS[t.category] ?? { task: "other" }).task,
     }));
+
+  const byTask = [...Object.values(TASKS), { task: "other", summary: "Everything else." }]
+    .map((g) => ({ ...g, tools: tools.filter((t) => t.task === g.task).map((t) => ({ id: t.id, priceUsd: t.priceUsd, endpoint: t.endpoint })) }))
+    .filter((g) => g.tools.length);
+
+  // Work an agent can be HIRED for (the job board), next to the tools it can
+  // CALL. Different payment shape: a job is paid on unlock, straight to the
+  // delivering agent's wallet; Blue Agent takes no fee and holds nothing.
+  const jobs = {
+    board: "https://app.blueagent.dev/jobs",
+    post: { method: "POST", endpoint: `${BASE}/api/jobs`, auth: "SIWE session (cookie or x-blue-session)", body: "{title, brief, budgetUsd, skill?, inputs?: {token}, invitedAgentId?}" },
+    feed: `${BASE}/api/jobs/feed`,
+    paymentMode: "pay-on-unlock",
+    currency: "USDC", network: "eip155:8453",
+    budgetUsd: { min: 0.01, max: 100 },
+    directHire: { param: "invitedAgentId", holdHours: 48, link: "https://app.blueagent.dev/jobs?agent=<agentId>&skill=<skill>" },
+    skills: STOCK_JOB_TEMPLATES.map((t) => ({ id: t.skill, task: "stock-research", title: t.title, defaultBudgetUsd: Number(t.budget), inputs: { token: "Coinbase stock token address on Base" }, required: [...STOCK_SKILLS[t.skill]] })),
+  };
 
   return NextResponse.json(
     {
@@ -131,6 +166,11 @@ export async function GET() {
       // thing being checked, which passes no matter what. `scripts/docs-truth-check.ts`
       // (group 4) pins the equality; `hub-receipts-report.ts` prints it beside
       // the symbol each came from.
+      byTask,
+      jobs,
+      // Every paid id answers 402 with a JSON body (x402Version, accepts[]
+      // with amount, asset, payTo) before any work runs; errors are JSON too.
+      errors: { format: "application/json", paymentRequired: 402 },
       integrity: {
         listed: AGENT_TOOLS.length,
         withHandler: Object.keys(HANDLERS).length,
