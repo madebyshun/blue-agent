@@ -1,25 +1,36 @@
-// Instant Blocky hire (2026-11-18): only exact per-Blocky URLs are relayable.
-import { parseBlockyUrl, blockyUrl, blockyServices, instantToolForSkill } from "../src/lib/blocky-instant";
+// Instant Blocky hire: exact per-Blocky URLs only; skills and prices per Blocky.
+import { parseBlockyUrl, blockyUrl, servicesFrom, instantToolForSkill, skillForTool, MAX_PRICE_USD, type CatalogTool } from "../src/lib/blocky-instant";
 import { agentRecord, type LedgerEntry } from "../src/lib/agent-ledger";
 
 let passed = 0, failed = 0;
 const check = (name: string, ok: boolean) => { if (ok) passed++; else failed++; console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}`); };
 
 (async () => {
-  check("exact per-Blocky URL parses", JSON.stringify(parseBlockyUrl(blockyUrl("nav-premium", "101"))) === '{"tool":"nav-premium","n":"101"}');
+  check("exact per-Blocky URL parses (any tool id shape)", JSON.stringify(parseBlockyUrl(blockyUrl("token-safety", "740"))) === '{"tool":"token-safety","n":"740"}');
   check("blocky=any refused", parseBlockyUrl("https://www.basecity.space/api/x402?tool=nav-premium&blocky=any") === null);
   check("other host refused", parseBlockyUrl("https://basecity.space.evil.io/api/x402?tool=nav-premium&blocky=1") === null);
   check("bare apex host refused (exact origin only)", parseBlockyUrl("https://basecity.space/api/x402?tool=nav-premium&blocky=1") === null);
-  check("unknown tool refused", parseBlockyUrl("https://www.basecity.space/api/x402?tool=drain&blocky=1") === null);
+  check("odd tool id refused", parseBlockyUrl("https://www.basecity.space/api/x402?tool=../x&blocky=1") === null);
   check("extra params refused", parseBlockyUrl("https://www.basecity.space/api/x402?tool=nav-premium&blocky=1&to=0xabc") === null);
   check("param order must be canonical", parseBlockyUrl("https://www.basecity.space/api/x402?blocky=1&tool=nav-premium") === null);
-  check("services carry both tools at catalog prices", blockyServices("7").map((s) => `${s.url}|${s.priceUsd}`).join(",") === `${blockyUrl("nav-premium", "7")}|0.02,${blockyUrl("weekend-gap", "7")}|0.01,${blockyUrl("after-hours-volume", "7")}|0.01`);
-  check("every stock skill maps to its instant tool", instantToolForSkill("stock-nav-premium")?.id === "nav-premium" && instantToolForSkill("stock-weekend-gap")?.id === "weekend-gap" && instantToolForSkill("stock-x") === null);
+
+  const catalog: CatalogTool[] = [
+    { id: "token-safety", guild: "security", task: "Token safety", input: { properties: { token: {} } } },
+    { id: "nav-premium", guild: "market", task: "NAV premium", input: { properties: { ticker: {} } } },
+    { id: "blocky-card", guild: "creative", task: "Card", input: { properties: { blocky: {} } } },
+  ];
+  const svc = servicesFrom("740", catalog, { guild: "security", level: 1, skills: ["token-safety", "unknown-tool", "nav-premium"], prices: { "token-safety": 0.01, "nav-premium": 5 } });
+  check("only this Blocky's catalog skills, at its own price", svc.length === 1 && svc[0].url === blockyUrl("token-safety", "740") && svc[0].priceUsd === 0.01);
+  check("price above the hard ceiling dropped", MAX_PRICE_USD === 0.1 && !svc.some((s) => s.url.includes("nav-premium")));
+  check("example input uses the tool's own field, blank when no safe value", JSON.stringify(svc[0].example) === '{"token":""}');
+  const card = servicesFrom("7", catalog, { skills: ["blocky-card"], prices: { "blocky-card": 0.005 } });
+  check("blocky field prefilled with the Blocky number", JSON.stringify(card[0].example) === '{"blocky":"7"}');
+  check("stock tools map to job skills; others keep their id", instantToolForSkill("stock-weekend-gap")?.id === "weekend-gap" && skillForTool("nav-premium") === "stock-nav-premium" && skillForTool("token-safety") === "token-safety");
+
   const owner = "0x" + "a".repeat(40), payTo = owner;
-  const e = (did: string, payer: string, kind?: "instant"): LedgerEntry => ({ jobId: "instant", did, title: "t", skill: "stock-nav-premium", ticker: "NVDA", at: "", priceUnits: 20_000, payTo, ...(kind ? { kind } : {}), unlock: { tx: null, payer, at: "" } });
-  const r = await agentRecord([e("1", "0x" + "b".repeat(40), "instant"), e("2", "0x" + "c".repeat(40), "instant"), e("3", owner, "instant")], [owner]);
-  check("instant calls kept out of job totals", r.delivered === 0 && r.purchased === 0);
-  check("instant self-paid excluded, others counted", r.instantCalls === 2 && Math.abs(r.instantUsd - 0.04) < 1e-9);
+  const e = (did: string, payer: string): LedgerEntry => ({ jobId: "instant", did, title: "t", skill: "token-safety", ticker: null, at: "", priceUnits: 10_000, payTo, kind: "instant", unlock: { tx: null, payer, at: "" } });
+  const r = await agentRecord([e("1", "0x" + "b".repeat(40)), e("2", owner), e("3", "0x00fd29b7d6dbf13afb879afbb239db1d48ce746f")], [owner]);
+  check("instant: self-paid and team-paid excluded", r.instantCalls === 1 && r.delivered === 0);
   console.log(`\n${failed ? `${failed} of ${passed + failed} CHECK(S) FAILED` : `all ${passed} checks passed`}`);
   process.exit(failed ? 1 : 0);
 })();

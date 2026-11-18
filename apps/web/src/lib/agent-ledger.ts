@@ -141,7 +141,7 @@ export async function agentRecord(all: LedgerEntry[], self: string[]): Promise<A
 
 // ── identity, light: owner + registration, no log scans ─────────────────────
 
-export interface AgentCard { id: string; owner: string; uri: string; name: string; image: string | null; payTo: string; blocky: { url: string; via: "onchain-tokenURI" | "owner-signature"; n?: string } | null }
+export interface AgentCard { id: string; owner: string; uri: string; name: string; image: string | null; payTo: string; blocky: { url: string; via: "onchain-tokenURI" | "owner-signature"; n?: string; skills?: string[] } | null }
 
 const BLOCKY_CARD = /^https:\/\/(www\.)?basecity\.space\/api\/agent-card\?/;
 
@@ -258,6 +258,14 @@ async function readAgentCardUncached(id: string): Promise<AgentCard | null> {
       const card = await fetchBlockyCard(n);
       if (await ownerProofHolds(card, n, id)) { blocky = { url: safeUrl(card?.url), via: "owner-signature", n }; break; }
     }
+  }
+  // The Blocky's own skills (BaseCity specializations), for /agents filters.
+  if (blocky?.n) {
+    try {
+      const r = await fetch(`${BASECITY}/api/x402?blocky=${blocky.n}`, { signal: AbortSignal.timeout(5000), next: { revalidate: 120 } });
+      const j = r.ok ? ((await r.json()) as { skills?: unknown }) : null;
+      if (Array.isArray(j?.skills)) blocky = { ...blocky, skills: j.skills.map(String).filter((x) => /^[a-z0-9-]{2,32}$/.test(x)) };
+    } catch { /* skills unknown: filters fall back to job history */ }
   }
   return { id, owner, uri, name, image, payTo, blocky };
 }
