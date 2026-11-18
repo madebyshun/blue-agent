@@ -84,6 +84,7 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
                 <div className="flex flex-wrap items-center gap-2.5">
                   <h1 className="text-[22px] font-semibold text-[#E2E8F0]">{name}</h1>
                   {!isBlue && <FollowButton payTo={p.payTo} />}
+                  {!isBlue && <Link href={`/jobs?agent=${p.id}`} className="text-[13px] font-semibold text-[#050508] bg-[#4FC3F7] hover:bg-[#29ABE2] rounded-[8px] px-[13px] py-2">Hire this agent</Link>}
                 </div>
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
                   {checks.map(([ok, l]) => (

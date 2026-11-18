@@ -50,6 +50,29 @@ export interface Job {
   /** Optional structured research job (stock skills). Absent on free-text jobs. */
   skill?: string;
   inputs?: StockInputs;
+  /**
+   * Direct hire (BaseCity plan, ShunTr 2026-11-18): only this ERC-8004 agent
+   * may deliver until `inviteUntil`; after that the job is open to anyone.
+   */
+  invitedAgentId?: string;
+  inviteUntil?: string;
+}
+
+/** How long an invited agent holds a direct-hire job before it opens up. */
+export const INVITE_MS = 48 * 3600 * 1000;
+const AGENT_ID = /^\d{1,12}$/;
+
+/** A direct-hire invite from user input: the agent id, null for none, or a refusal. Pure. */
+export function inviteSpec(raw: unknown): string | null | { refusal: string } {
+  if (raw == null || raw === "") return null;
+  const id = String(raw).trim().replace(/^#/, "");
+  return AGENT_ID.test(id) ? id : { refusal: "invitedAgentId: an ERC-8004 agent id on Base (digits)." };
+}
+
+/** The invited agent, while its hold is still running; null once it lapsed. Pure. */
+export function activeInvite(job: Pick<Job, "invitedAgentId" | "inviteUntil">, now = Date.now()): string | null {
+  if (!job.invitedAgentId || !job.inviteUntil) return null;
+  return now < Date.parse(job.inviteUntil) ? job.invitedAgentId : null;
 }
 
 const K_INDEX = "jobs:index";
@@ -89,8 +112,10 @@ export function stockJobSpec(skill: unknown, token: unknown, ticker?: unknown): 
 }
 
 /** Why a delivery cannot be accepted, or null. Pure. */
-export function deliveryProblem(job: Job, d: { agent: string; payTo: string; priceUsd: number; preview: string; result: string }): string | null {
+export function deliveryProblem(job: Job, d: { agent: string; agentId?: string; payTo: string; priceUsd: number; preview: string; result: string }, now = Date.now()): string | null {
   if (job.status !== "open") return "This job is not open.";
+  const invited = activeInvite(job, now);
+  if (invited && d.agentId !== invited) return `This job is a direct hire for agent #${invited} until ${job.inviteUntil}; it opens to everyone after that.`;
   if (!ADDR.test(d.payTo)) return "payTo must be a 0x address on Base.";
   const u = Math.round(d.priceUsd * 1e6);
   if (!Number.isFinite(u) || u < LIMITS.minBudget) return "Price: at least $0.01.";
@@ -117,10 +142,11 @@ export async function getJob(id: string): Promise<Job | null | undefined> {
   return p.status === "error" ? undefined : p.status === "hit" ? p.value : null;
 }
 
-export async function createJob(poster: string, title: string, brief: string, budgetUnits: number, spec?: { skill: string; inputs: StockInputs } | null): Promise<Job | string> {
+export async function createJob(poster: string, title: string, brief: string, budgetUnits: number, spec?: { skill: string; inputs: StockInputs } | null, invitedAgentId?: string | null): Promise<Job | string> {
   const open = ((await listJobs(LIMITS.indexMax)) ?? []).filter((j) => j.poster === poster && j.status === "open").length;
   if (open >= LIMITS.openPerPoster) return `You have ${open} open jobs; close one first.`;
-  const job: Job = { id: newId(), title, brief, budgetUnits, poster, status: "open", createdAt: new Date().toISOString(), deliveries: [], ...(spec ?? {}) };
+  const job: Job = { id: newId(), title, brief, budgetUnits, poster, status: "open", createdAt: new Date().toISOString(), deliveries: [], ...(spec ?? {}),
+    ...(invitedAgentId ? { invitedAgentId, inviteUntil: new Date(Date.now() + INVITE_MS).toISOString() } : {}) };
   await kv.set(itemKey(job.id), job, { ex: TTL });
   const r = await kvMutate<string[]>(K_INDEX, [], (cur) => [job.id, ...cur].slice(0, LIMITS.indexMax));
   if (r !== "ok") return "Could not save the job right now; nothing was posted.";
@@ -131,7 +157,7 @@ export async function addDelivery(job: Job, d: Omit<Delivery, "id" | "at">, resu
   const delivery: Delivery = { ...d, id: newId(), at: new Date().toISOString() };
   await kv.set(resultKey(job.id, delivery.id), result, { ex: TTL });
   const r = await kvMutate<Job>(itemKey(job.id), job, (cur) => {
-    if (deliveryProblem(cur, { agent: d.agent, payTo: d.payTo, priceUsd: d.priceUnits / 1e6, preview: d.preview, result })) return null;
+    if (deliveryProblem(cur, { agent: d.agent, agentId: d.agentId, payTo: d.payTo, priceUsd: d.priceUnits / 1e6, preview: d.preview, result })) return null;
     return { ...cur, deliveries: [...cur.deliveries, delivery] };
   }, TTL);
   return r === "ok" ? delivery : "Could not record the delivery right now.";
@@ -197,6 +223,8 @@ export function jobsForAgents(jobs: Job[], limit = 10) {
     brief: j.brief.slice(0, 400),
     budget_usd: j.budgetUnits / 1e6,
     deliveries: j.deliveries.length,
+    invited_agent_id: activeInvite(j),
+    invite_until: activeInvite(j) ? j.inviteUntil : null,
     contract: workerJobContract(j),
     page: `https://app.blueagent.dev/jobs/${j.id}`,
     deliver: `POST https://blueagent.dev/api/jobs/${j.id}/deliveries`,

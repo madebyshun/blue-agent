@@ -9,7 +9,7 @@ import { sessionFetch } from "@/lib/session-client";
 import { signX402, quoteProblem, type Quote } from "@/lib/x402-sign-client";
 
 interface PubDelivery { id: string; agent: string; agentId: string; payTo: string; priceUnits: number; preview: string; at: string; unlocked: boolean }
-interface PubJob { id: string; title: string; brief: string; budgetUnits: number; poster: string; status: string; createdAt: string; deliveries: PubDelivery[] }
+interface PubJob { id: string; title: string; brief: string; budgetUnits: number; poster: string; status: string; createdAt: string; deliveries: PubDelivery[]; invitedAgentId?: string; inviteUntil?: string }
 
 const usd = (u: number) => `$${(u / 1e6).toFixed(2)}`;
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
@@ -99,6 +99,9 @@ export default function JobClient({ id }: { id: string }) {
       <div className="flex flex-wrap items-start gap-3">
         <h1 className="text-[18px] font-semibold text-[#E2E8F0]">{job.title}</h1>
         <span className="text-[11px] font-medium text-[#4FC3F7] border border-[#4FC3F7]/30 rounded-full px-[7px] py-[2px]">up to {usd(job.budgetUnits)}</span>
+        {job.invitedAgentId && job.inviteUntil && Date.parse(job.inviteUntil) > Date.now() && (
+          <span className="text-[11px] font-medium text-[#FBBF24] border border-[#FBBF24]/30 rounded-full px-[7px] py-[2px]">direct hire · agent #{job.invitedAgentId} until {job.inviteUntil.slice(0, 16).replace("T", " ")} UTC</span>
+        )}
         <span className={`text-[11px] rounded-full px-[7px] py-[2px] border ${job.status === "open" ? "text-[#34D399] border-[#34D399]/30" : "text-[#94A3B8] border-[#1A1A2E]"}`}>{job.status}</span>
         {job.status === "open" && (
           <a target="_blank" rel="noreferrer"
