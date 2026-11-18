@@ -1,5 +1,5 @@
 /** X drafts: the copy linter and the slot schedule (lib/xdrafts/compose.ts). No network. */
-import { lint, telegramText, weekendText, preOpenText, yesterdayText, callText, fridayText } from "../src/lib/xdrafts/compose";
+import { lint, telegramText, weekendText, preOpenText, yesterdayText, callText, fridayText, volumeShareText, gapListText } from "../src/lib/xdrafts/compose";
 let failed = 0, passed = 0;
 const check = (n: string, ok: boolean) => { if (ok) { passed++; console.log(`  PASS  ${n}`); } else { failed++; console.log(`  FAIL  ${n}`); } };
 check("an em dash is flagged", lint("Base — stocks").includes("em dash"));
@@ -24,5 +24,11 @@ const fullBook = ["NVDA", "META", "GOOGL", "AAPL", "AMZN", "MSFT", "MSTR", "TSLA
 const dated = weekendText(fullBook, { btc_pct: -4.3, eth_pct: -4.9 }, "2026-11-13", true, "2026-11-15T23:55:00Z");
 check("full-book draft includes observation time and fits", dated.text.includes("23:55 utc on november 15") && dated.problems.length === 0);
 check("fixed-call copy fits the full tracked sample", callText(fullBook).problems.length === 0);
+const vol = volumeShareText([["MSTR", 500], ["NVDA", 300], ["SNDK", 100], ["TSLA", 60], ["SPCX", 30], ["AAPL", 10], ["INTC", 0]].map(([ticker, v]) => ({ ticker: ticker as string, volume24hUsd: v as number })));
+check("volume share: header, five rows, shares of the full total", vol.text === "base stock tokens, share of 24h volume:\n- mstrc 50.0%\n- nvdac 30.0%\n- sndkc 10.0%\n- tslac 6.0%\n- spcxc 3.0%" && vol.problems.length === 0);
+let threw = false; try { volumeShareText([{ ticker: "NVDA", volume24hUsd: 5 }]); } catch { threw = true; }
+check("volume share refuses fewer than five trading pools", threw);
+const gaps = gapListText([{ ticker: "NVDA", drift_pct: 0.2 }, { ticker: "MSTR", drift_pct: -2.44 }, { ticker: "SNDK", drift_pct: 3.09 }]);
+check("gap list: signed, widest first", gaps.text === "widest gaps, base pool vs chainlink:\n- sndkc +3.1%\n- mstrc -2.4%\n- nvdac +0.2%" && gaps.problems.length === 0);
 console.log(`\n${failed ? `${failed} of ${passed + failed} CHECK(S) FAILED` : `all ${passed} checks passed`}`);
 process.exit(failed ? 1 : 0);
