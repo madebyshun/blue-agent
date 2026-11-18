@@ -31,6 +31,7 @@ import { ERC8004_ABI, ERC8004_IDENTITY, ERC8004_REPUTATION, ERC8004_CHAIN_ID, fe
 import { verifyUnlock, type LedgerEntry } from "@/lib/agent-ledger";
 import { X402_PAY_TO } from "@/lib/x402-payee";
 import { BLUE_REFERRER } from "@/lib/agent-coin";
+import { TEAM_WALLETS } from "@/lib/mcp-receipts";
 
 export const FEEDBACK_MIN_UNITS = 50_000;          // $0.05
 export const LOW_GAS_WEI = 300_000_000_000_000n;   // 0.0003 ETH
@@ -47,6 +48,8 @@ export interface FeedbackFile {
 
 /** Pure: should this unlock be queued at all? (Owner self-pay is re-checked on chain at send time.) */
 export function queueable(i: Pick<FeedbackItem, "tx" | "payer" | "payTo" | "priceUnits">): boolean {
+  // Team / test payers are not outside demand; no reputation for them.
+  if (TEAM_WALLETS.has(lc(i.payer))) return false;
   return /^0x[0-9a-fA-F]{64}$/.test(i.tx) && i.priceUnits >= FEEDBACK_MIN_UNITS && lc(i.payer) !== lc(i.payTo);
 }
 
