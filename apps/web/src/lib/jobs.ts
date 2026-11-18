@@ -231,6 +231,8 @@ export async function deliveryMessage(f: { jobId: string; agentId: string; payTo
 // minutes, and each signature posts once. Signed posts are limited per wallet
 // per UTC day (API_POSTS_PER_DAY), on top of LIMITS.openPerPoster.
 export const API_POSTS_PER_DAY = 10;
+/** The x402 anti-spam fee for posting without a session or signature: $0.02 (ShunTr 2026-11-18). */
+export const POST_FEE_UNITS = 20_000;
 
 export async function jobPostMessage(f: { title: string; brief: string; budgetUnits: number; skill?: string | null; token?: string | null; invitedAgentId?: string | null; issuedAt: string }): Promise<string> {
   return [

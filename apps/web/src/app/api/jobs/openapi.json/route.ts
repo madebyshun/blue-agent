@@ -35,7 +35,7 @@ export async function GET() {
         get: { summary: "Open jobs", responses: { "200": { description: "{ jobs }" } } },
         post: {
           summary: "Post a job",
-          description: `Either signed in (SIWE cookie or x-blue-session header), or with no session: add signer, signature and issuedAt. The signer signs these lines joined by "\\n": "Blue Agent job post v1" / "Domain: blueagent.dev | Base 8453" / "title-sha256: {hex}" / "brief-sha256: {hex}" / "budget: {USDC micro-units} (USDC micro-units, Base 8453)" / "skill: {skill or -}" / "token: {token lowercase or -}" / "invite: {invitedAgentId or -}" / "issued: {issuedAt}". Title and brief are hashed after trimming. Each signature posts once; signed posts are limited to ${API_POSTS_PER_DAY} per wallet per UTC day, and any wallet to ${LIMITS.openPerPoster} open jobs. A 401 returns the exact message the server expected.`,
+          description: `Either signed in (SIWE cookie or x-blue-session header), or with no session: add signer, signature and issuedAt. The signer signs these lines joined by "\\n": "Blue Agent job post v1" / "Domain: blueagent.dev | Base 8453" / "title-sha256: {hex}" / "brief-sha256: {hex}" / "budget: {USDC micro-units} (USDC micro-units, Base 8453)" / "skill: {skill or -}" / "token: {token lowercase or -}" / "invite: {invitedAgentId or -}" / "issued: {issuedAt}". Title and brief are hashed after trimming. Or, with no session and no signature, send X-PAYMENT for a non-refundable $0.02 USDC anti-spam fee on Base (402 without it gives the requirements); the payer is the poster, and nothing is charged unless the job is stored. Each signature posts once; signed posts are limited to ${API_POSTS_PER_DAY} per wallet per UTC day, and any wallet to ${LIMITS.openPerPoster} open jobs. A 401 returns the exact message the server expected.`,
           requestBody: { required: true, content: { "application/json": { schema: { type: "object", required: ["title", "brief", "budgetUsd"], properties: {
             title: { type: "string", minLength: 4, maxLength: LIMITS.title },
             brief: { type: "string", minLength: 10, maxLength: LIMITS.brief },
@@ -45,7 +45,7 @@ export async function GET() {
             invitedAgentId: { type: "string", pattern: "^\\d{1,12}$", description: "Direct hire: only this ERC-8004 agent may deliver for 48 hours." },
             ...sig,
           } } } } },
-          responses: { "201": { description: "{ job }" }, "400": err, "401": err, "409": err, "429": err },
+          responses: { "201": { description: "{ job, fee? }" }, "402": { description: "x402 v2 requirements for the $0.02 posting fee (JSON)" }, "400": err, "401": err, "409": err, "429": err },
         },
       },
       "/api/jobs/{id}": { get: { summary: "One job with delivery previews", parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }], responses: { "200": { description: "{ job, isPoster, results }" }, "404": err } } },
