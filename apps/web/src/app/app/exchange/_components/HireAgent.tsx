@@ -27,6 +27,33 @@ type Phase =
 
 const svcName = (s: ResourceSample) => s.name ?? s.url.replace(/^https?:\/\/[^/]+/, "").split("/").filter(Boolean).slice(-2).join(" ").replace(/[-_]/g, " ") ?? s.url;
 const price = (s: ResourceSample) => (s.priceUsd === null ? "price on request" : `$${s.priceUsd} per task`);
+/** BaseCity Blocky services: the fields their catalog schemas use, checked before any call. */
+const BLOCKY_X402 = "https://www.basecity.space/api/x402";
+const FIELD_RULES: Record<string, [RegExp, string]> = {
+  token: [/^0x[0-9a-fA-F]{40}$/, "a 0x token address on Base"],
+  address: [/^0x[0-9a-fA-F]{40}$/, "a 0x address on Base"],
+  wallet: [/^0x[0-9a-fA-F]{40}$/, "a 0x wallet address on Base"],
+  tx: [/^0x[0-9a-fA-F]{64}$/, "a 0x transaction hash (64 hex)"],
+  agentId: [/^\d{1,12}$/, "an ERC-8004 agent id (digits)"],
+  blocky: [/^\d{1,6}$/, "a Blocky number"],
+  ticker: [/^[A-Za-z.]{1,8}$/, "a ticker such as NVDA"],
+  query: [/\S/, "a few words"],
+};
+function inputProblem(url: string, input: Record<string, unknown>): string | null {
+  if (!url.startsWith(BLOCKY_X402)) return null;
+  for (const [k, v] of Object.entries(input)) {
+    const rule = FIELD_RULES[k];
+    if (rule && !rule[0].test(String(v ?? "").trim())) return `${k}: enter ${rule[1]}. Nothing was called.`;
+  }
+  return null;
+}
+/** A seller's own 4xx explanation, when it sent one as JSON {message|error}. */
+function sellerMessage(body: unknown): string | null {
+  const b = body as { message?: unknown; error?: unknown } | null;
+  const m = typeof b?.message === "string" ? b.message : typeof b?.error === "string" ? b.error : null;
+  return m ? m.slice(0, 300) : null;
+}
+
 const Step = ({ n, t }: { n: number; t: string }) => <p className="mt-4 text-[13px] font-semibold text-[#E2E8F0]">{n}. {t}</p>;
 
 export default function HireAgent({ payTo, name, services, blurb }: { payTo: string; name: string; services: ResourceSample[]; blurb?: string }) {
@@ -39,7 +66,9 @@ export default function HireAgent({ payTo, name, services, blurb }: { payTo: str
   const [json, setJson] = useState(JSON.stringify(services[0]?.example ?? {}, null, 2));
   const [ph, setPh] = useState<Phase>({ k: "idle" });
 
-  const pick = (n: number) => { setI(n); setJson(JSON.stringify(services[n]?.example ?? {}, null, 2)); setPh({ k: "idle" }); };
+  // A `wallet` field is the buyer's own connected wallet when left blank.
+  const withWallet = (ex: Record<string, unknown> | undefined) => (ex && "wallet" in ex && !ex.wallet && address ? { ...ex, wallet: address } : ex ?? {});
+  const pick = (n: number) => { setI(n); setJson(JSON.stringify(withWallet(services[n]?.example), null, 2)); setPh({ k: "idle" }); };
   const parsed = (() => { try { const v = JSON.parse(json || "{}"); return v && typeof v === "object" ? v : null; } catch { return null; } })();
 
   async function call(payment?: string) {
@@ -49,10 +78,12 @@ export default function HireAgent({ payTo, name, services, blurb }: { payTo: str
 
   async function quote() {
     if (!parsed) return setPh({ k: "error", msg: "Input is not valid JSON." });
+    const bad = inputProblem(svc.url, parsed as Record<string, unknown>);
+    if (bad) return setPh({ k: "error", msg: bad });
     setPh({ k: "quoting" });
     const { http, d } = await call();
     if (http !== 200) return setPh({ k: "error", msg: d.error ?? `HTTP ${http}` });
-    if (d.status !== 402) return d.status && d.status < 300 ? setPh({ k: "free", body: d.body }) : setPh({ k: "error", msg: `The seller answered HTTP ${d.status} without a price.` });
+    if (d.status !== 402) return d.status && d.status < 300 ? setPh({ k: "free", body: d.body }) : setPh({ k: "error", msg: sellerMessage(d.body) ? `The seller refused the input: ${sellerMessage(d.body)}` : `The seller answered HTTP ${d.status} without a price.` });
     const v = Number(d.quote?.x402Version ?? 2);
     const q = (d.quote?.accepts ?? []).map((a) => toQuote(a, v)).find((x): x is Quote => !!x);
     if (!q) return setPh({ k: "error", msg: "The seller does not take USDC on Base for this service." });
@@ -74,7 +105,7 @@ export default function HireAgent({ payTo, name, services, blurb }: { payTo: str
       const { http, d } = await call(p);
       if (http !== 200) throw new Error(d.error ?? `HTTP ${http}`);
       const tx = d.receipt?.transaction ?? d.receipt?.txHash ?? null;
-      if ((d.status ?? 0) >= 400) throw new Error(`The seller answered HTTP ${d.status}.`);
+      if ((d.status ?? 0) >= 400) throw new Error(sellerMessage(d.body) ? `The seller answered: ${sellerMessage(d.body)}` : `The seller answered HTTP ${d.status}.`);
       setPh({ k: "done", body: d.body, tx, status: d.status ?? 0 });
     } catch (e) {
       setPh({ k: "error", signed, msg: (e as Error).message.split("\n")[0].slice(0, 200) });
@@ -84,7 +115,7 @@ export default function HireAgent({ payTo, name, services, blurb }: { payTo: str
   if (!services.length) return null;
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} className="rounded-[8px] bg-[#4FC3F7] px-[13px] py-2 text-[13px] font-semibold text-[#050508] hover:bg-[#29ABE2]">+ Hire agent</button>
+      <button type="button" onClick={() => { pick(i); setOpen(true); }} className="rounded-[8px] bg-[#4FC3F7] px-[13px] py-2 text-[13px] font-semibold text-[#050508] hover:bg-[#29ABE2]">+ Hire agent</button>
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={() => setOpen(false)}>
           <div className="max-h-[90vh] w-full max-w-[620px] overflow-y-auto rounded-[14px] border border-[#1A1A2E] bg-[#0a0a0f] p-5 font-mono" onClick={(e) => e.stopPropagation()}>
