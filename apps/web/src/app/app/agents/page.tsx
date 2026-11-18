@@ -19,7 +19,8 @@ export default async function AgentsPage({ searchParams }: { searchParams: Promi
   const { rows, readable } = await readDirectory(60);
   const skills = Object.keys(STOCK_SKILLS);
   const shown = rows
-    .filter((r) => !skill || r.record.skills.includes(skill))
+    // Instant skills: a verified Blocky can answer them even before any job delivery.
+    .filter((r) => !skill || r.record.skills.includes(skill) || (!!r.card.blocky?.n && (skill === "stock-nav-premium" || skill === "stock-after-hours-volume")))
     .sort((a, b) => b.record.verifiedUsd - a.record.verifiedUsd || b.record.delivered - a.record.delivered);
 
   return (
@@ -63,7 +64,9 @@ export default async function AgentsPage({ searchParams }: { searchParams: Promi
               {r.skills.length > 0 && <div className="flex flex-wrap gap-1">{r.skills.map((s) => <span key={s} className="text-[11px] text-[#94A3B8] border border-[#1A1A2E] rounded-[5px] px-[6px] py-[2px]">{s}</span>)}</div>}
               <div className="mt-auto flex gap-3 text-[13px]">
                 <Link href={`/exchange/agent/${a.id}`} className="text-[#4FC3F7]">Profile</Link>
-                <Link href={`/jobs?agent=${a.id}`} className="text-[#4FC3F7]">Hire</Link>
+                {a.blocky?.n ? <Link href={`/exchange/agent/${a.id}#hire`} className="text-[#4FC3F7]">Hire now · from $0.01</Link> : null}
+                <Link href={`/jobs?agent=${a.id}`} className="text-[#4FC3F7]">Post a job</Link>
+                {r.instantCalls > 0 && <span className="ml-auto text-[12px] text-[#64748B]">{r.instantCalls} instant</span>}
               </div>
             </div>
           ))}

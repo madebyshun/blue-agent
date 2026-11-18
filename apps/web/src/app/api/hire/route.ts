@@ -18,7 +18,8 @@
  * /exchange/sell (readListing) — https, under that exact payTo — so it is not
  * an open proxy. Answers are capped at 200 KB.
  */
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse, after, type NextRequest } from "next/server";
+import { blockyOwner, parseBlockyUrl, blockyServices } from "@/lib/blocky-instant";
 import { readProviderDetail } from "@/lib/hub/exchange";
 import { readListing, recordHire } from "@/lib/hub/listings";
 import { blueHireServices } from "@/lib/hub/blue-services";
@@ -58,9 +59,15 @@ export async function POST(req: NextRequest) {
   const own = payTo === X402_PAY_TO.toLowerCase() ? blueHireServices().find((r) => r.url === url) : undefined;
   const res = own ?? detail?.resources.find((r) => r.url === url)
     ?? listing?.services.filter((s) => s.probe === "live").map((s) => ({ url: s.url, priceUsd: s.priceUsd, description: s.description, method: undefined as string | undefined })).find((r) => r.url === url);
-  if (!res || !/^https:\/\//.test(url)) return NextResponse.json({ error: "That service is not in this seller's listing." }, { status: 404 });
+  // A BaseCity Blocky's instant service (lib/blocky-instant.ts): allowed only
+  // for an exact per-Blocky URL whose Blocky is owned, on chain right now, by
+  // this payTo — so the buyer can only ever be quoted to the Blocky's owner.
+  const blocky = !res ? parseBlockyUrl(url) : null;
+  const blockyRes = blocky && (await blockyOwner(blocky.n)) === payTo ? blockyServices(blocky.n).find((s) => s.url === url) : undefined;
+  const svc = res ?? blockyRes;
+  if (!svc || !/^https:\/\//.test(url)) return NextResponse.json({ error: blocky ? "That Blocky is not owned by this payTo on Base right now." : "That service is not in this seller's listing." }, { status: 404 });
 
-  const method = res.method === "GET" ? "GET" : "POST";
+  const method = svc.method === "GET" ? "GET" : "POST";
   const input = b.input && typeof b.input === "object" ? (b.input as Record<string, unknown>) : {};
   let target = url;
   if (method === "GET" && Object.keys(input).length) {
@@ -92,7 +99,22 @@ export async function POST(req: NextRequest) {
     const from = p?.payload?.authorization?.from;
     if (typeof from === "string" && /^0x[0-9a-fA-F]{40}$/.test(from)) {
       const rc = receipt as { transaction?: string; txHash?: string } | null;
-      await recordHire(from.toLowerCase(), { at: new Date().toISOString(), payTo, url, status: r.status, tx: rc?.transaction ?? rc?.txHash ?? null, units: p?.payload?.authorization?.value ?? null });
+      const tx = rc?.transaction ?? rc?.txHash ?? null;
+      await recordHire(from.toLowerCase(), { at: new Date().toISOString(), payTo, url, status: r.status, tx, units: p?.payload?.authorization?.value ?? null });
+      // A paid Blocky answer joins that agent's record as an "instant" call,
+      // once the receipt is re-read on chain (agent-ledger verifyUnlock).
+      if (blocky && r.ok && tx && /^0x[0-9a-fA-F]{64}$/.test(tx)) {
+        const units = Number(p?.payload?.authorization?.value ?? 0);
+        const payer = from.toLowerCase();
+        after(async () => {
+          const { resolveBlocky } = await import("@/lib/mcp-jobs");
+          const link = await resolveBlocky(blocky.n);
+          if (typeof link === "string") return;
+          const { recordLedger, verifyUnlock } = await import("@/lib/agent-ledger");
+          const e = { jobId: "instant", did: tx, title: `${blocky.tool} via Blocky #${blocky.n}`, skill: blocky.tool === "nav-premium" ? "stock-nav-premium" : "stock-after-hours-volume", ticker: typeof input.ticker === "string" ? input.ticker.toUpperCase().slice(0, 8) : null, at: new Date().toISOString(), priceUnits: units, payTo, kind: "instant" as const, unlock: { tx, payer, at: new Date().toISOString() } };
+          if (await verifyUnlock(e)) await recordLedger(link.agentId, e);
+        });
+      }
     }
   }
   return NextResponse.json({

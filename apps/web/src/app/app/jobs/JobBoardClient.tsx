@@ -144,6 +144,9 @@ export default function JobBoardClient() {
                 {COINBASE_BASE_STOCKS.map((s) => <option key={s.token} value={s.token}>{s.ticker} · {s.name}</option>)}
               </select>
               <p className="text-[12px] text-[#64748B]">{stock ? `${stock.name} · ${stock.symbol} · ${stock.token} (Base 8453, Coinbase list)` : "Pick a stock to fill the token address."}</p>
+              {(f.skill === "stock-nav-premium" || f.skill === "stock-after-hours-volume") && (
+                <p className="text-[13px] text-[#94A3B8]">Want it now? A BaseCity Blocky answers this at once over x402, paid per call to its owner, no review. <Link href={`/agents?skill=${f.skill}`} className="text-[#4FC3F7]">Get it now →</Link> Posting a job stays the fallback.</p>
+              )}
             </div>
           )}
           <input className={input} placeholder="Title (what you need, in a line)" maxLength={100} value={f.skill ? fill(f.title) : f.title} readOnly={!!f.skill} onChange={(e) => setF({ ...f, title: e.target.value })} />
