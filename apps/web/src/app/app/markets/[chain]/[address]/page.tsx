@@ -5,6 +5,8 @@
 // (GeckoTerminal pool, candles, trades).
 import { Fragment } from "react";
 import type { Metadata } from "next";
+import { pageMeta } from "@/lib/og-card";
+import { COINBASE_BASE_STOCKS } from "@/lib/base-stocks/coinbase-list";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getAddress, isAddress } from "viem";
@@ -21,7 +23,10 @@ type P = { params: Promise<{ chain: string; address: string }> };
 
 export async function generateMetadata({ params }: P): Promise<Metadata> {
   const { chain, address } = await params;
-  return { title: `${address.slice(0, 8)}… on ${chain === "base" ? "Base" : "Robinhood Chain"} — Markets` };
+  const s = chain === "base" ? COINBASE_BASE_STOCKS.find((x) => x.token.toLowerCase() === address.toLowerCase()) : undefined;
+  const where = chain === "base" ? "Base" : "Robinhood Chain";
+  const title = s ? `${s.symbol}, ${s.name} on ${where} — Blue Agent Markets` : `${address.slice(0, 8)}… on ${where} — Markets`;
+  return pageMeta(`/markets/${chain}/${address}`, title, `${s ? `${s.name} stock token` : "Token"} on ${where}: candles from its own pool, its pools, recent trades and on-chain facts.`);
 }
 
 const usd = (n: number | null) => n === null ? "—" : n >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(1)}k` : n >= 1 ? `$${n.toFixed(2)}` : n > 0 ? `$${n.toPrecision(3)}` : "$0";

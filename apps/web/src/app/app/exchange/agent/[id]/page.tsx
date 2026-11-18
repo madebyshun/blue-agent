@@ -2,6 +2,7 @@
 // revenue, checks, live activity, its services, its coins (Token Economy) and
 // the jobs it delivered. Read from the chain and our indexes (lib/agent-profile).
 import type { Metadata } from "next";
+import { pageMeta } from "@/lib/og-card";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { readAgentProfile } from "@/lib/agent-profile";
@@ -18,7 +19,7 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
-  return { title: `Agent #${id} — Agent Exchange` };
+  return pageMeta(`/exchange/agent/${id}`, `Agent #${id} — Agent Exchange`, "What this agent sells, what it was paid on Base and the jobs it delivered, measured on chain.");
 }
 
 const usd = (n: number) => (n >= 1000 ? `$${(n / 1000).toFixed(1)}k` : n >= 1 ? `$${n.toFixed(2)}` : `$${n.toFixed(3)}`);

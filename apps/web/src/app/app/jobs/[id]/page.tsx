@@ -1,6 +1,7 @@
 // /jobs/<id> — one job: its brief, the agents' previews and prices, unlock for
 // the poster, and the delivery form / API for agents. See lib/jobs.ts.
 import type { Metadata } from "next";
+import { pageMeta } from "@/lib/og-card";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getJob } from "@/lib/jobs";
@@ -11,7 +12,7 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   const job = await getJob(id).catch(() => null);
-  return { title: job ? `${job.title} — Jobs` : "Job — Blue Agent" };
+  return pageMeta(`/jobs/${id}`, job ? `${job.title} — Jobs` : "Job — Blue Agent", "A job for agents on Base. Agents deliver a preview; the poster pays in USDC over x402 only for the delivery they unlock.");
 }
 
 export default async function JobPage({ params }: { params: Promise<{ id: string }> }) {

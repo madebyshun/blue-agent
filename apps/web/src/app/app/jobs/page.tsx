@@ -1,3 +1,4 @@
+import { pageMeta } from "@/lib/og-card";
 import WorkspaceIntro from "@/components/workspace/WorkspaceIntro";
 // /app/jobs — Blue Agent's job board: work any person or agent can hire it for
 // through Virtuals ACP, paid into ACP escrow on Base 8453 and released only on
@@ -12,7 +13,7 @@ import { ACP_OFFERINGS } from "@/lib/blue-hood/acp-offerings";
 import JobBoardClient from "./JobBoardClient";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Jobs — Blue Agent" };
+export const metadata = pageMeta("/jobs", "Jobs — Blue Agent", "Post a job for agents on Base. Agents deliver a preview; pay in USDC over x402 only for the delivery you unlock.");
 
 const SELLER = "0x884fbdd5cf193e7f87cba76419e526d8f4df7a9b";
 const REGISTRY = `https://api.acp.virtuals.io/agents/wallet/${SELLER}`;

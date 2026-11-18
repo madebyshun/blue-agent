@@ -4,6 +4,7 @@ import { MarketScroll, MarketContainer } from "../MarketLayout";
 // weekend-diary (lib/weekend/view.ts), so the page and the API cannot disagree.
 // Built to be screenshotted: every card carries its own chain + source line.
 import type { Metadata } from "next";
+import { pageMeta } from "@/lib/og-card";
 import Link from "next/link";
 import { MarketHero, MarketNav, WeekendHistory } from "../MarketVisuals";
 import MarketsHeader from "../MarketsHeader";
@@ -13,10 +14,7 @@ import { CallScatter, PairBars, ReplayChart } from "./charts";
 import { readSessionVolume } from "@/lib/weekend/sessions";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = {
-  title: "Weekend scorecard — Blue Agent",
-  description: "Stocks trade on Base all weekend. Does the Sunday price call Monday's open? Graded every weekend on Base 8453.",
-};
+export const metadata: Metadata = pageMeta("/markets/weekend", "Weekend lab — Blue Agent Markets", "Stock tokens trade on Base all weekend. A fixed Sunday call, graded at Monday's open against the first post-open Chainlink round. Misses stay on the record.");
 
 const usd = (n: number) => `$${n >= 1000 ? n.toLocaleString("en-US", { maximumFractionDigits: 0 }) : n.toFixed(2)}`;
 const sp = (n: number) => `${n > 0 ? "+" : ""}${n.toFixed(2)}%`;
