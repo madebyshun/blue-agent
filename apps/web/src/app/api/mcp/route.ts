@@ -11,7 +11,7 @@
  *   }
  *
  * Protocol: JSON-RPC 2.0 over HTTP POST
- * Tools: 15 — 7 paid + 8 free
+ * Tools: 16 — 7 paid + 9 free
  *        MCP v2 (2026-10-22): renamed, five paid over the x402 MCP transport
  *        (lib/mcp-paid.ts); the v1 names answer until MCP_LEGACY_UNTIL.
  *        CUT FROM 85 ON 2026-09-26. The reasoning, the measurements, and the rule
@@ -933,6 +933,14 @@ export async function POST(req: NextRequest) {
         const text = await callHubTool(hubId, args);
         await recordCall(meterId, "mcp", "ok");
         return ok(id, { content: legacyContent(name, text) }, useSse);
+      }
+
+      // jobs_post — two-step signed job post (lib/mcp-jobs.ts); no key, no money.
+      if (name === "jobs_post") {
+        const { mcpJobsPost } = await import("@/lib/mcp-jobs");
+        const r = await mcpJobsPost(args);
+        await recordCall(meterId, "mcp", r.isError ? "err" : "ok");
+        return ok(id, { content: [{ type: "text", text: r.text }], ...(r.isError ? { isError: true } : {}) }, useSse);
       }
 
       // blue_call — the paid door to every catalog id HUB_MAP does not preload.
