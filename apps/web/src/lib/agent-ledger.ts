@@ -227,9 +227,12 @@ async function linkedBlockies(owner: string, agentId: string): Promise<string[]>
  * (measured 2026-11-18), and /agents reads up to 160 of them. A Blocky that
  * changes hands keeps its badge at most 5 minutes longer.
  */
-const cachedCard = unstable_cache((id: string) => readAgentCardUncached(id), ["agent-card:v2"], { revalidate: 300 });
+// A null (RPC timeout, rate limit) must not be cached for 5 minutes: it is
+// thrown out of the cached function and the caller gets null for this read only.
+class NotCached extends Error {}
+const cachedCard = unstable_cache(async (id: string) => { const c = await readAgentCardUncached(id); if (!c) throw new NotCached(); return c; }, ["agent-card:v3"], { revalidate: 300 });
 export async function readAgentCard(id: string): Promise<AgentCard | null> {
-  try { return await cachedCard(id); } catch { return readAgentCardUncached(id); }
+  try { return await cachedCard(id); } catch (e) { return e instanceof NotCached ? null : readAgentCardUncached(id); }
 }
 
 async function readAgentCardUncached(id: string): Promise<AgentCard | null> {
@@ -277,12 +280,13 @@ async function readAgentCardUncached(id: string): Promise<AgentCard | null> {
  * Blockies BaseCity reports on duty (GET /api/agent-link?all=1). A HINT only:
  * each one is listed only if readAgentCard verifies it by rule (a) or (b).
  */
-async function onDutyBlockyAgents(): Promise<string[]> {
+async function onDutyBlockyAgents(): Promise<{ agentId: string; n: string }[]> {
   try {
     const r = await fetch(`${BASECITY}/api/agent-link?all=1`, { signal: AbortSignal.timeout(5000), next: { revalidate: 120 } });
     if (!r.ok) return [];
-    const j = (await r.json()) as { blockies?: { agentId?: unknown; onDuty?: unknown }[] };
-    return (j.blockies ?? []).filter((b) => b.onDuty === true).map((b) => String(b.agentId)).filter((x) => /^\d{1,12}$/.test(x)).slice(0, 200);
+    const j = (await r.json()) as { blockies?: { agentId?: unknown; blocky?: unknown; onDuty?: unknown }[] };
+    return (j.blockies ?? []).filter((b) => b.onDuty === true).map((b) => ({ agentId: String(b.agentId), n: String(b.blocky) }))
+      .filter((x) => /^\d{1,12}$/.test(x.agentId) && /^\d{1,6}$/.test(x.n)).slice(0, 200);
   } catch { return []; }
 }
 
@@ -299,13 +303,20 @@ async function mapLimit<T, R>(xs: T[], n: number, fn: (x: T) => Promise<R>): Pro
  * that have none yet (BaseCity, 2026-11-18). An agent with no record and no
  * verified Blocky link is dropped, e.g. a shared agent whose Blocky moved on.
  */
-export async function readDirectory(limit = 160) {
+export async function readDirectory(limit = 160): Promise<{ rows: { card: AgentCard; record: AgentRecord; pending?: string }[]; readable: boolean }> {
   const live = await listJobs(500);
   const [known, duty] = await Promise.all([knownAgentIds(live), onDutyBlockyAgents()]);
-  const ids = [...new Set([...known, ...duty])].slice(0, limit);
+  const hint = new Map(duty.map((d) => [d.agentId, d.n]));
+  const ids = [...new Set([...known, ...duty.map((d) => d.agentId)])].slice(0, limit);
   const rows = await mapLimit(ids, 8, async (id) => {
     const card = await readAgentCard(id);
-    if (!card) return null;
+    // An on-duty Blocky whose chain read failed this time (RPC limit, cold
+    // cache) still gets a card, marked unverified: no badge, no Hire, no stats
+    // claimed. It verifies on a later load (BaseCity mobile check, 2026-11-19).
+    if (!card) {
+      const n = hint.get(id);
+      return n ? { card: { id, owner: "", uri: "", name: `Blocky #${n}`, image: null, payTo: "", blocky: null } as AgentCard, record: await agentRecord([], []), pending: n } : null;
+    }
     const entries = await readLedger(id, live);
     const record = await agentRecord(entries, [card.owner, card.payTo]);
     if (!card.blocky && record.delivered === 0 && record.instantCalls === 0) return null;
