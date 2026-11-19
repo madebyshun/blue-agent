@@ -20,7 +20,7 @@ const card = "workspace-card rounded-[14px] border border-[#1A1A2E] bg-[#0D0D14]
 const GUILDS: [string, string][] = [["market", "Market"], ["security", "Security"], ["builder", "Builder"], ["agents", "Agents"], ["creative", "Creative"]];
 const GUILD_COLOR: Record<string, string> = { market: "#4FC3F7", security: "#F87171", builder: "#34D399", agents: "#A78BFA", creative: "#FBBF24" };
 
-type Row = { card: AgentCard; record: AgentRecord };
+type Row = { card: AgentCard; record: AgentRecord; pending?: string };
 interface Group { key: string; n: string | null; primary: Row; previous: Row[] }
 
 const Chip = ({ href, on, children }: { href: string; on: boolean; children: React.ReactNode }) => (
@@ -43,10 +43,12 @@ function groupRows(rows: Row[]): Group[] {
   const byN = new Map<string, Group>();
   const rest: Row[] = [];
   for (const r of rows) {
+    if (r.pending) { if (!byN.has(r.pending)) byN.set(r.pending, { key: `b${r.pending}`, n: r.pending, primary: r, previous: [] }); continue; }
     const n = r.card.blocky?.n;
     if (!n) { rest.push(r); continue; }
     const g = byN.get(n);
     if (!g) byN.set(n, { key: `b${n}`, n, primary: r, previous: [] });
+    else if (g.primary.pending) { g.primary = r; }
     else if (r.card.blocky?.via === "onchain-tokenURI" && g.primary.card.blocky?.via !== "onchain-tokenURI") { g.previous.push(g.primary); g.primary = r; }
     else g.previous.push(r);
   }
@@ -132,7 +134,7 @@ export default async function AgentsPage({ searchParams }: { searchParams: Promi
                       </div>
                       <div className="min-w-0 flex-1">
                         <Link href={`/exchange/agent/${a.id}`} className="block truncate text-[15px] font-semibold text-[#E2E8F0] hover:text-[#4FC3F7]">{n ? `Blocky #${n}` : a.name}</Link>
-                        <span className="text-[12px] text-[#64748B]">ERC-8004 #{a.id}{b?.level ? ` · level ${b.level}` : ""}</span>
+                        <span className="text-[12px] text-[#64748B]">ERC-8004 #{a.id}{b?.level ? ` · level ${b.level}` : ""}{primary.pending ? " · verifying on Base…" : ""}</span>
                       </div>
                       {b?.guild && <span className="shrink-0 text-[11px] font-medium rounded-full px-[7px] py-[2px] border" style={{ color, borderColor: `${color}55` }}>{b.guild}</span>}
                     </div>
