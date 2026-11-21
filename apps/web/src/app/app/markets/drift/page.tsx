@@ -35,6 +35,10 @@ const ago = (s: number | null) => {
   return m < 60 ? `${m}m` : m < 48 * 60 ? `${Math.round(m / 60)}h` : `${Math.round(m / 1440)}d`;
 };
 
+const LOGO_BY_CONTRACT = new Map(
+  COINBASE_BASE_STOCKS.filter((s) => s.image).map((s) => [s.token.toLowerCase(), s.image as string]),
+);
+
 export default async function DriftPage() {
   let rows: Row[] = [];
   let asOf: string | null = null, stale = false, failed = false;
@@ -81,25 +85,34 @@ export default async function DriftPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((r) => (
-                    <tr key={r.ticker} className="border-t border-[#1A1A2E]">
-                      <td className="px-4 py-2.5">
-                        <a href={r.explorer} target="_blank" rel="noreferrer" className="flex items-center gap-2.5 text-[#E2E8F0] hover:text-[#4FC3F7]">
-                          <StockMark ticker={r.ticker} chain="base" size={24} /><span>{r.ticker}c</span>
-                        </a>
-                      </td>
-                      <td className="text-right text-[#94A3B8]">{px(r.oracle_usd)}</td>
-                      <td className="text-right text-[#E2E8F0]">{px(r.dex_usd)}</td>
-                      <td className={`text-right ${r.drift_pct == null ? "text-[#64748B]" : r.drift_pct > 0 ? "text-[#4ADE80]" : r.drift_pct < 0 ? "text-[#F87171]" : "text-[#94A3B8]"}`}>
-                        {r.drift_pct == null ? "—" : `${r.drift_pct > 0 ? "+" : ""}${r.drift_pct.toFixed(2)}%`}
-                      </td>
-                      <td className="text-right text-[#94A3B8]">{usd(r.total_tvl_usd)}</td>
-                      <td className="text-right text-[#94A3B8]">{usd(r.volume_24h_usd)}</td>
-                      <td className="text-right pr-4 text-[#64748B]">{ago(r.oracle_updated_at)}
-                        <span className="block text-[10px]">{oracleLabel(r.oracle_updated_at, asOf ?? "")}</span>
-                        <span className="block text-[10px]">{r.oracle_updated_at ? new Date(r.oracle_updated_at * 1000).toISOString().replace("T", " ").slice(0, 19) + " UTC" : "unavailable"}</span></td>
-                    </tr>
-                  ))}
+                  {rows.map((r) => {
+                    const logo = LOGO_BY_CONTRACT.get(r.contract.toLowerCase());
+                    return (
+                      <tr key={r.ticker} className="border-t border-[#1A1A2E]">
+                        <td className="px-4 py-2.5">
+                          <a href={r.explorer} target="_blank" rel="noreferrer" className="flex items-center gap-2.5 text-[#E2E8F0] hover:text-[#4FC3F7]">
+                            {logo ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={logo} alt="" width={24} height={24} className="h-6 w-6 rounded-full object-cover shrink-0 bg-[#0F121A]" />
+                            ) : (
+                              <StockMark ticker={r.ticker} chain="base" size={24} />
+                            )}
+                            <span>{r.ticker}c</span>
+                          </a>
+                        </td>
+                        <td className="text-right text-[#94A3B8]">{px(r.oracle_usd)}</td>
+                        <td className="text-right text-[#E2E8F0]">{px(r.dex_usd)}</td>
+                        <td className={`text-right ${r.drift_pct == null ? "text-[#64748B]" : r.drift_pct > 0 ? "text-[#4ADE80]" : r.drift_pct < 0 ? "text-[#F87171]" : "text-[#94A3B8]"}`}>
+                          {r.drift_pct == null ? "—" : `${r.drift_pct > 0 ? "+" : ""}${r.drift_pct.toFixed(2)}%`}
+                        </td>
+                        <td className="text-right text-[#94A3B8]">{usd(r.total_tvl_usd)}</td>
+                        <td className="text-right text-[#94A3B8]">{usd(r.volume_24h_usd)}</td>
+                        <td className="text-right pr-4 text-[#64748B]">{ago(r.oracle_updated_at)}
+                          <span className="block text-[10px]">{oracleLabel(r.oracle_updated_at, asOf ?? "")}</span>
+                          <span className="block text-[10px]">{r.oracle_updated_at ? new Date(r.oracle_updated_at * 1000).toISOString().replace("T", " ").slice(0, 19) + " UTC" : "unavailable"}</span></td>
+                      </tr>
+                    );
+                  })}
                   {rows.length === 0 && <tr><td colSpan={7} className="px-4 py-4 text-[#64748B]">No Base rows in the last poll.</td></tr>}
                 </tbody>
               </table>

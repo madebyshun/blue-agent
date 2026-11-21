@@ -1,3 +1,4 @@
+import { approvedBaseStocks } from "@/lib/base-stocks/universe";
 /**
  * Markets mode (R3, 2026-10-28): stock tokens and crypto tokens on Base 8453 and
  * Robinhood Chain 4663, one list, one token page, one portfolio.
@@ -64,12 +65,12 @@ export interface MarketExtras {
 }
 
 /** Every stock token we have verified, both chains. Static; prices come after. */
-export function stockUniverse(): Omit<StockRow, "priceUsd" | "volume24hUsd" | "liquidityUsd" | "read" | keyof MarketExtras>[] {
+export function stockUniverse(baseStocks: readonly import("@/lib/base-stocks/coinbase-list").CoinbaseBaseStock[] = COINBASE_BASE_STOCKS): Omit<StockRow, "priceUsd" | "volume24hUsd" | "liquidityUsd" | "read" | keyof MarketExtras>[] {
   return [
     // Base: every Coinbase Tokenized Stock Base publishes (lib/base-stocks/
     // coinbase-list, each checked on chain), named as Blue Hood's registry names
     // them where it lists the ticker too.
-    ...COINBASE_BASE_STOCKS.map((s) => ({
+    ...baseStocks.map((s) => ({
       chain: "base" as const, ticker: s.ticker, name: BASE_STOCKS.find((b) => b.token.toLowerCase() === s.token.toLowerCase())?.name ?? s.name,
       contract: getAddress(s.token), decimals: 8, kind: "stock" as const,
     })),
@@ -101,12 +102,24 @@ async function gtPrices(chain: MarketChain, addrs: string[]): Promise<{ px: Reco
     for (const t of body?.data ?? []) {
       const a = t.attributes ?? {};
       const addr = String(a.address ?? "").toLowerCase();
-      const top = pools.get(String(t.relationships?.top_pools?.data?.[0]?.id ?? ""));
+      const candidates = (t.relationships?.top_pools?.data ?? [])
+        .map((ref) => pools.get(String(ref.id ?? "")))
+        .filter((p): p is NonNullable<typeof p> => !!p);
+      // Prefer a pool with actual 24h trading volume over a phantom-TVL $0-volume pool (e.g. mmETH/SNDKc).
+      const top = candidates.sort((x, y) => {
+        const vx = num((x.attributes?.volume_usd as Record<string, unknown> | undefined)?.h24) ?? 0;
+        const vy = num((y.attributes?.volume_usd as Record<string, unknown> | undefined)?.h24) ?? 0;
+        if ((vx > 0) !== (vy > 0)) return vy > 0 ? 1 : -1;
+        const lx = num(x.attributes?.reserve_in_usd) ?? 0;
+        const ly = num(y.attributes?.reserve_in_usd) ?? 0;
+        return ly - lx || vy - vx;
+      })[0];
       const pa = top?.attributes ?? {};
       const ours = String(top?.relationships?.base_token?.data?.id ?? "").toLowerCase().endsWith(addr);
       const mcap = num(a.market_cap_usd), fdv = num(a.fdv_usd);
+      const activePoolPrice = top ? num(ours ? pa.base_token_price_usd : pa.quote_token_price_usd, 1e9) : null;
       out[addr] = {
-        price: num(a.price_usd, 1e9), vol: num(a.volume_usd?.h24), liq: num(a.total_reserve_in_usd),
+        price: activePoolPrice ?? num(a.price_usd, 1e9), vol: num(a.volume_usd?.h24), liq: num(a.total_reserve_in_usd),
         logo: logoOf(a.image_url), mcapUsd: mcap ?? fdv, mcapIsFdv: mcap === null && fdv !== null,
         change24hPct: top && ours ? pct((pa.price_change_percentage as Record<string, unknown> | undefined)?.h24) : null,
         pool: top ? String(pa.address ?? "") || null : null, side: ours ? "base" : "quote",
@@ -167,7 +180,7 @@ export const unmintedBaseStocks = cacheWhole(async (): Promise<string[]> => {
 }, "markets:base-unminted:v1", 3600);
 
 export const readStockMarkets = cacheWhole(async (): Promise<{ rows: StockRow[]; readAt: string }> => {
-  const uni = stockUniverse();
+  const uni = stockUniverse(await approvedBaseStocks());
   const priced: StockRow[] = [];
   let partial = false;
   const unminted = new Set(await unmintedBaseStocks());
@@ -380,7 +393,16 @@ async function fetchTokenMarket(chain: MarketChain, token: string): Promise<Toke
   const pools = await gtJson<{ data?: GtPool[] }>(`/networks/${chain}/tokens/${t}/pools?page=1`, 2);
   if (pools.status === 404) return empty("none_listed");
   if (!pools.body) throw new Uncached(empty("unread"));
-  const ranked = (pools.body.data ?? []).map((p) => ({ p, liq: num(p.attributes?.reserve_in_usd) ?? 0 })).sort((a, b) => b.liq - a.liq);
+  const ranked = (pools.body.data ?? [])
+    .map((p) => ({
+      p,
+      liq: num(p.attributes?.reserve_in_usd) ?? 0,
+      vol: num((p.attributes?.volume_usd as Record<string, unknown> | undefined)?.h24) ?? 0,
+    }))
+    .sort((a, b) => {
+      if ((a.vol > 0) !== (b.vol > 0)) return b.vol > 0 ? 1 : -1;
+      return b.liq - a.liq || b.vol - a.vol;
+    });
   const best = ranked[0]?.p;
   if (!best) return empty("none_listed");
   const a = best.attributes ?? {};
@@ -431,7 +453,7 @@ const BALANCE_ABI = [
 
 /** Native, stable and stock-token balances on both chains, valued at market prices. */
 export async function readPortfolio(owner: Address): Promise<{ holdings: Holding[]; unread: MarketChain[] }> {
-  const uni = stockUniverse();
+  const uni = stockUniverse(await approvedBaseStocks());
   // Balances and prices in parallel, prices capped at 8s: a rate-limited price
   // read leaves a holding unpriced ("—"), it never holds up the balances.
   const capped = <T,>(p: Promise<T>, fallback: T) => Promise.race([p.catch(() => fallback), new Promise<T>((r) => setTimeout(() => r(fallback), 8_000))]);
