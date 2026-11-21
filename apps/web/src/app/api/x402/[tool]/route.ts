@@ -169,6 +169,7 @@ export async function GET(
       status: 402,
       headers: {
         "Access-Control-Allow-Origin": "*",
+        "Cache-Control": "no-store",
         "payment-required": paymentRequiredHeader,
       },
     }
@@ -368,6 +369,7 @@ async function handle(
         status: 402,
         headers: {
           "Access-Control-Allow-Origin": "*",
+          "Cache-Control": "no-store",
           "payment-required": paymentRequiredHeader,
         },
       }
@@ -419,7 +421,7 @@ async function handle(
   if (!verify.ok) {
     return NextResponse.json(
       { error: "Payment verification failed", status: verify.status, detail: verify.detail },
-      { status: 402 }
+      { status: 402, headers: { "Cache-Control": "no-store" } }
     );
   }
 
@@ -498,7 +500,7 @@ async function handle(
   }
   // The settlement receipt in both dialects: v2 reads PAYMENT-RESPONSE
   // ({ success, transaction, network, payer }), v1 X-PAYMENT-RESPONSE.
-  const receiptHeaders: Record<string, string> = {};
+  const receiptHeaders: Record<string, string> = { "Cache-Control": "private" };
   if (settle.ok) {
     const { payerFromPayload } = await import("@/lib/wallet/spend-log");
     const receipt = Buffer.from(JSON.stringify({

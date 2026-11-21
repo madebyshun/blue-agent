@@ -21,6 +21,7 @@
  */
 import { createPublicClient, http, parseAbiItem, type Address } from "viem";
 import { base } from "viem/chains";
+import { x402ExactPermit2ProxyAddress, x402UptoPermit2ProxyAddress } from "@x402/evm";
 import { kv, kvGetProbe, kvMutate } from "@/lib/kv";
 import { X402_PAY_TO } from "@/lib/x402-payee";
 import { TEAM_WALLETS } from "@/lib/mcp-receipts";
@@ -28,6 +29,7 @@ import { TEAM_WALLETS } from "@/lib/mcp-receipts";
 const USDC: Address = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 const TRANSFER = parseAbiItem("event Transfer(address indexed from, address indexed to, uint256 value)");
 const AUTH_USED = parseAbiItem("event AuthorizationUsed(address indexed authorizer, bytes32 indexed nonce)");
+const PERMIT2_PROXIES: Address[] = [x402ExactPermit2ProxyAddress, x402UptoPermit2ProxyAddress];
 const BAZAAR = "https://api.cdp.coinbase.com/platform/v2/x402/discovery/resources";
 
 export const CHUNK = 2_000n;          // blocks per getLogs window (~6.7 min on Base since its 0.2 s blocks, 2026-11-05; ~67 min before)
@@ -158,10 +160,12 @@ export function foldChunk(
   blob: DayBlob,
   transfers: { tx: string; from: string; to: string; value: bigint }[],
   authorized: Set<string>,
+  permit2Txs: Set<string> = new Set(),
 ): DayBlob {
   for (const t of transfers) {
     const from = t.from.toLowerCase();
-    if (!authorized.has(`${t.tx.toLowerCase()}:${from}`)) continue;   // not an EIP-3009 settlement
+    const txLc = t.tx.toLowerCase();
+    if (!authorized.has(`${txLc}:${from}`) && !permit2Txs.has(txLc)) continue;   // not an EIP-3009 or Permit2 x402 settlement
     const to = t.to.toLowerCase();
     const c = (blob.p[to] ??= { n: 0, u: 0, pay: [] });
     const units = Number(t.value);
@@ -202,11 +206,15 @@ export async function indexStep(deadline: number): Promise<{ chunks: number; cur
       const logs = await c.getLogs({ address: USDC, event: AUTH_USED, args: { authorizer: payers.slice(i, i + ADDR_BATCH) }, fromBlock: cursor, toBlock: to });
       for (const l of logs) authorized.add(`${l.transactionHash.toLowerCase()}:${l.args.authorizer!.toLowerCase()}`);
     }
+    const permit2Logs = transfers.length
+      ? await c.getLogs({ address: PERMIT2_PROXIES, fromBlock: cursor, toBlock: to }).catch(() => [])
+      : [];
+    const permit2Txs = new Set(permit2Logs.map((l) => l.transactionHash.toLowerCase()));
     const ts = Number((await c.getBlock({ blockNumber: cursor })).timestamp) * 1000;
     const day = ymd(ts);
     const res = await kvMutate<DayBlob>(dayKey(day), { p: {}, from: cursor.toString(), to: to.toString() }, (b) => {
       b.to = to.toString();
-      return foldChunk(b, transfers, authorized);
+      return foldChunk(b, transfers, authorized, permit2Txs);
     }, DAY_TTL);
     if (res !== "ok" && res !== "unchanged") throw new Error(`day ${day} write ${res}`);   // never advance past unwritten data
     cursor = to + 1n;
@@ -459,7 +467,7 @@ export interface Payment { tx: string; from: string; usd: number; block: string 
 
 /**
  * The seller's latest x402 settlements, read from the chain at render time:
- * the last ~2,000 blocks (~67 min on Base), same EIP-3009 test as the index.
+ * the last ~2,000 blocks (~6.7 min on Base at 0.2s blocks), matching EIP-3009 or Permit2.
  * null = the RPC did not answer; [] = none in the window.
  */
 export async function recentPayments(payTo: string, limit = 10): Promise<Payment[] | null> {
@@ -470,10 +478,14 @@ export async function recentPayments(payTo: string, limit = 10): Promise<Payment
     const logs = await c.getLogs({ address: USDC, event: TRANSFER, args: { to: payTo as Address }, fromBlock: from, toBlock: head });
     if (!logs.length) return [];
     const payers = [...new Set(logs.map((l) => l.args.from!))].slice(0, ADDR_BATCH) as Address[];
-    const auth = await c.getLogs({ address: USDC, event: AUTH_USED, args: { authorizer: payers }, fromBlock: from, toBlock: head });
+    const [auth, permit2Logs] = await Promise.all([
+      c.getLogs({ address: USDC, event: AUTH_USED, args: { authorizer: payers }, fromBlock: from, toBlock: head }),
+      c.getLogs({ address: PERMIT2_PROXIES, fromBlock: from, toBlock: head }).catch(() => []),
+    ]);
     const ok = new Set(auth.map((l) => `${l.transactionHash.toLowerCase()}:${l.args.authorizer!.toLowerCase()}`));
+    const p2 = new Set(permit2Logs.map((l) => l.transactionHash.toLowerCase()));
     return logs
-      .filter((l) => ok.has(`${l.transactionHash.toLowerCase()}:${l.args.from!.toLowerCase()}`))
+      .filter((l) => ok.has(`${l.transactionHash.toLowerCase()}:${l.args.from!.toLowerCase()}`) || p2.has(l.transactionHash.toLowerCase()))
       .reverse()
       .slice(0, limit)
       .map((l) => ({ tx: l.transactionHash, from: l.args.from!.toLowerCase(), usd: Number(l.args.value) / 1e6, block: l.blockNumber.toString() }));

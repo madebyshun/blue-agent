@@ -144,7 +144,7 @@ export default async function AgentsPage() {
           <Link href="/exchange/discovered" className="mt-3 inline-block text-[13px] text-[#4FC3F7]">Every x402 seller on Base ({ex.providersListed.toLocaleString("en-US")}) → Discovered</Link>
 
           <p className="text-[12px] text-[#64748B] mt-4 leading-relaxed">
-            Revenue counts USDC paid to a seller&apos;s payTo on Base in a transaction that used the payer&apos;s EIP-3009 authorization, the way x402 settles. Gross:
+            Revenue counts USDC paid to a seller&apos;s payTo on Base in a transaction that used the payer&apos;s EIP-3009 authorization or x402 Permit2 settlement. Gross:
             a seller&apos;s own test wallets cannot be told apart, so nothing is subtracted on a guess.
             {vet && <> &ldquo;vet402 x/y delivered&rdquo; is <a className="text-[#4FC3F7]" href="https://vet402.com/sellers" target="_blank" rel="noreferrer">vet402</a>&apos;s record of its own purchases from that seller&apos;s domain (delivered of bought, its own failures excluded), retrieved {vet.retrievedAt.slice(0, 10)}, CC BY 4.0.</>}
             {" "}Not financial advice. <Link className="text-[#4FC3F7]" href="/exchange/docs">How it works →</Link>

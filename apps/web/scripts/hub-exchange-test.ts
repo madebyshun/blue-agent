@@ -11,12 +11,13 @@ const team = [...R.TEAM_WALLETS][0];
 const blob = M.foldChunk({ p: {}, from: "0", to: "0" }, [
   { tx: "0xA", from: buyer, to: seller, value: 10_000n },
   { tx: "0xB", from: buyer, to: seller, value: 20_000n },
-  { tx: "0xC", from: buyer, to: seller, value: 99_000_000n },   // plain transfer: no AuthorizationUsed
+  { tx: "0xC", from: buyer, to: seller, value: 99_000_000n },   // plain transfer: no AuthorizationUsed or Permit2
   { tx: "0xD", from: team, to: seller, value: 5_000n },
-], new Set([`0xa:${buyer}`, `0xb:${buyer}`, `0xd:${team}`]));
+  { tx: "0xE", from: buyer, to: seller, value: 15_000n },        // Permit2 settlement tx
+], new Set([`0xa:${buyer}`, `0xb:${buyer}`, `0xd:${team}`]), new Set(["0xe"]));
 const c = blob.p[seller];
-assert.equal(c.n, 2, "only authorized transfers count");
-assert.equal(c.u, 30_000);
+assert.equal(c.n, 3, "authorized EIP-3009 + Permit2 transfers count");
+assert.equal(c.u, 45_000);
 assert.equal(c.pay.length, 1, "payer deduped");
 assert.equal(c.tn, 1, "team call split out");
 assert.equal(c.tu, 5_000);

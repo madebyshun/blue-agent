@@ -12,6 +12,11 @@ import ExchangeHeader from "./ExchangeHeader";
 const usd = (n: number) => (n >= 1000 ? `$${(n / 1000).toFixed(1)}k` : n >= 1 ? `$${n.toFixed(2)}` : `$${n.toFixed(3)}`);
 const short = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 const ymd = (d: string | null) => (d ? `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6)}` : "—");
+function formatLag(blocks: number): string {
+  const secs = Math.round(blocks * 0.2);
+  const time = secs < 60 ? `${secs}s` : secs < 3600 ? `${Math.round(secs / 60)}m` : `${(secs / 3600).toFixed(1)}h`;
+  return `~${time} (${blocks.toLocaleString("en-US")} blocks) behind head`;
+}
 
 const BORDER = "#1A1A2E";
 const SURFACE = "#0D0D14";
@@ -105,11 +110,11 @@ export default function ExchangeView({ ex, totalPaid, ours, oursPayTo, agentId, 
             </button>
           </div>
 
-          <Label title={`MEASURED · ${window.toUpperCase()}`} sub={`USDC settled on Base 8453 · ${ex.daysCovered} day${ex.daysCovered === 1 ? "" : "s"} indexed since ${ymd(ex.firstDay)}${ex.lagBlocks !== null ? ` · ${ex.lagBlocks.toLocaleString("en-US")} blocks behind head` : ""}`} />
+          <Label title={`MEASURED · ${window.toUpperCase()}`} sub={`USDC settled on Base 8453 · ${ex.daysCovered} day${ex.daysCovered === 1 ? "" : "s"} indexed since ${ymd(ex.firstDay)}${ex.lagBlocks !== null ? ` · ${formatLag(ex.lagBlocks)}` : ""}`} />
           <div className="grid gap-2.5 grid-cols-2 md:grid-cols-4">
             <Stat label="X402 VOLUME" value={R ? usd(volume) : "—"} sub="gross, every listed seller" />
             <Stat label="SELLERS PAID" value={R ? String(totalPaid) : "—"} sub={R ? `${multi} with 2+ paying wallets` : "indexing"} />
-            <Stat label="PAID CALLS" value={R ? calls.toLocaleString("en-US") : "—"} sub="EIP-3009 settlements" />
+            <Stat label="PAID CALLS" value={R ? calls.toLocaleString("en-US") : "—"} sub="EIP-3009 & Permit2 settlements" />
             <Stat label="SELLERS LISTED" value={ex.providersListed ? ex.providersListed.toLocaleString("en-US") : "—"} sub={`CDP Bazaar · ${ex.listUpdatedAt ? ex.listUpdatedAt.slice(0, 10) : "—"}`} />
           </div>
 
@@ -166,7 +171,7 @@ export default function ExchangeView({ ex, totalPaid, ours, oursPayTo, agentId, 
           )}
           {R && (
             <p className="font-mono text-[12px] text-[#64748B] mt-4 leading-relaxed">
-              Measured: USDC paid to a seller&apos;s payTo in a transaction that also used the payer&apos;s EIP-3009 authorization, the way x402 settles.
+              Measured: USDC paid to a seller&apos;s payTo in a transaction that also used the payer&apos;s EIP-3009 authorization or x402 Permit2 settlement.
               Plain transfers are not counted. Gross inflow: a seller&apos;s own test wallets cannot be told apart, so nothing is subtracted on a guess.
               Live 402: {Object.keys(live).length} of {probesChecked} sellers checked answered with a USDC quote on Base to their own payTo (unpaid probe, a slice a day).
               ERC-8004: {Object.keys(agents).length} seller{Object.keys(agents).length === 1 ? "" : "s"} hold an agent identity on Base, of {identitiesChecked} checked so far (the check walks the list a slice a day).
