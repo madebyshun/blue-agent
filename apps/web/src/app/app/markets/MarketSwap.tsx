@@ -1,23 +1,36 @@
 "use client";
 
 // Swap on a Markets token page — the wallet's own swap cards, opened on THIS
-// chain and THIS contract (never a ticker). Base: the 0x Convert card buying the
-// token. Robinhood Chain: USDG → token through the RH router. The user's wallet
-// signs; nothing here holds or routes funds. Same split as hood/HoodSwap.tsx.
+// chain and THIS contract (never a ticker). Base: the 0x/Aerodrome Convert card
+// buying the token (defaulting sell side to USDC for B20 stocks since Aerodrome
+// quotes B20 against USDC). Robinhood Chain: USDG → token through the RH router.
+// The user's wallet signs; nothing here holds or routes funds.
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAccount } from "wagmi";
 import BankSwapCard from "@/app/app/bank/SwapCard";
 import { RobinhoodSwapCard } from "@/app/chat/components/RobinhoodSwapCard";
 import { WALLET_CHAINS } from "@/lib/wallet/chains";
+import { BASE_STOCKS } from "@/lib/base-stocks/registry";
+import { COINBASE_BASE_STOCKS } from "@/lib/base-stocks/coinbase-list";
 
-type Props = { chain: "base" | "robinhood"; contract: string; symbol: string };
+const USDC_BASE = WALLET_CHAINS.base.stable;
+const isBaseStock = (addr: string) =>
+  BASE_STOCKS.some((s) => s.token.toLowerCase() === addr.toLowerCase()) ||
+  COINBASE_BASE_STOCKS.some((s) => s.token.toLowerCase() === addr.toLowerCase());
+
+type Props = { chain: "base" | "robinhood"; contract: string; symbol: string; logo?: string | null };
 
 /** The swap card alone: used inline on a token page and inside the Markets Trade popup. */
-export function SwapPanel({ chain, contract, symbol }: Props) {
+export function SwapPanel({ chain, contract, symbol, logo }: Props) {
   const { address } = useAccount();
   return chain === "base" ? (
-    <BankSwapCard account={address} initialBuy={contract} />
+    <BankSwapCard
+      account={address}
+      initialSell={isBaseStock(contract) ? USDC_BASE : undefined}
+      initialBuy={contract}
+      initialBuyLogo={logo}
+    />
   ) : (
     <RobinhoodSwapCard result={{
       kind: "robinhood_swap", direction: "buy",
@@ -30,7 +43,7 @@ export function SwapPanel({ chain, contract, symbol }: Props) {
 }
 
 /** A Trade popup for one Markets row: this chain, this contract, the wallet signs. */
-export function TradeModal({ chain, contract, symbol, name, onClose }: Props & { name: string; onClose: () => void }) {
+export function TradeModal({ chain, contract, symbol, name, logo, onClose }: Props & { name: string; onClose: () => void }) {
   useEffect(() => {
     const esc = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", esc);
@@ -46,7 +59,7 @@ export function TradeModal({ chain, contract, symbol, name, onClose }: Props & {
           </div>
           <button type="button" onClick={onClose} aria-label="Close" className="rounded-md px-2 py-1 text-[16px] leading-none text-[#94A3B8] hover:text-[#E2E8F0]">×</button>
         </div>
-        <SwapPanel chain={chain} contract={contract} symbol={symbol} />
+        <SwapPanel chain={chain} contract={contract} symbol={symbol} logo={logo} />
         <Link href={`/markets/${chain}/${contract}`} className="mt-3 inline-block text-[13px] text-[#4FC3F7]">Chart and details →</Link>
       </div>
     </div>

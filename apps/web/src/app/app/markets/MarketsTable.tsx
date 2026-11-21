@@ -203,7 +203,7 @@ export default function MarketsTable({ rows, readAt, stats }: { rows: MarketRow[
 
   return (
     <div>
-      {trade && <TradeModal chain={trade.chain} contract={trade.token} symbol={label(trade)} name={trade.name} onClose={() => setTrade(null)} />}
+      {trade && <TradeModal chain={trade.chain} contract={trade.token} symbol={label(trade)} name={trade.name} logo={trade.logo} onClose={() => setTrade(null)} />}
       <div className="mb-4 hidden">
         {cards.map(([l, v, sub]) => (
           <div key={l} className="rounded-[16px] border border-white/[0.09] bg-[#0b111c] p-[14px]">

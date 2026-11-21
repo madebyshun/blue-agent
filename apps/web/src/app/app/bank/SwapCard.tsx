@@ -53,7 +53,9 @@ import { useRecordAction } from "@/hooks/useRecordAction";
 import { PreTradeBanner, usePreTradeCheck } from "@/components/wallet/PreTradeBanner";
 import { BASE_MAJORS } from "@/lib/wallet/token-trust";
 import { BASE_STOCKS } from "@/lib/base-stocks/registry";
+import { COINBASE_BASE_STOCKS } from "@/lib/base-stocks/coinbase-list";
 import { useSpendableBalance } from "@/lib/wallet/useSpendableBalance";
+import { useSendableAssets } from "@/lib/wallet/useSendableAssets";
 import { resolveSpend } from "@/lib/wallet/read-state";
 // A quantity WORD ("all"/"max"/"half"/"N%") — chat passes these through verbatim
 // rather than doing the arithmetic itself, because only the card can see the
@@ -63,6 +65,14 @@ import { UnverifiedBalance } from "@/components/wallet/UnverifiedBalance";
 import type { WalletChain } from "@/lib/wallet/chains";
 import { Picker, PickerRow } from "@/components/wallet/Picker";
 import { WalletCard, Field, NetworkPicker, ConfirmButton, CardNote } from "@/components/wallet/CardShell";
+
+const SYMBOL_ABI = [
+  { name: "symbol", type: "function", stateMutability: "view", inputs: [], outputs: [{ type: "string" }] },
+] as const;
+
+const COINBASE_BY_ADDR = new Map(
+  COINBASE_BASE_STOCKS.map((s) => [s.token.toLowerCase(), s] as const),
+);
 
 // The tradable majors come from `token-trust.ts`, which is also what decides
 // whether a token in the portfolio may be sold at all. They used to be two
@@ -84,7 +94,17 @@ import { WalletCard, Field, NetworkPicker, ConfirmButton, CardNote } from "@/com
  * from `bal.decimals` (`useSpendableBalance`), the buy side from `buyDec`
  * below. What is left in this field is a DISPLAY hint for the curated four.
  */
-type Token = { sym: string; addr: string; decimals?: number; native?: boolean };
+type Token = {
+  sym: string;
+  addr: string;
+  decimals?: number;
+  native?: boolean;
+  name?: string;
+  image?: string | null;
+  amount?: string;
+  usdValue?: number;
+  isB20?: boolean;
+};
 const TOKENS: Token[] = BASE_MAJORS;
 const ETH  = TOKENS.find(t => t.native)!;
 const USDC = TOKENS.find(t => t.sym === "USDC")!;
@@ -94,31 +114,31 @@ const USDC = TOKENS.find(t => t.sym === "USDC")!;
 // click so re-selling the same token re-applies.
 export type SellPreset = { addr: string; sym: string; decimals: number; amount: string; nonce: number };
 
+function resolveKnownByAddr(addr: string): Token | null {
+  const lc = addr.toLowerCase();
+  const major = TOKENS.find(t => t.addr.toLowerCase() === lc);
+  if (major) return major;
+  const cb = COINBASE_BY_ADDR.get(lc);
+  if (cb) return { sym: cb.symbol, addr, decimals: 8, name: cb.name, image: cb.image, isB20: true };
+  const stock = BASE_STOCKS.find(t => t.token.toLowerCase() === lc);
+  if (stock) return { sym: stock.symbol, addr, decimals: 8, name: stock.name, isB20: true };
+  return null;
+}
+
 /**
  * Arm one side of the trade from a caller-supplied string.
  *
  * Accepts an ADDRESS, or a symbol that names one of the CURATED majors — and
- * nothing else. The distinction is the whole rule: "USDC" resolves because this
- * app holds a canonical Base address for it (`token-trust.ts`, the same map
- * that decides whether a held token may be sold at all), so the symbol is an
- * index into an assertion we already made. A symbol we hold no address for is
- * just a word the model typed, and Base has several tokens answering to any
- * given word. Those come back as `unmatched` and the card SAYS so rather than
- * arming the default under a name the user did not choose.
+ * nothing else. Addresses in `BASE_MAJORS`, `BASE_STOCKS`, or
+ * `COINBASE_BASE_STOCKS` resolve to their verified symbol and decimals.
  */
 function seedToken(want: string | undefined, fallback: Token): { token: Token; unmatched?: string } {
   const s = String(want ?? "").trim();
   if (!s) return { token: fallback };
   if (isAddress(s)) {
     const addr = getAddress(s);
-    const major = TOKENS.find(t => t.addr.toLowerCase() === addr.toLowerCase());
-    if (major) return { token: major };
-    // A Base stock token in the verified registry wears its registry symbol
-    // (METAc): the registry already asserted this contract is that stock.
-    // Measured 2026-10-21: "buy $1 of META on Base" reported "→ 0.001427
-    // 0xb200…707C".
-    const stock = BASE_STOCKS.find(t => t.token.toLowerCase() === addr.toLowerCase());
-    if (stock) return { token: { sym: stock.symbol, addr, decimals: 8 } };
+    const known = resolveKnownByAddr(addr);
+    if (known) return { token: known };
     // No `sym`: the chip falls back to the address, which is what identifies it.
     return { token: { sym: "", addr } };
   }
@@ -134,14 +154,22 @@ function seedToken(want: string | undefined, fallback: Token): { token: Token; u
 const CONVERT_CHAINS: readonly WalletChain[] = ["base", "robinhood"];
 
 const fmt = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: 6 });
+function fmtAmt(s: string): string {
+  const n = Number(s);
+  if (!Number.isFinite(n)) return s;
+  if (n >= 1e9) return (n / 1e9).toFixed(2) + "B";
+  if (n >= 1e6) return (n / 1e6).toFixed(2) + "M";
+  if (n >= 1e3) return Math.round(n).toLocaleString("en-US");
+  return s;
+}
 const truncAddr = (a: string) => (a.length > 12 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a);
 /** What to CALL a token. An injected one has no symbol we are willing to vouch
  *  for, so it wears its address — shorter than the truth but not a different
  *  claim, which a borrowed ticker would be. */
 const label = (t: Token) => t.sym || truncAddr(t.addr);
-/** Is this one of the four the app holds a canonical address for? Decides
- *  whether `decimals` on the row is an asserted fact or an empty field. */
+/** Is this one of the curated majors or verified Coinbase B20 stocks? */
 const inMajors = (t: Token) => TOKENS.some(x => x.addr.toLowerCase() === t.addr.toLowerCase());
+const isKnownVerified = (t: Token) => inMajors(t) || COINBASE_BY_ADDR.has(t.addr.toLowerCase()) || BASE_STOCKS.some(x => x.token.toLowerCase() === t.addr.toLowerCase());
 
 type FeeLeg = { amount?: string; token?: string; type?: string } | null;
 type Quote = {
@@ -162,7 +190,7 @@ type Quote = {
 const SLIPPAGE_CHOICES = [50, 100, 300] as const;
 
 export default function SwapCard({
-  account, preset, onChain, initialSell, initialBuy, initialAmount,
+  account, preset, onChain, initialSell, initialBuy, initialBuyLogo, initialAmount,
 }: {
   account?: `0x${string}`;
   preset?: SellPreset | null;
@@ -173,22 +201,11 @@ export default function SwapCard({
    *  — a pair cannot have the same token on both sides, and quietly keeping it
    *  would leave the card permanently quoteless with nothing saying why. */
   initialBuy?: string;
+  /** Optional fallback logo URL (e.g. from Markets/GeckoTerminal) when the registry has none. */
+  initialBuyLogo?: string | null;
   /** A number, or a quantity WORD ("all" / "half" / "25%") resolved against the
    *  live balance once it lands. */
   initialAmount?: string | number;
-  /**
-   * Move the CALLER to another venue. Deliberately a callback and NOT a `chain`
-   * value prop, because of the header above: this card signs on Base mainnet
-   * unconditionally. If it accepted the chain as a value, a caller could hand it
-   * `"robinhood"` and the header would read Robinhood over a card that then
-   * force-switches to Base and spends Base funds — a label that lies about which
-   * money is moving. The picker's `value` is therefore hardcoded `"base"`, and
-   * choosing anything else does not reconfigure this card, it REPLACES it.
-   *
-   * Omitted → no picker at all. A dropdown whose only option is the option
-   * already selected is a control that cannot do anything, and the chat surface
-   * that renders this card has nowhere to switch to.
-   */
   onChain?: (c: WalletChain) => void;
 }) {
   const { isConnected } = useAccount();
@@ -207,9 +224,10 @@ export default function SwapCard({
     const fallbackBuy = s.token.addr.toLowerCase() === USDC.addr.toLowerCase() ? ETH : USDC;
     const b = seedToken(initialBuy, fallbackBuy);
     const same = b.token.addr.toLowerCase() === s.token.addr.toLowerCase();
+    const buyTok = same ? fallbackBuy : (b.token.image || !initialBuyLogo ? b.token : { ...b.token, image: initialBuyLogo });
     return {
       sell: s.token,
-      buy: same ? fallbackBuy : b.token,
+      buy: buyTok,
       // Both sides' misses are reported, deduped — "swap FOO for FOO" should
       // name FOO once.
       unmatched: [...new Set([s.unmatched, b.unmatched].filter(Boolean) as string[])],
@@ -218,6 +236,8 @@ export default function SwapCard({
 
   const [sell, setSell] = useState<Token>(seeded.sell);
   const [buy, setBuy]   = useState<Token>(seeded.buy);
+  const [sellQuery, setSellQuery] = useState("");
+  const [buyQuery, setBuyQuery] = useState("");
   const [assetHint, setAssetHint] = useState<string[]>(seeded.unmatched);
   const [amount, setAmount] = useState(() => {
     const raw = initialAmount != null ? String(initialAmount) : "";
@@ -245,6 +265,10 @@ export default function SwapCard({
     check: pt.check ? { verdict: pt.check.verdict, reasons: pt.check.reasons.map((r) => r.text) } : null,
   }));
 
+  // Wallet holdings on Base — populates YOU PAY with the user's actual tokens
+  // (excluding impostors) and enriches majors/stocks with live balances.
+  const walletList = useSendableAssets(account, "base");
+
   // Balance of the sell token — read (with its scale) through the one hook, so
   // "still reading" and "could not read" stay distinguishable. `sell.decimals`
   // is NOT used for money any more: BASE_MAJORS is curated and a `preset` comes
@@ -255,27 +279,35 @@ export default function SwapCard({
   });
   const balance = bal.balance;
 
+  // Read on-chain symbol() if a pasted token has no known symbol yet.
+  const { data: sellSymOnChain } = useReadContract({
+    address: sell.addr as `0x${string}`, abi: SYMBOL_ABI, functionName: "symbol", chainId: base.id,
+    query: { enabled: !sell.native && sell.sym === "" && isAddress(sell.addr) },
+  });
+  useEffect(() => {
+    if (typeof sellSymOnChain === "string" && sellSymOnChain) {
+      setSell(s => (s.sym === "" && !s.native ? { ...s, sym: sellSymOnChain } : s));
+    }
+  }, [sellSymOnChain]);
+
+  const { data: buySymOnChain } = useReadContract({
+    address: buy.addr as `0x${string}`, abi: SYMBOL_ABI, functionName: "symbol", chainId: base.id,
+    query: { enabled: !buy.native && buy.sym === "" && isAddress(buy.addr) },
+  });
+  useEffect(() => {
+    if (typeof buySymOnChain === "string" && buySymOnChain) {
+      setBuy(b => (b.sym === "" && !b.native ? { ...b, sym: buySymOnChain } : b));
+    }
+  }, [buySymOnChain]);
+
   // The BUY token's scale, read from the contract.
-  //
-  // It used to come off the row (`buy.decimals`), which was correct only
-  // because the buy list was the four curated majors and could not contain
-  // anything else. Chat can now name the receive side, so the exponent that
-  // turns 0x's `buyAmount` into "you receive N" may be for a token nobody has
-  // ever read. Get it wrong by two and the card shows 1/100th of the trade — a
-  // fabricated financial figure on the one line the user checks before signing.
-  //
-  // A curated major keeps its constant as the answer while the read is in
-  // flight (the address is in `token-trust`'s VERIFIED map, so the pair is an
-  // assertion this app already makes), and the on-chain value overrides it if
-  // they ever disagree. An injected token has no such backing: until the read
-  // lands `buyDec` is null, the receive field says so, and `canSwap` is false.
   const { data: buyDecOnChain } = useReadContract({
     address: buy.addr as `0x${string}`, abi: ERC20_ABI, functionName: "decimals", chainId: base.id,
     query: { enabled: !buy.native && isAddress(buy.addr) },
   });
   const buyDec: number | null = buy.native ? 18
     : buyDecOnChain != null ? Number(buyDecOnChain)
-    : inMajors(buy) ? buy.decimals ?? null
+    : isKnownVerified(buy) ? buy.decimals ?? null
     : null;
 
   const amt = parseFloat(amount);
@@ -371,19 +403,73 @@ export default function SwapCard({
     }
     setAmount(formatUnits(v, bal.decimals));
   }
-  function pick(side: "sell" | "buy", addr: string) {
-    const tok = [sell, buy, ...TOKENS].find(t => t.addr.toLowerCase() === addr.toLowerCase());
+  const walletTokens: Token[] = walletList.assets
+    .filter(a => a.trust !== "impostor")
+    .map(a => {
+      const addr = a.address ?? ETH.addr;
+      const known = resolveKnownByAddr(addr);
+      return {
+        ...(known ?? { sym: a.symbol, addr, decimals: a.decimals }),
+        native: a.address === null,
+        name: known?.name ?? a.name,
+        amount: a.amount,
+        usdValue: a.usdValue,
+      };
+    });
+
+  const dedupeTokens = (list: Token[]): Token[] => {
+    const seen = new Map<string, Token>();
+    for (const t of list) {
+      const k = t.addr.toLowerCase();
+      const prev = seen.get(k);
+      if (!prev) {
+        seen.set(k, t);
+      } else {
+        seen.set(k, {
+          ...prev,
+          ...t,
+          sym: prev.sym || t.sym,
+          image: prev.image ?? t.image,
+          name: prev.name ?? t.name,
+          amount: prev.amount ?? t.amount,
+          usdValue: prev.usdValue ?? t.usdValue,
+        });
+      }
+    }
+    return [...seen.values()];
+  };
+
+  const coinbaseTokens: Token[] = COINBASE_BASE_STOCKS.map(s => ({
+    sym: s.symbol,
+    addr: s.token,
+    decimals: 8,
+    name: s.name,
+    image: s.image,
+    isB20: true,
+  }));
+
+  const payOptions = dedupeTokens([
+    ...walletTokens,
+    ...TOKENS,
+    sell,
+  ]);
+
+  const receiveOptions = dedupeTokens([
+    buy,
+    ...TOKENS,
+    ...walletTokens,
+    ...coinbaseTokens,
+  ]);
+
+  function pick(side: "sell" | "buy", addr: string, explicit?: Token) {
+    const tok = explicit
+      ?? [...payOptions, ...receiveOptions].find(t => t.addr.toLowerCase() === addr.toLowerCase())
+      ?? (isAddress(addr) ? (resolveKnownByAddr(getAddress(addr)) ?? { sym: "", addr: getAddress(addr) }) : undefined);
     if (!tok) return;
-    if (side === "sell") { if (tok.addr === buy.addr) setBuy(sell); setSell(tok); }
-    else { if (tok.addr === sell.addr) setSell(buy); setBuy(tok); }
+    if (side === "sell") { if (tok.addr.toLowerCase() === buy.addr.toLowerCase()) setBuy(sell); setSell(tok); }
+    else { if (tok.addr.toLowerCase() === sell.addr.toLowerCase()) setSell(buy); setBuy(tok); }
     setAmount(""); setQuote(null); setPendingWord(""); setAssetHint([]);
   }
-  // An injected non-major renders and stays selectable on whichever side holds
-  // it. BOTH sides, now: the buy list was `TOKENS` flat, so a token chat armed
-  // to RECEIVE showed a chip whose own value was missing from its panel —
-  // opening it and closing it again would have silently swapped the trade to a
-  // major the user never asked for.
-  const optionsFor = (t: Token) => (inMajors(t) ? TOKENS : [t, ...TOKENS]);
 
   const canSwap = !!account && !!quote?.transaction && amt > 0 && gate === "ok" && !loading && buyDec != null
     && pt.cleared && !pt.blocked;
@@ -482,21 +568,120 @@ export default function SwapCard({
   // `label` is not DRAWN in inline mode — it becomes the bar's `aria-label`,
   // which is the whole reason it is still passed: two identical-looking chips
   // one above the other need different accessible names.
-  const tokenChip = (side: "sell" | "buy", value: Token, options: Token[]) => (
-    <Picker inline label={side === "sell" ? "Pay with" : "Receive"}
-      summary={<span className="text-[14px] text-slate-200">{label(value)}</span>}>
-      {close => options.map(t => (
-        <PickerRow key={t.addr} selected={t.addr.toLowerCase() === value.addr.toLowerCase()}
-          onClick={() => { pick(side, t.addr); close(); }}>
-          <span className="text-[15px] text-white flex-1">{label(t)}</span>
-          {/* The address, because a ticker does not identify a token — and the
-              sell list can carry an arbitrary one injected by `preset`. An
-              `<option>` had nowhere to put this. */}
-          <span className="text-[12px] text-slate-600">{t.native ? "native" : truncAddr(t.addr)}</span>
-        </PickerRow>
-      ))}
-    </Picker>
+  const tokenAvatar = (t: Token) => t.image ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={t.image} alt="" className="w-4 h-4 rounded-full object-cover shrink-0 bg-[#0F121A]" />
+  ) : (
+    <span className="inline-flex items-center justify-center w-4 h-4 rounded-full shrink-0 border border-[#2a3350] bg-[#0F121A] text-[8px] font-semibold text-slate-400">
+      {label(t).replace(/^0x/i, "").slice(0, 2).toUpperCase()}
+    </span>
   );
+
+  const tokenChip = (side: "sell" | "buy", value: Token, options: Token[]) => {
+    const query = side === "sell" ? sellQuery : buyQuery;
+    const setQuery = side === "sell" ? setSellQuery : setBuyQuery;
+    const q = query.trim();
+    const pastedAddr = isAddress(q) ? getAddress(q) : null;
+    const ql = q.toLowerCase();
+    const shown = q && !pastedAddr
+      ? options.filter(t =>
+          t.sym.toLowerCase().includes(ql)
+          || (t.name ?? "").toLowerCase().includes(ql)
+          || t.addr.toLowerCase().includes(ql))
+      : options;
+    const alreadyListed = pastedAddr
+      ? options.some(t => t.addr.toLowerCase() === pastedAddr.toLowerCase())
+      : false;
+    const pastedTok: Token | null = pastedAddr
+      ? (resolveKnownByAddr(pastedAddr) ?? { sym: "", addr: pastedAddr })
+      : null;
+
+    return (
+      <Picker
+        inline
+        label={side === "sell" ? "Pay with" : "Receive"}
+        onClose={() => setQuery("")}
+        panelClassName="w-72 max-w-[calc(100vw-3rem)]"
+        summary={
+          <span className="flex items-center gap-1.5 whitespace-nowrap">
+            {tokenAvatar(value)}
+            <span className="text-[14px] text-slate-200 whitespace-nowrap">{label(value)}</span>
+          </span>
+        }>
+        {close => (
+          <div>
+            <div className="p-2 border-b border-[#13131f]">
+              <input
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                placeholder="Search symbol or paste 0x…"
+                spellCheck={false} autoCapitalize="none" autoCorrect="off"
+                className="w-full bg-[#050508] border border-[#1A1A2E] rounded-md px-2 py-1.5 font-mono text-[13px] text-white outline-none placeholder:text-slate-700 focus:border-[#4FC3F740]"
+              />
+            </div>
+
+            <div className="max-h-60 overflow-y-auto">
+              {pastedTok && !alreadyListed && (
+                <PickerRow onClick={() => { pick(side, pastedTok.addr, pastedTok); close(); }}>
+                  <span className="font-mono text-[13px] text-[#4FC3F7] flex-1 truncate">
+                    Use {label(pastedTok)}
+                  </span>
+                  <span className="font-mono text-[12px] text-slate-600 shrink-0 whitespace-nowrap">
+                    {truncAddr(pastedTok.addr)}
+                  </span>
+                </PickerRow>
+              )}
+
+              {shown.map(t => (
+                <PickerRow
+                  key={t.addr}
+                  selected={t.addr.toLowerCase() === value.addr.toLowerCase()}
+                  onClick={() => { pick(side, t.addr, t); close(); }}>
+                  {tokenAvatar(t)}
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[14px] text-white whitespace-nowrap truncate">{label(t)}</span>
+                    {t.name && <span className="block text-[11px] text-slate-500 truncate">{t.name}</span>}
+                  </span>
+                  <span className="text-right shrink-0 whitespace-nowrap">
+                    {t.amount != null ? (
+                      <>
+                        <span className="block font-mono text-[12px] text-slate-300">{fmtAmt(t.amount)}</span>
+                        {t.usdValue != null && (
+                          <span className="block font-mono text-[11px] text-slate-600">${t.usdValue.toFixed(2)}</span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-[12px] text-slate-600">{t.native ? "native" : truncAddr(t.addr)}</span>
+                    )}
+                  </span>
+                </PickerRow>
+              ))}
+
+              {shown.length === 0 && !pastedAddr && (
+                <div className="px-2.5 py-3 text-[12px] text-slate-500">
+                  No token matches &ldquo;{q}&rdquo;. Paste a Base contract address to trade it.
+                </div>
+              )}
+            </div>
+
+            {side === "sell" && (
+              <div className="px-2.5 py-1.5 border-t border-[#13131f] font-mono text-[11px] text-slate-600 leading-relaxed">
+                {!account ? "Connect wallet to load your Base tokens."
+                  : walletList.loading ? "Reading your Base wallet tokens…"
+                  : walletList.failed ? (
+                    <span className="text-amber-400">
+                      Couldn&apos;t load wallet tokens — showing majors.{" "}
+                      <button type="button" onClick={() => walletList.refetch()} className="underline">Retry</button>
+                    </span>
+                  ) : walletList.partial ? "Some wallet tokens may be omitted — paste an address if needed."
+                  : "Your Base wallet tokens · paste any 0x address."}
+              </div>
+            )}
+          </div>
+        )}
+      </Picker>
+    );
+  };
 
   return (
     <WalletCard title="CONVERT" chain="base" note={quote?.venue === "aerodrome" ? "via Aerodrome" : "via 0x"}>
@@ -531,7 +716,7 @@ export default function SwapCard({
         <div className="flex items-center gap-2">
           <input type="number" min="0" value={amount} onChange={e => { setAmount(e.target.value); setPendingWord(""); }} placeholder="0.0"
             className="flex-1 bg-transparent text-[19px] text-white outline-none placeholder:text-slate-700 w-0" />
-          {tokenChip("sell", sell, optionsFor(sell))}
+          {tokenChip("sell", sell, payOptions)}
         </div>
         {pendingWord && (
           <div className="text-[12px] text-slate-500 mt-1">
@@ -552,7 +737,7 @@ export default function SwapCard({
           <div className="flex-1 text-[19px] text-white w-0 truncate">
             {loading ? <span className="text-slate-600">…</span> : buyAmount != null ? fmt(buyAmount) : <span className="text-slate-700">0.0</span>}
           </div>
-          {tokenChip("buy", buy, optionsFor(buy))}
+          {tokenChip("buy", buy, receiveOptions)}
         </div>
         {/* An unread exponent is not a small display gap — it is the difference
             between this line and 100× this line. The button is disabled with it. */}

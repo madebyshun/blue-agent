@@ -24,7 +24,7 @@
 import { useEffect, useRef, useState } from "react";
 
 export function Picker({
-  label, summary, disabled, onClose, inline, children,
+  label, summary, disabled, onClose, inline, panelClassName, children,
 }: {
   /** Rendered above the bar, in the same small-caps style as the card's other
    *  field labels. Omitted when `inline` — an inline picker sits inside a field
@@ -52,6 +52,8 @@ export function Picker({
    * implementation, the one dropdown grew a second size.
    */
   inline?: boolean;
+  /** Optional extra classes for the open dropdown panel (e.g. wider panel for token search). */
+  panelClassName?: string;
   /** The open panel. Receives `close` so a row can commit and dismiss. */
   children: (close: () => void) => React.ReactNode;
 }) {
@@ -105,7 +107,7 @@ export function Picker({
         <div
           role="listbox"
           className={`absolute z-30 mt-1 rounded-lg border border-[#1A1A2E] bg-[#0a0a0f] shadow-xl shadow-black/60 overflow-hidden ${
-            inline ? "right-0 min-w-[11rem]" : "left-0 right-0"}`}>
+            inline ? `right-0 ${panelClassName ?? "min-w-[15rem]"}` : `left-0 right-0 ${panelClassName ?? ""}`}`}>
           {children(() => setOpen(false))}
         </div>
       )}

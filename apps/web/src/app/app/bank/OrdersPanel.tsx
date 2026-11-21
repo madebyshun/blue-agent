@@ -40,25 +40,30 @@ function useMemoWatcher(pendingKey: string, onPaid: () => void) {
     async function tick() {
       try {
         const latest = await c.getBlockNumber();
-        // First pass looks back ~1500 blocks (≤ public-RPC 2000-block cap); then incremental.
-        const from = cursor ?? (latest > 1500n ? latest - 1500n : 0n);
+        // Base Denim produces 0.2s blocks (5 blocks/sec), so 15,000 blocks ≈ 50 min.
+        // Scan in 1,500-block chunks to stay within public-RPC 2,000-block getLogs limits.
+        const from = cursor ?? (latest > 15_000n ? latest - 15_000n : 0n);
         if (from > latest) return;
-        const logs = await c.getLogs({
-          address: B20_USDC as `0x${string}`,
-          event: MEMO_EVENT_ABI[0],
-          args: { memo: memos },
-          fromBlock: from,
-          toBlock: latest,
-        });
-        cursor = latest + 1n;
-        if (cancelled) return;
+        const CHUNK = 1_500n;
         let changed = false;
-        for (const log of logs) {
-          const memo = (log.args as { memo?: Hex }).memo;
-          if (!memo) continue;
-          const oid = memoToOrderId(memo);
-          if (ids.includes(oid)) { markPaid(oid, log.transactionHash ?? undefined); changed = true; }
+        for (let start = from; start <= latest; start += CHUNK) {
+          const end = start + CHUNK - 1n < latest ? start + CHUNK - 1n : latest;
+          const logs = await c.getLogs({
+            address: B20_USDC as `0x${string}`,
+            event: MEMO_EVENT_ABI[0],
+            args: { memo: memos },
+            fromBlock: start,
+            toBlock: end,
+          });
+          if (cancelled) return;
+          for (const log of logs) {
+            const memo = (log.args as { memo?: Hex }).memo;
+            if (!memo) continue;
+            const oid = memoToOrderId(memo);
+            if (ids.includes(oid)) { markPaid(oid, log.transactionHash ?? undefined); changed = true; }
+          }
         }
+        cursor = latest + 1n;
         if (changed) onPaidRef.current();
       } catch { /* RPC hiccup — retry next tick */ }
     }

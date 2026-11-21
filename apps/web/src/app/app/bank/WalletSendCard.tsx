@@ -661,7 +661,7 @@ export default function WalletSendCard({
   // to — sponsorship is a per-chain capability, and a badge that outlived its
   // chain would be a promise about the wrong network.
   return (
-    <WalletCard title="SEND" chain={network} note={gaslessSupported ? "⚡ gas sponsored" : undefined}>
+    <WalletCard title="SEND" chain={network} note={gaslessSupported ? "gas sponsored" : undefined}>
       {/* Network — chosen in-card. Base + Robinhood only; no Base Sepolia.
           A dropdown rather than one button per chain: the segmented row encoded
           "there are exactly two chains", and this wallet is built to grow past
@@ -805,7 +805,7 @@ export default function WalletSendCard({
           function, as the portfolio table's badge (#145). */}
       {asset.trust === "impostor" && (
         <div className="mb-3 rounded-lg border border-red-500/30 bg-red-500/5 px-2.5 py-2 font-mono text-[12px] text-red-400 leading-relaxed">
-          ⚠ This token calls itself <strong>{asset.symbol}</strong> but its address is not the real{" "}
+          This token calls itself <strong>{asset.symbol}</strong> but its address is not the real{" "}
           {asset.symbol} on {cfg.short}. Sending it sends the impostor, not the asset it names.
         </div>
       )}

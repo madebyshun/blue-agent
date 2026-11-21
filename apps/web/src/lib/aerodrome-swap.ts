@@ -77,7 +77,7 @@ export type AeroQuote =
       sellToken: string; buyToken: string; sellAmount: string;
       buyAmount: string; minBuyAmount: string;
       pool: string; tickSpacing: number; slippageBps: number;
-      transaction: { to: string; data: string; value: "0" };
+      transaction?: { to: string; data: string; value: "0" };
       issues: { allowance: { spender: string } };
     }
   | { error: string; venue: "aerodrome" };
@@ -166,7 +166,7 @@ export async function aerodromeQuote(p: { sellToken: string; buyToken: string; s
   if (lc(other) !== lc(USDC_BASE)) {
     return { venue: "aerodrome", error: `${stock.symbol} trades against USDC on Aerodrome. Swap to USDC first, then ${sellStock ? "sell" : "buy"} ${stock.symbol} with USDC.` };
   }
-  if (!/^0x[a-fA-F0-9]{40}$/.test(p.taker)) return { venue: "aerodrome", error: "A taker wallet is required to build the swap." };
+  const hasTaker = /^0x[a-fA-F0-9]{40}$/.test(p.taker);
   if (!/^\d+$/.test(p.sellAmount) || BigInt(p.sellAmount) === 0n) return { venue: "aerodrome", error: "bad sellAmount" };
 
   const cands = await poolCandidates(stock.token as Address);
@@ -195,20 +195,26 @@ export async function aerodromeQuote(p: { sellToken: string; buyToken: string; s
   }
   const bps = p.slippageBps ?? 100;
   const minOut = (out * BigInt(10_000 - bps)) / 10_000n;
-  const data = encodeFunctionData({
-    abi: ROUTER_ABI, functionName: "exactInputSingle",
-    args: [{
-      tokenIn: p.sellToken as Address, tokenOut: p.buyToken as Address, tickSpacing: found.tickSpacing,
-      recipient: p.taker as Address, deadline: BigInt(Math.floor(Date.now() / 1000) + 20 * 60),
-      amountIn, amountOutMinimum: minOut, sqrtPriceLimitX96: 0n,
-    }],
-  });
+  const transaction = hasTaker
+    ? {
+        to: SWAP_ROUTER,
+        data: encodeFunctionData({
+          abi: ROUTER_ABI, functionName: "exactInputSingle",
+          args: [{
+            tokenIn: p.sellToken as Address, tokenOut: p.buyToken as Address, tickSpacing: found.tickSpacing,
+            recipient: p.taker as Address, deadline: BigInt(Math.floor(Date.now() / 1000) + 20 * 60),
+            amountIn, amountOutMinimum: minOut, sqrtPriceLimitX96: 0n,
+          }],
+        }),
+        value: "0" as const,
+      }
+    : undefined;
   return {
     venue: "aerodrome",
     sellToken: p.sellToken, buyToken: p.buyToken, sellAmount: p.sellAmount,
     buyAmount: out.toString(), minBuyAmount: minOut.toString(),
     pool: found.pool, tickSpacing: found.tickSpacing, slippageBps: bps,
-    transaction: { to: SWAP_ROUTER, data, value: "0" },
+    ...(transaction ? { transaction } : {}),
     issues: { allowance: { spender: SWAP_ROUTER } },
   };
 }

@@ -94,7 +94,7 @@ const ROUTER = parseAbi(["function exactInputSingle((address tokenIn,address tok
   q = await aerodromeQuote({ sellToken: "0x4200000000000000000000000000000000000006", buyToken: STOCK, sellAmount: "1000", taker: TAKER, slippageBps: 100 });
   ok("a stock against anything but USDC says: swap to USDC first", "error" in q && /Swap to USDC first/.test(q.error));
   q = await aerodromeQuote({ sellToken: USDC_BASE, buyToken: STOCK, sellAmount: "1000000", taker: "", slippageBps: 100 });
-  ok("no taker → refused (the output needs a recipient)", "error" in q);
+  ok("no taker → preview quote only (no transaction)", !("error" in q) && !!q.buyAmount && !q.transaction);
 
   console.log("2. pool choice");
   q = await aerodromeQuote({ sellToken: USDC_BASE, buyToken: STOCK, sellAmount: "1000000", taker: TAKER, slippageBps: 100 });
@@ -102,7 +102,7 @@ const ROUTER = parseAbi(["function exactInputSingle((address tokenIn,address tok
     !("error" in q) && q.pool.toLowerCase() === POOL10 && q.tickSpacing === 10 && (quoted as { tickSpacing: number; amountIn: bigint } | null)?.tickSpacing === 10 && (quoted as { tickSpacing: number; amountIn: bigint } | null)?.amountIn === 1_000_000n, JSON.stringify(q));
 
   console.log("3. calldata");
-  if (!("error" in q)) {
+  if (!("error" in q) && q.transaction) {
     const { functionName, args } = decodeFunctionData({ abi: ROUTER, data: q.transaction.data as `0x${string}` });
     const p = args[0];
     ok("exactInputSingle on the verified router", functionName === "exactInputSingle" && q.transaction.to === SWAP_ROUTER && q.issues.allowance.spender === SWAP_ROUTER);
