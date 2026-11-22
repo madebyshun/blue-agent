@@ -1,4 +1,3 @@
-import { approvedBaseStocks } from "@/lib/base-stocks/universe";
 /**
  * Markets mode (R3, 2026-10-28): stock tokens and crypto tokens on Base 8453 and
  * Robinhood Chain 4663, one list, one token page, one portfolio.
@@ -180,7 +179,7 @@ export const unmintedBaseStocks = cacheWhole(async (): Promise<string[]> => {
 }, "markets:base-unminted:v1", 3600);
 
 export const readStockMarkets = cacheWhole(async (): Promise<{ rows: StockRow[]; readAt: string }> => {
-  const uni = stockUniverse(await approvedBaseStocks());
+  const uni = stockUniverse();
   const priced: StockRow[] = [];
   let partial = false;
   const unminted = new Set(await unmintedBaseStocks());
@@ -453,7 +452,7 @@ const BALANCE_ABI = [
 
 /** Native, stable and stock-token balances on both chains, valued at market prices. */
 export async function readPortfolio(owner: Address): Promise<{ holdings: Holding[]; unread: MarketChain[] }> {
-  const uni = stockUniverse(await approvedBaseStocks());
+  const uni = stockUniverse();
   // Balances and prices in parallel, prices capped at 8s: a rate-limited price
   // read leaves a holding unpriced ("—"), it never holds up the balances.
   const capped = <T,>(p: Promise<T>, fallback: T) => Promise.race([p.catch(() => fallback), new Promise<T>((r) => setTimeout(() => r(fallback), 8_000))]);
