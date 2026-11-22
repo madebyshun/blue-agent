@@ -714,7 +714,7 @@ async function dexPriceDexScreener(
       }
       const price = parseFloat(p.priceUsd ?? "");
       if (!Number.isFinite(price) || price <= 0) return [];
-      return [{ p, price, liq: dsNum(p.liquidity?.usd) }];
+      return [{ p, price, liq: dsNum(p.liquidity?.usd), vol: dsNum(p.volume?.h24) ?? 0 }];
     });
     if (!usable.length) {
       // `unanchored` separates "this token has no dollar market" from the
@@ -726,7 +726,12 @@ async function dexPriceDexScreener(
       );
       return null;
     }
-    usable.sort((a, b) => (b.liq ?? 0) - (a.liq ?? 0));
+    usable.sort((a, b) => {
+      const aLive = a.vol > 0 ? 1 : 0;
+      const bLive = b.vol > 0 ? 1 : 0;
+      if (aLive !== bLive) return bLive - aLive;
+      return (b.liq ?? 0) - (a.liq ?? 0);
+    });
     const { p, price, liq } = usable[0];
     const poolAddr = (p.pairAddress ?? "").toLowerCase();
     return {

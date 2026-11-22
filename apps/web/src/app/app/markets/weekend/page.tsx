@@ -9,6 +9,7 @@ import Link from "next/link";
 import { MarketHero, MarketNav, WeekendHistory } from "../MarketVisuals";
 import MarketsHeader from "../MarketsHeader";
 import StockMark from "@/components/blue-hood/StockMark";
+import { COINBASE_BASE_STOCKS } from "@/lib/base-stocks/coinbase-list";
 import { diaryView, scorecardView, weekendReplay } from "@/lib/weekend/view";
 import { CallScatter, PairBars, ReplayChart } from "./charts";
 import { readSessionVolume } from "@/lib/weekend/sessions";
@@ -37,6 +38,21 @@ function Big({ n, l, sub, accent }: { n: string; l: string; sub?: string; accent
 
 function Stamp() {
   return <div className="flex items-center justify-between text-[11px] text-[#475569] mt-4"><span>Base 8453 · Chainlink + Base DEX</span><span>blueagent.dev/markets/weekend</span></div>;
+}
+
+const LOGO_BY_TICKER = new Map(
+  COINBASE_BASE_STOCKS.filter((s) => s.image).map((s) => [s.ticker.toUpperCase(), s.image as string]),
+);
+
+function BaseLogo({ ticker, size }: { ticker: string; size: number }) {
+  const logo = LOGO_BY_TICKER.get(ticker.toUpperCase());
+  if (logo) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={logo} alt="" width={size} height={size} style={{ width: size, height: size }} className="rounded-full object-cover shrink-0 bg-[#0F121A]" />
+    );
+  }
+  return <StockMark ticker={ticker} chain="base" size={size} />;
 }
 
 export default async function WeekendPage({ searchParams }: { searchParams: Promise<{ ticker?: string; w?: string }> }) {
@@ -102,7 +118,7 @@ export default async function WeekendPage({ searchParams }: { searchParams: Prom
               <div className="mt-4 grid md:grid-cols-2 gap-x-8 gap-y-2">
                 {sessions.tickers.map((t) => (
                   <div key={t.ticker} className="grid grid-cols-[28px_64px_1fr_44px] items-center gap-2 text-[12px]">
-                    <StockMark ticker={t.ticker} chain="base" size={22} />
+                    <BaseLogo ticker={t.ticker} size={22} />
                     <span className="text-[#E2E8F0]">{t.ticker}c</span>
                     <div className="flex h-[10px] rounded-sm overflow-hidden">
                       <div style={{ width: `${t.share.open}%` }} className="bg-[#334155]" /><div style={{ width: `${t.share.nights}%` }} className="bg-[#2B7FB0]" /><div style={{ width: `${t.share.weekend}%` }} className="bg-[#4FC3F7]" />
@@ -132,7 +148,7 @@ export default async function WeekendPage({ searchParams }: { searchParams: Prom
               {rw && rr && replay.length > 3 && (
                 <div className={`${CARD} p-5`}>
                   <div className="flex items-center gap-3">
-                    <StockMark ticker={rr.ticker} chain="base" size={30} />
+                    <BaseLogo ticker={rr.ticker} size={30} />
                     <div>
                       <div className={EYEBROW}>WEEKEND REPLAY · {day(rw.friday).toUpperCase()}–{day(addDays(rw.friday, 3)).toUpperCase()}</div>
                       <div className="text-[16px] text-[#F8FAFC]">{rr.ticker}c on Base</div>
@@ -161,7 +177,7 @@ export default async function WeekendPage({ searchParams }: { searchParams: Prom
               <div className="mt-3 grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
                 {now.rows.map((r) => (
                   <a key={r.ticker} href={r.explorer} target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-[10px] border border-[#1A1A2E] px-3 py-2.5 hover:border-[#4FC3F7]/40">
-                    <StockMark ticker={r.ticker} chain="base" size={28} />
+                    <BaseLogo ticker={r.ticker} size={28} />
                     <div className="flex-1 min-w-0">
                       <div className="text-[13px] text-[#E2E8F0]">{r.ticker}c</div>
                       <div className="text-[11px] text-[#64748B]">Ref {usd(r.close_usd)} → Base {usd(r.dex_usd)}</div>
