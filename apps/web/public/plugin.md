@@ -3,11 +3,11 @@
 > Source of truth: https://blueagent.dev/plugin.md
 > Hub UI: https://blueagent.dev/hub · Catalog (machine-readable): https://blueagent.dev/api/catalog
 
-30 AI tools for onchain builders and autonomous agents — audits, token signals,
+33 AI tools for onchain builders and autonomous agents — audits, token signals,
 stock signals, liquidity depth, contract trust and pre-trade safety and
-more. 23 are paid HTTP endpoints that speak **x402 v2** natively, so Base MCP
+more. 24 are paid HTTP endpoints that speak **x402 v2** natively, so Base MCP
 can call any of them and settle the USDC payment without extra wiring. The
-other 7 are priced $0.00, never answer 402 and never ask for a signature.
+other 9 are priced $0.00, never answer 402 and never ask for a signature.
 
 - **Reads:** Base mainnet (8453) and Robinhood Chain (4663) — the `rh-*`
   tokenized-stock tools are the Robinhood Chain desk; bridging between the
@@ -35,10 +35,11 @@ other 7 are priced $0.00, never answer 402 and never ask for a signature.
 > A paid Blue Hub call charges USDC on-chain. Never auto-pay without consent.
 
 > [!NOTE]
-> **Seven tools are free and this gate does not apply to them.** They are priced
+> **Nine tools are free and this gate does not apply to them.** They are priced
 > `$0.00` in the catalog, never answer 402 and never ask for a signature:
 > `blue-doctor` · `hood-live` · `weekend-scorecard` · `pre-trade-check` ·
-> `sign-check` · `approval-audit` · `rh-rwa-verify`. POST them directly. Do not build an
+> `sign-check` · `approval-audit` · `rh-rwa-verify` · `b20-policy-check` ·
+> `tx-simulate`. POST them directly. Do not build an
 > authorization — there is nothing to sign and no transfer to make.
 >
 > This paragraph is load-bearing, not a footnote. The gate above used to read
@@ -64,7 +65,7 @@ no auth. Returns:
   "network": "eip155:8453",
   "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
   "payTo": "0x02950ad38ada1d599375bd447e080cd404809205",
-  "count": 30,
+  "count": 33,
   "tools": [
     {
       "id": "base-stock-quote",

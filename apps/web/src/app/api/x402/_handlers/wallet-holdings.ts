@@ -62,6 +62,9 @@ export default async function handler(req: Request): Promise<Response> {
 
     const w = await readWallet(address, "mainnet");
     if (w.error) return failLoud(address, w.error);
+    if (w.holdings.length === 0 && (w.partial || w.degraded)) {
+      return failLoud(address, w.partialReason ?? "No balance read completed for this wallet.");
+    }
 
     const nativeRow = w.holdings.find((h) => h.isNative);
     const native_eth = nativeRow ? Number(nativeRow.amount) : null;

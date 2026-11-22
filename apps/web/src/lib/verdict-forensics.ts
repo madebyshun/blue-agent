@@ -101,13 +101,19 @@ export type OriginResult =
 type SimTx = { to: string; data: string; value: bigint };
 type SimCall = { ok: boolean; reason: string; logs: { address: string; topics: string[]; data: string }[] };
 
+let fetchImpl: typeof fetch = (...args) => fetch(...args);
+/** Tests inject a fixture fetcher; production always uses global fetch. */
+export function __setForensicsFetch(f: typeof fetch | null) {
+  fetchImpl = f ?? ((...args) => fetch(...args));
+}
+
 async function fetchJson<T>(url: string, init?: RequestInit, timeoutMs = 8_000): Promise<T> {
   const headers = {
     Accept: "application/json",
     "User-Agent": "Mozilla/5.0 (compatible; BlueAgent/1.0; +https://blueagent.dev)",
     ...(init?.headers ?? {}),
   };
-  const res = await fetch(url, { ...init, headers, signal: AbortSignal.timeout(timeoutMs) });
+  const res = await fetchImpl(url, { ...init, headers, signal: AbortSignal.timeout(timeoutMs) });
   const text = await res.text();
   let parsed: unknown;
   try { parsed = JSON.parse(text); } catch { parsed = null; }
