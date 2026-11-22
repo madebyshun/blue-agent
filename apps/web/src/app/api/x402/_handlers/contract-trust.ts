@@ -225,9 +225,20 @@ Proxy: ${basescan.isProxy ? `yes → ${basescan.implementationAddress}` : "no"}
 ${context ? `Additional context: ${context}` : ""}
 `.trim();
 
+    const llmErrors: string[] = [];
+    const safeLlm = async (label: string, system: string, temp: number, tokens: number): Promise<string> => {
+      try {
+        return await llm(system, contractCtx, temp, tokens);
+      } catch (e) {
+        llmErrors.push(`${label}: ${(e as Error).message}`);
+        return "";
+      }
+    };
+
     const [blueRaw, msRaw] = await Promise.all([
       // Blue Agent: security analysis
-      llm(
+      safeLlm(
+        "security",
         `You are Blue Agent — security specialist for Base (chain ID 8453).
 Analyze a contract for trust signals before a user swaps or interacts with it.
 Focus on: verification status, proxy risks, known attack patterns (reentrancy, owner backdoors, mint/burn abuse, fee manipulation, honeypot patterns, rugpull vectors).
@@ -242,12 +253,12 @@ Schema: {
   "known_pattern": "<ERC-20|ERC-721|LP|lending|bridge|unknown>",
   "blue_assessment": "<2-3 sentences — direct, no fluff>"
 }`,
-        contractCtx,
         0.2,
         700
       ),
       // MiroShark: community trust signal
-      llm(
+      safeLlm(
+        "community",
         `You are MiroShark — community intelligence persona on Base.
 Assess community trust signals for this contract based on name, address, and context.
 Consider: is this a known protocol? Is the contract name familiar? Any degen red flags? Community consensus?
@@ -258,21 +269,22 @@ Schema: {
   "degen_flags": ["<flag>" or empty],
   "community_verdict": "<1-2 sentences>"
 }`,
-        contractCtx,
         0.3,
         400
       ),
     ]);
 
     const blue = parseJson(blueRaw) ?? {
-      security_score: 50,
+      security_score: null,
       verified: basescan.verified,
-      proxy_risk: "unknown",
+      proxy_risk: basescan.isProxy ? "medium" : "unknown",
       red_flags: [],
       green_flags: basescan.verified ? ["source verified on Basescan"] : [],
       attack_vectors: [],
       known_pattern: "unknown",
-      blue_assessment: "Analysis inconclusive. Proceed with caution.",
+      blue_assessment: llmErrors.length
+        ? "LLM narrative unavailable; verdict below is computed strictly from on-chain and Basescan reads."
+        : "Analysis inconclusive. Proceed with caution.",
     };
 
     const ms = parseJson(msRaw) ?? {

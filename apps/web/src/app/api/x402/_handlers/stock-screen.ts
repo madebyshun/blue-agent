@@ -20,10 +20,12 @@
 // FACTS ONLY. Nothing ranks on opinion, momentum forecast or "best pick". A row
 // clears the filter or it does not, and `failed_on` says which number moved it.
 import { BASE_STOCKS } from "@/lib/base-stocks/registry";
+import { COINBASE_BASE_STOCKS } from "@/lib/base-stocks/coinbase-list";
 import type { BaseStockQuote } from "@/lib/base-stocks/b20-quote";
 import { readBaseStockQuote } from "@/lib/base-stocks/b20-quote";
 import { readBody, BASE_CHAIN } from "@/lib/base-stocks/handler-common";
 import { splitQuotes, type ScreenFilters } from "@/lib/base-stocks/screen";
+import { BASE_PRICE_SOURCE, dexPrice } from "@/lib/robinhood/rwa-price";
 
 const num = (v: unknown, fallback: number | null): number | null => {
   if (v === undefined || v === null || v === "") return fallback;
@@ -41,6 +43,12 @@ export default async function handler(req: Request): Promise<Response> {
     v !== undefined && v !== null && v !== "" ? v : params.get(key);
 
   const limit = Math.max(1, Math.min(50, Number(pick(body.limit, "limit") ?? 10) || 10));
+  const tickersRaw = pick(body.tickers, "tickers");
+  const requestedTickers = typeof tickersRaw === "string"
+    ? tickersRaw.split(",").map((s) => s.trim().toUpperCase()).filter(Boolean)
+    : Array.isArray(tickersRaw)
+      ? tickersRaw.map((s) => String(s).trim().toUpperCase()).filter(Boolean)
+      : [];
   const filters: ScreenFilters = {
     max_abs_drift_pct: num(pick(body.max_abs_drift_pct, "max_abs_drift_pct"), null),
     min_liquidity_usd: num(pick(body.min_liquidity_usd, "min_liquidity_usd"), 0) ?? 0,
@@ -52,11 +60,14 @@ export default async function handler(req: Request): Promise<Response> {
   };
 
   // One read per stock, no stagger: `readBaseStockQuote` batches its on-chain
-  // calls through multicall and the registry holds nine tickers. The hood poller
-  // does exactly this every five minutes.
+  // calls through multicall and the registry holds Chainlink-fed tickers.
+  const targetFeedStocks = requestedTickers.length
+    ? BASE_STOCKS.filter((s) => requestedTickers.includes(s.ticker.toUpperCase()) || requestedTickers.includes(s.symbol.toUpperCase()))
+    : BASE_STOCKS;
+
   const quotes: BaseStockQuote[] = [];
   const failed: { ticker: string; error: string }[] = [];
-  for (const stock of BASE_STOCKS) {
+  for (const stock of targetFeedStocks) {
     try {
       quotes.push(await readBaseStockQuote(stock));
     } catch (e) {
@@ -64,12 +75,46 @@ export default async function handler(req: Request): Promise<Response> {
     }
   }
 
+  // If caller asked for specific tickers from COINBASE_BASE_STOCKS that do not
+  // have a Chainlink feed, read their live DEX price/liquidity directly so they
+  // are never silently dropped as "unlisted".
+  const fedTickers = new Set(targetFeedStocks.map((s) => s.ticker.toUpperCase()));
+  const extraStocks = requestedTickers.length
+    ? COINBASE_BASE_STOCKS.filter(
+        (s) =>
+          !fedTickers.has(s.ticker.toUpperCase()) &&
+          (requestedTickers.includes(s.ticker.toUpperCase()) || requestedTickers.includes(s.symbol.toUpperCase())),
+      ).slice(0, 20)
+    : [];
+  const dexOnlyRows = await Promise.all(
+    extraStocks.map(async (s) => {
+      const dex = await dexPrice(s.token, BASE_PRICE_SOURCE).catch(() => null);
+      return {
+        ticker: s.ticker,
+        symbol: s.symbol,
+        token: s.token,
+        share_price_usd: null,
+        dex_price_usd: dex?.price_usd ?? null,
+        drift_pct: null,
+        abs_drift_pct: null,
+        liquidity_usd: dex?.liquidity_usd ?? null,
+        volume_24h_usd: dex?.volume_24h_usd ?? null,
+        oracle_age_seconds: null,
+        oracle_is_stale: null,
+        price_in_band: null,
+        can_fire: false,
+        suppressed_reason: "no_chainlink_feed",
+        pool: dex?.pool_url ?? null,
+      };
+    }),
+  );
+
   // Reported, never dropped. A screen that quietly shrinks its universe reads as
   // "nothing else qualified" — a far more confident claim than "we could not
   // read it", and false.
-  if (quotes.length === 0) {
+  if (quotes.length === 0 && dexOnlyRows.length === 0) {
     throw new Error(
-      `All ${BASE_STOCKS.length} tokenized stocks failed to read; nothing was charged.`,
+      `All ${targetFeedStocks.length || BASE_STOCKS.length} tokenized stocks failed to read; nothing was charged.`,
     );
   }
 
@@ -100,16 +145,17 @@ export default async function handler(req: Request): Promise<Response> {
     filters,
     universe: {
       listed: BASE_STOCKS.length,
-      read: quotes.length,
-      passed: rows.length,
+      total_coinbase_base_stocks: COINBASE_BASE_STOCKS.length,
+      read: quotes.length + dexOnlyRows.length,
+      passed: rows.length + dexOnlyRows.length,
       failed_read: failed,
     },
-    rows: rows.map(row),
+    rows: [...rows.map(row), ...dexOnlyRows],
     // `failed_on` is what makes the reject list falsifiable: "rejected because
     // liquidity_unreadable" can be argued with, a bare "rejected" cannot.
     rejected,
     ranked_by: "abs_drift_pct, widest first — a ranking, not a recommendation",
     note:
-      "Facts about nine tokenized stocks, filtered by your own thresholds. A wide drift is as often a broken oracle read as a mispriced pool; read can_fire and suppressed_reason before acting. Not financial advice.",
+      `Facts about ${BASE_STOCKS.length} Chainlink-fed tokenized stocks (plus any requested tickers from the ${COINBASE_BASE_STOCKS.length}-stock Coinbase Base universe), filtered by your own thresholds. Not financial advice.`,
   });
 }

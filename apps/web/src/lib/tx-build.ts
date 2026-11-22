@@ -23,13 +23,42 @@ import { preTradeCheck, type PreTradeCheck } from "@/lib/pre-trade-check";
 import { recordPreTradeBlock } from "@/lib/action-stats";
 import { ROBINHOOD_SWAP_ROUTER_ADDRESS } from "@/lib/robinhood/swap";
 import { buildBaseApprove, parseSlippageArg } from "@/lib/zerox-swap";
+import { BASE_MAJORS } from "@/lib/wallet/token-trust";
+import { COINBASE_BASE_STOCKS } from "@/lib/base-stocks/coinbase-list";
 
 const BASE = process.env.NEXT_PUBLIC_APP_URL ?? "https://blueagent.dev";
 
 const ADDR_RE = /^0x[a-fA-F0-9]{40}$/;
-export function reqAddr(v: unknown, field: string): string {
+
+function formatApiError(err: unknown): string {
+  if (typeof err === "string") return err;
+  if (err && typeof err === "object") {
+    const o = err as Record<string, unknown>;
+    if (typeof o.message === "string") return o.message;
+    if (typeof o.reason === "string") return o.reason;
+    if (typeof o.description === "string") return o.description;
+    try { return JSON.stringify(err); } catch { /* fall through */ }
+  }
+  return String(err);
+}
+
+function suggestAddressForTicker(raw: string, chain?: TxChain): string {
+  if (chain !== "base") return "";
+  const q = raw.trim().toUpperCase();
+  if (!q) return "";
+  const major = BASE_MAJORS.find((m) => m.sym.toUpperCase() === q);
+  if (major) return ` Did you mean ${major.sym} on Base 8453: ${major.addr}?`;
+  const stock = COINBASE_BASE_STOCKS.find((s) => s.symbol.toUpperCase() === q || s.ticker.toUpperCase() === q);
+  if (stock) return ` Did you mean ${stock.symbol} (tracks ${stock.ticker}) on Base 8453: ${stock.token}?`;
+  return "";
+}
+
+export function reqAddr(v: unknown, field: string, chain?: TxChain): string {
   const s = String(v ?? "").trim();
-  if (!ADDR_RE.test(s)) throw new Error(`${field} must be a 0x-prefixed 40-hex address`);
+  if (!ADDR_RE.test(s)) {
+    const hint = (field === "tokenIn" || field === "tokenOut" || field === "token") ? suggestAddressForTicker(s, chain) : "";
+    throw new Error(`${field} must be a 0x-prefixed 40-hex address.${hint}`);
+  }
   return s;
 }
 
@@ -58,7 +87,7 @@ export async function postPrepare(url: string, body: unknown, label: string): Pr
   let parsed: unknown;
   try { parsed = JSON.parse(text); } catch { parsed = { raw: text }; }
   if (!res.ok) {
-    const msg = (parsed as { error?: string }).error ?? `HTTP ${res.status}`;
+    const msg = formatApiError((parsed as { error?: unknown }).error ?? `HTTP ${res.status}`);
     throw new Error(`${label} failed: ${msg}`);
   }
   return JSON.stringify(parsed, null, 2);
@@ -98,7 +127,10 @@ export async function buildSwapTx(args: Record<string, unknown>): Promise<string
   // Resolve decimals on the token's OWN chain so the agent never does exponent
   // math. See lib/tx-chains.ts — a wrong exponent here is a wrong trade size.
   const inIsNative = isNativeToken(tokenIn);
-  const decimals = inIsNative ? 18 : (await readTokenMeta(chain, reqAddr(tokenIn, "tokenIn") as `0x${string}`)).decimals;
+  const resolvedIn = inIsNative ? tokenIn : reqAddr(tokenIn, "tokenIn", chain);
+  const outIsNative = isNativeToken(tokenOut);
+  const resolvedOut = outIsNative ? tokenOut : reqAddr(tokenOut, "tokenOut", chain);
+  const decimals = inIsNative ? 18 : (await readTokenMeta(chain, resolvedIn as `0x${string}`)).decimals;
   const amountInBase = parseUnits(amountIn, decimals).toString();
 
   if (chain === "base") {
@@ -112,8 +144,8 @@ export async function buildSwapTx(args: Record<string, unknown>): Promise<string
     // normalises, so this is belt-and-braces; it is spelled out here because
     // this is the call site the failure was measured at.
     const qs = new URLSearchParams({
-      sellToken:  toNativeSentinel(tokenIn),
-      buyToken:   toNativeSentinel(tokenOut),
+      sellToken:  toNativeSentinel(resolvedIn),
+      buyToken:   toNativeSentinel(resolvedOut),
       sellAmount: amountInBase,
       taker:      fromAddress,
       slippageBps: String(slippageBps),
@@ -121,7 +153,7 @@ export async function buildSwapTx(args: Record<string, unknown>): Promise<string
     const res  = await fetch(`${BASE}/api/swap/quote?${qs}`, { signal: AbortSignal.timeout(30_000) });
     const data = await res.json().catch(() => ({})) as Record<string, unknown>;
     if (data.needsKey) throw new Error("Base swap routing is unavailable in this deployment (ZEROX_API_KEY unset).");
-    if (data.error)    throw new Error(`Base 8453 swap quote failed: ${String(data.error)}`);
+    if (data.error)    throw new Error(`Base 8453 swap quote failed: ${formatApiError(data.error)}`);
     if (data.liquidityAvailable === false) {
       return JSON.stringify({
         ok: false, chain: "base", chainId: TX_CHAINS.base.chainId,
@@ -168,12 +200,11 @@ export async function buildSwapTx(args: Record<string, unknown>): Promise<string
   if (!ROBINHOOD_SWAP_ROUTER_ADDRESS) {
     throw new Error("Robinhood Chain 4663 swap router is not configured in this deployment.");
   }
-  const outIsNative = isNativeToken(tokenOut);
   if (inIsNative && outIsNative) throw new Error("tokenIn and tokenOut cannot both be native ETH");
   // 3% unless the caller says otherwise — the RhSwapCard default, because an
   // estimate is looser than 0x's firm quote (whose default here is 1%).
   const rhSlippageBps = args.slippageBps === undefined || args.slippageBps === null ? 300 : slippageBps;
-  const est = await estimateRhOut(tokenIn, tokenOut, inIsNative, outIsNative, amountIn);
+  const est = await estimateRhOut(resolvedIn, resolvedOut, inIsNative, outIsNative, amountIn);
   if ((inIsNative || outIsNative) && est.fee === null) {
     return JSON.stringify({
       ok: false, chain: "robinhood", chainId: TX_CHAINS.robinhood.chainId,
@@ -193,7 +224,7 @@ export async function buildSwapTx(args: Record<string, unknown>): Promise<string
       },
     }, null, 2);
   }
-  const outDecimals = outIsNative ? 18 : (await readTokenMeta(chain, reqAddr(tokenOut, "tokenOut") as `0x${string}`)).decimals;
+  const outDecimals = outIsNative ? 18 : (await readTokenMeta(chain, resolvedOut as `0x${string}`)).decimals;
   const minOut = estimatedOut * (1 - rhSlippageBps / 10_000);
   const amountOutMinimum = parseUnits(minOut.toFixed(Math.min(outDecimals, 18)), outDecimals).toString();
   const body: Record<string, unknown> = {

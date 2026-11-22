@@ -37,7 +37,12 @@ async function lookup(token: string): Promise<LookupResult> {
   const d = (await r.json()) as { pairs?: Pair[] };
   const base = (d.pairs ?? [])
     .filter((p) => p.chainId === "base")
-    .sort((a, b) => (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0));
+    .sort((a, b) => {
+      const aActive = (a.volume?.h24 ?? 0) > 0 ? 1 : 0;
+      const bActive = (b.volume?.h24 ?? 0) > 0 ? 1 : 0;
+      if (aActive !== bActive) return bActive - aActive;
+      return (b.liquidity?.usd ?? 0) - (a.liquidity?.usd ?? 0);
+    });
   if (base.length === 0) return { pair: null, reason: "no_pairs" };
 
   // DexScreener's `priceUsd` ALWAYS prices the pair's BASE token, and

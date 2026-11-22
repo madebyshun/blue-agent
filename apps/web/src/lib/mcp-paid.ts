@@ -130,6 +130,12 @@ export async function runPaidMcpTool(opts: {
   const units = MCP_PRICES[tool];
   if (!units) throw new Error(`${tool} has no MCP price`);
 
+  const { haltReason } = await import("@/lib/tool-halts");
+  const halt = haltReason(tool);
+  if (halt) {
+    return { isError: true, content: [{ type: "text", text: `[TOOL_HALTED] ${tool} is paused: ${halt}. You were not charged.` }] };
+  }
+
   // Bad input never gets a price.
   const why = opts.refuse();
   if (why) return { isError: true, content: [{ type: "text", text: `[BAD_INPUT] ${why} Nothing was charged.` }] };

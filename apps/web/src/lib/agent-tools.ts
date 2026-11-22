@@ -667,6 +667,62 @@ const AGENT_TOOLS_RAW: AgentTool[] = [
       slippage_bps: v.slippage_bps ? Number(v.slippage_bps) : 100,
     }),
   },
+
+  {
+    id: "b20-policy-check",
+    name: "B20 Policy Check",
+    description: "Check whether a Coinbase B20 tokenized stock on Base 8453 is paused or restricts a wallet via PolicyRegistry isAuthorized. Use before building a B20 swap. Free.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "security",
+    inputs: [
+      { key: "token", label: "B20 token address on Base", placeholder: "0x…", required: true },
+      { key: "wallet", label: "Wallet address (optional)", placeholder: "0x…" },
+    ],
+    isComposite: false,
+    price: "$0.00", priceUSDC: 0,
+    x402Url: `${X402_BASE}/b20-policy-check`,
+    x402Body: (v) => ({ token: v.token ?? "", ...(v.wallet ? { wallet: v.wallet } : {}) }),
+  },
+
+  {
+    id: "tx-simulate",
+    name: "Tx Simulate (Dry-Run)",
+    description: "Simulate any unsigned transaction { from, to, data, value } via eth_simulateV1 before signing, returning revert status, gas used, and decoded ERC-20 transfers. Free.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "security",
+    inputs: [
+      { key: "chain", label: "Chain: base or robinhood", placeholder: "base" },
+      { key: "from", label: "Sender wallet 0x…", placeholder: "0x…", required: true },
+      { key: "to", label: "Target contract 0x…", placeholder: "0x…", required: true },
+      { key: "data", label: "Calldata 0x…", placeholder: "0x" },
+      { key: "value", label: "Value in wei", placeholder: "0" },
+    ],
+    isComposite: false,
+    price: "$0.00", priceUSDC: 0,
+    x402Url: `${X402_BASE}/tx-simulate`,
+    x402Body: (v) => ({
+      chain: v.chain || "base",
+      from: v.from ?? "",
+      to: v.to ?? "",
+      data: v.data || "0x",
+      value: v.value || "0",
+    }),
+  },
+
+  {
+    id: "cross-venue-stock-quote",
+    name: "Cross-Venue Stock Quote",
+    description: "Unified tokenized-stock quote across Base B20, Robinhood Chain 4663, and Chainlink oracle with cross-venue spread and US market session status.",
+    agentHandle: "blueagent", agentName: "Blue Agent", agentType: "blue",
+    category: "signal",
+    inputs: [
+      { key: "ticker", label: "Stock ticker", placeholder: "NVDA, TSLA, AAPL", required: true },
+    ],
+    isComposite: false,
+    price: "$0.02", priceUSDC: 20000,
+    x402Url: `${X402_BASE}/cross-venue-stock-quote`,
+    x402Body: (v) => ({ ticker: v.ticker ?? "" }),
+  },
 ];
 
 // ─── v2 defaults ──────────────────────────────────────────────────────────────

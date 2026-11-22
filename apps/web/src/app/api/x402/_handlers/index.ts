@@ -14,6 +14,9 @@ import hRhStockArb       from "./rh-stock-arb";
 import hRhStockOhlc      from "./rh-stock-ohlc";
 import hRhStockSwapPrepare from "./rh-stock-swap-prepare";
 import hRhStockSwapQuote   from "./rh-stock-swap-quote";
+import hB20PolicyCheck from "./b20-policy-check";
+import hTxSimulate from "./tx-simulate";
+import hCrossVenueStockQuote from "./cross-venue-stock-quote";
 import hTokenPrice from "./token-price";
 import hPoolScan from "./pool-scan";
 import hBlueDoctor from "./blue-doctor";
@@ -79,4 +82,7 @@ export const HANDLERS: Record<string, (req: Request) => Promise<Response>> = {
   "rh-stock-ohlc":      hRhStockOhlc,
   "rh-stock-swap-prepare": hRhStockSwapPrepare,
   "rh-stock-swap-quote":   hRhStockSwapQuote,
+  "b20-policy-check":        hB20PolicyCheck,
+  "tx-simulate":             hTxSimulate,
+  "cross-venue-stock-quote": hCrossVenueStockQuote,
 };

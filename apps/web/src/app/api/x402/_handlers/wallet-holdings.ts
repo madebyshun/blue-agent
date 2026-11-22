@@ -45,6 +45,7 @@ function failLoud(address: string, message: string): Response {
 }
 
 export default async function handler(req: Request): Promise<Response> {
+  let requestedAddress = "";
   try {
     let body: { address?: string } = {};
     try {
@@ -53,16 +54,14 @@ export default async function handler(req: Request): Promise<Response> {
     } catch {}
     const url = new URL(req.url);
     if (!body.address) body.address = url.searchParams.get("address") || undefined;
-    const { address } = body;
+    const address = (body.address ?? "").trim();
+    requestedAddress = address;
     if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) {
       return Response.json({ error: "Provide a valid wallet address (0x...)" }, { status: 400 });
     }
 
     const w = await readWallet(address, "mainnet");
     if (w.error) return failLoud(address, w.error);
-    if (w.holdings.length === 0 && (w.partial || w.degraded)) {
-      return failLoud(address, w.partialReason ?? "No balance read completed for this wallet.");
-    }
 
     const nativeRow = w.holdings.find((h) => h.isNative);
     const native_eth = nativeRow ? Number(nativeRow.amount) : null;
@@ -81,7 +80,7 @@ export default async function handler(req: Request): Promise<Response> {
     for (const h of w.holdings) if (h.usdValue == null && Number(h.amount) > 0) unpriced_positions++;
     const total_usd = +w.holdings.reduce((s, h) => s + (h.usdValue ?? 0), 0).toFixed(2);
     const complete = !w.partial;
-    const empty = complete && tokens.length === 0 && (native_eth ?? 0) === 0;
+    const empty = tokens.length === 0 && (native_eth ?? 0) === 0;
 
     return Response.json({
       tool: "wallet-holdings",
@@ -102,6 +101,6 @@ export default async function handler(req: Request): Promise<Response> {
       timestamp: new Date().toISOString(),
     });
   } catch (e) {
-    return failLoud("", (e as Error).message);
+    return failLoud(requestedAddress, (e as Error).message);
   }
 }

@@ -363,7 +363,7 @@ export const MCP_TOOLS = [
 export const MCP_TOOL_COUNT = MCP_TOOLS.length;
 
 /** Old names answer, unlisted, until this instant (route.ts LEGACY), then refuse with their replacement. */
-export const MCP_LEGACY_UNTIL = "2026-11-22T00:00:00Z";
+export const MCP_LEGACY_UNTIL = "2026-12-23T00:00:00Z";
 
 /**
  * v1 names → their v2 replacement (null = retired, nothing replaces it). They
