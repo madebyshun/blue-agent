@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { MarketScroll, MarketContainer } from "../../MarketLayout";
 import { MarketHero, MarketNav, CoverageMap } from "../../MarketVisuals";
 import MarketsHeader from "../../MarketsHeader";
@@ -48,7 +49,7 @@ export default async function StockCoveragePage() {
               <table className="w-full min-w-[1100px] text-xs">
                 <thead><tr className="bg-[#0B0F1E] text-left text-[#94A3B8]">{["STOCK", "IDENTITY / ISSUANCE", "ISSUER NAV", "POOL SPOT", "GAP", "ASSESSED UTC", "ASSESSMENT"].map((h) => <th className="p-3" key={h}>{h}</th>)}</tr></thead>
                 <tbody>{[...v.rows].sort((a, b) => a.ticker.localeCompare(b.ticker)).map((r) => <tr className="border-t border-[#1A1A2E] align-top" key={r.contract}>
-                  <td className="p-3">{r.explorer === "pass" ? <a href={`https://basescan.org/token/${r.contract}`} target="_blank" rel="noreferrer" className="text-[#4FC3F7]">{r.symbol}</a> : r.symbol}<span className="mt-1 block text-[10px] text-[#64748B]">{r.grading_admitted ? "fixed cohort" : "inventory only"}</span></td>
+                  <td className="p-3"><span className="inline-flex items-center gap-1.5"><Link href={`/markets/base/${r.contract}`} className="text-[#4FC3F7] hover:underline">{r.symbol}</Link>{r.explorer === "pass" && <a href={`https://basescan.org/token/${r.contract}`} target="_blank" rel="noreferrer" className="text-[10px] text-[#64748B] hover:text-[#4FC3F7]" title="Basescan">↗</a>}</span><span className="mt-1 block text-[10px] text-[#64748B]">{r.grading_admitted ? "fixed cohort" : "inventory only"}</span></td>
                   <td className="p-3">{r.identity}<span className="block text-[#94A3B8]">{r.issued === null ? "supply unknown" : r.issued ? "issued" : "unissued"}</span></td>
                   <td className="p-3">{money(r.reference_usd)}<span className="mt-1 block text-[10px] text-[#64748B]">{r.reference_at && Number.isFinite(Date.parse(r.reference_at)) ? utc(r.reference_at) : "reference date unavailable"}</span></td>
                   <td className="p-3">{money(r.pool?.price_usd ?? null)}<span className="block text-[#94A3B8]">{r.activity}</span></td>

@@ -147,11 +147,24 @@ export default async function WeekendPage({ searchParams }: { searchParams: Prom
               </div>
               {rw && rr && replay.length > 3 && (
                 <div className={`${CARD} p-5`}>
-                  <div className="flex items-center gap-3">
-                    <BaseLogo ticker={rr.ticker} size={30} />
-                    <div>
-                      <div className={EYEBROW}>WEEKEND REPLAY · {day(rw.friday).toUpperCase()}–{day(addDays(rw.friday, 3)).toUpperCase()}</div>
-                      <div className="text-[16px] text-[#F8FAFC]">{rr.ticker}c on Base</div>
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div className="flex items-center gap-3">
+                      <BaseLogo ticker={rr.ticker} size={30} />
+                      <div>
+                        <div className={EYEBROW}>WEEKEND REPLAY · {day(rw.friday).toUpperCase()}–{day(addDays(rw.friday, 3)).toUpperCase()}</div>
+                        <div className="text-[16px] text-[#F8FAFC]">{rr.ticker}c on Base</div>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {rw.rows.slice(0, 6).map((opt) => (
+                        <Link
+                          key={opt.ticker}
+                          href={`/markets/weekend?w=${rw.friday}&ticker=${opt.ticker}`}
+                          className={`rounded-md border px-2 py-0.5 text-[11px] transition-colors ${opt.ticker === rr.ticker ? "border-[#4FC3F7]/60 bg-[#4FC3F7]/12 text-[#4FC3F7]" : "border-[#1A1A2E] text-[#64748B] hover:text-[#E2E8F0]"}`}
+                        >
+                          {opt.ticker}c
+                        </Link>
+                      ))}
                     </div>
                   </div>
                   <div className="mt-3"><ReplayChart pts={replay} callAt={rw.call_at} openAt={new Date(rr.open_round_at * 1000).toISOString()} openUsd={rr.open_usd} /></div>

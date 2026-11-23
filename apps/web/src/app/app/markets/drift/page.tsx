@@ -88,25 +88,28 @@ export default async function DriftPage() {
                   {rows.map((r) => {
                     const logo = LOGO_BY_CONTRACT.get(r.contract.toLowerCase());
                     return (
-                      <tr key={r.ticker} className="border-t border-[#1A1A2E]">
+                      <tr key={r.ticker} className="border-t border-[#1A1A2E] hover:bg-[#0F121A]">
                         <td className="px-4 py-2.5">
-                          <a href={r.explorer} target="_blank" rel="noreferrer" className="flex items-center gap-2.5 text-[#E2E8F0] hover:text-[#4FC3F7]">
-                            {logo ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img src={logo} alt="" width={24} height={24} className="h-6 w-6 rounded-full object-cover shrink-0 bg-[#0F121A]" />
-                            ) : (
-                              <StockMark ticker={r.ticker} chain="base" size={24} />
-                            )}
-                            <span>{r.ticker}c</span>
-                          </a>
+                          <div className="flex items-center gap-2.5">
+                            <Link href={`/markets/base/${r.contract}`} className="flex items-center gap-2.5 text-[#E2E8F0] hover:text-[#4FC3F7]">
+                              {logo ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={logo} alt="" width={24} height={24} className="h-6 w-6 rounded-full object-cover shrink-0 bg-[#0F121A]" />
+                              ) : (
+                                <StockMark ticker={r.ticker} chain="base" size={24} />
+                              )}
+                              <span>{r.ticker}c</span>
+                            </Link>
+                            <a href={r.explorer} target="_blank" rel="noreferrer" className="text-[11px] text-[#64748B] hover:text-[#4FC3F7]" title="Basescan">↗</a>
+                          </div>
                         </td>
-                        <td className="text-right text-[#94A3B8]">{px(r.oracle_usd)}</td>
-                        <td className="text-right text-[#E2E8F0]">{px(r.dex_usd)}</td>
-                        <td className={`text-right ${r.drift_pct == null ? "text-[#64748B]" : r.drift_pct > 0 ? "text-[#4ADE80]" : r.drift_pct < 0 ? "text-[#F87171]" : "text-[#94A3B8]"}`}>
+                        <td className="text-right text-[#94A3B8] tabular-nums">{px(r.oracle_usd)}</td>
+                        <td className="text-right text-[#E2E8F0] tabular-nums">{px(r.dex_usd)}</td>
+                        <td className={`text-right tabular-nums ${r.drift_pct == null ? "text-[#64748B]" : r.drift_pct > 0 ? "text-[#34D399]" : r.drift_pct < 0 ? "text-[#F87171]" : "text-[#94A3B8]"}`}>
                           {r.drift_pct == null ? "—" : `${r.drift_pct > 0 ? "+" : ""}${r.drift_pct.toFixed(2)}%`}
                         </td>
-                        <td className="text-right text-[#94A3B8]">{usd(r.total_tvl_usd)}</td>
-                        <td className="text-right text-[#94A3B8]">{usd(r.volume_24h_usd)}</td>
+                        <td className="text-right text-[#94A3B8] tabular-nums">{usd(r.total_tvl_usd)}</td>
+                        <td className="text-right text-[#94A3B8] tabular-nums">{usd(r.volume_24h_usd)}</td>
                         <td className="text-right pr-4 text-[#64748B]">{ago(r.oracle_updated_at)}
                           <span className="block text-[10px]">{oracleLabel(r.oracle_updated_at, asOf ?? "")}</span>
                           <span className="block text-[10px]">{r.oracle_updated_at ? new Date(r.oracle_updated_at * 1000).toISOString().replace("T", " ").slice(0, 19) + " UTC" : "unavailable"}</span></td>
