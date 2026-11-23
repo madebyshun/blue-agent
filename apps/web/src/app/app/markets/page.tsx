@@ -5,7 +5,7 @@ import { MarketScroll, MarketContainer } from "./MarketLayout";
 // Every row names its chain; a ticker alone never identifies a token (NVDA is
 // two contracts). Data: lib/markets.ts (registries + GeckoTerminal).
 import type { Metadata } from "next";
-import { readBlueLaunchMarkets, readStockMarkets, readTrending, type MarketChain } from "@/lib/markets";
+import { readBlueLaunchMarkets, readCandles, readStockMarkets, readTrending, type MarketChain } from "@/lib/markets";
 import MarketsHeader from "./MarketsHeader";
 import MarketsTable, { type MarketRow } from "./MarketsTable";
 import Link from "next/link";
@@ -61,6 +61,19 @@ export default async function MarketsPage() {
   // is Robinhood's feather (measured 2026-10-29: PLTR, SKHY, NVDA). Use the
   // company mark on file (StockMark) or a monogram instead.
   for (const r of rows) if (r.chain === "robinhood" && (r.kind === "stock" || r.kind === "etf")) r.logo = null;
+
+  // Preload 4h candles for the top Base stock (capped at 2s) so MarketPulse paints
+  // immediately on first render with zero client fetch wait.
+  const leadStock = rows
+    .filter((r) => r.chain === "base" && r.kind === "stock" && r.read && r.pool)
+    .sort((a, b) => (b.liq ?? -1) - (a.liq ?? -1))[0];
+  const initialCandles = leadStock?.pool
+    ? await Promise.race([
+        readCandles("base", leadStock.pool.toLowerCase(), leadStock.side, "4h").catch(() => null),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000)),
+      ])
+    : null;
+
   const count = (c: MarketChain) => stocks.rows.filter((r) => r.chain === c).length;
   const vol = (c: MarketChain) => stocks.rows.filter((r) => r.chain === c).reduce((a, r) => a + (r.volume24hUsd ?? 0), 0);
   // A chain whose GeckoTerminal read was refused shows "—", never a summed $0.
@@ -80,7 +93,7 @@ export default async function MarketsPage() {
             { label: "Readable stock pools", value: String(stocks.rows.filter((r) => r.chain === "base" && r.read && r.pool).length), detail: "not a whole-chain census" },
           ]} />
           <MarketNav active="overview" />
-          <MarketPulse rows={rows} asOf={stocks.readAt} />
+          <MarketPulse rows={rows} asOf={stocks.readAt} initialPool={leadStock?.pool ?? null} initialCandles={initialCandles} />
           <Link href="/markets/weekend" className="mb-3 flex items-center justify-between gap-3 bg-[#0B0F1E] border border-[#1A1A2E] hover:border-[#4FC3F7]/40 rounded-[10px] px-4 py-2.5 text-[13px]">
             <span className="text-[#E2E8F0]">Weekend lab <span className="text-[#94A3B8]">· a fixed Sunday call, compared with the first post-open oracle reading.</span></span>
             <span className="text-[#4FC3F7]">Open →</span>

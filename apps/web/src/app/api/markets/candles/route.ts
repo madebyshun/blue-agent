@@ -20,5 +20,8 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "chain, pool (0x address or v4 pool id) and tf (15m|1h|4h|1d) are required." }, { status: 400 });
   }
   const candles = await readCandles(chain, pool.toLowerCase(), side, tf).catch(() => null);
-  return NextResponse.json({ chain, pool, tf, candles }, { headers: { "cache-control": "public, max-age=30" } });
+  return NextResponse.json(
+    { chain, pool, tf, candles },
+    { headers: { "cache-control": "public, max-age=30, s-maxage=60, stale-while-revalidate=300" } },
+  );
 }

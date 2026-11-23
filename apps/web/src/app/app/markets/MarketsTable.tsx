@@ -5,7 +5,7 @@
 // pool age, liquidity, 24h volume; sortable, searchable, paged. Sparklines load
 // as rows scroll into view, two at a time, from the same cached candles the
 // token page uses (GeckoTerminal is keyless and 429s on bursts).
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { TradeModal } from "./MarketSwap";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -60,7 +60,7 @@ const cache = new Map<string, number[] | null>();
 const queue: (() => Promise<void>)[] = [];
 let running = 0;
 function pump() {
-  while (running < 2 && queue.length) {
+  while (running < 3 && queue.length) {
     const job = queue.shift()!;
     running++;
     job().finally(() => { running--; pump(); });
@@ -114,19 +114,33 @@ function Spark({ r, up }: { r: MarketRow; up: boolean | null }) {
     io.observe(el.current);
     return () => io.disconnect();
   }, [key, r.pool, r.chain, r.side, v]);
+  const gradId = useId().replace(/:/g, "");
   const W = 200, H = 30;
   let path = null as string | null;
+  let lastY = H / 2;
   if (v && v.length > 1) {
     const lo = Math.min(...v), hi = Math.max(...v), span = hi - lo || hi || 1;
-    path = v.map((c, i) => `${i ? "L" : "M"}${((i / (v.length - 1)) * W).toFixed(1)},${(H - 2 - ((c - lo) / span) * (H - 4)).toFixed(1)}`).join(" ");
+    const pts = v.map((c, i) => [
+      (i / (v.length - 1)) * W,
+      H - 3 - ((c - lo) / span) * (H - 6),
+    ]);
+    lastY = pts[pts.length - 1][1];
+    path = pts.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
   }
-  const col = up === null ? "#64748B" : up ? "#34D399" : "#F87171";
+  const col = up === null ? "#4FC3F7" : up ? "#34D399" : "#F87171";
   return (
     <div ref={el} className="h-[30px] w-full">
       {path ? (
         <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="h-full w-full">
-          <path d={`${path} L${W},${H} L0,${H} Z`} fill={col} opacity={0.1} />
-          <path d={path} fill="none" stroke={col} strokeWidth={1.3} vectorEffect="non-scaling-stroke" />
+          <defs>
+            <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={col} stopOpacity={0.22} />
+              <stop offset="100%" stopColor={col} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <path d={`${path} L${W},${H} L0,${H} Z`} fill={`url(#${gradId})`} />
+          <path d={path} fill="none" stroke={col} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+          <circle cx={W - 1.5} cy={lastY} r={2} fill={col} />
         </svg>
       ) : <span className="block pt-2 text-center text-[12px] text-[#334155]">{!r.pool || (Array.isArray(v) && v.length < 2) ? "no history" : refused ? "·" : ""}</span>}
     </div>

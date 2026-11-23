@@ -1,100 +1,602 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useId, useMemo, useState } from "react";
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { Bar, BarChart, CartesianGrid, Cell, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import StockMark from "@/components/blue-hood/StockMark";
 import type { MarketRow } from "./MarketsTable";
 
-const BLUE = "#3977ff", GREEN = "#50d9a4", RED = "#fa7b8c", MUTED = "#748097";
-const number = (v: number) => Math.abs(v) >= 1e9 ? `${(v / 1e9).toFixed(2)}B` : Math.abs(v) >= 1e6 ? `${(v / 1e6).toFixed(1)}M` : Math.abs(v) >= 1e3 ? `${(v / 1e3).toFixed(0)}K` : v.toFixed(2);
-const tooltip = { background: "#111725", border: "1px solid #273247", borderRadius: 12, color: "#edf2fc", fontSize: 12, padding: "12px 16px" };
+const CYAN = "#4FC3F7", GREEN = "#34D399", RED = "#F87171", MUTED = "#64748B";
+const number = (v: number) =>
+  Math.abs(v) >= 1e9 ? `${(v / 1e9).toFixed(2)}B`
+  : Math.abs(v) >= 1e6 ? `${(v / 1e6).toFixed(1)}M`
+  : Math.abs(v) >= 1e3 ? `${(v / 1e3).toFixed(0)}K`
+  : v.toFixed(2);
+const fmtPrice = (n: number) =>
+  n >= 1000 ? n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  : n >= 1 ? n.toFixed(2)
+  : n >= 0.01 ? n.toFixed(4)
+  : n.toPrecision(3);
+const tooltip = {
+  background: "#0B0F1A",
+  border: "1px solid #1E293B",
+  borderRadius: 10,
+  color: "#E2E8F0",
+  fontSize: 12,
+  padding: "10px 14px",
+};
+
+// ── Shared client candle cache + in-flight deduplication ─────────────────────
+type RawCandle = [number, number, number, number, number, number];
+type PulseRange = "1h" | "4h" | "1d";
+type PulsePoint = { at: number; close: number; open: number; high: number; low: number; vol: number };
+
+const pulseCache = new Map<string, PulsePoint[] | null>();
+const pulseInflight = new Map<string, Promise<PulsePoint[] | null>>();
+
+function parsePulsePoints(raw: unknown): PulsePoint[] | null {
+  if (!Array.isArray(raw)) return null;
+  const pts = raw
+    .filter((c): c is RawCandle => Array.isArray(c) && c.length >= 5 && Number.isFinite(c[0]) && Number.isFinite(c[4]) && c[4] > 0)
+    .map((c) => ({
+      at: c[0] * 1000,
+      open: c[1],
+      high: c[2],
+      low: c[3],
+      close: c[4],
+      vol: Number.isFinite(c[5]) ? c[5] : 0,
+    }))
+    .sort((a, b) => a.at - b.at);
+  return pts.length >= 2 ? pts : null;
+}
+
+function fetchPulseCandles(pool: string, side: "base" | "quote", range: PulseRange): Promise<PulsePoint[] | null> {
+  const key = `base:${pool.toLowerCase()}:${side}:${range}`;
+  if (pulseCache.has(key)) return Promise.resolve(pulseCache.get(key) ?? null);
+  const existing = pulseInflight.get(key);
+  if (existing) return existing;
+  const p = fetch(`/api/markets/candles?chain=base&pool=${encodeURIComponent(pool)}&side=${side}&tf=${range}`)
+    .then((r) => (r.ok ? r.json() : null))
+    .then((j) => {
+      const pts = parsePulsePoints(j?.candles);
+      if (pts) pulseCache.set(key, pts);
+      return pts;
+    })
+    .catch(() => null)
+    .finally(() => pulseInflight.delete(key));
+  pulseInflight.set(key, p);
+  return p;
+}
+
+function fmtPulseTime(ms: number, range: PulseRange): string {
+  const d = new Date(ms);
+  if (range === "1d") return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+  return `${d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })} · ${d.toISOString().slice(11, 16)} UTC`;
+}
 
 export function MarketNav({ active }: { active: "overview" | "drift" | "weekend" | "coverage" }) {
-  return <nav aria-label="Market views" className="sticky top-0 z-20 -mt-5 flex shrink-0 gap-4 overflow-x-auto bg-[#070b12] pt-3 border-b border-white/10 text-[11px] sm:gap-6 sm:text-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-    {([ ["overview", "/markets", "Overview"], ["drift", "/markets/drift", "Oracle drift"], ["weekend", "/markets/weekend", "Weekend lab"], ["coverage", "/markets/drift/coverage", "Coverage"] ] as const).map(([id, href, label]) => <Link key={id} href={href} aria-current={active === id ? "page" : undefined} className={`whitespace-nowrap border-b-2 pb-4 pt-2 transition-colors ${active === id ? "border-[#3977ff] text-white" : "border-transparent text-[#8390a7] hover:text-white"}`}>{label}</Link>)}
-  </nav>;
+  return (
+    <nav aria-label="Market views" className="sticky top-0 z-20 -mt-5 flex shrink-0 gap-4 overflow-x-auto bg-[#070b12] pt-3 border-b border-[#1A1A2E] text-[11px] sm:gap-6 sm:text-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      {([
+        ["overview", "/markets", "Overview"],
+        ["drift", "/markets/drift", "Oracle drift"],
+        ["weekend", "/markets/weekend", "Weekend lab"],
+        ["coverage", "/markets/drift/coverage", "Coverage"],
+      ] as const).map(([id, href, label]) => (
+        <Link
+          key={id}
+          href={href}
+          aria-current={active === id ? "page" : undefined}
+          className={`whitespace-nowrap border-b-2 pb-4 pt-2 transition-colors ${active === id ? "border-[#4FC3F7] text-white" : "border-transparent text-[#8390a7] hover:text-white"}`}
+        >
+          {label}
+        </Link>
+      ))}
+    </nav>
+  );
 }
 
 export function MarketHero({ label, title, description, stats }: { label: string; title: string; description: string; stats: { label: string; value: string; detail?: string }[] }) {
-  return <header className="relative overflow-hidden py-7 md:py-10">
-    <div aria-hidden className="pointer-events-none absolute -right-20 -top-28 h-72 w-96 rounded-full bg-[#1753f2]/10 blur-[90px]" />
-    <div className="relative grid min-w-0 grid-cols-1 gap-7 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] xl:items-end">
-      <div className="max-w-[680px]"><p className="mb-4 flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.22em] text-[#8090ac]"><span className="h-1.5 w-1.5 rounded-full bg-[#3977ff]" />BASE 8453 <span className="text-white/20">/</span> {label}</p>
-        <h1 className="min-h-[101px] font-mono text-[28px] font-semibold md:min-h-[102px] leading-[1.2] tracking-[-0.035em] text-[#f3f6fd] md:text-[42px]">{title}</h1>
-        <p className="mt-4 min-h-[84px] max-w-[580px] font-prose md:min-h-[63px] text-[14px] leading-relaxed text-[#8b98af]">{description}</p>
+  return (
+    <header className="relative overflow-hidden py-7 md:py-10">
+      <div aria-hidden className="pointer-events-none absolute -right-20 -top-28 h-72 w-96 rounded-full bg-[#4FC3F7]/8 blur-[90px]" />
+      <div className="relative grid min-w-0 grid-cols-1 gap-7 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] xl:items-end">
+        <div className="max-w-[680px]">
+          <p className="mb-4 flex items-center gap-2 text-[10px] font-medium uppercase tracking-[0.22em] text-[#8090ac]">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#4FC3F7]" />BASE 8453 <span className="text-white/20">/</span> {label}
+          </p>
+          <h1 className="min-h-[101px] font-mono text-[28px] font-semibold md:min-h-[102px] leading-[1.2] tracking-[-0.035em] text-[#f3f6fd] md:text-[42px]">{title}</h1>
+          <p className="mt-4 min-h-[84px] max-w-[580px] font-prose md:min-h-[63px] text-[14px] leading-relaxed text-[#8b98af]">{description}</p>
+        </div>
+        <dl className="grid grid-cols-3 gap-5 border-t border-white/10 pt-5 min-w-0 xl:border-0 xl:pt-0">
+          {stats.map((s) => (
+            <div key={s.label}>
+              <dt className="min-h-[30px] text-[10px] leading-relaxed sm:min-h-[16px] text-[#8896ad]">{s.label}</dt>
+              <dd className="mt-2 font-mono text-[25px] font-medium tracking-[-0.025em] text-[#f3f6fd] md:text-[30px]">{s.value}</dd>
+              {s.detail && <p className="mt-1 text-[10px] text-[#64748b]">{s.detail}</p>}
+            </div>
+          ))}
+        </dl>
       </div>
-      <dl className="grid grid-cols-3 gap-5 border-t border-white/10 pt-5 min-w-0 xl:border-0 xl:pt-0">{stats.map((s) => <div key={s.label}><dt className="min-h-[30px] text-[10px] leading-relaxed sm:min-h-[16px] text-[#8896ad]">{s.label}</dt><dd className="mt-2 font-mono text-[25px] font-medium tracking-[-0.025em] text-[#f3f6fd] md:text-[30px]">{s.value}</dd>{s.detail && <p className="mt-1 text-[10px] text-[#64748b]">{s.detail}</p>}</div>)}</dl>
-    </div>
-  </header>;
+    </header>
+  );
 }
 
 export function ChartShell({ eyebrow, title, children, aside, note }: { eyebrow: string; title: string; children: React.ReactNode; aside?: React.ReactNode; note: string }) {
-  return <section className="min-w-0 rounded-2xl border border-white/[0.09] bg-gradient-to-b from-[#0e1421] to-[#090e18] p-5 md:p-7">
-    <div className="mb-6 flex flex-wrap items-start justify-between gap-4"><div><p className="text-[10px] uppercase tracking-[0.17em] text-[#7c8da9]">{eyebrow}</p><h2 className="mt-2 font-mono text-[22px] font-medium tracking-[-0.035em] text-[#edf2fc]">{title}</h2></div>{aside}</div>
-    {children}<p className="mt-5 border-t border-white/[0.06] pt-4 font-prose text-[11px] leading-relaxed text-[#718099]">{note}</p>
-  </section>;
+  return (
+    <section className="min-w-0 rounded-2xl border border-[#1A1A2E] bg-gradient-to-b from-[#0c1220] to-[#080c15] p-5 md:p-6">
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.17em] text-[#4FC3F7]/80">{eyebrow}</p>
+          <h2 className="mt-1.5 font-mono text-[21px] font-medium tracking-[-0.03em] text-[#edf2fc]">{title}</h2>
+        </div>
+        {aside}
+      </div>
+      {children}
+      <p className="mt-5 border-t border-[#1A1A2E] pt-3.5 font-prose text-[11px] leading-relaxed text-[#64748B]">{note}</p>
+    </section>
+  );
 }
 
-export function MarketPulse({ rows, asOf }: { rows: MarketRow[]; asOf: string | null }) {
-  // Every readable stock pool is pickable (it was the six deepest, which read as
-  // "Markets only has six stocks"); the depth chart keeps the deepest eight.
-  const stocks = useMemo(() => rows.filter((r) => r.chain === "base" && r.kind === "stock" && r.read && r.pool).sort((a, b) => (b.liq ?? -1) - (a.liq ?? -1)), [rows]);
+export function MarketPulse({
+  rows,
+  asOf,
+  initialPool,
+  initialCandles,
+}: {
+  rows: MarketRow[];
+  asOf: string | null;
+  initialPool?: string | null;
+  initialCandles?: RawCandle[] | null;
+}) {
+  const stocks = useMemo(
+    () => rows.filter((r) => r.chain === "base" && r.kind === "stock" && r.read && r.pool).sort((a, b) => (b.liq ?? -1) - (a.liq ?? -1)),
+    [rows],
+  );
   const [token, setToken] = useState<string | null>(null);
-  const [range, setRange] = useState<"1h" | "4h" | "1d">("4h");
-  const [candles, setCandles] = useState<{ at: number; close: number | null }[] | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [range, setRange] = useState<PulseRange>("4h");
   const selected = stocks.find((r) => r.token === token) ?? stocks[0];
-  const gradient = useId().replace(/:/g, "");
+
+  // Seed cache synchronously from SSR preloaded candles so first paint is instant (0ms).
+  const initialPoints = useMemo(() => {
+    const pts = parsePulsePoints(initialCandles);
+    if (pts && initialPool && selected?.pool && initialPool.toLowerCase() === selected.pool.toLowerCase()) {
+      pulseCache.set(`base:${selected.pool.toLowerCase()}:${selected.side}:4h`, pts);
+    }
+    return pts;
+  }, [initialCandles, initialPool, selected?.pool, selected?.side]);
+
+  const activeKey = selected?.pool ? `base:${selected.pool.toLowerCase()}:${selected.side}:${range}` : "";
+  const [series, setSeries] = useState<PulsePoint[] | null>(() => {
+    if (activeKey && pulseCache.has(activeKey)) return pulseCache.get(activeKey) ?? null;
+    if (range === "4h" && initialPool && selected?.pool && initialPool.toLowerCase() === selected.pool.toLowerCase()) {
+      return initialPoints;
+    }
+    return null;
+  });
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(720);
+  const gradId = useId().replace(/:/g, "");
+
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      if (el.clientWidth > 0) setWidth(el.clientWidth);
+    });
+    ro.observe(el);
+    if (el.clientWidth > 0) setWidth(el.clientWidth);
+    return () => ro.disconnect();
+  }, []);
+
   useEffect(() => {
     if (!selected?.pool) return;
-    const abort = new AbortController();
-    setBusy(true); setCandles(null);
-    fetch(`/api/markets/candles?chain=base&pool=${encodeURIComponent(selected.pool)}&side=${selected.side}&tf=${range}`, { signal: abort.signal })
-      .then((r) => r.ok ? r.json() : null).then((j) => {
-        if (abort.signal.aborted) return;
-        const valid: number[][] = Array.isArray(j?.candles) ? j.candles.filter((c: number[]) => Array.isArray(c) && Number.isFinite(c[0]) && Number.isFinite(c[4]) && c[4] > 0).sort((a: number[], b: number[]) => a[0] - b[0]) : [];
-        const step = range === "1h" ? 3600 : range === "4h" ? 14400 : 86400;
-        const points: { at: number; close: number | null }[] = [];
-        valid.forEach((c, i) => { if (i && c[0] - valid[i - 1][0] > step * 1.5) points.push({ at: (valid[i - 1][0] + step) * 1000, close: null }); points.push({ at: c[0] * 1000, close: c[4] }); });
-        setCandles(valid.length >= 2 ? points : null);
-      }).catch(() => { if (!abort.signal.aborted) setCandles(null); }).finally(() => { if (!abort.signal.aborted) setBusy(false); });
-    return () => abort.abort();
+    const key = `base:${selected.pool.toLowerCase()}:${selected.side}:${range}`;
+    setHoverIdx(null);
+    if (pulseCache.has(key)) {
+      const hit = pulseCache.get(key) ?? null;
+      setSeries(hit);
+      setFailed(!hit);
+      setBusy(false);
+      return;
+    }
+    let alive = true;
+    setBusy(true);
+    setFailed(false);
+    fetchPulseCandles(selected.pool, selected.side, range).then((pts) => {
+      if (!alive) return;
+      if (pts) {
+        setSeries(pts);
+        setFailed(false);
+      } else {
+        setFailed(true);
+      }
+      setBusy(false);
+    });
+    return () => { alive = false; };
   }, [selected?.pool, selected?.side, range]);
+
+  const prefetch = useCallback((pool: string | null, side: "base" | "quote", tf: PulseRange) => {
+    if (!pool) return;
+    void fetchPulseCandles(pool, side, tf);
+  }, []);
+
+  // Chart geometry (lightweight native SVG — zero Recharts mount delay, 60fps scrub)
+  const H = 264, PAD_T = 14, PAD_B = 26, PAD_R = 58;
+  const chart = useMemo(() => {
+    if (!series || series.length < 2) return null;
+    const plotW = Math.max(180, width - PAD_R);
+    const plotH = H - PAD_T - PAD_B;
+    const closes = series.map((p) => p.close);
+    const rawLo = Math.min(...closes);
+    const rawHi = Math.max(...closes);
+    const pad = (rawHi - rawLo) * 0.08 || rawHi * 0.005 || 1;
+    const lo = rawLo - pad;
+    const hi = rawHi + pad;
+    const span = hi - lo || 1;
+    const xAt = (i: number) => (i / (series.length - 1)) * plotW;
+    const yAt = (v: number) => PAD_T + (1 - (v - lo) / span) * plotH;
+
+    const stepMs = range === "1h" ? 3_600_000 : range === "4h" ? 14_400_000 : 86_400_000;
+    const segments: string[] = [];
+    const areaSegments: string[] = [];
+    let segPts: { x: number; y: number }[] = [];
+
+    const flushSeg = () => {
+      if (segPts.length === 0) return;
+      const d = segPts.map((p, idx) => `${idx === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+      segments.push(d);
+      const first = segPts[0], last = segPts[segPts.length - 1];
+      areaSegments.push(`${d} L${last.x.toFixed(1)},${(PAD_T + plotH).toFixed(1)} L${first.x.toFixed(1)},${(PAD_T + plotH).toFixed(1)} Z`);
+      segPts = [];
+    };
+
+    series.forEach((p, i) => {
+      if (i > 0 && p.at - series[i - 1].at > stepMs * 2.5) flushSeg();
+      segPts.push({ x: xAt(i), y: yAt(p.close) });
+    });
+    flushSeg();
+
+    const first = series[0];
+    const last = series[series.length - 1];
+    const isUp = last.close >= first.close;
+    const ticks = [0, 0.33, 0.66, 1].map((f) => {
+      const v = lo + span * f;
+      return { v, y: yAt(v) };
+    });
+    const xTicks = [0, Math.floor((series.length - 1) * 0.33), Math.floor((series.length - 1) * 0.66), series.length - 1]
+      .filter((v, idx, arr) => arr.indexOf(v) === idx)
+      .map((idx) => ({
+        x: xAt(idx),
+        label: new Date(series[idx].at).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }),
+      }));
+
+    return { plotW, plotH, xAt, yAt, segments, areaSegments, first, last, isUp, ticks, xTicks };
+  }, [series, width, range]);
+
+  const activePoint = hoverIdx !== null && series ? series[hoverIdx] : chart?.last ?? null;
+  const displayPrice = activePoint?.close ?? selected?.price ?? null;
+  const rangePct = useMemo(() => {
+    if (!activePoint || !chart) return selected?.change ?? null;
+    return chart.first.close > 0 ? ((activePoint.close - chart.first.close) / chart.first.close) * 100 : null;
+  }, [activePoint, chart, selected?.change]);
+  const strokeColor = rangePct === null ? CYAN : rangePct >= 0 ? GREEN : RED;
+
+  const handlePointer = useCallback((clientX: number, rect: DOMRect) => {
+    if (!series || !chart) return;
+    const relX = Math.max(0, Math.min(chart.plotW, clientX - rect.left));
+    const idx = Math.round((relX / chart.plotW) * (series.length - 1));
+    setHoverIdx(Math.max(0, Math.min(series.length - 1, idx)));
+  }, [series, chart]);
+
   const depth = stocks.slice(0, 8).map((r) => ({ name: `${r.symbol}c`, liquidity: r.liq }));
-  return <div className="grid gap-4 lg:grid-cols-[minmax(0,1.65fr)_minmax(260px,1fr)]">
-    <ChartShell eyebrow="THE STOCK DESK" title={selected ? `${selected.name}` : "Pool price history"} note={`Base 8453 · GeckoTerminal pool candle closes, USD per token. Gaps are left open. Snapshot ${asOf ? new Date(asOf).toUTCString() : "unavailable"}.`} aside={<div className="flex rounded-full border border-white/10 bg-black/20 p-1">{([ ["1h", "Hourly"], ["4h", "4-hour"], ["1d", "Daily"] ] as const).map(([tf, text]) => <button type="button" key={tf} aria-pressed={range === tf} onClick={() => setRange(tf)} className={`rounded-full px-3 py-1.5 text-[11px] ${range === tf ? "bg-[#263754] text-white" : "text-[#8090aa] hover:text-white"}`}>{text}</button>)}</div>}>
-      <div className="mb-5 flex flex-wrap items-center gap-3"><span className="font-mono text-[36px] font-medium tracking-[-0.025em] text-white">{selected?.price != null ? `$${number(selected.price)}` : "—"}</span><span className="text-xs text-[#7b8aa3]">snapshot price</span>{selected?.change != null && <span className={`rounded-full px-2.5 py-1 text-xs ${selected.change >= 0 ? "bg-[#50d9a4]/10 text-[#50d9a4]" : "bg-[#fa7b8c]/10 text-[#fa7b8c]"}`}>{selected.change >= 0 ? "+" : ""}{selected.change.toFixed(2)}% · 24h</span>}</div>
-      <div className="h-[260px] min-w-0 md:h-[300px]" aria-label="Selected Base stock pool price history">
-        {candles && !busy ? <ResponsiveContainer width="100%" height="100%" minWidth={0}><AreaChart data={candles} margin={{ top: 12, right: 4, bottom: 0, left: 0 }}><defs><linearGradient id={gradient} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={BLUE} stopOpacity={0.32} /><stop offset="100%" stopColor={BLUE} stopOpacity={0} /></linearGradient></defs><CartesianGrid vertical={false} stroke="#ffffff0b" strokeDasharray="3 5" /><XAxis dataKey="at" type="number" domain={["dataMin", "dataMax"]} scale="time" tickFormatter={(t) => new Date(t).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })} stroke={MUTED} tickLine={false} axisLine={false} minTickGap={55} fontSize={10} /><YAxis domain={["auto", "auto"]} tickFormatter={(v) => `$${number(v)}`} stroke={MUTED} tickLine={false} axisLine={false} width={65} fontSize={10} /><Tooltip contentStyle={tooltip} itemStyle={{ color: "#edf2fc" }} labelStyle={{ color: "#b4c1d5" }} labelFormatter={(t) => new Date(Number(t)).toUTCString()} formatter={(v) => [`$${Number(v).toFixed(4)}`, "Pool close"]} /><Area type="linear" dataKey="close" stroke={BLUE} fill={`url(#${gradient})`} strokeWidth={2.4} connectNulls={false} isAnimationActive={false} /></AreaChart></ResponsiveContainer> : <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-white/10 text-xs text-[#748097]">{busy ? "Reading pool candles…" : "Pool history is temporarily unavailable. Try another interval."}</div>}
-      </div>
-      <div className="mt-5 flex max-h-[132px] flex-wrap gap-2 overflow-y-auto pr-1">{stocks.map((r) => <button type="button" key={r.token} onClick={() => setToken(r.token)} aria-pressed={selected?.token === r.token} className={`flex items-center gap-2 rounded-full border px-3 py-2 text-[11px] ${selected?.token === r.token ? "border-[#3977ff]/60 bg-[#3977ff]/10 text-white" : "border-white/10 text-[#8290a6] hover:text-white"}`}>{r.logo ? <img src={r.logo} alt="" width={18} height={18} loading="lazy" className="h-[18px] w-[18px] rounded-full object-cover" /> : <StockMark ticker={r.symbol} chain="base" size={18} />}{r.symbol}c</button>)}</div>
-    </ChartShell>
-    <ChartShell eyebrow="LIQUIDITY LANDSCAPE" title="Where the depth is." note="Eight deepest readable stock pools in this snapshot. Selected pool liquidity, not a whole-chain total.">
-      <div className="h-[300px]" aria-label="Liquidity of the eight deepest displayed Base stock pools">{depth.length ? <ResponsiveContainer width="100%" height="100%" minWidth={0}><BarChart layout="vertical" data={depth} margin={{ left: 0, right: 16, top: 5, bottom: 5 }}><CartesianGrid horizontal={false} stroke="#ffffff0b" /><XAxis type="number" tickFormatter={(v) => `$${number(v)}`} stroke={MUTED} fontSize={10} axisLine={false} tickLine={false} /><YAxis type="category" dataKey="name" width={65} stroke="#b4c1d5" fontSize={11} axisLine={false} tickLine={false} /><Tooltip cursor={{ fill: "#ffffff05" }} contentStyle={tooltip} itemStyle={{ color: "#edf2fc" }} labelStyle={{ color: "#b4c1d5" }} formatter={(v) => [`$${Number(v).toLocaleString()}`, "Pool liquidity"]} /><Bar dataKey="liquidity" radius={[0, 5, 5, 0]} barSize={23} isAnimationActive={false}>{depth.map((r, i) => <Cell key={r.name} fill={i === 0 ? "#6999ff" : BLUE} opacity={1 - i * 0.07} />)}</Bar></BarChart></ResponsiveContainer> : <p className="text-xs text-[#748097]">No readable pool depth in this snapshot.</p>}</div>
-      <Link href="/markets/drift" className="mt-5 flex items-center justify-between rounded-xl border border-white/10 px-4 py-4 text-xs text-[#c4d0e4] hover:border-[#3977ff]/50">Explore the oracle gap <span className="text-[#6999ff]">↗</span></Link>
-    </ChartShell>
-  </div>;
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1.65fr)_minmax(260px,1fr)]">
+      <ChartShell
+        eyebrow="THE STOCK DESK"
+        title={selected ? `${selected.name} (${selected.symbol}c)` : "Pool price history"}
+        note={`Base 8453 · GeckoTerminal pool candle closes, USD per token. Snapshot ${asOf ? new Date(asOf).toUTCString() : "unavailable"}.`}
+        aside={
+          <div className="flex items-center gap-2">
+            <div className="flex rounded-lg border border-[#1A1A2E] bg-[#070b12] p-0.5">
+              {([["1h", "1H"], ["4h", "4H"], ["1d", "1D"]] as const).map(([tf, text]) => (
+                <button
+                  type="button"
+                  key={tf}
+                  aria-pressed={range === tf}
+                  onMouseEnter={() => prefetch(selected?.pool ?? null, selected?.side ?? "base", tf)}
+                  onClick={() => setRange(tf)}
+                  className={`rounded-md px-2.5 py-1 font-mono text-[11px] font-medium transition-colors ${
+                    range === tf ? "bg-[#4FC3F7]/15 text-[#4FC3F7] border border-[#4FC3F7]/40" : "border border-transparent text-[#64748B] hover:text-white"
+                  }`}
+                >
+                  {text}
+                </button>
+              ))}
+            </div>
+            {selected && (
+              <Link
+                href={`/markets/base/${selected.token}`}
+                className="rounded-lg border border-[#1A1A2E] bg-[#070b12] px-2.5 py-1.5 font-mono text-[11px] text-[#94A3B8] hover:border-[#4FC3F7]/40 hover:text-[#4FC3F7] transition-colors"
+              >
+                Details
+              </Link>
+            )}
+          </div>
+        }
+      >
+        {/* Dynamic scrub price header */}
+        <div className="mb-4 flex flex-wrap items-baseline gap-3">
+          <span className="font-mono text-[34px] font-semibold tracking-[-0.03em] text-white tabular-nums leading-none">
+            {displayPrice != null ? `$${fmtPrice(displayPrice)}` : "—"}
+          </span>
+          {rangePct !== null && (
+            <span
+              className="rounded-md px-2 py-0.5 font-mono text-[12px] font-medium tabular-nums"
+              style={{
+                background: rangePct >= 0 ? "rgba(52,211,153,0.12)" : "rgba(248,113,113,0.12)",
+                color: rangePct >= 0 ? GREEN : RED,
+              }}
+            >
+              {rangePct >= 0 ? "+" : ""}{rangePct.toFixed(2)}%
+            </span>
+          )}
+          <span className="font-mono text-[11px] text-[#64748B] tabular-nums">
+            {hoverIdx !== null && activePoint
+              ? fmtPulseTime(activePoint.at, range)
+              : busy ? "updating..." : `${range.toUpperCase()} window`}
+          </span>
+        </div>
+
+        {/* Native 60fps interactive SVG area chart */}
+        <div
+          ref={boxRef}
+          className="relative w-full select-none touch-none"
+          style={{ height: H }}
+          aria-label="Selected Base stock pool price history"
+        >
+          {chart && series ? (
+            <svg
+              width={width}
+              height={H}
+              className={`block transition-opacity duration-150 ${busy ? "opacity-45" : "opacity-100"}`}
+              onMouseMove={(e) => handlePointer(e.clientX, e.currentTarget.getBoundingClientRect())}
+              onMouseLeave={() => setHoverIdx(null)}
+              onTouchMove={(e) => {
+                const t = e.touches[0];
+                if (t) handlePointer(t.clientX, e.currentTarget.getBoundingClientRect());
+              }}
+              onTouchEnd={() => setHoverIdx(null)}
+            >
+              <defs>
+                <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={strokeColor} stopOpacity={0.26} />
+                  <stop offset="100%" stopColor={strokeColor} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+
+              {/* Horizontal grid + Y labels */}
+              {chart.ticks.map((t, i) => (
+                <g key={i}>
+                  <line x1={0} x2={chart.plotW} y1={t.y} y2={t.y} stroke="#1A1A2E" strokeDasharray="2 4" />
+                  <text x={chart.plotW + 8} y={t.y + 3.5} fill={MUTED} fontSize={10.5} className="font-mono tabular-nums">
+                    ${fmtPrice(t.v)}
+                  </text>
+                </g>
+              ))}
+
+              {/* Opening baseline */}
+              <line
+                x1={0}
+                x2={chart.plotW}
+                y1={chart.yAt(chart.first.close)}
+                y2={chart.yAt(chart.first.close)}
+                stroke="#475569"
+                strokeOpacity={0.45}
+                strokeDasharray="3 4"
+              />
+
+              {/* Area + smooth crisp line */}
+              {chart.areaSegments.map((d, i) => (
+                <path key={`a-${i}`} d={d} fill={`url(#${gradId})`} />
+              ))}
+              {chart.segments.map((d, i) => (
+                <path
+                  key={`l-${i}`}
+                  d={d}
+                  fill="none"
+                  stroke={strokeColor}
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              ))}
+
+              {/* Live end dot or scrub crosshair */}
+              {hoverIdx !== null && activePoint ? (
+                <g pointerEvents="none">
+                  <line
+                    x1={chart.xAt(hoverIdx)}
+                    x2={chart.xAt(hoverIdx)}
+                    y1={PAD_T}
+                    y2={PAD_T + chart.plotH}
+                    stroke="#64748B"
+                    strokeDasharray="2 3"
+                  />
+                  <circle cx={chart.xAt(hoverIdx)} cy={chart.yAt(activePoint.close)} r={7} fill={strokeColor} fillOpacity={0.2} />
+                  <circle cx={chart.xAt(hoverIdx)} cy={chart.yAt(activePoint.close)} r={3.5} fill={strokeColor} stroke="#070b12" strokeWidth={1.5} />
+                </g>
+              ) : (
+                <g pointerEvents="none">
+                  <circle cx={chart.xAt(series.length - 1)} cy={chart.yAt(chart.last.close)} r={6} fill={strokeColor} fillOpacity={0.22} />
+                  <circle cx={chart.xAt(series.length - 1)} cy={chart.yAt(chart.last.close)} r={3} fill={strokeColor} />
+                </g>
+              )}
+
+              {/* X-axis dates */}
+              {chart.xTicks.map((t, i) => (
+                <text
+                  key={i}
+                  x={t.x}
+                  y={H - 6}
+                  fill={MUTED}
+                  fontSize={10.5}
+                  textAnchor={i === 0 ? "start" : i === chart.xTicks.length - 1 ? "end" : "middle"}
+                  className="font-mono"
+                >
+                  {t.label}
+                </text>
+              ))}
+            </svg>
+          ) : (
+            <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-[#1A1A2E] text-xs text-[#64748B]">
+              {busy ? "Loading pool candles..." : failed ? "Pool history is temporarily unavailable. Try another interval." : "Select a stock pool to view history."}
+            </div>
+          )}
+        </div>
+
+        {/* Stock selector chips with hover prefetch */}
+        <div className="mt-4 flex max-h-[124px] flex-wrap gap-1.5 overflow-y-auto pr-1">
+          {stocks.map((r) => {
+            const on = selected?.token === r.token;
+            return (
+              <button
+                type="button"
+                key={r.token}
+                onMouseEnter={() => prefetch(r.pool, r.side, range)}
+                onClick={() => setToken(r.token)}
+                aria-pressed={on}
+                className={`flex items-center gap-2 rounded-lg border px-2.5 py-1.5 font-mono text-[11px] transition-colors ${
+                  on
+                    ? "border-[#4FC3F7]/55 bg-[#4FC3F7]/12 text-white"
+                    : "border-[#1A1A2E] bg-[#070b12] text-[#8290a6] hover:border-[#2a3350] hover:text-white"
+                }`}
+              >
+                {r.logo ? (
+                  <img src={r.logo} alt="" width={16} height={16} loading="lazy" className="h-4 w-4 rounded-full object-cover" />
+                ) : (
+                  <StockMark ticker={r.symbol} chain="base" size={16} />
+                )}
+                <span>{r.symbol}c</span>
+                {r.change !== null && (
+                  <span className={r.change >= 0 ? "text-[#34D399]" : "text-[#F87171]"}>
+                    {r.change >= 0 ? "+" : ""}{r.change.toFixed(1)}%
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </ChartShell>
+
+      <ChartShell eyebrow="LIQUIDITY LANDSCAPE" title="Where the depth is." note="Eight deepest readable stock pools in this snapshot. Selected pool liquidity, not a whole-chain total.">
+        <div className="h-[300px]" aria-label="Liquidity of the eight deepest displayed Base stock pools">
+          {depth.length ? (
+            <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+              <BarChart layout="vertical" data={depth} margin={{ left: 0, right: 16, top: 5, bottom: 5 }}>
+                <CartesianGrid horizontal={false} stroke="#ffffff0b" />
+                <XAxis type="number" tickFormatter={(v) => `$${number(v)}`} stroke={MUTED} fontSize={10} axisLine={false} tickLine={false} />
+                <YAxis type="category" dataKey="name" width={65} stroke="#b4c1d5" fontSize={11} axisLine={false} tickLine={false} />
+                <Tooltip cursor={{ fill: "#ffffff05" }} contentStyle={tooltip} itemStyle={{ color: "#edf2fc" }} labelStyle={{ color: "#b4c1d5" }} formatter={(v) => [`$${Number(v).toLocaleString()}`, "Pool liquidity"]} />
+                <Bar dataKey="liquidity" radius={[0, 5, 5, 0]} barSize={22} isAnimationActive={false}>
+                  {depth.map((r, i) => (
+                    <Cell key={r.name} fill={CYAN} opacity={Math.max(0.32, 0.95 - i * 0.08)} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <p className="text-xs text-[#64748B]">No readable pool depth in this snapshot.</p>
+          )}
+        </div>
+        <Link href="/markets/drift" className="mt-5 flex items-center justify-between rounded-xl border border-[#1A1A2E] bg-[#070b12] px-4 py-3.5 text-xs text-[#c4d0e4] hover:border-[#4FC3F7]/45 hover:text-white transition-colors">
+          <span>Explore the oracle gap</span>
+          <span className="text-[#4FC3F7]">Open</span>
+        </Link>
+      </ChartShell>
+    </div>
+  );
 }
 
 export function DriftDistribution({ rows, asOf }: { rows: { ticker: string; drift_pct: number | null }[]; asOf: string | null }) {
   const data = rows.filter((r) => r.drift_pct !== null && Number.isFinite(r.drift_pct)).map((r) => ({ ticker: `${r.ticker}c`, gap: r.drift_pct! })).sort((a, b) => a.gap - b.gap);
   const bound = Math.max(0.5, ...data.map((r) => Math.abs(r.gap))) * 1.15;
-  return <ChartShell eyebrow="THE ORACLE GAP" title="One reference. A different market." note={`DEX vs multiplier-adjusted Chainlink · tracked Base stocks only · ${asOf ? new Date(asOf).toUTCString() : "snapshot unavailable"}. Hover a bar for its measured gap.`} aside={<span className="rounded-full border border-white/10 px-3 py-1.5 text-[10px] text-[#6999ff]">● Premium <span className="ml-3 text-[#fa7b8c]">● Discount</span></span>}>
-    <div className="h-[350px]" aria-label="Diverging chart of tracked Base stock DEX premiums and discounts">{data.length ? <ResponsiveContainer width="100%" height="100%" minWidth={0}><BarChart data={data} layout="vertical" margin={{ top: 5, right: 20, left: 0, bottom: 5 }}><CartesianGrid horizontal={false} stroke="#ffffff0b" strokeDasharray="3 5" /><XAxis type="number" domain={[-bound, bound]} ticks={[-bound, -bound / 2, 0, bound / 2, bound]} tickFormatter={(v) => `${v > 0 ? "+" : ""}${v.toFixed(2)}%`} fontSize={10} stroke={MUTED} axisLine={false} tickLine={false} /><YAxis type="category" dataKey="ticker" fontSize={11} stroke="#b2bfd4" width={65} axisLine={false} tickLine={false} /><ReferenceLine x={0} stroke="#94a3b8" strokeOpacity={0.5} /><Tooltip cursor={{ fill: "#ffffff05" }} contentStyle={tooltip} itemStyle={{ color: "#edf2fc" }} labelStyle={{ color: "#b4c1d5" }} formatter={(v) => [`${Number(v) > 0 ? "+" : ""}${Number(v).toFixed(4)}%`, "DEX vs oracle"]} /><Bar dataKey="gap" radius={4} barSize={15} isAnimationActive={false}>{data.map((r) => <Cell key={r.ticker} fill={r.gap >= 0 ? BLUE : RED} />)}</Bar></BarChart></ResponsiveContainer> : <div className="flex h-full items-center justify-center text-xs text-[#748097]">No readable drift snapshot. Awaiting DEX and oracle prices.</div>}</div>
-  </ChartShell>;
+  return (
+    <ChartShell eyebrow="THE ORACLE GAP" title="One reference. A different market." note={`DEX vs multiplier-adjusted Chainlink · tracked Base stocks only · ${asOf ? new Date(asOf).toUTCString() : "snapshot unavailable"}. Hover a bar for its measured gap.`} aside={<span className="rounded-lg border border-[#1A1A2E] px-3 py-1.5 text-[10px] text-[#4FC3F7]">Premium <span className="ml-3 text-[#F87171]">Discount</span></span>}>
+      <div className="h-[350px]" aria-label="Diverging chart of tracked Base stock DEX premiums and discounts">
+        {data.length ? (
+          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+            <BarChart data={data} layout="vertical" margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+              <CartesianGrid horizontal={false} stroke="#ffffff0b" strokeDasharray="3 5" />
+              <XAxis type="number" domain={[-bound, bound]} ticks={[-bound, -bound / 2, 0, bound / 2, bound]} tickFormatter={(v) => `${v > 0 ? "+" : ""}${v.toFixed(2)}%`} fontSize={10} stroke={MUTED} axisLine={false} tickLine={false} />
+              <YAxis type="category" dataKey="ticker" fontSize={11} stroke="#b2bfd4" width={65} axisLine={false} tickLine={false} />
+              <ReferenceLine x={0} stroke="#94a3b8" strokeOpacity={0.5} />
+              <Tooltip cursor={{ fill: "#ffffff05" }} contentStyle={tooltip} itemStyle={{ color: "#edf2fc" }} labelStyle={{ color: "#b4c1d5" }} formatter={(v) => [`${Number(v) > 0 ? "+" : ""}${Number(v).toFixed(4)}%`, "DEX vs oracle"]} />
+              <Bar dataKey="gap" radius={4} barSize={15} isAnimationActive={false}>
+                {data.map((r) => <Cell key={r.ticker} fill={r.gap >= 0 ? CYAN : RED} />)}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="flex h-full items-center justify-center text-xs text-[#64748B]">No readable drift snapshot. Awaiting DEX and oracle prices.</div>
+        )}
+      </div>
+    </ChartShell>
+  );
 }
 
 export function WeekendHistory({ weekends }: { weekends: { friday: string; rows: { hit: boolean | null }[] }[] }) {
   const data = [...weekends].reverse().map((w) => ({ date: w.friday, right: w.rows.filter((r) => r.hit === true).length, wrong: w.rows.filter((r) => r.hit === false).length, flat: w.rows.filter((r) => r.hit === null).length }));
-  return <ChartShell eyebrow="THE TRACK RECORD" title="Every weekend leaves a record." note="Counts of graded stock-weekends in the returned record. Flat means |Sunday gap| < 0.5%; no per-week hit-rate is inferred from these small samples." aside={<div className="flex gap-4 text-[10px] text-[#94a3b8]"><span style={{ color: GREEN }}>● Right</span><span style={{ color: RED }}>● Wrong</span><span>● Flat</span></div>}>
-    <div className="h-[260px]" aria-label="Stacked counts of right, wrong and flat stock calls per weekend"><ResponsiveContainer width="100%" height="100%" minWidth={0}><BarChart data={data} barCategoryGap="30%"><CartesianGrid vertical={false} stroke="#ffffff0b" strokeDasharray="3 5" /><XAxis dataKey="date" tickFormatter={(d) => new Date(d + "T12:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })} fontSize={10} stroke={MUTED} axisLine={false} tickLine={false} /><YAxis allowDecimals={false} width={28} stroke={MUTED} fontSize={10} axisLine={false} tickLine={false} /><Tooltip contentStyle={tooltip} itemStyle={{ color: "#edf2fc" }} labelStyle={{ color: "#b4c1d5" }} cursor={{ fill: "#ffffff05" }} /><Bar stackId="calls" dataKey="right" fill={GREEN} isAnimationActive={false} /><Bar stackId="calls" dataKey="wrong" fill={RED} isAnimationActive={false} /><Bar stackId="calls" dataKey="flat" fill="#354258" radius={[4, 4, 0, 0]} isAnimationActive={false} /></BarChart></ResponsiveContainer></div>
-  </ChartShell>;
+  return (
+    <ChartShell eyebrow="THE TRACK RECORD" title="Every weekend leaves a record." note="Counts of graded stock-weekends in the returned record. Flat means |Sunday gap| < 0.5%; no per-week hit-rate is inferred from these small samples." aside={<div className="flex gap-4 text-[10px] text-[#94a3b8]"><span style={{ color: GREEN }}>Right</span><span style={{ color: RED }}>Wrong</span><span>Flat</span></div>}>
+      <div className="h-[260px]" aria-label="Stacked counts of right, wrong and flat stock calls per weekend">
+        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+          <BarChart data={data} barCategoryGap="30%">
+            <CartesianGrid vertical={false} stroke="#ffffff0b" strokeDasharray="3 5" />
+            <XAxis dataKey="date" tickFormatter={(d) => new Date(d + "T12:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })} fontSize={10} stroke={MUTED} axisLine={false} tickLine={false} />
+            <YAxis allowDecimals={false} width={28} stroke={MUTED} fontSize={10} axisLine={false} tickLine={false} />
+            <Tooltip contentStyle={tooltip} itemStyle={{ color: "#edf2fc" }} labelStyle={{ color: "#b4c1d5" }} cursor={{ fill: "#ffffff05" }} />
+            <Bar stackId="calls" dataKey="right" fill={GREEN} isAnimationActive={false} />
+            <Bar stackId="calls" dataKey="wrong" fill={RED} isAnimationActive={false} />
+            <Bar stackId="calls" dataKey="flat" fill="#354258" radius={[4, 4, 0, 0]} isAnimationActive={false} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    </ChartShell>
+  );
 }
 
 export function CoverageMap({ catalog, rows }: { catalog: { contract: string; symbol: string }[]; rows: { contract: string; issued: boolean | null }[] }) {
   const byAddress = new Map(rows.map((r) => [r.contract.toLowerCase(), r]));
-  return <ChartShell eyebrow="THE WHOLE UNIVERSE" title="Every dot is a stock token." note="One dot per official catalog address on Base 8453. Issuance describes onchain supply, not trading eligibility, liquidity or availability of an oracle." aside={<div className="flex flex-wrap gap-4 text-[10px] text-[#8493ad]"><span className="text-[#6b9aff]">● Issued</span><span>● Unissued</span><span className="text-[#d3a75c]">● Unknown / pending</span></div>}>
-    <div className="grid grid-cols-[repeat(18,minmax(0,1fr))] gap-1.5 md:grid-cols-[repeat(36,minmax(0,1fr))]" role="list" aria-label="Issuance status of every listed Base stock token">{catalog.map((s) => { const r = byAddress.get(s.contract.toLowerCase()); const state = !r || r.issued === null ? "unknown or pending" : r.issued ? "issued" : "unissued"; return <span key={s.contract} role="listitem" tabIndex={0} title={`${s.symbol} · ${state}`} aria-label={`${s.symbol}: ${state}`} className={`aspect-square rounded-[3px] border transition-transform hover:scale-125 focus:scale-125 focus:outline focus:outline-1 focus:outline-white ${state === "issued" ? "border-[#78a1ff]/40 bg-[#3977ff] shadow-[0_0_9px_#3977ff20]" : state === "unissued" ? "border-white/[0.06] bg-[#202b3b]" : "border-[#d3a75c]/30 bg-[#d3a75c]/30"}`} />; })}</div>
-  </ChartShell>;
+  return (
+    <ChartShell eyebrow="THE WHOLE UNIVERSE" title="Every dot is a stock token." note="One dot per official catalog address on Base 8453. Issuance describes onchain supply, not trading eligibility, liquidity or availability of an oracle." aside={<div className="flex flex-wrap gap-4 text-[10px] text-[#8493ad]"><span className="text-[#4FC3F7]">Issued</span><span>Unissued</span><span className="text-[#d3a75c]">Unknown / pending</span></div>}>
+      <div className="grid grid-cols-[repeat(18,minmax(0,1fr))] gap-1.5 md:grid-cols-[repeat(36,minmax(0,1fr))]" role="list" aria-label="Issuance status of every listed Base stock token">
+        {catalog.map((s) => {
+          const r = byAddress.get(s.contract.toLowerCase());
+          const state = !r || r.issued === null ? "unknown or pending" : r.issued ? "issued" : "unissued";
+          return (
+            <span
+              key={s.contract}
+              role="listitem"
+              tabIndex={0}
+              title={`${s.symbol} · ${state}`}
+              aria-label={`${s.symbol}: ${state}`}
+              className={`aspect-square rounded-[3px] border transition-transform hover:scale-125 focus:scale-125 focus:outline focus:outline-1 focus:outline-white ${
+                state === "issued"
+                  ? "border-[#4FC3F7]/40 bg-[#4FC3F7] shadow-[0_0_9px_#4FC3F720]"
+                  : state === "unissued"
+                  ? "border-white/[0.06] bg-[#1a2233]"
+                  : "border-[#d3a75c]/30 bg-[#d3a75c]/30"
+              }`}
+            />
+          );
+        })}
+      </div>
+    </ChartShell>
+  );
 }
