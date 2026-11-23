@@ -6,8 +6,10 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { ApprovalsPanel, type AuditView } from "@/components/wallet/ApprovalsPanel";
 import { ActionStrip } from "@/components/wallet/ActionStrip";
 import { useAccount, useReadContracts, useBalance, useReadContract, useWriteContract, useSwitchChain, usePublicClient, useSendTransaction, useCapabilities, useSendCalls, useCallsStatus } from "wagmi";
-import { formatUnits, parseUnits, isAddress, namehash, encodeFunctionData } from "viem";
+import { createPublicClient, http, formatUnits, parseUnits, isAddress, namehash, encodeFunctionData, parseEventLogs } from "viem";
 import { base } from "viem/chains";
+import { QUADRA_FACTORY_V3, QUADRA_V3_ABI, QUADRA_V3_EXPECTS, BLUE_REFERRER, ETH_QUOTE, ERC20_MIN_ABI, coinProblem, coinContractUri, newSalt, type CoinDraft } from "@/lib/agent-coin";
+import { COINBASE_BASE_STOCKS } from "@/lib/base-stocks/coinbase-list";
 import { useName } from "@coinbase/onchainkit/identity";
 import { YIELD_NETWORKS, ERC20_ABI, AAVE_POOL_ABI, ERC4626_ABI, WITHDRAW_ALL, supplyApyPct, VENUES, VENUE_LIST, type YieldNetwork, type VenueId } from "@/lib/yield-execution";
 import { useChat } from "../ChatContext";
@@ -2362,11 +2364,274 @@ const shortAddr = (a?: string) => (a && /^0x[a-fA-F0-9]{40}$/.test(a) ? `${a.sli
 const amt = (v: unknown) => (v === undefined || v === null || v === "" ? "" : String(v));
 
 /** Read tools whose result is text only (see ToolResultCard). */
+interface QuadraLaunchResult {
+  kind?: "quadra_launch";
+  name?: string;
+  symbol?: string;
+  pair?: string;
+  pairAddress?: string;
+  description?: string;
+  launchUrl?: string;
+}
+
+interface QuadraPair { address: `0x${string}`; symbol: string; decimals: number }
+const QUADRA_ETH_PAIR: QuadraPair = { address: ETH_QUOTE, symbol: "ETH", decimals: 18 };
+const quadraPub = createPublicClient({ chain: base, transport: http() });
+
+async function runQuadraPreflight(): Promise<{ ok: boolean; why: string[]; pairs: QuadraPair[] }> {
+  const why: string[] = [];
+  const [low, high, creator, ref, eth, stocks] = await Promise.all([
+    quadraPub.readContract({ address: QUADRA_FACTORY_V3, abi: QUADRA_V3_ABI, functionName: "FEE_LOW" }),
+    quadraPub.readContract({ address: QUADRA_FACTORY_V3, abi: QUADRA_V3_ABI, functionName: "FEE_HIGH" }),
+    quadraPub.readContract({ address: QUADRA_FACTORY_V3, abi: QUADRA_V3_ABI, functionName: "CREATOR_SHARE_BPS" }),
+    quadraPub.readContract({ address: QUADRA_FACTORY_V3, abi: QUADRA_V3_ABI, functionName: "REFERRER_SHARE_BPS" }),
+    quadraPub.readContract({ address: QUADRA_FACTORY_V3, abi: QUADRA_V3_ABI, functionName: "quotes", args: [ETH_QUOTE] }),
+    quadraPub.multicall({ contracts: COINBASE_BASE_STOCKS.map((st) => ({ address: QUADRA_FACTORY_V3, abi: QUADRA_V3_ABI, functionName: "quotes", args: [st.token] } as const)) }),
+  ]);
+  const pairs: QuadraPair[] = [
+    ...(eth[0] ? [QUADRA_ETH_PAIR] : []),
+    ...COINBASE_BASE_STOCKS.filter((_, i) => stocks[i].status === "success" && (stocks[i].result as readonly [boolean, number])[0])
+      .map((st) => ({ address: st.token, symbol: st.symbol, decimals: 8 })),
+  ];
+  if (low !== QUADRA_V3_EXPECTS.feeLow || high !== QUADRA_V3_EXPECTS.feeHigh) why.push(`fees read ${low}/${high}`);
+  if (creator !== QUADRA_V3_EXPECTS.creatorShareBps) why.push(`creator share ${creator} bps`);
+  if (ref !== QUADRA_V3_EXPECTS.referrerShareBps) why.push(`referrer share ${ref} bps`);
+  if (pairs.length === 0) why.push("no pair enabled on factory");
+  return { ok: why.length === 0, why, pairs };
+}
+
+function QuadraLaunchCard({ result, account }: { result: QuadraLaunchResult; account?: `0x${string}` }) {
+  const { address: wagmiAddr, chainId, isConnected } = useAccount();
+  const wallet = account ?? wagmiAddr;
+  const connected = Boolean(wallet) || isConnected;
+  const { switchChainAsync } = useSwitchChain();
+  const { sendTransactionAsync } = useSendTransaction();
+
+  const [draft, setDraft] = useState<CoinDraft>({
+    name: (result.name ?? "").trim().slice(0, 32),
+    symbol: (result.symbol ?? "").trim().replace(/^\$/, "").toUpperCase().slice(0, 11),
+    description: (result.description ?? "").trim().slice(0, 280),
+    image: "",
+    agentId: "",
+  });
+  const [fee, setFee] = useState<10_000 | 30_000>(10_000);
+  const [buy, setBuy] = useState("0");
+  const [pairAddr, setPairAddr] = useState<string>(ETH_QUOTE);
+  const [pairNotice, setPairNotice] = useState<string>("");
+  const [check, setCheck] = useState<{ ok: boolean; why: string[]; pairs: QuadraPair[] } | null>(null);
+  const [step, setStep] = useState<{ s: "idle" | "busy" | "done" | "error"; msg?: string; hash?: string; token?: string }>({ s: "idle" });
+
+  useEffect(() => {
+    let alive = true;
+    runQuadraPreflight()
+      .then((c) => {
+        if (!alive) return;
+        setCheck(c);
+        const wanted = (result.pairAddress || result.pair || "").trim().toLowerCase();
+        if (wanted && wanted !== "eth") {
+          const hit = c.pairs.find(
+            (p) => p.address.toLowerCase() === wanted || p.symbol.toLowerCase() === wanted || p.symbol.toLowerCase() === `${wanted}c`,
+          );
+          if (hit) {
+            setPairAddr(hit.address);
+            setPairNotice("");
+          } else {
+            setPairNotice(`${(result.pair || wanted).toUpperCase()} is not enabled on the Quadra factory right now — defaulted to ETH.`);
+          }
+        }
+      })
+      .catch(() => {
+        if (alive) setCheck({ ok: false, why: ["could not read Quadra factory on Base"], pairs: [] });
+      });
+    return () => { alive = false; };
+  }, [result.pair, result.pairAddress]);
+
+  const pair = check?.pairs.find((p) => p.address === pairAddr) ?? check?.pairs[0] ?? QUADRA_ETH_PAIR;
+  const isEth = pair.address === ETH_QUOTE;
+  const problem = coinProblem(draft);
+  let buyWei = 0n;
+  let buyBad = false;
+  try { buyWei = parseUnits(buy || "0", pair.decimals); } catch { buyBad = true; }
+
+  const bal = useSpendableBalance({ holder: wallet ?? "", native: isEth, token: isEth ? undefined : pair.address, chainId: base.id });
+  const gate = resolveSpend({ loading: bal.loading, received: bal.received, failed: bal.failed, over: bal.raw != null && buyWei > bal.raw });
+
+  async function onLaunch() {
+    if (!wallet) return;
+    setStep({ s: "busy", msg: "Confirm in your wallet..." });
+    try {
+      if (chainId !== base.id) await switchChainAsync({ chainId: base.id });
+      if (!isEth && buyWei > 0n) {
+        const allowance = await quadraPub.readContract({ address: pair.address, abi: ERC20_MIN_ABI, functionName: "allowance", args: [wallet, QUADRA_FACTORY_V3] });
+        if (allowance < buyWei) {
+          setStep({ s: "busy", msg: `1 of 2 · approve ${buy} ${pair.symbol} in your wallet...` });
+          const ah = await sendTransactionAsync({
+            to: pair.address,
+            data: encodeFunctionData({ abi: ERC20_MIN_ABI, functionName: "approve", args: [QUADRA_FACTORY_V3, buyWei] }),
+            chainId: base.id,
+          });
+          const arc = await quadraPub.waitForTransactionReceipt({ hash: ah });
+          if (arc.status !== "success") throw new Error(`approve reverted (${ah})`);
+          setStep({ s: "busy", msg: "2 of 2 · sign launch in your wallet..." });
+        }
+      }
+      const data = encodeFunctionData({
+        abi: QUADRA_V3_ABI,
+        functionName: "launch",
+        args: [draft.name.trim(), draft.symbol.trim(), coinContractUri(draft), newSalt(), pair.address, buyWei, fee, BLUE_REFERRER],
+      });
+      const hash = await sendTransactionAsync({ to: QUADRA_FACTORY_V3, data, value: isEth ? buyWei : 0n, chainId: base.id });
+      setStep({ s: "busy", msg: "Waiting for Base confirmation...", hash });
+      const rc = await quadraPub.waitForTransactionReceipt({ hash });
+      if (rc.status !== "success") throw new Error(`launch reverted (${hash})`);
+      const ev = parseEventLogs({ abi: QUADRA_V3_ABI, logs: rc.logs, eventName: "Launched" })[0];
+      setStep({ s: "done", hash, token: ev?.args.token, msg: `${draft.symbol.trim().toUpperCase()} launched on Base.` });
+    } catch (e) {
+      setStep({ s: "error", msg: ((e as Error).message || "Launch failed").split("\n")[0].slice(0, 180) });
+    }
+  }
+
+  const inputCls = "w-full rounded-lg border border-[#1A1A2E] bg-[#050508] px-2.5 py-1.5 text-[13px] text-[#E2E8F0] outline-none focus:border-[#4FC3F7]/40";
+  const sym = draft.symbol.trim().toUpperCase() || "TOKEN";
+  const balText = bal.balance != null ? `${bal.balance.toLocaleString("en-US", { maximumFractionDigits: isEth ? 5 : 4 })} ${pair.symbol}` : null;
+
+  return (
+    <div className="mt-2 rounded-xl border border-[#1A1A2E] bg-[#0a0a0f] p-3.5 font-mono">
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <span className="text-[12px] tracking-[0.14em] text-[#64748B] font-semibold">QUADRA V3 LAUNCHPAD · BASE 8453</span>
+        <span className="text-[11px] px-2 py-0.5 rounded-full border border-[#4FC3F7]/30 text-[#4FC3F7]">NON-CUSTODIAL</span>
+      </div>
+
+      {step.s === "done" ? (
+        <div className="space-y-2.5">
+          <p className="text-[14px] font-semibold text-[#34D399]">{step.msg}</p>
+          {step.token && (
+            <p className="text-[12px] text-[#94A3B8] break-all">Token: {step.token}</p>
+          )}
+          <div className="flex flex-wrap gap-3 text-[12px]">
+            {step.token && (
+              <>
+                <a href={`https://basescan.org/token/${step.token}`} target="_blank" rel="noreferrer" className="text-[#4FC3F7] hover:underline">Basescan</a>
+                <a href={`/markets/base/${step.token}`} className="text-[#4FC3F7] hover:underline">Markets page</a>
+                <a href={`https://dexscreener.com/base/${step.token}`} target="_blank" rel="noreferrer" className="text-[#4FC3F7] hover:underline">DexScreener</a>
+              </>
+            )}
+            {step.hash && (
+              <a href={`https://basescan.org/tx/${step.hash}`} target="_blank" rel="noreferrer" className="text-[#94A3B8] hover:text-[#E2E8F0] hover:underline">Deploy tx</a>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-2.5">
+          <div className="grid grid-cols-1 sm:grid-cols-[1.4fr_1fr] gap-2">
+            <label className="grid gap-1">
+              <span className="text-[11px] text-[#64748B] uppercase">Token name</span>
+              <input className={inputCls} value={draft.name} maxLength={32} placeholder="BlueBot" onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
+            </label>
+            <label className="grid gap-1">
+              <span className="text-[11px] text-[#64748B] uppercase">Symbol</span>
+              <input className={inputCls} value={draft.symbol} maxLength={11} placeholder="BLUEBOT" onChange={(e) => setDraft({ ...draft, symbol: e.target.value.toUpperCase() })} />
+            </label>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <label className="grid gap-1">
+              <span className="text-[11px] text-[#64748B] uppercase">Paired asset</span>
+              <select className={inputCls} value={pair.address} onChange={(e) => { setPairAddr(e.target.value); setBuy("0"); setPairNotice(""); }} disabled={!check}>
+                {(check?.pairs.length ? check.pairs : [QUADRA_ETH_PAIR]).map((p) => (
+                  <option key={p.address} value={p.address}>{p.symbol}</option>
+                ))}
+              </select>
+            </label>
+            <div className="grid gap-1">
+              <span className="text-[11px] text-[#64748B] uppercase">Pool fee</span>
+              <div className="flex gap-1.5">
+                {([[10_000, "1%"], [30_000, "3%"]] as const).map(([v, l]) => (
+                  <button key={v} type="button" onClick={() => setFee(v)} className="flex-1 rounded-lg border py-1.5 text-[12px]"
+                    style={fee === v ? { color: "#050508", background: "#4FC3F7", borderColor: "#4FC3F7", fontWeight: 600 } : { color: "#94A3B8", borderColor: "#1A1A2E" }}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {pairNotice && <p className="text-[12px] text-[#FBBF24]">{pairNotice}</p>}
+
+          <label className="grid gap-1">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] text-[#64748B] uppercase">First buy in {pair.symbol} (0 = none)</span>
+              {balText && (
+                <span className="text-[11px] text-[#64748B]">
+                  Bal {balText} <button type="button" onClick={() => setBuy(String(bal.balance))} className="text-[#4FC3F7] ml-1">Max</button>
+                </span>
+              )}
+            </div>
+            <input className={inputCls} value={buy} inputMode="decimal" onChange={(e) => setBuy(e.target.value.trim())} />
+          </label>
+
+          <label className="grid gap-1">
+            <span className="text-[11px] text-[#64748B] uppercase">Description (optional)</span>
+            <input className={inputCls} value={draft.description} maxLength={280} placeholder="Short summary" onChange={(e) => setDraft({ ...draft, description: e.target.value })} />
+          </label>
+
+          <dl className="grid grid-cols-2 gap-2 text-[11px]">
+            <div className="rounded-lg border border-[#1A1A2E] bg-[#050508] px-2.5 py-1.5">
+              <dt className="text-[#64748B]">Fixed supply</dt>
+              <dd className="text-[#E2E8F0]">1,000,000,000 · no admin</dd>
+            </div>
+            <div className="rounded-lg border border-[#1A1A2E] bg-[#050508] px-2.5 py-1.5">
+              <dt className="text-[#64748B]">Fee split</dt>
+              <dd className="text-[#E2E8F0]">80% creator · 15% Quadra · 5% Blue</dd>
+            </div>
+          </dl>
+
+          {problem && draft.name && <p className="text-[12px] text-[#F87171]">{problem}</p>}
+          {buyBad && <p className="text-[12px] text-[#F87171]">Invalid {pair.symbol} amount.</p>}
+          {connected && buyWei > 0n && (bal.failed
+            ? <UnverifiedBalance symbol={pair.symbol} onRetry={() => { void bal.refetch(); }} busy={bal.refetching} />
+            : gate === "insufficient" && <p className="text-[12px] text-[#F87171]">Exceeds your {pair.symbol} balance on Base.</p>)}
+
+          {check === null ? (
+            <p className="text-[12px] text-[#64748B]">Reading Quadra v3 factory on Base...</p>
+          ) : !check.ok ? (
+            <p className="text-[12px] text-[#F87171]">Factory preflight failed ({check.why.join("; ")}).</p>
+          ) : !connected ? (
+            <ConnectButton label="Connect wallet to launch" />
+          ) : (
+            <button
+              type="button"
+              onClick={onLaunch}
+              disabled={Boolean(problem) || buyBad || (buyWei > 0n && gate !== "ok") || step.s === "busy"}
+              className="w-full rounded-lg bg-[#4FC3F7] px-3 py-2 text-[14px] font-semibold text-[#050508] hover:bg-[#29ABE2] disabled:opacity-40 transition-colors"
+            >
+              {step.s === "busy" ? (step.msg || "Launching...") : `Launch $${sym} / ${pair.symbol}${buyWei > 0n ? ` (+ ${buy} ${pair.symbol} buy)` : ""}`}
+            </button>
+          )}
+
+          {step.s === "error" && step.msg && <p className="text-[12px] text-[#F87171]">{step.msg}</p>}
+          {step.s === "busy" && step.hash && (
+            <p className="text-[12px] text-[#94A3B8]">
+              Tx submitted: <a href={`https://basescan.org/tx/${step.hash}`} target="_blank" rel="noreferrer" className="text-[#4FC3F7] hover:underline">{truncAddr(step.hash)}</a>
+            </p>
+          )}
+
+          <div className="flex items-center justify-between text-[11px] text-[#64748B] pt-1">
+            <span>You sign directly on Base 8453 · locked Uniswap v4 LP</span>
+            <a href={result.launchUrl || "/markets/launch"} className="text-[#4FC3F7] hover:underline">Full launchpad</a>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const TEXT_ONLY_TOOLS: ReadonlySet<string> = new Set([
   "hub_honeypot", "hub_risk_gate", "hub_deep_analysis", "hub_token_pick", "hub_contract_trust",
   "hub_market_fit", "hub_key_exposure", "blue_stream", "hub_hood_arrow",
   "check_memo", "check_authorization", "check_wallet", "wallet_brief", "stock_brief", "explain_tx",
   "hub_rh_movers", "hub_rh_new_listings", "hub_rh_search", "hub_rh_quote", "hub_rh_index", "hub_safe_trending",
+  "hub_jobs_board", "hub_agent_exchange",
 ]);
 
 export function ToolResultCard({ tool, result }: { tool: string; result: Record<string, unknown> }) {
@@ -2525,6 +2790,17 @@ export function ToolResultCard({ tool, result }: { tool: string; result: Record<
       if (!d) return null;
       return <DiscoveryCard title={d.title} rows={d.rows} more={d.more} note={d.note}
         renderSwap={(row) => <DiscoverySwap row={row} account={account} />} />;
+    }
+
+    case "prepare_quadra_launch": {
+      const q = r as QuadraLaunchResult;
+      const sym = (q.symbol ?? "").trim().toUpperCase();
+      const title = sym ? `Launch $${sym} / ${q.pair || "ETH"}` : `Launch ${q.name || "token"} / ${q.pair || "ETH"}`;
+      return (
+        <ActionStrip summary={title} chain="base" cta="Review & sign">
+          <QuadraLaunchCard result={q} account={account} />
+        </ActionStrip>
+      );
     }
 
     case "prepare_swap": {

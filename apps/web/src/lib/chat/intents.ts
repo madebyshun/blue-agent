@@ -40,8 +40,8 @@ export function tradeToolFor(messages: readonly { role: string; content: unknown
   if (last?.role !== "user" || typeof last.content !== "string") return null;
   const t = last.content.toLowerCase().trim();
   if (t.length > 160 || !/\d/.test(t)) return null;
-  if (!/^(please\s+)?(swap|buy|sell|convert|trade)\b/.test(t)) return null;
-  if (/\?$|\b(should|how|why|can i|is it|what if)\b/.test(t)) return null;
+  if (!/^(please\s+|hãy\s+|giúp mình\s+|giúp tôi\s+)?(swap|buy|sell|convert|trade|mua|bán|đổi)\b/.test(t)) return null;
+  if (/\?$|\b(should|how|why|can i|is it|what if|có nên|làm sao|tại sao)\b/.test(t)) return null;
   return /\b(robinhood|rh chain|on rh|chain 4663)\b/.test(t) ? "robinhood_swap" : "prepare_swap";
 }
 
@@ -75,7 +75,7 @@ export function stockChainFromText(text: string): "base" | "robinhood" | null {
 }
 
 export function forcedToolFor(messages: readonly { role: string; content: unknown }[]):
-  "hub_sign_check" | "hub_pretrade" | "explain_tx" | "wallet_brief" | "stock_brief" | "set_price_alert" | "prepare_swap" | "robinhood_swap" | "prepare_send" | "robinhood_send" | null {
+  "hub_sign_check" | "hub_pretrade" | "hub_token_verdict" | "hub_tx_simulate" | "prepare_quadra_launch" | "hub_jobs_board" | "hub_agent_exchange" | "explain_tx" | "wallet_brief" | "stock_brief" | "set_price_alert" | "prepare_swap" | "robinhood_swap" | "prepare_send" | "robinhood_send" | null {
   const last = messages[messages.length - 1];
   if (last?.role !== "user" || typeof last.content !== "string") return null;
   const raw = last.content;
@@ -86,15 +86,31 @@ export function forcedToolFor(messages: readonly { role: string; content: unknow
   const hasAddr = /0x[a-f0-9]{40}\b/.test(t);
   // "why is the weekend gap different?" is a question about the idea, not a
   // request for today's report (2026-10-21: it got the full brief).
-  const explaining = /^(why|how does|how do|explain|what does|what is a |what's a )/.test(t.trim());
+  const explaining = /^(why|how does|how do|explain|what does|what is a |what's a |can i )/.test(t.trim());
   if (!hasAddr && !explaining && t.length <= 160 && BRIEF_RE.test(t)) return "wallet_brief";
   if (!hasAddr && !explaining && t.length <= 160 && STOCK_BRIEF_RE.test(t)) return "stock_brief";
+  // Quadra v3 launch card on Base (8453) — exclude Robinhood Chain (no launchpad yet) and explanatory questions
+  if (!hasAddr && !explaining && t.length <= 180 && !/\b(robinhood|rh chain|on rh|4663)\b/.test(t) && !/\?$/.test(t.trim())
+    && /\b(launch|create|deploy)\s+(a\s+|my\s+|new\s+)?(token|coin|memecoin)\b|(?:tạo|phát hành|launch)\s+(?:một\s+)?(?:token|coin)\b/.test(t)) {
+    return "prepare_quadra_launch";
+  }
+  // Jobs Board & Agent Exchange read tools
+  if (!hasAddr && !explaining && t.length <= 160 && /\b(jobs?\s*board|open\s+jobs?|agent\s+jobs?|hire\s+an?\s+agent|bounty\s+board)\b|danh sách job|việc làm agent|thuê agent/.test(t)) {
+    return "hub_jobs_board";
+  }
+  if (!hasAddr && !explaining && t.length <= 160 && /\b(agent\s+exchange|x402\s+sellers?|top\s+x402\s+(?:agents?|sellers?)|discover\s+agents?)\b|sàn agent|danh sách agent x402/.test(t)) {
+    return "hub_agent_exchange";
+  }
+  if (hasAddr && t.length <= 220 && /\b(simulate|dry[- ]?run)\b|mô phỏng giao dịch/.test(t)) return "hub_tx_simulate";
+  if (hasAddr && t.length <= 200 && /\b(token verdict|deep (check|verdict|scan)|forensics|top holders?)\b/.test(t)) return "hub_token_verdict";
   if (hasAddr && t.length <= 200 && /\b(safe|scam|rug|honeypot|legit|risky|trust)\b|an toàn|lừa đảo/.test(t)) return "hub_pretrade";
   // An alert request must reach set_price_alert (2026-10-21: "alert me when
   // ETH on Base goes above $2,500" ran no tool and told the user to press a
   // card that did not exist).
   if (!hasAddr && t.length <= 220 && /\b(alert me|notify me|tell me when|ping me|let me know when|báo tôi|nhắc tôi)\b|^every (day|week|morning)\b.*\bif\b/.test(t)) return "set_price_alert";
-  if (t.length <= 160 && /\d/.test(t) && /^(please\s+)?(send|transfer|pay)\b/.test(t.trim()) && /\bto\b/.test(t) && !/\?$/.test(t.trim())) {
+  const isEnSend = /^(please\s+)?(send|transfer|pay)\b/.test(t.trim()) && /\bto\b/.test(t);
+  const isViSend = /^(hãy\s+|giúp mình\s+|giúp tôi\s+)?(chuyển|gửi)\b/.test(t.trim()) && /\b(cho|tới|đến)\b/.test(t);
+  if (t.length <= 160 && /\d/.test(t) && (isEnSend || isViSend) && !/\?$/.test(t.trim())) {
     return /\b(robinhood|rh chain|on rh|chain 4663)\b/.test(t) ? "robinhood_send" : "prepare_send";
   }
   return tradeToolFor(messages);

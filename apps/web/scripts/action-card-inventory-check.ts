@@ -241,19 +241,15 @@ check("the registered-tool list was derived, not empty", REGISTERED.length > 20,
 // the useful one: a name is weak evidence, so it is the NET here, not the test.
 // `hub_b20_manage` (mint/burn on an EXISTING token) must not match; creating one
 // must.
+// Quadra v3 handoff card (`prepare_quadra_launch`) is the ONE live launch card:
+// it only links/prefills `/markets/launch` (no in-chat signing, no Bankr, no B20 createB20).
+const ALLOWED_LAUNCH_HANDOFF = new Set(["prepare_quadra_launch"]);
 const DEPLOY_SHAPED =
   /launch|(?:deploy|create|issue)[_a-z]*token|token[_a-z]*(?:deploy|create)|b20[_a-z]*create|create[_a-z]*b20/;
-const deployTools = REGISTERED.filter(n => DEPLOY_SHAPED.test(n));
-check("no registered chat tool is named like a token-deploy tool", deployTools.length === 0,
+const deployTools = REGISTERED.filter(n => DEPLOY_SHAPED.test(n) && !ALLOWED_LAUNCH_HANDOFF.has(n));
+check("no unexpected registered chat tool is named like a token-deploy tool", deployTools.length === 0,
   deployTools.length ? `found: ${deployTools.join(", ")}` : `checked ${REGISTERED.length}`);
 
-// The operation, which is what actually matters. A tool only becomes a deploy
-// PATH when it can put a transaction in front of the user, and in this codebase
-// that means a dispatcher case rendering an action card — text tools just return
-// prose. So: any tool that TALKS about deploying (name or description) must have
-// no card. That keeps `blue_deploy` and `hub_b20_analyze` honest as explainers
-// and would catch a rename that dodges the pattern above, without either one
-// being written down here.
 const SCHEMAS = [...ROUTE.matchAll(/name: "([a-z0-9_]+)",\s*\n\s*description: "([^"]*)"/g)];
 check("tool descriptions were parsed for the operation check", SCHEMAS.length > 20,
   `${SCHEMAS.length} schemas`);
@@ -261,11 +257,11 @@ const deployish = SCHEMAS
   .filter(([, n, d]) => /deploy|launch/i.test(n) || /\bdeploy(ing|ment)?\b|\blaunch(ing)?\b/i.test(d))
   .map(([, n]) => n);
 check("tools that discuss deploying were found", deployish.length > 0, deployish.join(", "));
-const deployishWithCard = deployish.filter(n => CARDS.includes(`case "${n}":`));
-check("no deploy-related tool renders an action card", deployishWithCard.length === 0,
+const deployishWithCard = deployish.filter(n => CARDS.includes(`case "${n}":`) && !ALLOWED_LAUNCH_HANDOFF.has(n));
+check("no unexpected deploy-related tool renders an action card", deployishWithCard.length === 0,
   deployishWithCard.length
     ? `these can put a tx in front of the user: ${deployishWithCard.join(", ")}`
-    : `${deployish.length} explainers, all card-less`);
+    : `${deployish.length} checked, only Quadra v3 handoff card allowed`);
 
 // The retired ids by name, as tombstones. `prepare_token_launch` (Bankr) and
 // `hub_b20_launch` (self-hosted) died for different reasons four days apart;
@@ -299,8 +295,8 @@ const phantom = NAMED.filter(n => !REGISTERED.includes(n));
 check("the prompt names no tool that is not registered", phantom.length === 0,
   phantom.length ? `phantom: ${phantom.join(", ")}` : `${NAMED.length} names all resolve`);
 
-const promptDeploy = NAMED.filter(n => DEPLOY_SHAPED.test(n));
-check("the prompt names no token-deploy tool", promptDeploy.length === 0,
+const promptDeploy = NAMED.filter(n => DEPLOY_SHAPED.test(n) && !ALLOWED_LAUNCH_HANDOFF.has(n));
+check("the prompt names no unexpected token-deploy tool", promptDeploy.length === 0,
   promptDeploy.length ? `found: ${promptDeploy.join(", ")}` : "");
 
 // The counter-assertion, and the reason this whole section is not just deletion:

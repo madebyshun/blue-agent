@@ -66,7 +66,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 // ── Helper: mini inline markdown (bold, code, links) ─────────────────────────
 
 function InlineText({ text }: { text: string }) {
-  const re = /(\*\*(.+?)\*\*|\*([^*\n]+)\*|`([^`\n]+)`|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\))/g;
+  const re = /(\*\*(.+?)\*\*|\*([^*\n]+)\*|`([^`\n]+)`|\[([^\]]+)\]\(((?:https?:\/\/|\/[a-zA-Z0-9])[^\s)]*)\))/g;
   const parts: React.ReactNode[] = [];
   let last = 0, match: RegExpExecArray | null, idx = 0;
   while ((match = re.exec(text)) !== null) {
@@ -78,8 +78,11 @@ function InlineText({ text }: { text: string }) {
       parts.push(<em key={idx} className="italic text-slate-300">{match[3]}</em>);
     else if (match[4] !== undefined)
       parts.push(<code key={idx} className="font-mono bg-[#1A1A2E] text-[#7DD3FC] px-1.5 py-0.5 rounded text-[0.84em]">{match[4]}</code>);
-    else if (match[5] !== undefined)
-      parts.push(<a key={idx} href={match[6]} target="_blank" rel="noopener noreferrer" className="text-[#4FC3F7] underline hover:opacity-80">{match[5]}</a>);
+    else if (match[5] !== undefined) {
+      const href = match[6];
+      const external = href.startsWith("http");
+      parts.push(<a key={idx} href={href} {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})} className="text-[#4FC3F7] underline hover:opacity-80">{match[5]}</a>);
+    }
     last = match.index + match[0].length;
   }
   if (last < text.length) parts.push(text.slice(last));

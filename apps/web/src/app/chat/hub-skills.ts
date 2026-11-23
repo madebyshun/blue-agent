@@ -108,7 +108,7 @@ const CATEGORY_ORDER: SkillCategory[] = [
 const CURATED: { id: string; tool: string; category: SkillCategory; trigger: string }[] = [
   // Market Intel
   // Due Diligence
-  { id: "honeypot-check",          tool: "hub_honeypot",         category: "Due Diligence", trigger: "/scan " },
+  { id: "honeypot-check",          tool: "hub_honeypot",         category: "Due Diligence", trigger: "Is this token a honeypot? " },
   { id: "risk-gate",               tool: "hub_risk_gate",        category: "Due Diligence", trigger: "Run a risk gate on " },
   { id: "contract-trust",          tool: "hub_contract_trust",   category: "Due Diligence", trigger: "What's the trust score for contract " },
   // Builder Tools

@@ -295,9 +295,9 @@ check("the no-DCA rule survives in both branches",
 check("no branch instructs the model to call simulateContract",
   !/simulateContract/.test(b20Free) && !/simulateContract/.test(b20Full)
   && !/simulateContract/.test(ROUTE));
-check("and it says so outright, in both branches",
+check("tool-free prompt forbids simulating; tool-carrying prompt routes to hub_tx_simulate",
   /YOU DO NOT SIMULATE TRANSACTIONS/.test(b20Free)
-  && /YOU DO NOT SIMULATE TRANSACTIONS/.test(b20Full));
+  && /hub_tx_simulate/.test(b20Full));
 // The revert modes are a FACT about B20 the user needs before sending, and they
 // used to be reachable only through the simulate instructions that just left.
 check("policy/pause reverts are still explained without a simulate step",

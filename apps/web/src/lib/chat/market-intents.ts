@@ -19,6 +19,7 @@
  * answered by the route from the desk snapshot).
  */
 import { BASE_STOCKS } from "@/lib/base-stocks/registry";
+import { COINBASE_BASE_STOCKS } from "@/lib/base-stocks/coinbase-list";
 import { RWA_TOKENS } from "@/lib/robinhood/rwa-registry";
 import { nyseMarketStatus } from "@/lib/market-hours";
 
@@ -26,15 +27,17 @@ export interface MarketCall { name: string; args: Record<string, unknown> }
 
 const STOCK_TICKERS = new Set<string>([
   ...BASE_STOCKS.map((s) => s.ticker.toUpperCase()),
+  ...COINBASE_BASE_STOCKS.map((s) => s.ticker.toUpperCase()),
   ...RWA_TOKENS.filter((t) => t.kind === "stock" || t.kind === "etf").map((t) => t.ticker.toUpperCase()),
 ]);
 
 /** Words that are also tickers and must not be read as one unless written in capitals. */
 const WORDISH = new Set(["A", "ALL", "ARE", "IT", "ON", "BE", "SO", "NOW", "CAN", "GO", "FOR", "AN", "ONE", "NEW", "OPEN",
-  "LOW", "HIGH", "TWO", "CAT", "COIN", "BIG", "WELL", "LOVE", "FUN", "CASH", "KEY", "SAFE", "PLAY", "REAL", "TRUE", "AI", "BUY", "SELL", "TOP"]);
+  "LOW", "HIGH", "TWO", "CAT", "COIN", "BIG", "WELL", "LOVE", "FUN", "CASH", "KEY", "SAFE", "PLAY", "REAL", "TRUE", "AI", "BUY", "SELL", "TOP",
+  "RUN", "APP", "NET", "PAY", "NOW", "COST", "FAST", "BEST", "BASE", "HOOD", "POOL", "LIVE", "TECH", "CORE", "LINK", "NEXT", "PRO", "MAX"]);
 
 function chainFrom(t: string): "base" | "robinhood" | null {
-  const base = /\bbase\b|\b8453\b|coinbase/.test(t);
+  const base = /\bbase\b|\b8453\b|coinbase|\bb20\b/.test(t);
   const rh = /\brobinhood\b|\brh\b|\b4663\b/.test(t);
   return base && !rh ? "base" : rh && !base ? "robinhood" : null;
 }
@@ -79,8 +82,9 @@ export function marketCallsFor(messages: readonly { role: string; content: unkno
   const t = raw.toLowerCase();
   if (t.length > 200) return null;
   // Actions and alerts have their own tools; explanations are the model's.
-  if (/^(please\s+)?(buy|sell|swap|send|bridge|convert|trade|transfer|pay|revoke)\b/.test(t)) return null;
-  if (/\b(alert me|notify me|tell me when|ping me|báo tôi)\b/.test(t)) return null;
+  if (/^(please\s+|hãy\s+|giúp mình\s+|giúp tôi\s+)?(buy|sell|swap|send|bridge|convert|trade|transfer|pay|revoke|launch|deploy|create|mua|bán|đổi|chuyển|gửi|tạo|phát hành)\b/.test(t)) return null;
+  if (/\b(launch|deploy|create|issue)\s+(a\s+|my\s+|new\s+)?(token|coin|memecoin)\b/.test(t)) return null;
+  if (/\b(alert me|notify me|tell me when|ping me|báo tôi|nhắc tôi)\b/.test(t)) return null;
   // "…and buy $1 there": a trade inside the question belongs to the trade tools.
   if (/\b(buy|sell|swap|mua|bán)\b.*(\$\s?\d|\d+(\.\d+)?\s?(usdc|usd|eth|đô))/.test(t)) return null;
   // The weekend gap is explained from what the desk actually does, in code
@@ -93,37 +97,42 @@ export function marketCallsFor(messages: readonly { role: string; content: unkno
   }
 
   const addr = t.match(ADDR)?.[0];
-  if (addr && /\b(buy|sell)(ing)? pressure\b|\bdex flow\b|\bbuyers?\b.*\bsellers?\b/.test(t)) return [{ name: "hub_dex_flow", args: { token: addr } }];
   if (addr && /^\s*((what|who) is|what's|tell me about|info on|overview of|look up)?\s*0x[a-f0-9]{40}\s*\??\s*$/.test(t)) {
     return [{ name: "check_token", args: { address: addr } }];
   }
   if (addr) return null; // anything else about an address: safety, explain — other routes
 
-  if (/\b(buy|sell)(ing)? pressure\b|\bdex flow\b/.test(t)) {
-    const sym = t.match(/\b(?:on|for|of|in) \$?([a-z][a-z0-9]{1,11})\b/)?.[1];
-    return sym ? [{ name: "hub_dex_flow", args: { token: sym } }] : null;
-  }
-
   const calls: MarketCall[] = [];
   const add = (c: MarketCall) => { if (!calls.some((x) => x.name === c.name && JSON.stringify(x.args) === JSON.stringify(c.args))) calls.push(c); };
 
-  if (/\btrending\b/.test(t)) add({ name: "hub_safe_trending", args: {} });
-  if (/\b(top|best) (base )?tokens?\b.*\b(quality|score)\b|\bquality score\b/.test(t)) add({ name: "hub_token_pick", args: {} });
+  if (/\btrending\b|xu hướng|đang hot/.test(t)) add({ name: "hub_safe_trending", args: {} });
+  if (/\b(top|best) (base )?tokens?\b.*\b(quality|score)\b|\bquality score\b/.test(t)) add({ name: "hub_safe_trending", args: {} });
 
   const stockish = /\bstocks?\b|\betfs?\b|\bshares?\b|cổ phiếu/.test(t);
-  if (/\bnew (stock|etf)s?( tokens?)?\b|\bnew listings?\b|\bnewly listed\b|\bmã mới\b/.test(t)) add({ name: "hub_rh_new_listings", args: {} });
-  else if (/\b(movers?|gainers?|losers?)\b/.test(t) && (stockish || /\brobinhood\b|\brh\b/.test(t))) add({ name: "hub_rh_movers", args: {} });
-  else if (/\bhow many (stock|etf)|\b(all|list of|every) (the )?(stock|etf) tokens\b/.test(t)) add({ name: "hub_rh_index", args: {} });
-  else {
+  if (/\bnew (stock|etf)s?( tokens?)?\b|\bnew listings?\b|\bnewly listed\b|\bmã mới\b/.test(t)) add({ name: "hub_rh_movers", args: {} });
+  else if (/\b(movers?|gainers?|losers?)\b|tăng mạnh|giảm mạnh/.test(t) && (stockish || /\brobinhood\b|\brh\b/.test(t))) add({ name: "hub_rh_movers", args: {} });
+  else if (/\bhow many (stock|etf)|\b(all|list of|every) (the )?(stock|etf) tokens\b/.test(t)) {
+    add({ name: "stock_brief", args: chainFrom(t) ? { chain: chainFrom(t) } : {} });
+  } else {
     const find = raw.match(/\b(?:find|search(?: for)?|look ?up)\s+(.{2,40}?)\s+(?:on|in)\s+(?:robinhood|rh)\b/i);
-    if (find) add({ name: "hub_rh_search", args: { query: find[1].replace(/\b(the|stock|token)\b/gi, "").trim() } });
+    if (find) {
+      const q = find[1].replace(/\b(the|stock|token)\b/gi, "").trim();
+      const hitTicker = stockTickerIn(q.toUpperCase());
+      if (hitTicker) add({ name: "stock_quote", args: { ticker: hitTicker, chain: "robinhood" } });
+      else add({ name: "stock_brief", args: { chain: "robinhood" } });
+    }
   }
 
   // A ticker alone is not a price question ("ell my NVDA" must not get a
   // quote): it needs a price word, a chain, or to be the whole message.
   const ticker = stockTickerIn(raw);
+  const asksCrossVenue = !!ticker && /\b(drift|spread|cross[- ]?venue)\b|chênh lệch/.test(t);
   const asksQuote = !!ticker && (/\bprices?\b|\bgiá\b|\bquote\b|\btrading at\b|\bon (base|robinhood|rh)\b/.test(t) || t.replace(/[?!.\s]/g, "") === ticker.toLowerCase());
-  if (ticker && asksQuote && !calls.length && !/\b(cheaper|above|below|gap|premium|discount)\b/.test(t)) {
+  if (asksCrossVenue && !calls.length) {
+    add({ name: "hub_cross_venue_stock", args: { ticker } });
+  } else if (/\bscreen(?:er)?\b.*\b(stocks?|etfs?)\b|\b(stocks?|etfs?)\b.*\bscreen(?:er)?\b|lọc cổ phiếu/.test(t) && !calls.length) {
+    add({ name: "hub_stock_screen", args: {} });
+  } else if (ticker && asksQuote && !calls.length && !/\b(cheaper|above|below|gap|premium|discount)\b/.test(t)) {
     add({ name: "stock_quote", args: { ticker, chain: chainFrom(t) } });
   } else if (!calls.some((c) => c.name.startsWith("hub_rh_")) &&
     /\bstock tokens?\b|\bstocks? (on|today|now)\b|\bonchain stocks?\b|\bpriced (above|below)\b|\b(above|below) the (real )?stock\b|\bcheaper on\b|\b(stock )?(gap|premium|discount)s?\b.*\bstock|cổ phiếu onchain/.test(t)) {
@@ -152,7 +161,7 @@ export function marketCallsFor(messages: readonly { role: string; content: unkno
 export function looksLikeMarketData(text: string): boolean {
   const t = text.toLowerCase().trim();
   if (/^(why|how does|how do|explain|what does|what is a |what's a |should i|can you|what can)/.test(t)) return false;
-  return /\b(price|prices|trending|movers?|gainers?|losers?|launched|launches|listings?|market cap|24h volume|liquidity|how many tokens|top \d+ tokens?)\b|\bgiá\b/.test(t);
+  return /\b(price|prices|trending|movers?|gainers?|losers?|launched|launches|listings?|market cap|24h volume|liquidity|how many tokens|top \d+ tokens?)\b|\bgiá\b|xu hướng|tăng mạnh|giảm mạnh/.test(t);
 }
 
 export const NO_LIVE_SOURCE =

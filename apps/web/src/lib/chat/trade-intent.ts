@@ -6,6 +6,9 @@
  */
 import { QUANTITY_WORD_RE } from "@/lib/wallet/amount";
 import { findBaseStock, type BaseStock } from "@/lib/base-stocks/registry";
+import { COINBASE_BASE_STOCKS, type CoinbaseBaseStock } from "@/lib/base-stocks/coinbase-list";
+
+export type ResolvedBaseStock = Pick<BaseStock, "ticker" | "name" | "token" | "symbol"> & Partial<BaseStock>;
 
 /**
  * A DOLLAR amount ("$5", "5 USD", "5 dollars") — the "buy $5 of TSLA" shape.
@@ -43,13 +46,19 @@ export function userDollarAmount(userText: string, modelAmount: unknown): string
   return Number.isFinite(Number(a)) && typed.has(Number(a)) ? null : n;
 }
 
+const COINBASE_BY_TICKER = new Map<string, CoinbaseBaseStock>(
+  COINBASE_BASE_STOCKS.map((s) => [s.ticker.toUpperCase(), s]),
+);
+
 /**
- * A Base stock by its exact ticker ("NVDA") or its token symbol ("NVDAc"),
- * from the verified Base stock registry ONLY — each row there is cross-checked
- * against base.org/stocks and asserted on-chain. Never a name search: the #280
- * impostor got in by matching a name.
+ * A Base stock by its exact ticker ("NVDA", "PLTR") or its token symbol
+ * ("NVDAc", "PLTRc"), from BlueAgent's verified Base stock registries ONLY:
+ * first the Chainlink-fed desk (`BASE_STOCKS`), then the full 377-token
+ * Coinbase Base stock list (`COINBASE_BASE_STOCKS`, sourced from
+ * base.org/api/stocks). Never a name search: the #280 impostor got in by
+ * matching a name.
  */
-export function baseStockByTickerOrSymbol(raw: string): BaseStock | undefined {
+export function baseStockByTickerOrSymbol(raw: string): ResolvedBaseStock | undefined {
   const sym = raw.trim().replace(/^\$/, "");
   if (!sym) return undefined;
   const direct = findBaseStock(sym);
@@ -58,6 +67,12 @@ export function baseStockByTickerOrSymbol(raw: string): BaseStock | undefined {
   if (sym.length > 1 && sym.endsWith("c")) {
     const hit = findBaseStock(sym.slice(0, -1));
     if (hit && hit.symbol === sym) return hit;
+  }
+  const cbDirect = COINBASE_BY_TICKER.get(sym.toUpperCase());
+  if (cbDirect) return cbDirect;
+  if (sym.length > 1 && sym.endsWith("c")) {
+    const cbHit = COINBASE_BY_TICKER.get(sym.slice(0, -1).toUpperCase());
+    if (cbHit && cbHit.symbol === sym) return cbHit;
   }
   return undefined;
 }

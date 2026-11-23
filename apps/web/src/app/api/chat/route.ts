@@ -279,25 +279,37 @@ const LONG_FORM_MAX_TOKENS = 4096;
 const FOUNDER_COMMAND_RE = /^\s*\/?blue\s+(idea|build|audit|ship|raise)\b/i;
 
 const MODELS: Record<string, { maxTokens: number }> = {
-  // 768 until 2026-10-01. Fast's model reasons before it answers, and the
-  // reasoning counts against this cap: "what is pons?" came back EMPTY 2/2 at
-  // 768 (finish_reason "length", zero content) and answered 3/3 at 1536.
-  // The prompt still asks for short answers; this is headroom, not length.
-  fast:     { maxTokens: 1536 },
-  pro:      { maxTokens: 1200 },  // was 2048 — also the fallback for every unlisted tier
-  max:      { maxTokens: 2400 },
-  deepseek: { maxTokens: 2400 },
-  gemini:   { maxTokens: 2400 },
-  kimi:     { maxTokens: 2400 },
+  // Live presets — every active preset gets an explicit budget so `deep` no
+  // longer falls back to legacy `pro` (1200) and gets cut shorter than `fast`.
+  fast:       { maxTokens: 2048 },
+  flash:      { maxTokens: 2048 },
+  private:    { maxTokens: 2048 },
+  balanced:   { maxTokens: 2048 },
+  deep:       { maxTokens: 4096 },
+  grok:       { maxTokens: 2048 },
+  search:     { maxTokens: 2048 },
+  uncensored: { maxTokens: 4096 },
+  tee:        { maxTokens: 4096 },
+  sonnet55:   { maxTokens: 4096 },
+  // Legacy ids
+  pro:        { maxTokens: 1200 },
+  max:        { maxTokens: 2400 },
+  deepseek:   { maxTokens: 2400 },
+  gemini:     { maxTokens: 2400 },
+  kimi:       { maxTokens: 2400 },
 };
 
 // ─── Model display names ──────────────────────────────────────────────────────
 
 const VENICE_DISPLAY: Record<string, string> = {
   "deepseek-v4-flash":                  "DeepSeek V4 Flash (Venice)",
+  "deepseek-v4-1-flash-uncensored":     "DeepSeek V4.1 Flash Uncensored (Venice)",
   "deepseek-v4-pro":                    "DeepSeek V4 Pro (Venice)",
   "kimi-k2-6":                          "Kimi K2 (Venice)",
   "claude-opus-4-7":                    "Claude Opus 4 (Venice)",
+  "claude-sonnet-5-5":                  "Claude Sonnet 5.5 (Venice)",
+  "glm-5-3-flash-e2ee":                 "GLM 5.3 Flash TEE (Venice)",
+  "grok-4-7":                           "Grok 4.7 (Venice)",
   "qwen3-5-9b":                         "Qwen 3.5 9B (Venice) · Free",
 };
 
@@ -335,16 +347,20 @@ function getModelLabel(tier: string, modelId?: string, provider?: string): strin
 
 const VENICE_MAX_TOKENS: Record<string, number> = {
   "deepseek-v4-flash":                 4096,
+  "deepseek-v4-1-flash-uncensored":    8192,
   "deepseek-v4-pro":                   8192,
   "kimi-k2-6":                         4096,
   "claude-opus-4-7":                   4096,
+  "claude-sonnet-5-5":                 4096,
   "claude-fable-5":                    4096,
+  "grok-4-7":                          4096,
   "grok-4-3":                          4096,
   "qwen3-5-9b":                        4096,
   "qwen3-235b-a22b-instruct-2507":     8192,
   "mistral-small-3-2-24b-instruct":    4096,
   "venice-uncensored-1-2":             4096,
-  // E2EE — smaller models, conservative limit
+  // E2EE / TEE models
+  "glm-5-3-flash-e2ee":                4096,
   "e2ee-venice-uncensored-24b-p":      2048,
   "e2ee-gemma-3-27b-p":                2048,
   "e2ee-qwen3-6-35b-a3b":              2048,
@@ -352,6 +368,10 @@ const VENICE_MAX_TOKENS: Record<string, number> = {
 
 function veniceMaxTokens(modelId: string): number {
   return VENICE_MAX_TOKENS[modelId] ?? 4096;
+}
+
+function isE2eeModelId(modelId?: string): boolean {
+  return !!modelId && /(?:^e2ee-|-e2ee$)/i.test(modelId);
 }
 
 // ─── System prompt ────────────────────────────────────────────────────────────
@@ -851,6 +871,104 @@ Testnets are reachable by full id: base-sepolia, ethereum-sepolia, robinhood-tes
       required: ["tokenIn", "tokenOut", "amountIn"],
     },
   },
+  {
+    name: "hub_token_verdict",
+    description: "Deep pre-trade safety verdict for a Base (8453) token by contract address — runs eth_simulateV1 round-trip buy/sell simulation, Top 10 holder concentration, launcher forensics (Quadra, Clanker, Doppler, Virtuals), and honeypot/tax analysis. Use when the user asks for a deep token verdict, forensics, top holders, or full pre-trade analysis on Base.",
+    input_schema: {
+      type: "object",
+      properties: {
+        token: { type: "string", description: "Token contract address (0x…) on Base." },
+      },
+      required: ["token"],
+    },
+  },
+  {
+    name: "hub_cross_venue_stock",
+    description: "Unified live tokenized-stock quote across Base B20 (377 stocks, chain 8453), Robinhood Chain (4663), and Chainlink oracle, with cross-venue spread/drift and US market session status. Use for 'what is the drift on NVDA right now?', 'NVDA spread Base vs Robinhood', or comparing a stock token across venues.",
+    input_schema: {
+      type: "object",
+      properties: {
+        ticker: { type: "string", description: "US stock/ETF ticker, e.g. NVDA, PLTR, TSLA, AAPL." },
+      },
+      required: ["ticker"],
+    },
+  },
+  {
+    name: "hub_stock_screen",
+    description: "Screen and search tokenized stocks across all 377 Base B20 stocks and Robinhood Chain by tickers, chain, liquidity, or spread. Use for 'screen tokenized stocks', 'lọc cổ phiếu onchain', or comparing multiple stock tickers at once.",
+    input_schema: {
+      type: "object",
+      properties: {
+        tickers: { type: "array", items: { type: "string" }, description: "Optional list of tickers to screen (e.g. ['NVDA','PLTR','AMD'])." },
+        chain:   { type: "string", enum: ["base", "robinhood", "all"], description: "Optional chain filter (default all)." },
+        limit:   { type: "number", description: "Max rows to return (default 10)." },
+      },
+    },
+  },
+  {
+    name: "hub_b20_policy_check",
+    description: "Read live B20 transfer pause state and PolicyRegistry authorization (sender, receiver, executor) on Base (8453) for a B20 token (0x address or stock ticker like NVDAc/PLTR). Checking policy authorization before swapping a B20 stock prevents wasted gas.",
+    input_schema: {
+      type: "object",
+      properties: {
+        token:  { type: "string", description: "B20 token 0x… address or Base stock ticker (e.g. NVDAc, PLTR)." },
+        wallet: { type: "string", description: "Optional 0x… wallet address; defaults to the connected wallet." },
+      },
+      required: ["token"],
+    },
+  },
+  {
+    name: "hub_tx_simulate",
+    description: "Simulate an EVM transaction live via eth_simulateV1 on Base (8453) or Robinhood Chain (4663) without broadcasting — returns will_succeed, revert_reason, gas_used, logs_count, and ERC-20 transfer previews. Use when the user asks to simulate or dry-run a transaction before signing.",
+    input_schema: {
+      type: "object",
+      properties: {
+        chain: { type: "string", enum: ["base", "robinhood"], description: "Chain to simulate on (default base)." },
+        from:  { type: "string", description: "Sender 0x… address (defaults to connected wallet)." },
+        to:    { type: "string", description: "Target contract or recipient 0x… address." },
+        data:  { type: "string", description: "Optional 0x-prefixed hex calldata." },
+        value: { type: "string", description: "Optional ETH value in wei (default '0')." },
+      },
+      required: ["to"],
+    },
+  },
+  {
+    name: "prepare_quadra_launch",
+    description: "Open the non-custodial QUADRA V3 LAUNCH card on Base (8453) directly in chat — prepares a fixed-supply (1B) token launch on a locked Uniswap v4 pool paired with ETH or an enabled Coinbase B20 stock token, runs factory preflight, and lets the user sign and deploy directly in chat with their own wallet. Use when the user asks to launch, create, or deploy a token on Base via Quadra (e.g. 'launch a token called BlueBot ($BLUEBOT)', 'tạo token mới trên Base'). NEVER invent parameters the user did not state; pass only what they provided. Never use for Robinhood Chain (no launchpad there yet).",
+    input_schema: {
+      type: "object",
+      properties: {
+        name:        { type: "string", description: "Optional token name (max 32 chars)." },
+        symbol:      { type: "string", description: "Optional token ticker/symbol (max 11 chars)." },
+        pair:        { type: "string", description: "Optional paired asset: 'ETH' (default), a Coinbase Base stock ticker (e.g. 'NVDAc', 'NVDA'), or a 0x… contract address." },
+        description: { type: "string", description: "Optional short description (max 280 chars)." },
+      },
+    },
+  },
+  {
+    name: "hub_jobs_board",
+    description: "Read live open jobs and bounties on the Blue Agent Jobs Board (Base 8453, /jobs). Use when the user asks about open agent jobs, bounties, hiring an agent, or 'danh sách job / thuê agent'. Read-only, zero fee.",
+    input_schema: {
+      type: "object",
+      properties: {
+        status: { type: "string", enum: ["open", "all"], description: "Filter by status (default 'open')." },
+        skill:  { type: "string", description: "Optional keyword/skill filter." },
+        limit:  { type: "number", description: "Max jobs to return (default 10)." },
+      },
+    },
+  },
+  {
+    name: "hub_agent_exchange",
+    description: "Read the live Blue Agent Exchange index (/exchange) — x402 sellers on Base 8453 ranked by measured USDC volume, paid calls, or distinct paying wallets, plus verified Blue Agent listings. Use for 'agent exchange', 'top x402 sellers', 'discover agents on Base', 'sàn agent'. Read-only, zero fee.",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Optional search filter by host, title, or 0x payTo." },
+        sort:  { type: "string", enum: ["usd", "calls", "payers"], description: "Sort order (default 'usd')." },
+        limit: { type: "number", description: "Max sellers to return (default 10)." },
+      },
+    },
+  },
 ];
 
 // ─── Tools hidden from chat (ShunTr, 2026-09-30) ─────────────────────────────
@@ -899,6 +1017,10 @@ const TOOL_ENDPOINT: Record<string, string> = {
   hub_rh_movers:        "rh-stock-movers",
   hub_rh_quote:         "rh-stock-quote",
   hub_safe_trending:    "safe-trending",
+  hub_cross_venue_stock:"cross-venue-stock-quote",
+  hub_stock_screen:     "stock-screen",
+  hub_b20_policy_check: "b20-policy-check",
+  hub_tx_simulate:      "tx-simulate",
 };
 
 // ─── Internal Hub tool caller ─────────────────────────────────────────────────
@@ -1959,6 +2081,167 @@ async function callHubTool(
     }
   }
 
+  if (toolName === "prepare_quadra_launch") {
+    const name = typeof args.name === "string" ? args.name.trim().slice(0, 32) : "";
+    const symbol = typeof args.symbol === "string" ? args.symbol.trim().replace(/^\$/, "").toUpperCase().slice(0, 11) : "";
+    const description = typeof args.description === "string" ? args.description.trim().slice(0, 280) : "";
+    const rawPair = typeof args.pair === "string" ? args.pair.trim() : "";
+    let pair = "ETH";
+    let pairAddress = "";
+    if (rawPair && rawPair.toUpperCase() !== "ETH") {
+      if (/^0x[a-fA-F0-9]{40}$/.test(rawPair)) {
+        pair = rawPair;
+        pairAddress = rawPair;
+      } else {
+        const stock = baseStockByTickerOrSymbol(rawPair.replace(/^\$/, ""));
+        if (stock) {
+          pair = stock.symbol;
+          pairAddress = stock.token;
+        } else {
+          pair = rawPair.toUpperCase();
+        }
+      }
+    }
+    const params = new URLSearchParams();
+    if (name) params.set("name", name);
+    if (symbol) params.set("symbol", symbol);
+    if (pair && pair !== "ETH") params.set("pair", pairAddress || pair);
+    if (description) params.set("description", description);
+    const qs = params.toString();
+    const launchUrl = `/markets/launch${qs ? `?${qs}` : ""}`;
+    const label = symbol ? `${name ? `${name} ($${symbol})` : `$${symbol}`}` : (name || "your token");
+    return {
+      text: `Quadra v3 Launch card rendered for ${label} paired with ${pair} on Base (8453). Non-custodial: the user reviews and signs the launch directly inside the card above in their own wallet. Reply with one short line pointing them to the card above; never claim a token was deployed.`,
+      staticReply: `Prepared Quadra v3 launch for **${label}** paired with **${pair}** on Base (8453) — review the parameters and sign directly in the card above.`,
+      result: {
+        kind: "quadra_launch",
+        name,
+        symbol,
+        pair,
+        pairAddress,
+        description,
+        launchUrl,
+      },
+    };
+  }
+  if (toolName === "hub_jobs_board") {
+    const statusFilter = args.status === "all" ? "all" : "open";
+    const skillFilter = typeof args.skill === "string" ? args.skill.trim().toLowerCase() : "";
+    const limit = typeof args.limit === "number" && args.limit > 0 ? Math.min(25, Math.floor(args.limit)) : 10;
+    try {
+      const { listJobs, publicJob } = await import("@/lib/jobs");
+      const rawJobs = await listJobs(100);
+      if (rawJobs === null) return { text: toolFailed(toolName, "job board unreadable right now") };
+      const all = rawJobs.map(publicJob);
+      const filtered = all.filter((j) => {
+        if (statusFilter === "open" && j.status !== "open") return false;
+        if (skillFilter) {
+          const hay = `${j.title} ${j.brief} ${j.skill ?? ""}`.toLowerCase();
+          if (!hay.includes(skillFilter)) return false;
+        }
+        return true;
+      });
+      const shown = filtered.slice(0, limit);
+      const jobsHome = absoluteUrl("/jobs");
+      const lines = [
+        `**Blue Agent Jobs Board** (Base 8453) — ${filtered.length} ${statusFilter === "open" ? "open " : ""}job${filtered.length === 1 ? "" : "s"}${skillFilter ? ` matching "${skillFilter}"` : ""}:`,
+      ];
+      if (shown.length === 0) {
+        lines.push(`No matching jobs right now. Post a job or check all listings at [Jobs Board](${jobsHome}).`);
+      } else {
+        for (const j of shown) {
+          const budget = typeof j.budgetUnits === "number" ? `$${(j.budgetUnits / 1e6).toFixed(2)} USDC` : "budget N/A";
+          lines.push(`- **${j.title}** (${budget} · ${j.status}${j.skill ? ` · ${j.skill}` : ""}) — [View job](${absoluteUrl(`/jobs/${j.id}`)})`);
+        }
+        lines.push(`\nBrowse or post a job at [Jobs Board](${jobsHome}).`);
+      }
+      const md = lines.join("\n");
+      return {
+        text: md,
+        staticReply: md,
+        result: { kind: "jobs_board", total: filtered.length, jobs: shown },
+      };
+    } catch (e) {
+      return { text: toolFailed(toolName, (e as Error).message) };
+    }
+  }
+  if (toolName === "hub_agent_exchange") {
+    const q = typeof args.query === "string" ? args.query.trim().toLowerCase() : "";
+    const sort = args.sort === "calls" || args.sort === "payers" ? args.sort : "usd";
+    const limit = typeof args.limit === "number" && args.limit > 0 ? Math.min(20, Math.floor(args.limit)) : 10;
+    try {
+      const [{ readExchange, readProviderIndex }, { readListings }] = await Promise.all([
+        import("@/lib/hub/exchange"),
+        import("@/lib/hub/listings"),
+      ]);
+      const [ex, listings] = await Promise.all([readExchange(30), readListings().catch(() => [])]);
+      if (!ex.readable) return { text: toolFailed(toolName, "exchange index unreadable right now") };
+      const rows = ex.rows
+        .filter((r) => !q || r.payTo.includes(q) || r.hosts.some((h) => h.toLowerCase().includes(q)) || r.title.toLowerCase().includes(q))
+        .sort((a, b) => sort === "calls" ? b.paidCalls - a.paidCalls : sort === "payers" ? b.payers - a.payers : b.usd - a.usd)
+        .slice(0, limit);
+      const totalVol = ex.rows.reduce((s, r) => s + r.usd, 0);
+      const totalCalls = ex.rows.reduce((s, r) => s + r.paidCalls, 0);
+      const fmtUsd = (n: number) => (n >= 1000 ? `$${(n / 1000).toFixed(1)}k` : n >= 1 ? `$${n.toFixed(2)}` : `$${n.toFixed(3)}`);
+      const exchangeHome = absoluteUrl("/exchange");
+      const lines = [
+        `**Base Agent Exchange** (${ex.daysCovered}d measured · ${ex.providersListed.toLocaleString("en-US")} listed · ${fmtUsd(totalVol)} volume · ${totalCalls.toLocaleString("en-US")} paid calls · ${listings.length} verified listings):`,
+      ];
+      if (rows.length > 0) {
+        rows.forEach((r, i) => {
+          const name = r.hosts[0] ?? `${r.payTo.slice(0, 6)}…${r.payTo.slice(-4)}`;
+          const desc = r.title ? ` — ${r.title.slice(0, 60)}` : "";
+          lines.push(`${i + 1}. **${name}** (${fmtUsd(r.usd)} · ${r.paidCalls.toLocaleString("en-US")} calls · ${r.payers} wallets)${desc} · [Profile](${absoluteUrl(`/exchange/${r.payTo}`)})`);
+        });
+      } else if (ex.providersListed > 0) {
+        const idx = await readProviderIndex().catch(() => null);
+        const listed = Object.entries(idx?.providers ?? {})
+          .filter(([payTo, p]) => !q || payTo.includes(q) || p.hosts.some((h) => h.toLowerCase().includes(q)) || p.title.toLowerCase().includes(q))
+          .sort((a, b) => b[1].resources - a[1].resources)
+          .slice(0, limit);
+        if (listed.length === 0) {
+          lines.push(`No indexed x402 sellers matched "${q}".`);
+        } else {
+          lines.push("Recent 30d settlement blobs are not yet populated in this index window — top listed x402 sellers by endpoint count:");
+          listed.forEach(([payTo, p], i) => {
+            const name = p.hosts[0] ?? `${payTo.slice(0, 6)}…${payTo.slice(-4)}`;
+            const desc = p.title ? ` — ${p.title.slice(0, 60)}` : "";
+            lines.push(`${i + 1}. **${name}** (${p.resources} endpoints)${desc} · [Profile](${absoluteUrl(`/exchange/${payTo}`)})`);
+          });
+        }
+      } else {
+        lines.push(q ? `No indexed x402 sellers matched "${q}".` : "No x402 sellers indexed yet.");
+      }
+      lines.push(`\nExplore all sellers or list your x402 service at [Agent Exchange](${exchangeHome}).`);
+      const md = lines.join("\n");
+      return {
+        text: md,
+        staticReply: md,
+        result: { kind: "agent_exchange", daysCovered: ex.daysCovered, providersListed: ex.providersListed, sellers: rows, verifiedListings: listings.length },
+      };
+    } catch (e) {
+      return { text: toolFailed(toolName, (e as Error).message) };
+    }
+  }
+  if (toolName === "hub_token_verdict") {
+    const addr = typeof args.token === "string" ? args.token.trim() : "";
+    if (!/^0x[a-fA-F0-9]{40}$/.test(addr)) {
+      const msg = "Paste a valid 0x… token contract address to run a deep token verdict.";
+      return { text: `${msg} Reply with this line.`, staticReply: msg };
+    }
+    const chain = args.chain === "robinhood" ? "robinhood" : "base";
+    try {
+      const { tokenVerdict } = await import("@/lib/token-verdict");
+      const verdict = await tokenVerdict(chain, addr);
+      return {
+        text: JSON.stringify(verdict, null, 2),
+        result: { kind: "token_verdict", ...verdict },
+      };
+    } catch (e) {
+      return { text: toolFailed(toolName, (e as Error).message) };
+    }
+  }
+
   if (toolName === "weekend_gap") {
     return { text: `${WEEKEND_GAP_TEXT}\n[Add nothing.]`, staticReply: WEEKEND_GAP_TEXT };
   }
@@ -1971,21 +2254,32 @@ async function callHubTool(
     const only = args.chain === "base" || args.chain === "robinhood" ? args.chain : null;
     try {
       const { stockBrief, stockQuoteText } = await import("@/lib/brief/stocks");
-      const line = stockQuoteText(await stockBrief(null), ticker, only)
+      const deskLine = stockQuoteText(await stockBrief(null), ticker, only);
+      const missedBase = only !== "robinhood" && (!deskLine || /not on the Base stock desk/i.test(deskLine));
+      if (missedBase) {
+        const b20 = baseStockByTickerOrSymbol(ticker);
+        if (b20) {
+          const mod = await import("@/app/api/token-price/route");
+          const res = await mod.POST(new NextRequest("https://app.invalid/api/token-price", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-blue-internal": INTERNAL_KEY },
+            body: JSON.stringify({ network: "base", address: b20.token }),
+          }));
+          const pd = res.ok ? await res.json().catch(() => null) as { usd?: number; change24h?: number; volume24h?: number } | null : null;
+          if (pd && typeof pd.usd === "number" && Number.isFinite(pd.usd)) {
+            const chg = typeof pd.change24h === "number" ? ` · 24h ${pd.change24h >= 0 ? "+" : ""}${pd.change24h.toFixed(2)}%` : "";
+            const vol = typeof pd.volume24h === "number" && pd.volume24h > 0 ? ` · 24h vol $${Math.round(pd.volume24h).toLocaleString("en-US")}` : "";
+            const line = `${b20.ticker} (${b20.symbol}) on Base: DEX $${pd.usd.toFixed(2)}${chg}${vol} · contract \`${b20.token}\`.`;
+            return { text: `${line}\n[Live Base B20 DEX reading. Add nothing.]`, staticReply: line, result: { kind: "stock_quote", ticker: b20.ticker, contract: b20.token } };
+          }
+        }
+      }
+      const line = deskLine
         ?? `${ticker} is not a stock token on the Base or Robinhood Chain desk that Blue Agent reads.`;
       return { text: `${line}\n[Desk readings. Add nothing, and never turn a gap into a buy/sell call.]`, staticReply: line, result: { kind: "stock_quote", ticker } };
     } catch (e) {
       return { text: toolFailed(toolName, (e as Error).message), staticReply: `Couldn't read the stock desks right now. Try again in a minute.` };
     }
-  }
-  if (toolName === "hub_dex_flow" && typeof args.token === "string" && !/^0x[a-fA-F0-9]{40}$/.test(args.token.trim())) {
-    const sym = args.token.replace(/^\$/, "").trim();
-    const addr = await baseAddressForSymbol(sym);
-    if (!addr) {
-      const msg = `I couldn't find ${sym.toUpperCase()} on Base by name. Paste its contract address and ask again.`;
-      return { text: `${msg} Reply with this line.`, staticReply: msg };
-    }
-    args = { ...args, token: addr };
   }
   if (toolName === "stock_brief") {
     const wallet = userAddress && /^0x[a-fA-F0-9]{40}$/.test(userAddress) ? userAddress : null;
@@ -2133,7 +2427,15 @@ async function callHubTool(
       // The signing wallet for a simulation is the user's own connected wallet
       // when the model did not name one.
       if (toolName === "hub_sign_check" && !args.from && userAddress) args = { ...args, from: userAddress };
+      if (toolName === "hub_tx_simulate" && !args.from && userAddress) args = { ...args, from: userAddress };
       if (toolName === "hub_approvals" && !args.wallet && userAddress) args = { ...args, wallet: userAddress };
+      if (toolName === "hub_b20_policy_check") {
+        if (!args.wallet && userAddress) args = { ...args, wallet: userAddress };
+        if (typeof args.token === "string" && !/^0x[a-fA-F0-9]{40}$/.test(args.token.trim())) {
+          const hit = baseStockByTickerOrSymbol(args.token);
+          if (hit) args = { ...args, token: hit.token };
+        }
+      }
       const r = await runInternalTool({
         tool:      endpoint,
         body:      args,
@@ -2677,7 +2979,8 @@ function wantsWalletBalance(messages: LLMMessage[]): boolean {
       || /\bhow much (eth|usdc|money)\b/.test(t)
       || /what.?s in my wallet\b/.test(t)
       || /\bmy (tokens|holdings|portfolio)\b/.test(t)
-      || /\bwallet holdings?\b/.test(t);
+      || /\bwallet holdings?\b/.test(t)
+      || /kiểm tra (số dư )?ví|số dư ví|trong ví có gì|tài sản (trong )?ví|ví của (mình|tôi)/.test(t);
 }
 
 const COMMAND_PROMPTS: Record<string, string> = {
@@ -3425,7 +3728,7 @@ export async function POST(req: NextRequest) {
   // Mirrors the `!isE2EE && !knowledgeOnly && !freeNoTools` gate on the Venice
   // branch and `!knowledgeOnly` on the Virtuals branch; if either changes, this
   // changes with it.
-  const isE2EEModel = effProvider === "venice" && !!effModelId && effModelId.startsWith("e2ee-");
+  const isE2EEModel = effProvider === "venice" && isE2eeModelId(effModelId);
   const hasConnectorTools = mcpMap.size > 0 && !knowledgeOnly && !freeNoTools && !isE2EEModel;
 
   // Third application of the same rule, and the one that was missed twice: does
@@ -3528,7 +3831,7 @@ export async function POST(req: NextRequest) {
     // Grok 4 always uses web search (internet-native model)
     const autoSearch = effWebSearch || effModelId.startsWith("grok-");
     // E2EE models skip tool use — smaller models, tool calling unreliable
-    const isE2EE     = effModelId.startsWith("e2ee-");
+    const isE2EE     = isE2eeModelId(effModelId);
 
     const openaiMsgs = [
       { role: "system", content: system },
@@ -3643,7 +3946,9 @@ export async function POST(req: NextRequest) {
   // Long-form turns get a long-form budget: a founder command (`blue audit …`)
   // or a turn carrying source read from a linked repo cannot answer inside
   // the 768/1,200-token caps that keep a price question short (see MODELS).
-  const virtualsMax = Math.max((MODELS[tier as string] ?? MODELS.pro).maxTokens, longForm ? LONG_FORM_MAX_TOKENS : 0);
+  // DeepSeek V4 Flash is a reasoning model whose hidden thinking shares max_tokens.
+  const reasoningHeadroom = /deepseek-v4-flash/i.test(virtualsModel) ? 3000 : 0;
+  const virtualsMax = Math.max((MODELS[tier as string] ?? MODELS.pro).maxTokens, longForm ? LONG_FORM_MAX_TOKENS : 0) + reasoningHeadroom;
   // No auto-web-search on Virtuals — hard-off regardless of the user's
   // toggle; the toggle only matters on the Venice branch above.
   const virtualsAutoSearch = false;

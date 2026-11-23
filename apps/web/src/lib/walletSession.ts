@@ -2,6 +2,8 @@
 
 import { useCallback } from "react";
 import { useDisconnect } from "wagmi";
+import { invalidateSessionCache } from "@/hooks/useEnsureSession";
+import { sessionFetch, setHeaderSessionToken } from "@/lib/session-client";
 
 /**
  * Wallet-session intent flag.
@@ -53,6 +55,9 @@ export function useWalletDisconnect() {
   const { disconnect } = useDisconnect();
   return useCallback(() => {
     markUserDisconnected();
+    invalidateSessionCache();
+    void sessionFetch("/api/auth/session", { method: "DELETE" }).catch(() => {});
+    setHeaderSessionToken(null);
     disconnect();
   }, [disconnect]);
 }

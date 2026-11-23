@@ -93,6 +93,12 @@ const LOOP_SKILLS: AgentSkill[] = [
     name: "New launches", description: "What launched in the last hour per launchpad (Pons, Flap, Doppler/Bankr, Virtuals, Clanker), recent graduations, new pools above a liquidity floor",
     // Server-read in chat (new_tokens) — no x402 tool, no fee, no usage counter.
     trigger: "What launched on Robinhood Chain today?", tools: ["new_tokens"] },
+  { id: "discover-jobs-board", group: "discover", chains: ["base"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR,
+    name: "Jobs Board", description: "Browse live open jobs and USDC bounties for AI agents on Base",
+    trigger: "Show open jobs on the Jobs Board", tools: ["hub_jobs_board"] },
+  { id: "discover-agent-exchange", group: "discover", chains: ["base"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR,
+    name: "Agent Exchange", description: "Explore top x402 agent sellers on Base ranked by measured USDC volume and paid calls",
+    trigger: "Show top sellers on Agent Exchange", tools: ["hub_agent_exchange"] },
   { id: "check-price-alert", group: "check", chains: ["base", "robinhood"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR,
     name: "Price alert", description: "Get told when a token or stock token crosses a price, or moves N% in 1h/24h — checked every 5 minutes, free, lands in Scheduled → Alerts and the Price alerts chat",
     trigger: "Alert me when ETH on Base goes above $", tools: ["set_price_alert", "my_alerts"] },
@@ -105,6 +111,12 @@ const LOOP_SKILLS: AgentSkill[] = [
   { id: "check-tx-risk", group: "check", chains: ["base"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR,
     name: "Before you sign", description: "Risk check on a transaction — the target, the approval it grants, the value it moves",
     trigger: "Is this transaction safe to sign? to: 0x… data: 0x…", tools: ["hub_risk_gate"], meterIds: ["risk-gate"] },
+  { id: "check-token-verdict", group: "check", chains: ["base", "robinhood"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR,
+    name: "Token verdict & forensics", description: "Deep pre-trade verdict — eth_simulateV1 round-trip sell test, Top 10 holders, and launcher forensics",
+    trigger: "Deep token verdict for 0x", tools: ["hub_token_verdict"] },
+  { id: "check-tx-simulate", group: "check", chains: ["base", "robinhood"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR,
+    name: "Simulate transaction", description: "Dry-run a transaction via eth_simulateV1 — revert reason, gas used, and ERC-20 transfer preview before signing",
+    trigger: "Simulate tx to 0x", tools: ["hub_tx_simulate"], meterIds: ["tx-simulate"] },
   // TRADE — cards the user signs
   { id: "trade-swap-base", group: "trade", chains: ["base"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR, signs: true,
     name: "Trade on Base", description: "Buy or sell any Base token — live 0x quote, your slippage, a pre-trade check, then you sign in your wallet",
@@ -118,11 +130,23 @@ const LOOP_SKILLS: AgentSkill[] = [
   { id: "trade-bridge", group: "trade", chains: ["base", "robinhood"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR, signs: true,
     name: "Bridge Base ↔ Robinhood", description: "Relay quote with its full cost; refused when the cost is over 20% of the amount",
     trigger: "Bridge 10 USDC from Base to Robinhood", tools: ["robinhood_bridge"] },
+  { id: "trade-quadra-launch", group: "trade", chains: ["base"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR, signs: true,
+    name: "Launch token (Quadra v3)", description: "Prepare a non-custodial fixed-supply token launch on Base (locked Uniswap v4 pool, paired with ETH or a Coinbase stock)",
+    trigger: "Launch a token called MyAgent ($MYAG) paired with ETH on Base", tools: ["prepare_quadra_launch"] },
   // WALLET
   { id: "wallet-holdings", group: "wallet", chains: ["base", "robinhood"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR,
     name: "My wallet", description: "Everything your connected wallet holds on Base and Robinhood Chain",
     trigger: "Check my wallet", tools: ["check_wallet"] },
   // STOCK TOKENS
+  { id: "stocks-cross-venue", group: "stocks", chains: ["base", "robinhood"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR,
+    name: "Cross-venue stock quote", description: "Compare live prices, spread and drift across Base B20 (377 stocks), Robinhood Chain, and Chainlink oracle",
+    trigger: "What is the drift on NVDA right now?", tools: ["hub_cross_venue_stock"], meterIds: ["cross-venue-stock-quote"] },
+  { id: "stocks-screener", group: "stocks", chains: ["base", "robinhood"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR,
+    name: "Stock token screener", description: "Screen and filter tokenized stocks across all 377 Base B20 tokens and Robinhood Chain",
+    trigger: "Screen tokenized stocks", tools: ["hub_stock_screen"], meterIds: ["stock-screen"] },
+  { id: "stocks-b20-policy", group: "stocks", chains: ["base"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR,
+    name: "B20 transfer policy check", description: "Check live B20 pause state and PolicyRegistry authorization before swapping a Base stock token",
+    trigger: "Check B20 policy for NVDAc", tools: ["hub_b20_policy_check"], meterIds: ["b20-policy-check"] },
   { id: "stocks-rh-quote", group: "stocks", chains: ["robinhood"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR,
     name: "Oracle quote", description: "Chainlink price for a Robinhood Chain stock token, with the round's age and staleness",
     trigger: "Oracle price of NVDA on Robinhood Chain", tools: ["hub_rh_quote"], meterIds: ["rh-stock-quote"] },
@@ -132,10 +156,10 @@ const LOOP_SKILLS: AgentSkill[] = [
  *  utilities chat calls directly rather than through /api/x402 (FREE_DIRECT
  *  in api/chat/route.ts). A skill built only from these has no `meterIds`. */
 export const NO_FEE_CHAT_TOOLS: ReadonlySet<string> = new Set([
-  "prepare_swap", "prepare_send", "robinhood_swap", "robinhood_send", "robinhood_bridge",
+  "prepare_swap", "prepare_send", "prepare_quadra_launch", "robinhood_swap", "robinhood_send", "robinhood_bridge",
   "check_wallet", "hub_token_price", "hub_crypto_rpc",
-  // Server-read in chat (lib/token-overview.ts, lib/launchpads/feed.ts).
-  "check_token", "new_tokens",
+  // Server-read in chat (lib/token-overview.ts, lib/launchpads/feed.ts, lib/token-verdict.ts, lib/jobs.ts, lib/hub/exchange.ts).
+  "check_token", "new_tokens", "hub_token_verdict", "hub_jobs_board", "hub_agent_exchange",
   // Price alerts (lib/watches) — drafted and listed in the route, armed via
   // /api/watches; checked by the 5-minute tick with no model call.
   "set_price_alert", "my_alerts",

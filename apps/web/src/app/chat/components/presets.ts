@@ -9,7 +9,7 @@
 // hardcode a model id anywhere else — this file and the server-side spec are
 // the two authoritative sites.
 export interface VirtualsPresetV1 {
-  id: "free" | "fast" | "balanced" | "deep" | "private" | "grok" | "flash" | "search";
+  id: "free" | "fast" | "balanced" | "deep" | "private" | "grok" | "flash" | "search" | "uncensored" | "tee" | "sonnet55";
   /** Which upstream this dispatches to — see the server spec for why. */
   provider: "virtuals" | "venice";
   model: string;
@@ -49,8 +49,11 @@ export const VIRTUALS_PRESETS_V1: VirtualsPresetV1[] = [
   { id: "deep",     provider: "virtuals", model: "anthropic-claude-opus-4-8",  label: "Deep",     desc: "Claude Opus 4.8 · heavy reasoning",       cost: "●●●", contextTokens: 1_000_000, credits: 200 },
   { id: "private",  provider: "virtuals", model: "e2ee-deepseek-v4-flash",     label: "Private",  desc: "E2EE · no logs · DeepSeek V4",            cost: "●",   contextTokens: 1_000_000, credits: 30,  privacy: true },
   { id: "flash",    provider: "virtuals", model: "google-gemini-2-5-flash",    label: "Instant",  desc: "Gemini 2.5 Flash · fastest first token",  cost: "●",   contextTokens: 1_048_576, credits: 10 },
-  { id: "grok",     provider: "virtuals", model: "x-ai-grok-4-20",             label: "Grok",     desc: "Grok 4 · 2M context window",              cost: "●●",  contextTokens: 2_000_000, credits: 60,  optional: true },
-  { id: "search",   provider: "venice",   model: "grok-4-3",                   label: "Search",   desc: "Grok 4.3 · live web search · 1M ctx",     cost: "●●",  contextTokens: 1_000_000, credits: 60,  optional: true, webSearch: true },
+  { id: "grok",       provider: "virtuals", model: "x-ai-grok-4-20",                   label: "Grok",       desc: "Grok 4 · 2M context window",                        cost: "●●",  contextTokens: 2_000_000, credits: 60,  optional: true },
+  { id: "search",     provider: "venice",   model: "grok-4-7",                         label: "Search",     desc: "Grok 4.7 · live web search · Private",              cost: "●●",  contextTokens: 500_000,   credits: 60,  optional: true, webSearch: true },
+  { id: "uncensored", provider: "venice",   model: "deepseek-v4-1-flash-uncensored",   label: "Uncensored", desc: "DeepSeek V4.1 Uncensored · Private · 1M ctx",       cost: "●",   contextTokens: 1_000_000, credits: 20 },
+  { id: "tee",        provider: "venice",   model: "glm-5-3-flash-e2ee",               label: "Private TEE",desc: "GLM 5.3 Flash TEE · attested enclave · 1M ctx",     cost: "●",   contextTokens: 1_000_000, credits: 20,  privacy: true },
+  { id: "sonnet55",   provider: "venice",   model: "claude-sonnet-5-5",                label: "Sonnet 5.5", desc: "Claude Sonnet 5.5 · Venice · web search · 1M ctx",  cost: "●●",  contextTokens: 1_000_000, credits: 55,  optional: true, webSearch: true },
 ];
 
 /**

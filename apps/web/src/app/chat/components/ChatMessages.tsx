@@ -76,7 +76,7 @@ function ThinkingBlock({ content, isStreaming = false }: { content: string; isSt
 // ── Inline markdown ───────────────────────────────────────────────────────────
 
 function renderInline(text: string): React.ReactNode[] {
-  const re = /(\*\*(.+?)\*\*|\*([^*\n]+)\*|`([^`\n]+)`|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\))/g;
+  const re = /(\*\*(.+?)\*\*|\*([^*\n]+)\*|`([^`\n]+)`|\[([^\]]+)\]\(((?:https?:\/\/|\/[a-zA-Z0-9])[^\s)]*)\))/g;
   const result: React.ReactNode[] = [];
   let last = 0, match: RegExpExecArray | null, idx = 0;
   while ((match = re.exec(text)) !== null) {
@@ -94,13 +94,16 @@ function renderInline(text: string): React.ReactNode[] {
           {match[4]}
         </code>
       );
-    else if (match[5] !== undefined)
+    else if (match[5] !== undefined) {
+      const href = match[6];
+      const external = href.startsWith("http");
       result.push(
-        <a key={idx} href={match[6]} target="_blank" rel="noopener noreferrer"
+        <a key={idx} href={href} {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
           className="text-[#4FC3F7] underline underline-offset-2 decoration-[#4FC3F740] hover:decoration-[#4FC3F7] transition-colors">
           {match[5]}
         </a>
       );
+    }
     last = match.index + match[0].length;
   }
   if (last < text.length) result.push(text.slice(last));
@@ -376,8 +379,10 @@ const LEGACY_VENICE_LABELS: Record<string, string> = {
 const modelLabel = (id: string) => chatTierLabel(id) ?? LEGACY_VENICE_LABELS[id] ?? id;
 
 const MODEL_COLORS: Record<string, string> = {
-  free: "#34D399", fast: "#64748b", pro: "#4FC3F7", max: "#A78BFA",
-  flash: "#FBBF24", search: "#22D3EE",
+  free: "#34D399", fast: "#64748b", balanced: "#4FC3F7", deep: "#A78BFA",
+  private: "#6EE7B7", grok: "#E879F9", flash: "#FBBF24", search: "#22D3EE",
+  uncensored: "#F59E0B", tee: "#34D399", sonnet55: "#F472B6",
+  pro: "#4FC3F7", max: "#A78BFA",
   "venice-deepseek": "#34D399", "venice-deepseek-pro": "#2DD4BF",
   "venice-kimi": "#818CF8", "venice-claude": "#F472B6",
   "venice-grok": "#E879F9", "venice-qwen": "#FB923C",

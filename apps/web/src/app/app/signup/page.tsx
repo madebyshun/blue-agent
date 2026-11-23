@@ -1,60 +1,8 @@
 "use client";
 
-// /signup — the front door. One page that says who can sign in, with what, and
-// what signing in actually changes.
-//
-// WHY IT EXISTS: there was no sign-up page at all. The only way in was a wallet
-// picker modal reached from the sidebar, whose top row said "Sign in with email,
-// Google, or X" and then opened a hosted modal to choose between them. That is a
-// menu inside a menu, and it is unlinkable — you cannot send someone a URL that
-// means "create an account".
-//
-// ── THE HONESTY CONSTRAINTS, all of them measured ───────────────────────────
-//
-// 1. THE BUTTONS ARE DERIVED, NEVER TYPED OUT. Every provider row comes from
-//    `PRIVY_LOGIN_METHODS`, which is parsed from `NEXT_PRIVY_LOGIN_METHODS`.
-//    Hardcoding "Google / GitHub / Discord" here would produce a button that
-//    opens a modal without that provider the moment the env var is edited —
-//    the exact defect `describeLoginMethods()` was written to prevent (see the
-//    header of lib/privy/config.ts).
-//
-// 2. NO PROFILE PHOTO IS PROMISED FOR THE SOCIAL LOGINS THIS APP OFFERS.
-//    Read off the installed `@privy-io/react-auth` types: Google, GitHub and
-//    Discord return NO picture field. Only Twitter, Telegram and Farcaster do.
-//    So the "you get an avatar" line says the avatar is DRAWN from the name,
-//    and the preview below it renders the real `Avatar` component so the claim
-//    and the artefact are the same thing.
-//
-// 3. WHEN PRIVY IS OFF, NOTHING SOCIAL IS SHOWN. `PRIVY_ENABLED` is false
-//    whenever `NEXT_PUBLIC_PRIVY_APP_ID` is unset — which is every local dev
-//    environment today. The page then offers the wallet path only and says so,
-//    rather than rendering dead buttons that throw on click.
-//
-// 4. WHAT SIGNING UP GIVES YOU IS COMPUTED, NOT ASSERTED. The allowance numbers
-//    and the multiplier come from `GUEST_DAILY`/`WALLET_DAILY` in lib/credits —
-//    the same constants the ledger debits against. And the page states the
-//    NEGATIVE too: signing in unlocks no model and no tool. It multiplies an
-//    allowance. Selling anything more would be the "tiers that gate nothing"
-//    defect the Plans rebuild just removed.
-//
-// ── WHY IT LIVES UNDER src/app/app/ ─────────────────────────────────────────
-// `signup` is registered in `APP_SEGMENTS` (middleware.ts). It must be: on the
-// app host, ANY first segment that is not an app segment 301s to the marketing
-// host. A root `/signup` would therefore bounce a signed-in-progress user from
-// app.blueagent.dev to blueagent.dev mid-flow, and the Privy session is
-// per-origin — so the redirect would strand the very session the page exists to
-// create.
-//
-// ── NO BRAND LOGOS, deliberately ────────────────────────────────────────────
-// The reference design puts a coloured mark on each row. This app just finished
-// a pass that removed decorative colour down to one accent, and seven OAuth
-// brand palettes would undo it in a single component — plus each mark is a
-// third-party asset with its own usage terms. Text rows, one accent.
-
 import { useState } from "react";
 import Link from "next/link";
 import { useWallet } from "@/hooks/useWallet";
-import { WalletPickerModal } from "@/components/WalletPicker";
 import { usePrivyIdentity } from "@/lib/privy/identity-bridge";
 import { resolveIdentity } from "@/lib/identity/account-identity";
 import Avatar from "@/components/Avatar";
@@ -67,30 +15,16 @@ import {
 import { GUEST_DAILY, WALLET_DAILY } from "@/lib/credits";
 
 const ACCENT = "#4FC3F7";
-
-// Email gets a text field instead of a button, so it is pulled out of the row
-// list. Everything else — including `sms`, whose modal collects a phone number
-// the same way — renders as one row.
 const EMAIL_METHOD: LoginMethod = "email";
 
-/**
- * Good enough to decide whether to PREFILL, and nothing more.
- *
- * Privy's modal is the authority on whether an address is real; it re-validates
- * and it is the thing that sends the code. This check only answers "is this
- * worth handing over", because prefilling a half-typed string would drop the
- * user into the modal with a value they then have to clear.
- */
 function looksLikeEmail(v: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 }
 
 export default function SignUpPage() {
-  const { isConnected, address, basename, label } = useWallet();
-  // `null` on the Privy-off tree — then there is no social path at all.
+  const { isConnected, address, basename, label, wallets, disconnect } = useWallet();
   const privy = usePrivyIdentity();
   const [email, setEmail] = useState("");
-  const [picker, setPicker] = useState(false);
 
   const identity = resolveIdentity({
     social: privy?.social ?? null,
@@ -99,25 +33,14 @@ export default function SignUpPage() {
     shortAddress: address ? (label ?? null) : null,
   });
 
-  // Same rule as the account menu: a Privy-authenticated user always ends up
-  // with a wallet, but the wallet can lag the session by a render, so treating
-  // "authenticated" as signed-in avoids showing the sign-up form to someone who
-  // has just finished using it.
   const signedIn = isConnected || !!privy?.authenticated;
-
-  // Split once, here, so the two render paths below cannot disagree about which
-  // methods exist. Both are empty when Privy is off.
   const social = PRIVY_ENABLED ? PRIVY_LOGIN_METHODS.filter((m) => m !== EMAIL_METHOD) : [];
   const hasEmail = PRIVY_ENABLED && PRIVY_LOGIN_METHODS.includes(EMAIL_METHOD);
-
   const allowanceMultiplier = Math.round(WALLET_DAILY / GUEST_DAILY);
 
   function continueWithEmail(e: React.FormEvent) {
     e.preventDefault();
     const value = email.trim();
-    // `loginMethods` narrows Privy's hosted modal to one method, so this button
-    // opens an email prompt rather than the full provider menu — the whole
-    // reason the page can offer per-provider rows at all.
     privy?.login(
       looksLikeEmail(value)
         ? { loginMethods: [EMAIL_METHOD], prefill: { type: "email", value } }
@@ -127,188 +50,244 @@ export default function SignUpPage() {
 
   return (
     <div className="flex flex-col h-full bg-[#050508] overflow-hidden">
-      {/* Header — matches every other app page rather than inventing a second
-          chrome for one route. */}
+      {/* Top bar */}
       <div className="flex items-center px-5 sm:px-6 h-14 border-b border-[#1A1A2E] flex-shrink-0">
         <div className="min-w-0">
           <p className="font-mono text-xs tracking-widest truncate" style={{ color: ACCENT }}>
-            // SIGN UP
+            // SIGN IN
           </p>
-          <p className="font-mono text-[13px] text-slate-700 mt-1 truncate">
-            One account for Blue Chat, the Hub and your wallet
+          <p className="font-mono text-[12px] text-slate-600 mt-0.5 truncate">
+            One account for Blue Chat, Agents, and Markets
           </p>
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-5 sm:px-6 py-8">
-        <div className="max-w-md mx-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto px-5 sm:px-6 py-10 flex items-start sm:items-center justify-center">
+        <div className="w-full max-w-[440px]">
           {signedIn ? (
             <SignedInCard
               identity={identity}
-              /* Only the three photo-bearing providers ever set this. */
               viaSocial={!!privy?.social}
+              onSignOut={() => {
+                privy?.logout();
+                disconnect();
+              }}
             />
           ) : (
-            <>
-              <h1 className="font-mono text-xl font-bold text-white">Sign up to Blue Agent</h1>
-              {/* Privy has ONE door: the same call signs in an existing account
-                  and creates a new one (we do not pass `disableSignup`). Saying
-                  so removes the "wait, do I have an account already?" pause. */}
-              <p className="font-mono text-[14px] text-slate-500 mt-2 leading-relaxed">
-                New here or coming back — the same button does both. No password to pick,
-                nothing to remember.
-              </p>
+            <div className="rounded-2xl border border-[#1A1A2E] bg-[#090910] overflow-hidden shadow-2xl shadow-black/60">
+              {/* Header */}
+              <div className="px-6 pt-6 pb-5 border-b border-[#141422]">
+                <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-[#4FC3F7]">
+                  BLUE AGENT ACCOUNT
+                </p>
+                <h1 className="font-mono text-[20px] font-bold text-white tracking-[-0.02em] mt-1.5">
+                  Sign in to Blue Agent
+                </h1>
+                <p className="font-mono text-[13px] text-slate-500 mt-1.5 leading-relaxed">
+                  New or returning — the same flow handles both. No password required.
+                </p>
+              </div>
 
-              {/* ── Email ──────────────────────────────────────────────────── */}
-              {hasEmail && (
-                <form onSubmit={continueWithEmail} className="mt-6">
-                  <label
-                    htmlFor="signup-email"
-                    className="font-mono text-[12px] text-slate-600 tracking-widest uppercase block mb-2"
-                  >
-                    Email
-                  </label>
-                  <input
-                    id="signup-email"
-                    type="email"
-                    inputMode="email"
-                    autoComplete="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@example.com"
-                    className="w-full rounded-lg border border-[#1A1A2E] bg-[#0A0A12] px-3 py-2.5 font-mono text-[15px] text-white placeholder:text-slate-700 outline-none focus:border-[#4FC3F7]/50 transition-colors"
-                  />
-                  <button
-                    type="submit"
-                    className="mt-2 w-full rounded-lg px-3 py-2.5 font-mono text-[15px] font-bold transition-opacity hover:opacity-90"
-                    style={{ background: ACCENT, color: "#050508" }}
-                  >
-                    Continue with email
-                  </button>
-                </form>
-              )}
+              <div className="p-6">
+                {/* Email */}
+                {hasEmail && (
+                  <form onSubmit={continueWithEmail}>
+                    <label
+                      htmlFor="signup-email"
+                      className="font-mono text-[11px] text-slate-500 tracking-[0.14em] uppercase block mb-2"
+                    >
+                      Email
+                    </label>
+                    <input
+                      id="signup-email"
+                      type="email"
+                      inputMode="email"
+                      autoComplete="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      className="w-full rounded-xl border border-[#1A1A2E] bg-[#0D0D16] px-3.5 py-2.5 font-mono text-[14px] text-white placeholder:text-slate-600 outline-none focus:border-[#4FC3F7]/60 transition-colors"
+                    />
+                    <button
+                      type="submit"
+                      className="mt-2.5 w-full rounded-xl px-4 py-3 font-mono text-[13px] font-bold transition-opacity hover:opacity-90"
+                      style={{ background: ACCENT, color: "#050508" }}
+                    >
+                      Continue with email
+                    </button>
+                  </form>
+                )}
 
-              {/* ── Socials ────────────────────────────────────────────────── */}
-              {social.length > 0 && (
-                <>
-                  {hasEmail && (
-                    <div className="flex items-center gap-2 my-5">
-                      <div className="h-px flex-1 bg-[#1A1A2E]" />
-                      <span className="font-mono text-[12px] text-slate-700 uppercase tracking-widest">or</span>
-                      <div className="h-px flex-1 bg-[#1A1A2E]" />
+                {/* Social providers */}
+                {social.length > 0 && (
+                  <>
+                    {hasEmail && (
+                      <div className="flex items-center gap-3 my-5">
+                        <div className="h-px flex-1 bg-[#1A1A2E]" />
+                        <span className="font-mono text-[11px] text-slate-600 uppercase tracking-[0.14em]">
+                          or
+                        </span>
+                        <div className="h-px flex-1 bg-[#1A1A2E]" />
+                      </div>
+                    )}
+                    <div className="space-y-2">
+                      {social.map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => privy?.login({ loginMethods: [m] })}
+                          className="w-full flex items-center justify-between rounded-xl border border-[#1A1A2E] bg-[#0D0D16] px-3.5 py-3 text-left font-mono text-[14px] text-slate-200 transition-all hover:border-[#4FC3F7]/45 hover:bg-[#11111E] hover:text-white"
+                        >
+                          <span>Continue with {loginMethodLabel(m)}</span>
+                          <span className="text-[12px] text-slate-600">Select</span>
+                        </button>
+                      ))}
                     </div>
-                  )}
-                  <div className={hasEmail ? "space-y-2" : "mt-6 space-y-2"}>
-                    {social.map((m) => (
+                  </>
+                )}
+
+                {/* Inline wallet list — no second modal hop */}
+                {(hasEmail || social.length > 0) && (
+                  <div className="flex items-center gap-3 my-5">
+                    <div className="h-px flex-1 bg-[#1A1A2E]" />
+                    <span className="font-mono text-[11px] text-slate-600 uppercase tracking-[0.14em]">
+                      or wallet
+                    </span>
+                    <div className="h-px flex-1 bg-[#1A1A2E]" />
+                  </div>
+                )}
+
+                {!PRIVY_ENABLED && (
+                  <p className="font-mono text-[11px] text-slate-500 uppercase tracking-[0.14em] mb-3">
+                    Select wallet
+                  </p>
+                )}
+
+                {wallets.length === 0 ? (
+                  <div className="rounded-xl border border-[#1A1A2E] bg-[#0D0D16] p-4">
+                    <p className="font-mono text-[13px] text-slate-300 font-medium">
+                      No browser wallet detected
+                    </p>
+                    <p className="font-mono text-[12px] text-slate-500 mt-1 leading-relaxed">
+                      Install Coinbase Wallet, Rabby, or MetaMask, then reload this page.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {wallets.map((w) => (
                       <button
-                        key={m}
-                        onClick={() => privy?.login({ loginMethods: [m] })}
-                        className="w-full rounded-lg border border-[#1A1A2E] bg-[#0A0A12] px-3 py-2.5 text-left font-mono text-[15px] text-slate-300 transition-colors hover:border-slate-700 hover:text-white"
+                        key={w.key}
+                        type="button"
+                        onClick={() => w.select()}
+                        className="group w-full flex items-center justify-between gap-3 rounded-xl border border-[#1A1A2E] bg-[#0D0D16] px-3.5 py-3 text-left transition-all hover:border-[#4FC3F7]/45 hover:bg-[#11111E]"
                       >
-                        Continue with {loginMethodLabel(m)}
+                        <div className="min-w-0">
+                          <p className="font-mono text-[14px] font-semibold text-slate-100 group-hover:text-white truncate">
+                            {w.name}
+                          </p>
+                          <p className="font-mono text-[12px] text-slate-500 truncate mt-0.5">
+                            {w.subtitle}
+                          </p>
+                        </div>
+                        <span className="shrink-0 font-mono text-[12px] text-slate-600 group-hover:text-[#4FC3F7] transition-colors">
+                          Connect
+                        </span>
                       </button>
                     ))}
                   </div>
-                </>
-              )}
+                )}
 
-              {/* ── Wallet ─────────────────────────────────────────────────── */}
-              <div className="flex items-center gap-2 my-5">
-                <div className="h-px flex-1 bg-[#1A1A2E]" />
-                <span className="font-mono text-[12px] text-slate-700 uppercase tracking-widest">
-                  {PRIVY_ENABLED ? "or" : "wallet"}
-                </span>
-                <div className="h-px flex-1 bg-[#1A1A2E]" />
+                {/* Compact stats strip */}
+                <div className="mt-6 grid grid-cols-3 gap-2">
+                  <div className="rounded-xl border border-[#141422] bg-[#07070D] px-3 py-2.5">
+                    <p className="font-mono text-[13px] font-bold text-white">
+                      {WALLET_DAILY.toLocaleString()}/d
+                    </p>
+                    <p className="font-mono text-[11px] text-slate-500 mt-0.5">
+                      {allowanceMultiplier}x guest limit
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-[#141422] bg-[#07070D] px-3 py-2.5">
+                    <p className="font-mono text-[13px] font-bold text-white">USDC</p>
+                    <p className="font-mono text-[11px] text-slate-500 mt-0.5">
+                      Pay-as-you-go
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-[#141422] bg-[#07070D] px-3 py-2.5">
+                    <p className="font-mono text-[13px] font-bold text-white">Self-custody</p>
+                    <p className="font-mono text-[11px] text-slate-500 mt-0.5">
+                      You hold keys
+                    </p>
+                  </div>
+                </div>
+
+                <p className="font-mono text-[11px] text-slate-600 mt-4 leading-relaxed">
+                  {PRIVY_ENABLED
+                    ? "Email or social sign-in provisions a non-custodial wallet for you. Every model and tool remains open to guests; signing in raises your daily allowance and enables USDC top-ups and sync."
+                    : "Every model and tool remains open to guests; connecting a wallet raises your daily allowance, enables USDC top-ups, and unlocks optional sync."}
+                </p>
               </div>
-              <button
-                onClick={() => setPicker(true)}
-                className="w-full rounded-lg border border-[#1A1A2E] bg-[#0A0A12] px-3 py-2.5 text-left font-mono text-[15px] text-slate-300 transition-colors hover:border-slate-700 hover:text-white"
-              >
-                Continue with a wallet you already own
-              </button>
-
-              {!PRIVY_ENABLED && (
-                // Not a "coming soon". This build genuinely has no email or
-                // social path — NEXT_PUBLIC_PRIVY_APP_ID is unset — and saying
-                // so beats rendering buttons that would throw on click.
-                <p className="font-mono text-[13px] text-slate-600 mt-3 leading-relaxed">
-                  Email and social sign-in are not enabled on this deployment, so a wallet is the
-                  only way in here.
-                </p>
-              )}
-
-              {PRIVY_ENABLED && (
-                <p className="font-mono text-[13px] text-slate-600 mt-3 leading-relaxed">
-                  Signing in with email or a social account creates a wallet for you — no extension,
-                  no seed phrase. You hold the keys; BlueAgent never does.
-                </p>
-              )}
-
-              <WhatItChanges
-                guest={GUEST_DAILY}
-                member={WALLET_DAILY}
-                multiplier={allowanceMultiplier}
-              />
-              <AvatarNote />
-            </>
+            </div>
           )}
         </div>
       </div>
-
-      <WalletPickerModal open={picker} onClose={() => setPicker(false)} />
     </div>
   );
 }
 
-// ── Bits ──────────────────────────────────────────────────────────────────────
-
-/**
- * Shown instead of the form once there IS an account, rather than re-offering
- * sign-in to someone already signed in. Doubles as the honest demo of the
- * avatar: it is the same `Avatar` component the sidebar menu renders, fed by the
- * same `resolveIdentity` ladder, so what you see here is exactly what you get.
- */
 function SignedInCard({
   identity,
   viaSocial,
+  onSignOut,
 }: {
   identity: ReturnType<typeof resolveIdentity>;
   viaSocial: boolean;
+  onSignOut: () => void;
 }) {
   return (
-    <div>
-      <h1 className="font-mono text-xl font-bold text-white">You&apos;re signed in</h1>
-      <p className="font-mono text-[14px] text-slate-500 mt-2">
-        Nothing left to do here.
-      </p>
+    <div className="rounded-2xl border border-[#1A1A2E] bg-[#090910] overflow-hidden shadow-2xl shadow-black/60">
+      <div className="px-6 pt-6 pb-5 border-b border-[#141422]">
+        <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-[#4FC3F7]">
+          ACTIVE SESSION
+        </p>
+        <h1 className="font-mono text-[20px] font-bold text-white tracking-[-0.02em] mt-1.5">
+          You&apos;re signed in
+        </h1>
+      </div>
 
-      <div className="mt-6 flex items-center gap-3 rounded-2xl border border-[#1A1A2E] bg-[#0A0A12] p-4">
-        <Avatar
-          photoUrl={identity.photoUrl}
-          initials={identity.initials}
-          colorSeed={identity.colorSeed}
-          size={44}
-        />
-        <div className="min-w-0">
-          <p className="font-mono text-[16px] text-white truncate">
-            {identity.displayName ?? "Account"}
-          </p>
-          <p className="font-mono text-[13px] text-slate-600 truncate">
-            {viaSocial ? "Social account" : "Wallet"}
-            {identity.secondary ? ` · ${identity.secondary}` : ""}
-          </p>
+      <div className="p-6">
+        <div className="flex items-center gap-3 rounded-xl border border-[#1A1A2E] bg-[#0D0D16] p-4">
+          <Avatar
+            photoUrl={identity.photoUrl}
+            initials={identity.initials}
+            colorSeed={identity.colorSeed}
+            size={42}
+          />
+          <div className="min-w-0 flex-1">
+            <p className="font-mono text-[15px] font-semibold text-white truncate">
+              {identity.displayName ?? "Account"}
+            </p>
+            <p className="font-mono text-[12px] text-slate-500 truncate mt-0.5">
+              {viaSocial ? "Social account" : "Wallet"}
+              {identity.secondary ? ` · ${identity.secondary}` : ""}
+            </p>
+          </div>
         </div>
-      </div>
 
-      <div className="mt-4 space-y-2">
-        <Row href="/chat" label="Open Blue Chat" hint="Ask, and let it call tools" />
-        <Row href="/wallet" label="Wallet" hint="Balances on Base and Robinhood Chain" />
-        <Row href="/usage" label="Usage" hint="Credits and agent spend" />
-      </div>
+        <div className="mt-4 space-y-2">
+          <Row href="/chat" label="Blue Chat" hint="Ask and run onchain tools" />
+          <Row href="/portfolio" label="Portfolio" hint="Balances on Base and Robinhood Chain" />
+          <Row href="/usage" label="Usage" hint="Credits and agent spend" />
+        </div>
 
-      <p className="font-mono text-[13px] text-slate-600 mt-4 leading-relaxed">
-        Sign out from the account menu at the bottom of the sidebar.
-      </p>
+        <button
+          type="button"
+          onClick={onSignOut}
+          className="mt-5 w-full rounded-xl border border-[#1A1A2E] bg-[#0D0D16] px-4 py-2.5 font-mono text-[13px] text-slate-400 hover:border-red-500/40 hover:text-red-400 transition-colors"
+        >
+          Sign out
+        </button>
+      </div>
     </div>
   );
 }
@@ -317,87 +296,17 @@ function Row({ href, label, hint }: { href: string; label: string; hint: string 
   return (
     <Link
       href={href}
-      className="block rounded-lg border border-[#1A1A2E] bg-[#0A0A12] px-3 py-2.5 transition-colors hover:border-slate-700"
+      className="group flex items-center justify-between gap-3 rounded-xl border border-[#1A1A2E] bg-[#0D0D16] px-3.5 py-3 transition-all hover:border-[#4FC3F7]/45 hover:bg-[#11111E]"
     >
-      <span className="block font-mono text-[15px] text-slate-300">{label}</span>
-      <span className="block font-mono text-[13px] text-slate-600">{hint}</span>
+      <div className="min-w-0">
+        <span className="block font-mono text-[14px] font-semibold text-slate-200 group-hover:text-white">
+          {label}
+        </span>
+        <span className="block font-mono text-[12px] text-slate-500 mt-0.5">{hint}</span>
+      </div>
+      <span className="font-mono text-[12px] text-slate-600 group-hover:text-[#4FC3F7] transition-colors">
+        Open
+      </span>
     </Link>
-  );
-}
-
-/**
- * The part a sign-up page usually lies about.
- *
- * Both numbers are the ledger's own constants, and the multiplier is arithmetic
- * on them — so a repricing edits one file and this paragraph follows. The last
- * line is the one that matters: an account gates NOTHING. Same models, same
- * tools. Claiming otherwise is the defect class this codebase keeps finding.
- */
-function WhatItChanges({
-  guest,
-  member,
-  multiplier,
-}: {
-  guest: number;
-  member: number;
-  multiplier: number;
-}) {
-  return (
-    <div className="mt-8 rounded-2xl border border-[#1A1A2E] bg-[#0A0A12] p-4">
-      <p className="font-mono text-[12px] text-slate-600 tracking-widest uppercase mb-3">
-        What an account actually changes
-      </p>
-      <ul className="space-y-1.5">
-        <Bullet>
-          <span className="text-slate-300">{member.toLocaleString()}</span> credits a day instead of{" "}
-          <span className="text-slate-300">{guest.toLocaleString()}</span> — {multiplier}× the guest
-          allowance, refreshed at 00:00 UTC.
-        </Bullet>
-        <Bullet>
-          You can top up with USDC when the allowance runs out. Guests cannot.
-        </Bullet>
-        <Bullet>
-          Optional cross-device sync for your conversations — off until you switch it on in Blue
-          Chat, and it costs one extra signature.
-        </Bullet>
-        <Bullet>
-          It unlocks <span className="text-slate-300">no model and no tool</span>. The picker and the
-          Hub catalog are identical for guests — see{" "}
-          <Link href="/plans" className="hover:underline" style={{ color: ACCENT }}>
-            Plans
-          </Link>
-          .
-        </Bullet>
-      </ul>
-    </div>
-  );
-}
-
-/**
- * Says where the avatar comes from, because the obvious assumption is wrong.
- *
- * MEASURED against the installed `@privy-io/react-auth` types: `Google`,
- * `Github` and `Discord` carry no picture field at all — only `Twitter`
- * (`profilePictureUrl`), `Telegram` (`photoUrl`) and `Farcaster` (`pfp`) do. So
- * for most people here the avatar is drawn from the name, and this note exists
- * so nobody reads a blank-looking monogram as a bug.
- */
-function AvatarNote() {
-  return (
-    <p className="font-mono text-[13px] text-slate-600 mt-4 leading-relaxed">
-      Your avatar is drawn from your name and your address — Blue Agent does not upload a photo
-      anywhere. If your provider gives us a real profile picture we use it; Google, GitHub and
-      Discord do not give one out, so those accounts get initials on a colour taken from your
-      wallet address.
-    </p>
-  );
-}
-
-function Bullet({ children }: { children: React.ReactNode }) {
-  return (
-    <li className="font-mono text-[13px] text-slate-500 flex gap-2 leading-relaxed">
-      <span className="text-slate-700">·</span>
-      <span>{children}</span>
-    </li>
   );
 }

@@ -376,7 +376,7 @@ export async function probeVirtuals(timeoutMs = 4000): Promise<VirtualsProbe> {
 // Calling: true" was not accepted as sufficient for any entry here.
 export interface VirtualsPreset {
   /** Stable UI id — never a provider model id. */
-  id: "free" | "fast" | "balanced" | "deep" | "private" | "grok" | "flash" | "search";
+  id: "free" | "fast" | "balanced" | "deep" | "private" | "grok" | "flash" | "search" | "uncensored" | "tee" | "sonnet55";
   /**
    * Which upstream this preset dispatches to. Decides the endpoint, the auth
    * header, and whether `venice_parameters` is sent — see `veniceCfg` /
@@ -456,14 +456,12 @@ export const VIRTUALS_PRESETS: VirtualsPreset[] = [
   // not; silently changing what an existing saved tier points at is how users
   // lose a capability without being told.
   { id: "flash",    provider: "virtuals", model: "google-gemini-2-5-flash",    label: "Instant",  desc: "Gemini 2.5 Flash · fastest first token",  cost: "●",   contextTokens: 1_048_576, credits: 10 },
-  { id: "grok",     provider: "virtuals", model: "x-ai-grok-4-20",             label: "Grok",     desc: "Grok 4 · 2M context window",              cost: "●●",  contextTokens: 2_000_000, credits: 60,  optional: true },
-  // NEW — Search. The ONLY preset that can read the live web: Venice honours
-  // `enable_web_search`, Virtuals has no search at all. This is the capability
-  // ChatInput.tsx:614 had to delete a button for. Grok rather than a cheaper
-  // Venice model because search answers get quoted as fact, and $1.42/$2.83
-  // per Mtok buys the model that is actually good at it (~$0.014 of inference
-  // against a 60 cr / $0.03 charge — thin but positive).
-  { id: "search",   provider: "venice",   model: "grok-4-3",                   label: "Search",   desc: "Grok 4.3 · live web search · 1M ctx",     cost: "●●",  contextTokens: 1_000_000, credits: 60,  optional: true, webSearch: true },
+  { id: "grok",       provider: "virtuals", model: "x-ai-grok-4-20",                   label: "Grok",        desc: "Grok 4 · 2M context window",                        cost: "●●",  contextTokens: 2_000_000, credits: 60,  optional: true },
+  // Venice presets — validated live against Venice /v1/models (getVeniceCatalog).
+  { id: "search",     provider: "venice",   model: "grok-4-7",                         label: "Search",      desc: "Grok 4.7 · live web search · Private",              cost: "●●",  contextTokens: 500_000,   credits: 60,  optional: true, webSearch: true },
+  { id: "uncensored", provider: "venice",   model: "deepseek-v4-1-flash-uncensored",   label: "Uncensored",  desc: "DeepSeek V4.1 Uncensored · Private · 1M ctx",       cost: "●",   contextTokens: 1_000_000, credits: 20 },
+  { id: "tee",        provider: "venice",   model: "glm-5-3-flash-e2ee",               label: "Private TEE", desc: "GLM 5.3 Flash TEE · attested enclave · 1M ctx",     cost: "●",   contextTokens: 1_000_000, credits: 20,  privacy: true },
+  { id: "sonnet55",   provider: "venice",   model: "claude-sonnet-5-5",                label: "Sonnet 5.5",  desc: "Claude Sonnet 5.5 · Venice · web search · 1M ctx",  cost: "●●",  contextTokens: 1_000_000, credits: 55,  optional: true, webSearch: true },
 ];
 
 /**

@@ -32,7 +32,10 @@ function emit() { if (isClient) window.dispatchEvent(new Event(EVENT)); }
  * keep being injected into every prompt from localStorage.
  * - base-builder-bundle (2026-09-30): every tool it named left chat.
  */
-const RETIRED_DEFAULT_PACKS: ReadonlySet<string> = new Set(["base-builder-bundle"]);
+const RETIRED_DEFAULT_PACKS: ReadonlySet<string> = new Set([
+  "base-builder-bundle",
+  "trader-intel-bundle",
+]);
 
 // Pre-installed default skills (no /skill install needed).
 const DEFAULT_SKILLS: InstalledSkill[] = [
@@ -44,7 +47,7 @@ const DEFAULT_SKILLS: InstalledSkill[] = [
     // owner 403-bans this project. It points at our own repo now; the skill is
     // published as @blueagent/skill on npm.
     url: "https://github.com/madebyshun/blue-agent",
-    content: `BlueAgent: ${TOOL_COUNT} pay-per-use x402 tools on Base. Use hub_token_price for prices, hub_risk_gate / hub_honeypot for safety, and the hub_* tools for intelligence, DeFi, and builder workflows.`,
+    content: `BlueAgent: ${TOOL_COUNT} pay-per-use x402 tools on Base. Use hub_token_price for prices, hub_pretrade / hub_honeypot for safety, and the hub_* tools for intelligence, stocks, DeFi, and builder workflows.`,
     enabled: true, installedAt: 0, default: true,
   },
   {
@@ -54,66 +57,17 @@ const DEFAULT_SKILLS: InstalledSkill[] = [
     content: "Base: onchain data + actions on Base (chain 8453). Prefer Base, USDC, and Coinbase tooling for all onchain work.",
     enabled: true, installedAt: 0, default: true,
   },
-  // ── Bundled skill packs — each teaches the model to chain multiple tools ──
-  //
-  // COST NOTE, and why none of these say "run ALL of them" any more.
-  //
-  // These two are default:true — injected into every user's localStorage and
-  // merged forward on load — so their text sits in EVERY system prompt whether
-  // or not the user ever opted in. Each Hub tool they name is separately
-  // metered and debited from the user's ledger (X-Credits-Debited, set by
-  // api/x402/[tool]). The old text ordered a full sweep. Priced out against
-  // agent-tools.ts at CREDIT_USD = 0.0005 (re-priced 2026-09-30, after
-  // hub_key_exposure and hub_whale_signal left chat and the base-builder pack
-  // was retired — see RETIRED_DEFAULT_PACKS):
-  //
-  //   token-safety  3 tools  $0.45  =   900 credits
-  //   trader-intel  4 tools  $0.65  = 1,300 credits
-  //
-  // A connected wallet gets WALLET_DAILY = 500 credits/day and a guest gets
-  // GUEST_DAILY = 100 (lib/credits.ts). So one obeyed sweep is ~3-4x a member's
-  // ENTIRE DAY and up to 19x a guest's — spent on a single question, from a
-  // pack nobody switched on. In practice the user does not even get the sweep
-  // they paid for: the ledger runs dry partway and the rest fail
-  // insufficient_credits.
-  //
-  // Second reason the mandate was wrong: it ordered tools whose REQUIRED input
-  // the request often does not contain. hub_whale_signal requires `address`,
-  // hub_dex_flow requires `token`, hub_repo_health requires `url`. "What should
-  // I buy?" supplies none of them, and a prompt that says run all five pushes
-  // the model to invent one — the exact failure CLAUDE.md forbids.
-  //
-  // So each pack now says: pick what the question needs, run only what you have
-  // real inputs for, and sweep only on an explicit ask. If you add a tool to a
-  // pack, re-price the comment above — the tools are not free.
   {
     name: "token-safety-bundle",
-    description: "Token Safety — hub_risk_gate · hub_honeypot · hub_contract_trust",
+    description: "Token Safety — hub_pretrade · hub_honeypot · hub_contract_trust · hub_risk_gate",
     url: "",
     content: `## Token Safety Bundle (active)
-For token or contract safety questions, these three tools are available. All take a contract address:
-- hub_risk_gate: overall risk score and critical flags
-- hub_honeypot: buy/sell trap detection and tax analysis
-- hub_contract_trust: verification status, ownership and trust signals
-Start with hub_risk_gate — it is the broadest single read. Add the others only when the question calls for them (a trade → hub_honeypot; "can the dev rug me?" → hub_contract_trust), or when the user explicitly asks for a full sweep. Each tool is separately charged to the user, so do not run all three by reflex.
-Say which checks you ran and which you skipped, and never state a verdict a tool did not return.`,
-    enabled: true, installedAt: 0, default: true,
-  },
-  // `base-builder-bundle` was retired 2026-09-30 with every tool it named
-  // (hub_repo_health, hub_base_grant, hub_builder_dd left chat). Removing it
-  // here is not enough on its own — see RETIRED_DEFAULT_PACKS in loadSkills().
-  {
-    name: "trader-intel-bundle",
-    description: "Trader Intel — hub_token_pick · hub_narrative_pulse · hub_token_momentum · hub_dex_flow",
-    url: "",
-    content: `## Trader Intel Bundle (active)
-For market questions:
-- hub_token_pick: scored token candidates from live data — no input needed
-- hub_token_momentum: what is breaking out right now — no input needed
-- hub_narrative_pulse: which narratives are running
-- hub_dex_flow: buy/sell pressure for one token — REQUIRES a token address
-Match the tool to the question. "What's moving?" needs no address — use hub_token_momentum or hub_token_pick. Only call hub_dex_flow when the user actually supplied a token address; NEVER invent one to complete a set.
-Run several only when the user explicitly asks for a full picture — each is billed. Report what each tool returned as facts, name the tools that fed the answer, and do not turn them into a buy/sell call.`,
+For token or contract safety questions, these tools are available (included with your chat message, no extra tool fee):
+- hub_pretrade: primary token safety check (impostor detection, honeypot/tax, stock-token policy & oracle drift)
+- hub_honeypot: buy/sell trap detection and tax analysis on Base
+- hub_contract_trust: contract verification status, ownership and trust signals on Base
+- hub_risk_gate: pending transaction screen (target + calldata + value)
+Start with hub_pretrade for token addresses, and hub_risk_gate for pending transactions. Add hub_contract_trust when the user asks about contract ownership or protocol trust. Say which checks you ran and never state a verdict a tool did not return.`,
     enabled: true, installedAt: 0, default: true,
   },
 ];

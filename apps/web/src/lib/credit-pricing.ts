@@ -150,10 +150,15 @@ export const CREDIT_PRICE_OVERRIDE: Readonly<Record<string, number>> = {
   "token-price": 0,
   "rh-stock-movers": 0,
   "rh-stock-quote": 0,
-  // run a model call of their own
+  "cross-venue-stock-quote": 0,
+  "stock-screen": 0,
+  "b20-policy-check": 0,
+  "tx-simulate": 0,
+  // run a model call or deep forensics
   "risk-gate": 0,
   "contract-trust": 0,
   "honeypot-check": 0,
+  "token-verdict": 0,
 };
 
 export function toolCreditCost(toolId: string, tier: TierInfo): number {

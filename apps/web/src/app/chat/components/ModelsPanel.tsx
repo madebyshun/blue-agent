@@ -60,8 +60,11 @@ const PRESET_META: Record<VirtualsPresetV1["id"], { color: string; bestFor: stri
   deep:     { color: "#A78BFA", bestFor: "Hard reasoning: audits, architecture, tricky debugging, multi-step analysis." },
   private:  { color: "#6EE7B7", bestFor: "Sensitive prompts — runs end-to-end encrypted with no logs retained." },
   flash:    { color: "#FBBF24", bestFor: "Snappy back-and-forth — the fastest first token." },
-  grok:     { color: "#E879F9", bestFor: "Live-data and huge-context tasks — the largest context window on offer." },
-  search:   { color: "#22D3EE", bestFor: "Questions that need the live web — real-time search during the answer." },
+  grok:       { color: "#E879F9", bestFor: "Huge-context tasks (2M window) — long codebases, docs, and multi-file analysis. Use Search for live web." },
+  search:     { color: "#22D3EE", bestFor: "Questions that need the live web — Grok 4.7 on Venice with real-time search." },
+  uncensored: { color: "#F97316", bestFor: "Unrestricted reasoning & coding on Venice Private infrastructure (DeepSeek V4.1, 1M ctx)." },
+  tee:        { color: "#10B981", bestFor: "Hardware-attested TEE enclave on Venice (GLM 5.3 Flash, 1M ctx, multimodal)." },
+  sonnet55:   { color: "#38BDF8", bestFor: "Anthropic Claude Sonnet 5.5 routed through Venice with live web search and 1M context." },
 };
 
 const CTX_STEPS = [

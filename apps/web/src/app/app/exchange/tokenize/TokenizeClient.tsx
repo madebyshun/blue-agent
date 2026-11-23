@@ -142,6 +142,35 @@ export default function TokenizeClient({ markets = false, assets }: { markets?: 
   const [holder, setHolder] = useState<string | null>(null);   // the coin's creator recipient right now
   const token = (launch.token ?? coin).trim();
   const [agentOwner, setAgentOwner] = useState<string | null>(null);
+  const [prefillPair, setPrefillPair] = useState<string>("");
+
+  // Prefill from Blue Chat QuadraLaunchCard (/markets/launch?name=...&symbol=...&pair=...&description=...)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sp = new URLSearchParams(window.location.search);
+    const qName = sp.get("name")?.trim().slice(0, 32) ?? "";
+    const qSym = sp.get("symbol")?.trim().toUpperCase().slice(0, 11) ?? "";
+    const qDesc = sp.get("description")?.trim().slice(0, 280) ?? "";
+    const qPair = sp.get("pair")?.trim() ?? "";
+    if (qName || qSym || qDesc) {
+      setD((prev) => ({
+        ...prev,
+        ...(qName ? { name: qName } : {}),
+        ...(qSym ? { symbol: qSym } : {}),
+        ...(qDesc ? { description: qDesc } : {}),
+      }));
+    }
+    if (qPair) setPrefillPair(qPair);
+  }, []);
+
+  useEffect(() => {
+    if (!prefillPair || !check?.pairs.length) return;
+    const needle = prefillPair.toLowerCase();
+    const match = check.pairs.find(
+      (p) => p.address.toLowerCase() === needle || p.symbol.toLowerCase() === needle || p.symbol.toLowerCase() === `${needle}c`,
+    );
+    if (match) setPairAddr(match.address);
+  }, [prefillPair, check]);
 
   useEffect(() => { preflight().then(setCheck).catch(() => setCheck({ ok: false, why: ["could not read the factory on Base"], referrerOk: false, pairs: [] })); }, []);
   useEffect(() => {

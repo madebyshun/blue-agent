@@ -3406,158 +3406,137 @@ function AgentSpendCard({ spend, priv }: { spend: SpendLoad; priv: (s: string) =
 
 // ── Landing hero (shown until the wallet connects) ───────────────────────────
 function BankLanding() {
-  // The lead bullet MIRRORS the panel's primary control so the two can never
-  // disagree. With Privy on, the way in is "sign in, we make the wallet" — and
-  // the method name is read from the same config the button reads, not typed
-  // out here. With Privy off (local dev, no NEXT_PUBLIC_PRIVY_APP_ID) the only
-  // way in is your own wallet, so the copy says that instead of advertising an
-  // onboarding path the panel does not render.
-  //
-  // What used to sit here — "Sign in with Face ID … Coinbase Smart Wallet" —
-  // described the CTA removed from `ConnectButton` below; see the comment there
-  // for why that promise stopped being true.
   const signIn = PRIVY_ENABLED
-    ? { icon: "✉️", title: `Sign in with ${describeLoginMethods()} — no seed phrase`, body: "No extension, no app, no 12-word phrase. Signing in creates a wallet that is yours — we never hold the keys." }
-    : { icon: "🔌", title: "Bring your own wallet", body: "MetaMask, Coinbase Wallet, Rabby, Phantom, or any WalletConnect wallet. Connect in one tap." };
-  // The second bullet used to promise "Earn ~X% APY on idle USDC". It is the
-  // first thing an unconnected visitor reads, and it sold the one feature this
-  // phase withdraws — so it advertised a door that is now closed. Replaced with
-  // the agent spend console, which is the thing about this product no other
-  // wallet can show.
-  //
-  // The console itself now lives on /app/usage, so the bullet says where. A
-  // landing bullet describing a panel that is no longer on the page it lands
-  // you on is the same defect as the APY promise it replaced: copy that outlived
-  // the thing it described.
-  const features: { icon: string; title: string; body: string }[] = [
+    ? {
+        title: `Sign in with ${describeLoginMethods()} — no seed phrase`,
+        body: "No extension, no app, no 12-word phrase. Signing in creates a wallet that is yours — we never hold the keys.",
+      }
+    : {
+        title: "Bring your own wallet",
+        body: "MetaMask, Coinbase Wallet, Rabby, Phantom, or any WalletConnect wallet. Connect in one tap.",
+      };
+  const features: { title: string; body: string }[] = [
     signIn,
-    { icon: "📊", title: "See every payment your agent made", body: "Each x402 tool call your agent paid for, itemised in USDC on your Usage page — the ledger a generic wallet cannot reconstruct." },
-    { icon: "➡", title: "Send to any wallet or name.base", body: "Pay anyone on Base by address or Basename. Instant, 24/7, no cut-off times." },
-    { icon: "🔒", title: "Non-custodial — you hold the keys", body: "You sign every transaction from your own wallet. BlueAgent never holds your keys or funds." },
-    { icon: "🌐", title: "On-chain, withdraw anytime", body: "Your money lives on Base, not in a silo. Pull it out whenever you want, in one click." },
+    {
+      title: "See every payment your agent made",
+      body: "Each x402 tool call your agent paid for, itemised in USDC on your Usage page — the ledger a generic wallet cannot reconstruct.",
+    },
+    {
+      title: "Send to any wallet or name.base",
+      body: "Pay anyone on Base by address or Basename. Instant, 24/7, no cut-off times.",
+    },
+    {
+      title: "Non-custodial — you hold the keys",
+      body: "You sign every transaction from your own wallet. BlueAgent never holds your keys or funds.",
+    },
+    {
+      title: "On-chain, withdraw anytime",
+      body: "Your money lives on Base, not in a silo. Pull it out whenever you want, in one click.",
+    },
   ];
   return (
     <div className="min-h-full bg-[#050508] flex items-center justify-center p-5 sm:p-8">
-      <div className="w-full max-w-4xl grid md:grid-cols-2 gap-6 items-center">
+      <div className="w-full max-w-4xl grid md:grid-cols-2 gap-8 items-center">
         <div>
-          {/* A headline and a paragraph used to sit between this label and the
-              bullets: "A wallet you actually own." over "Hold USDC, move money,
-              and track every agent payment on Base — non-custodial. You hold the
-              keys; BlueAgent only prepares the transaction, you sign it."
-
-              Every clause of it is repeated verbatim below. "Hold USDC, move
-              money" is bullet 3, "track every agent payment" is bullet 2,
-              "non-custodial / you hold the keys" is bullet 4 — which states it
-              twice more in its own title and body. Five claims, three of them
-              said twice within 200px, and the paragraph was the copy a reader
-              hits first, so the bullets under it read as a restatement rather
-              than as the detail.
-
-              The label is the heading now rather than a decorative eyebrow over
-              one: dropping the <h1> without promoting something would leave the
-              page with no heading at all. */}
-          <h1 className="font-mono text-[16px] tracking-widest text-[#4FC3F7] font-bold mb-4">🔵 WALLET</h1>
-          <div className="space-y-3">
-            {features.map(f => (
-              <div key={f.title} className="flex gap-3">
-                <span className="text-base shrink-0">{f.icon}</span>
-                <div>
-                  <div className="font-mono text-[15px] text-slate-200">{f.title}</div>
-                  <div className="font-mono text-[13px] text-slate-600 leading-relaxed">{f.body}</div>
-                </div>
+          <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-[#4FC3F7] mb-2">
+            // WALLET
+          </p>
+          <h1 className="font-mono text-[22px] font-bold text-white tracking-[-0.02em] mb-5">
+            Self-custody wallet on Base
+          </h1>
+          <div className="space-y-4">
+            {features.map((f) => (
+              <div key={f.title} className="border-l border-[#1A1A2E] pl-3.5">
+                <div className="font-mono text-[14px] font-semibold text-slate-200">{f.title}</div>
+                <div className="font-mono text-[12px] text-slate-500 leading-relaxed mt-0.5">{f.body}</div>
               </div>
             ))}
           </div>
         </div>
-        <div className="rounded-2xl border border-[#1A1A2E] bg-[#0a0a0f] p-6">
-          <div className="font-mono text-[17px] font-bold text-white mb-1">Open your account</div>
-          {/* Describes the control DIRECTLY BELOW IT, which is why it tracks
-              PRIVY_ENABLED: with Privy off there is no "we create your wallet"
-              path on this panel, only the wallet list. The old line promised
-              Face ID and a passkey — the CTA that delivered that is gone. */}
-          <p className="font-mono text-[14px] text-slate-500 mb-5">
+        <div className="rounded-2xl border border-[#1A1A2E] bg-[#090910] p-6 shadow-2xl shadow-black/60">
+          <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-[#4FC3F7]">
+            SIGN IN
+          </p>
+          <div className="font-mono text-[18px] font-bold text-white mt-1">Open your account</div>
+          <p className="font-mono text-[13px] text-slate-500 mt-1 mb-5 leading-relaxed">
             {PRIVY_ENABLED
               ? "Sign in and we create your wallet — no seed phrase, no app to install."
               : "Connect a wallet you already own — no signup, no KYC, no custody."}
           </p>
           <ConnectButton />
-          <div className="flex items-center gap-2 my-4">
-            <div className="h-px flex-1 bg-[#1A1A2E]" /><span className="font-mono text-[12px] text-slate-700">SECURED BY YOU</span><div className="h-px flex-1 bg-[#1A1A2E]" />
+          <div className="flex items-center gap-3 my-5">
+            <div className="h-px flex-1 bg-[#1A1A2E]" />
+            <span className="font-mono text-[11px] text-slate-600 uppercase tracking-[0.14em]">
+              Secured by you
+            </span>
+            <div className="h-px flex-1 bg-[#1A1A2E]" />
           </div>
-          <div className="flex items-center justify-center gap-4 font-mono text-[12px] text-slate-600">
-            <span>🔒 Non-custodial</span><span>·</span><span>⛓ On Base</span><span>·</span><span>🔑 You sign everything</span>
+          <div className="flex items-center justify-center gap-3 font-mono text-[11px] text-slate-500">
+            <span>Non-custodial</span>
+            <span className="text-slate-700">·</span>
+            <span>On Base</span>
+            <span className="text-slate-700">·</span>
+            <span>You sign everything</span>
           </div>
-          {/* Named Aave v3 and Morpho, which this surface no longer sends money
-              to — the only thing left pointing at them is the withdraw path,
-              and an unconnected visitor has no position to withdraw. Naming a
-              lender under the signup button reads as "your deposit goes here".
-              "Withdraw anytime" left the row above for the same reason: it
-              answers a question about a deposit you can no longer make. */}
-          <p className="font-mono text-[12px] text-slate-700 text-center mt-4">Powered by Base · USDC</p>
         </div>
       </div>
     </div>
   );
 }
 
-// Connect-wallet CTA — two controls, nothing else: sign in (we make the wallet)
-// vs bring your own. Same split Halo ships.
-//
-// ⚠️ THE "🔵 Create a free wallet" CTA THAT USED TO HEAD THIS PANEL IS GONE, and
-// it should not come back in that form. It called `coinbase.select()`, where
-// `coinbase` is just `wallets.find(name includes "coinbase")` — byte-for-byte
-// the same call as the "Coinbase Wallet" row inside the dropdown below. One
-// button, listed twice.
-//
-// It also stopped telling the truth. Before Privy, `coinbase` resolved to the
-// wagmi `coinbaseWallet({ preference: { options: "all" } })` connector, which
-// really does surface Smart Wallet creation — so "Face ID · no seed phrase" was
-// accurate. Routing external wallets through Privy changed what that entry
-// resolves to WITHOUT changing the copy, leaving a button that promised a
-// passkey and opened Coinbase's generic connect flow. The genuine passkey
-// product is `base_account`, which is its own row in the list and is labelled
-// as such there.
-//
-// The seedless pitch now lives on the Privy control, which actually delivers it
-// (sign in → embedded wallet, no seed phrase), and whose label is derived from
-// the configured login methods so it cannot drift the same way.
 function ConnectButton() {
   const { wallets, isPending } = useWallet();
   const [open, setOpen] = useState(false);
 
   return (
     <div className="relative">
-      {/* Sign in → embedded wallet. Guarded by PRIVY_ENABLED so PrivyLoginButton
-          never mounts outside its provider; with the var unset this panel falls
-          back to the wallet list alone (dev-only — prod has Privy on). */}
       {PRIVY_ENABLED && (
         <>
           <PrivyLoginButton variant="primary" />
-          {/* No sub-caption here on purpose: the panel line right above the
-              button already carries "no seed phrase, no app to install", and a
-              second copy of the same promise two rows apart reads as clutter.
-              One claim, one place — it also means there is only one string to
-              keep honest if the sign-in path changes again. */}
-          <div className="flex items-center gap-2 mt-3">
+          <div className="flex items-center gap-3 mt-4">
             <div className="h-px flex-1 bg-[#1A1A2E]" />
-            <span className="font-mono text-[12px] text-slate-600 uppercase tracking-widest">or</span>
+            <span className="font-mono text-[11px] text-slate-600 uppercase tracking-[0.14em]">
+              or wallet
+            </span>
             <div className="h-px flex-1 bg-[#1A1A2E]" />
           </div>
         </>
       )}
-      <button onClick={() => setOpen(o => !o)} disabled={isPending}
-        className="w-full font-mono text-[14px] text-slate-400 hover:text-slate-200 py-2.5 mt-3 rounded-xl border border-[#1A1A2E] transition-colors disabled:opacity-60">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        disabled={isPending}
+        className="w-full font-mono text-[13px] font-medium text-slate-300 hover:text-white py-2.5 mt-3 rounded-xl border border-[#1A1A2E] bg-[#0D0D16] hover:border-[#4FC3F7]/45 hover:bg-[#11111E] transition-all disabled:opacity-60"
+      >
         I already have a wallet
       </button>
       {open && (
         <>
-          <div className="absolute left-0 right-0 top-full mt-2 z-50 rounded-xl border border-[#1A1A2E] bg-[#0A0A12] shadow-2xl overflow-hidden">
-            <p className="font-mono text-[13px] text-slate-600 px-3 pt-3 pb-2 tracking-widest">SELECT WALLET</p>
-            {wallets.map(w => (
-              <button key={w.key} onClick={() => { w.select(); setOpen(false); }}
-                className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-[#1A1A2E] transition-colors">
-                <span className="w-7 h-7 rounded-lg bg-[#1A1A2E] flex items-center justify-center text-base shrink-0">{w.icon}</span>
-                <span className="font-mono text-xs text-slate-200">{w.name}</span>
+          <div className="absolute left-0 right-0 top-full mt-2 z-50 rounded-xl border border-[#1A1A2E] bg-[#090910] p-2 shadow-2xl shadow-black/90 space-y-1 max-h-[260px] overflow-y-auto">
+            <p className="font-mono text-[11px] text-slate-500 px-2 pt-1 pb-1.5 uppercase tracking-[0.14em]">
+              Select wallet
+            </p>
+            {wallets.map((w) => (
+              <button
+                key={w.key}
+                type="button"
+                onClick={() => {
+                  w.select();
+                  setOpen(false);
+                }}
+                className="group w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg text-left hover:bg-[#141422] transition-colors"
+              >
+                <div className="min-w-0">
+                  <span className="block font-mono text-[13px] font-medium text-slate-200 group-hover:text-white truncate">
+                    {w.name}
+                  </span>
+                  <span className="block font-mono text-[11px] text-slate-500 truncate">
+                    {w.subtitle}
+                  </span>
+                </div>
+                <span className="font-mono text-[11px] text-slate-600 group-hover:text-[#4FC3F7]">
+                  Connect
+                </span>
               </button>
             ))}
           </div>

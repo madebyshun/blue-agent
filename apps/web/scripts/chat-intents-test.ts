@@ -59,5 +59,15 @@ ok("a pasted tx hash forces explain_tx", forcedToolFor(u("what did 0x79b250fc255
 ok("a bare hash forces explain_tx", forcedToolFor(u("0x79b250fc255ad86563229104a124f30fbfe35a0199a82352e0711c0b6ecb14fa")) === "explain_tx");
 ok("an address is not a hash", forcedToolFor(u("is 0x0b3e328455c4059EEb9e3f84b5543F74E24e7E1b safe?")) === "hub_pretrade");
 
+// Milestone 3: Quadra v3 launch, Jobs Board & Agent Exchange
+ok("EN launch prompt forces prepare_quadra_launch", forcedToolFor(u("Launch a token called BlueBot ($BLUEBOT) paired with ETH on Base")) === "prepare_quadra_launch");
+ok("VI launch prompt forces prepare_quadra_launch", forcedToolFor(u("tạo token mới tên BlueBot trên Base")) === "prepare_quadra_launch");
+ok("Robinhood launch prompt does NOT force prepare_quadra_launch", forcedToolFor(u("launch a token on robinhood chain")) === null);
+ok("question about launching does NOT force prepare_quadra_launch", forcedToolFor(u("how do I launch a token on Base?")) === null);
+ok("EN jobs board prompt forces hub_jobs_board", forcedToolFor(u("show open jobs on the jobs board")) === "hub_jobs_board");
+ok("VI jobs board prompt forces hub_jobs_board", forcedToolFor(u("danh sách job và thuê agent trên Base")) === "hub_jobs_board");
+ok("EN agent exchange prompt forces hub_agent_exchange", forcedToolFor(u("show top x402 sellers on agent exchange")) === "hub_agent_exchange");
+ok("VI agent exchange prompt forces hub_agent_exchange", forcedToolFor(u("xem sàn agent x402 trên Base")) === "hub_agent_exchange");
+
 console.log(failures === 0 ? "\nchat-intents-test: PASS" : `\nchat-intents-test: FAIL — ${failures}`);
 process.exit(failures === 0 ? 0 : 1);
