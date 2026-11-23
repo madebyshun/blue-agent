@@ -5,7 +5,7 @@ import { MarketScroll, MarketContainer } from "./MarketLayout";
 // Every row names its chain; a ticker alone never identifies a token (NVDA is
 // two contracts). Data: lib/markets.ts (registries + GeckoTerminal).
 import type { Metadata } from "next";
-import { readBlueLaunchMarkets, readCandles, readStockMarkets, readTrending, type MarketChain } from "@/lib/markets";
+import { readBlueLaunchMarkets, readCandles, readStockMarkets, type MarketChain } from "@/lib/markets";
 import MarketsHeader from "./MarketsHeader";
 import MarketsTable, { type MarketRow } from "./MarketsTable";
 import Link from "next/link";
@@ -23,15 +23,10 @@ export const metadata: Metadata = {
 const usd = (n: number) => n >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(1)}k` : `$${n.toFixed(2)}`;
 
 export default async function MarketsPage() {
-  const [stocks, trending, launches] = await Promise.all([
+  const [stocks, launches] = await Promise.all([
     readStockMarkets().catch(() => ({ rows: [], readAt: null as string | null })),
-    readTrending().catch(() => ({ rows: [], readAt: null as string | null, unread: ["base", "robinhood"] as MarketChain[] })),
     readBlueLaunchMarkets().catch(() => ({ rows: [], readAt: null })),
   ]);
-  const launched = new Set(launches.rows.map((r) => r.token.toLowerCase()));
-  // A stock token can also trend on GeckoTerminal (MSTRc, SNDKc did): list it
-  // once, as the verified stock row, never a second time as "crypto".
-  const stockSet = new Set(stocks.rows.map((r) => `${r.chain}:${r.contract.toLowerCase()}`));
   const all: MarketRow[] = [
     ...stocks.rows.map((r) => ({
       chain: r.chain, kind: r.kind, token: r.contract, symbol: r.ticker, name: r.name, logo: r.logo,
@@ -42,11 +37,6 @@ export default async function MarketsPage() {
       chain: "base" as const, kind: "launch" as const, token: r.token, symbol: r.symbol ?? `${r.token.slice(0, 6)}…`, name: r.name ?? r.token, logo: r.logo,
       price: r.priceUsd, change: r.change24hPct, mcap: r.mcapUsd, mcapIsFdv: r.mcapIsFdv, liq: r.liquidityUsd, vol: r.volume24hUsd,
       createdAt: r.poolCreatedAt, pool: r.pool, side: r.side, read: r.read,
-    })),
-    ...trending.rows.filter((r) => !launched.has(r.token.toLowerCase()) && !stockSet.has(`${r.chain}:${r.token.toLowerCase()}`)).map((r) => ({
-      chain: r.chain, kind: "crypto" as const, token: r.token, symbol: r.symbol, name: r.name, logo: r.logo,
-      price: r.priceUsd, change: r.change24hPct, mcap: r.mcapUsd, mcapIsFdv: r.mcapIsFdv, liq: r.liquidityUsd, vol: r.volume24hUsd,
-      createdAt: r.poolCreatedAt, pool: r.pool || null, side: "base" as const, read: true,
     })),
   ];
   // Base only (2026-11-11): the list, stats and chip describe Base 8453.
@@ -81,16 +71,17 @@ export default async function MarketsPage() {
   // lower bound; nothing read at all: a dash. Never a confident total.
   const volShow = (c: MarketChain) => !stocks.readAt || !stocks.rows.some((r) => r.chain === c && r.read) ? "—" : `${volRead(c) ? "" : "≥"}${usd(vol(c))}`;
   const volRead = (c: MarketChain) => stocks.rows.some((r) => r.chain === c) && stocks.rows.filter((r) => r.chain === c).every((r) => r.read);
+  const readablePools = stocks.rows.filter((r) => r.chain === "base" && r.read && r.pool).length;
 
   return (
     <div className="flex flex-col h-full bg-[#070b12] overflow-hidden font-mono">
-      <MarketsHeader active="markets" chip={`${count("base")} stock tokens · ${rows.filter((r) => r.kind === "crypto").length} trending · Base 8453`} />
+      <MarketsHeader active="markets" chip={`${count("base")} stock tokens · ${readablePools} active pools · Base 8453`} />
       <MarketScroll>
         <MarketContainer>
           <MarketHero label="THE ONCHAIN MARKET OBSERVATORY" title="The market never closes." description="Stock tokens, live pool prices and the signals between them. A closer look at what trades on Base, around the clock." stats={[
             { label: "Stock tokens in this view", value: String(count("base")), detail: "Base 8453" },
             { label: "Stock pool volume · 24h", value: volShow("base"), detail: "selected pools · snapshot" },
-            { label: "Readable stock pools", value: String(stocks.rows.filter((r) => r.chain === "base" && r.read && r.pool).length), detail: "not a whole-chain census" },
+            { label: "Readable stock pools", value: String(readablePools), detail: "not a whole-chain census" },
           ]} />
           <MarketNav active="overview" />
           <MarketPulse rows={rows} asOf={stocks.readAt} initialPool={leadStock?.pool ?? null} initialCandles={initialCandles} />
@@ -103,7 +94,7 @@ export default async function MarketsPage() {
             robinhood: { count: count("robinhood"), vol: volShow("robinhood") === "—" ? null : vol("robinhood"), complete: volRead("robinhood") },
           }} />
           <p className="text-[12px] text-[#64748B] mt-4 leading-relaxed">
-            Stock tokens come from our checked Coinbase B20 catalog on Base, matched by contract and checked on chain. See Coverage for the latest inventory. Trending crypto is GeckoTerminal&apos;s list as-is, <span className="text-[#F59E0B]">unchecked</span>: no tax or honeypot test runs here, and tokens using a major&apos;s symbol (BTC, ETH, USDC…) are left out.
+            Stock tokens come from our checked Coinbase B20 catalog on Base, matched by contract and checked on chain. See Coverage for the latest inventory.
             Prices, change, market cap, liquidity, volume and charts are read from each token&apos;s DEX pools (Aerodrome / Uniswap on Base 8453) through GeckoTerminal, every 5 minutes. A stock token tracks a share; it is not the share. Not financial advice.
           </p>
         </MarketContainer>

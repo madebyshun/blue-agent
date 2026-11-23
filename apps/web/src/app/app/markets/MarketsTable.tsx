@@ -153,7 +153,7 @@ export interface ChainStat { count: number; vol: number | null; complete: boolea
 
 export default function MarketsTable({ rows, readAt, stats }: { rows: MarketRow[]; readAt: string | null; stats: Record<"base" | "robinhood", ChainStat> }) {
   const router = useRouter();
-  const [kind, setKind] = useState<"all" | "stocks" | "crypto" | "launches">("all");
+  const [kind, setKind] = useState<"all" | "stocks" | "launches">("all");
   // Base only since 2026-11-11 (ShunTr: focus Base). Robinhood token pages
   // still resolve at /markets/robinhood/<address>; they are just not listed.
   const chain = "base" as "all" | "base" | "robinhood";
@@ -167,7 +167,7 @@ export default function MarketsTable({ rows, readAt, stats }: { rows: MarketRow[
     const t = q.trim().toLowerCase();
     const val = (r: MarketRow): number | null => sort.k === "age" ? ageDays(r.createdAt) : r[sort.k];
     return rows
-      .filter((r) => kind === "all" || (kind === "crypto" ? r.kind === "crypto" : kind === "launches" ? r.kind === "launch" : r.kind === "stock" || r.kind === "etf"))
+      .filter((r) => kind === "all" || (kind === "launches" ? r.kind === "launch" : r.kind === "stock" || r.kind === "etf"))
       .filter((r) => chain === "all" || r.chain === chain)
       .filter((r) => !t || r.symbol.toLowerCase().includes(t) || r.name.toLowerCase().includes(t) || r.token.toLowerCase() === t)
       .sort((a, b) => {
@@ -227,9 +227,9 @@ export default function MarketsTable({ rows, readAt, stats }: { rows: MarketRow[
           </div>
         ))}
       </div>
-      {/* 24h trending strip */}
+      {/* 24h top stock volume strip */}
       <div className="flex items-center gap-3 overflow-x-auto rounded-[16px] border border-white/[0.09] bg-[#0b111c] px-3 py-2 [scrollbar-width:none]">
-        <span className="shrink-0 flex items-center gap-1.5 text-[12px] font-semibold tracking-[0.12em] text-[#E2E8F0]"><span className="h-1.5 w-1.5 rounded-full bg-[#34D399]" />24H TRENDING</span>
+        <span className="shrink-0 flex items-center gap-1.5 text-[12px] font-semibold tracking-[0.12em] text-[#E2E8F0]"><span className="h-1.5 w-1.5 rounded-full bg-[#34D399]" />24H TOP VOLUME</span>
         {trending.map((r) => (
           <Link key={`t${r.chain}${r.token}`} href={`/markets/${r.chain}/${r.token}`} className="shrink-0 flex items-center gap-2 rounded-lg px-2 py-1 hover:bg-[#0F121A]">
             <Logo r={r} size={20} />
@@ -242,7 +242,7 @@ export default function MarketsTable({ rows, readAt, stats }: { rows: MarketRow[
       </div>
 
       <div className="mt-7 mb-5 flex items-center gap-2 flex-wrap">
-        {([["all", "All"], ["stocks", "Stock tokens"], ["crypto", "Trending crypto"], ["launches", "Launched on Blue Agent"]] as const).map(([id, l]) => (
+        {([["all", "All"], ["stocks", "Stock tokens"], ["launches", "Launched on Blue Agent"]] as const).map(([id, l]) => (
           <button key={id} type="button" onClick={() => setKind(id)} className={chip(kind === id)}>{l}</button>
         ))}
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search markets, ticker or 0x…"
