@@ -145,7 +145,8 @@ async function run(text: string, tier = "fast") {
   const short = streamMaxTokens;
   await run("blue audit a vault contract");
   const long = streamMaxTokens;
-  check("5.1 a short question keeps the preset's cap", short === 1536, String(short));
+  // fast = 2048 since 2026-11-23, plus 3,000 reasoning headroom for deepseek-v4-flash (route.ts reasoningHeadroom).
+  check("5.1 a short question keeps the preset's cap", short === 2048 + 3000, String(short));
   check("5.2 a founder command gets the long-form budget", (long ?? 0) >= 4096, String(long));
 
   console.log("6. a stall MID-answer ends with a timed-out note (idle timeout, not total)");

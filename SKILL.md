@@ -92,8 +92,8 @@ USDC `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`. Fields marked `*` are require
 every other field has a server-side default. Machine-readable equivalent, with
 full JSON Schema per tool: https://blueagent.dev/api/catalog
 
-The 7 priced $0.00 never answer 402 and never ask for a signature:
-`blue-doctor` · `hood-live` · `weekend-scorecard` · `pre-trade-check` · `sign-check` · `approval-audit` · `rh-rwa-verify`.
+The 9 priced $0.00 never answer 402 and never ask for a signature:
+`blue-doctor` · `hood-live` · `weekend-scorecard` · `pre-trade-check` · `sign-check` · `approval-audit` · `rh-rwa-verify` · `b20-policy-check` · `tx-simulate`.
 Do not build an authorization for them — there is nothing to sign and no
 transfer to make.
 
@@ -114,10 +114,11 @@ transfer to make.
 | `token-price` | $0.01 | `token`* | Live price, market cap, volume and liquidity for any Base token. Use when an agent asks what a Base token costs right now, or needs a spot price before sizing a swap. |
 | `wallet-holdings` | $0.02 | `address`* | Live ERC-20 and ETH holdings with USD value for a Base wallet. Use when an agent asks what a Base address holds, or must size a trade against the actual balance instead of assuming one. |
 
-### signal (6)
+### signal (7)
 
 | id | price | body | what it does |
 |---|---|---|---|
+| `cross-venue-stock-quote` | $0.02 | `ticker`* | Unified tokenized-stock quote across Base B20, Robinhood Chain 4663, and Chainlink oracle with cross-venue spread and US market session status. |
 | `hood-live` | $0.00 | `chain` | Every tokenized stock Blue Hood watches right now on both venues: Chainlink oracle price, deepest-pool price and the drift between them. Use when an agent asks about tokenized stock prices, or wants the oracle-vs-pool gap before trading one. Free. |
 | `rh-stock-agent-brief` | $0.20 | `ticker`* | One JSON brief for a Robinhood Chain stock token: drift, oracle age, holdings, liquidity. Use when an agent wants a stock token's whole picture in a single call. |
 | `rh-stock-arb` | $0.05 | `ticker`* | Chainlink oracle versus the deepest DEX pool for a Robinhood Chain stock token: the gap in percent, which side is rich. Use when an agent asks for the oracle-premium or arbitrage gap on a stock token. |
@@ -125,11 +126,12 @@ transfer to make.
 | `stock-screen` | $0.02 | `max_abs_drift_pct` `min_liquidity_usd` `max_oracle_age_seconds` `limit` | Screen every Coinbase Tokenized Stock on Base at once against your own thresholds — drift versus the Chainlink oracle, pool liquidity, oracle staleness — and get only the rows that clear them, each with the number that decided it. Use when an agent asks for a daily stock screen or the day's stock picks and needs the filter applied, not nine separate quotes. |
 | `weekend-scorecard` | $0.00 | `ticker` `weekends` | Does the price Base trades a stock at over the weekend call Monday's open? Every Base stock on the desk, scored. Use when an agent asks whether tokenized stocks track the real thing, or needs weekend-vs-open accuracy before trusting an off-hours price. Free. |
 
-### security (9)
+### security (11)
 
 | id | price | body | what it does |
 |---|---|---|---|
 | `approval-audit` | $0.00 | `wallet`* `chain` | Everything a wallet has granted that is still live: ERC-20 allowances, NFT operator-for-all and Permit2 grants, each re-checked. Use when an agent asks what a wallet has approved, or whether an old approval can still drain it. Free. |
+| `b20-policy-check` | $0.00 | `token`* `wallet` | Check whether a Coinbase B20 tokenized stock on Base 8453 is paused or restricts a wallet via PolicyRegistry isAuthorized. Use before building a B20 swap. Free. |
 | `contract-trust` | $0.15 | `address`* `context` | Audit any Base contract before swapping or interacting: Basescan verification plus a security scan and community signal. Use when an agent asks whether a Base contract can be trusted, or why a verified contract still looks wrong. |
 | `honeypot-check` | $0.10 | `token`* | Detect honeypot tokens that can be bought but not sold, with transfer tax and rug pattern analysis on Base. Use when an agent asks whether a Base token is a honeypot, a scam, or safe to buy. |
 | `liquidity-depth` | $0.03 | `token`* `trade_size_usd` | Liquidity depth, slippage estimate and exit risk for a Base token. Use when an agent asks how much of a Base token it can sell without moving the price, or needs a slippage figure before a trade. |
@@ -137,6 +139,7 @@ transfer to make.
 | `rh-rwa-verify` | $0.00 | `contract`* `expected_ticker` | Given a contract address on Robinhood Chain, is it a canonical RHJ-issued stock token or an impersonator? Use when an agent is handed a Robinhood Chain token address and must know whether it is the real stock token before trading. Free. |
 | `risk-gate` | $0.20 | `to`* `action` `value` | Pre-transaction risk screen for any address or swap: drainer patterns, AML signals, malicious contracts. Use when an agent must clear a Base address or swap before money moves, and wants one verdict instead of five signals. |
 | `sign-check` | $0.00 | `chain` `from` `tx` `typed_data` | Call before a wallet signs anything. A transaction is decoded (approve, permit, Permit2, setApprovalForAll, transfer) and checked against what it actually grants. Use when an agent must tell a user what a signature does before they sign. Free. |
+| `tx-simulate` | $0.00 | `chain` `from`* `to`* `data` `value` | Simulate any unsigned transaction { from, to, data, value } via eth_simulateV1 before signing, returning revert status, gas used, and decoded ERC-20 transfers. Free. |
 | `wallet-risk` | $0.05 | `address`* | Is this address known to be dangerous? GoPlus flags (theft, phishing, sanctions, laundering, mixer) with their sources. Use when an agent asks whether a Base wallet is safe to pay or copy, or before routing funds to an unfamiliar address. |
 
 ### builder (1)

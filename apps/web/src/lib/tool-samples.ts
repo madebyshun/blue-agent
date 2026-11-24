@@ -115,6 +115,23 @@ export const TOOL_SAMPLES: Record<string, ToolSample> = {
   },
 
   // ── stock-screen ($0.02)
+  // measured 2026-11-24 against production data sources (trimmed to the response shape)
+  "b20-policy-check": {
+    provenance: "measured",
+    input: {"token": "0xb20000000000000000000078ee7ce2fE4908108C"},
+    output: {"tool": "b20-policy-check", "chain": "base", "chain_id": 8453, "token": "0xb20000000000000000000078ee7ce2fE4908108C", "symbol": "NVDAc", "is_b20": true, "transfer_paused": false, "policies": {"sender": {"id": "5", "mode": "POLICY_5"}, "receiver": {"id": "5", "mode": "POLICY_5"}, "executor": {"id": "5", "mode": "POLICY_5"}}, "verdict": "AUTHORIZED", "timestamp": "2026-11-24T14:55:52.746Z"},
+  },
+  "tx-simulate": {
+    provenance: "measured",
+    // USDC balanceOf(0x…dEaD) on Base: a harmless read anyone can reproduce.
+    input: {"chain": "base", "from": "0x000000000000000000000000000000000000dEaD", "to": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", "data": "0x70a08231000000000000000000000000000000000000000000000000000000000000dead", "value": "0"},
+    output: {"tool": "tx-simulate", "method": "eth_simulateV1", "chain": "base", "chain_id": 8453, "block": "0x3ad9f63", "will_succeed": true, "revert_reason": null, "gas_used": 30966, "logs_count": 0, "erc20_transfers": [], "timestamp": "2026-11-24T15:00:11.304Z"},
+  },
+  "cross-venue-stock-quote": {
+    provenance: "measured",
+    input: {"ticker": "NVDA"},
+    output: {"tool": "cross-venue-stock-quote", "ticker": "NVDA", "us_market_session": "regular", "base_dex_price_usd": 155.8834276187, "base_oracle_price_usd": 156.18249999, "robinhood_price_usd": 156.12843064, "cross_venue_spread_pct": -0.157, "spread_note": "Base DEX is -0.157% vs Robinhood Chain (Chainlink oracle)"},
+  },
   "stock-screen": {
     provenance: "shape",
     input: {"max_abs_drift_pct": 0.5, "min_liquidity_usd": 10000, "limit": 5},

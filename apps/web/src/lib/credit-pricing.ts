@@ -158,7 +158,7 @@ export const CREDIT_PRICE_OVERRIDE: Readonly<Record<string, number>> = {
   "risk-gate": 0,
   "contract-trust": 0,
   "honeypot-check": 0,
-  "token-verdict": 0,
+  // (no "token-verdict": chat runs lib/token-verdict directly, which has no catalog id or credit lookup)
 };
 
 export function toolCreditCost(toolId: string, tier: TierInfo): number {

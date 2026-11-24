@@ -30,7 +30,8 @@ for (const id of ["risk-gate", "contract-trust", "honeypot-check"]) ok(`model-ru
   }
 }
 ok("the x402 USDC price is unchanged ($0.15)", AGENT_TOOLS.find((t) => t.id === "safe-trending")?.price === "$0.15");
-const outsideChat = AGENT_TOOLS.find((t) => t.id === "stock-screen")!;
+// Any paid catalog tool chat does not price separately (stock-screen became a chat tool on 2026-11-23).
+const outsideChat = AGENT_TOOLS.find((t) => (t.priceUSDC ?? 0) > 0 && !(t.id in CREDIT_PRICE_OVERRIDE))!;
 ok("a paid tool outside chat follows its catalog price", toolCreditCost(outsideChat.id, t0) === Math.round(outsideChat.priceUSDC! / 1_000_000 * CREDITS_PER_USDC));
 for (const id of Object.keys(CREDIT_PRICE_OVERRIDE)) ok(`override "${id}" names a real catalog id`, AGENT_TOOLS.some((t) => t.id === id));
 
