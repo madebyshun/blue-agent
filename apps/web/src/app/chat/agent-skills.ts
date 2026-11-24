@@ -139,10 +139,10 @@ const LOOP_SKILLS: AgentSkill[] = [
     trigger: "Check my wallet", tools: ["check_wallet"] },
   // STOCK TOKENS
   { id: "stocks-cross-venue", group: "stocks", chains: ["base", "robinhood"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR,
-    name: "Cross-venue stock quote", description: "Compare live prices, spread and drift across Base B20 (377 stocks), Robinhood Chain, and Chainlink oracle",
+    name: "Cross-venue stock quote", description: "Compare live prices, spread and drift across Base B20 (415 stocks), Robinhood Chain, and Chainlink oracle",
     trigger: "What is the drift on NVDA right now?", tools: ["hub_cross_venue_stock"], meterIds: ["cross-venue-stock-quote"] },
   { id: "stocks-screener", group: "stocks", chains: ["base", "robinhood"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR,
-    name: "Stock token screener", description: "Screen and filter tokenized stocks across all 377 Base B20 tokens and Robinhood Chain",
+    name: "Stock token screener", description: "Screen and filter tokenized stocks across all 415 Base B20 tokens and Robinhood Chain",
     trigger: "Screen tokenized stocks", tools: ["hub_stock_screen"], meterIds: ["stock-screen"] },
   { id: "stocks-b20-policy", group: "stocks", chains: ["base"], provider: "Blue Agent", status: "active", author: BLUE_AUTHOR,
     name: "B20 transfer policy check", description: "Check live B20 pause state and PolicyRegistry authorization before swapping a Base stock token",

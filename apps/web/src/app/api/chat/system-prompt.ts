@@ -100,7 +100,7 @@ You have access to real-time Hub tools. Use them when the user asks about:
 - Live onchain data: balance, tx, block, gas, contract calls → hub_crypto_rpc (11 EVM mainnets, including both product chains: base and robinhood)
 - User's OWN wallet / portfolio ("check my balance", "what's in my wallet", "my tokens", "my holdings", "my portfolio") → check_wallet. It auto-uses the connected wallet (no address arg) and lists EVERY token the wallet actually holds (balance > 0) on Base via Moralis, then renders a result card. NEVER invent figures or tokens; if no wallet is connected the result says so. Do NOT use hub_crypto_rpc for the user's own balance.
 - What CHANGED in the user's wallet ("what changed in my wallet", "wallet brief", "morning brief", "anything new overnight") → wallet_brief. It diffs today's reading against the last brief (balances, tokens sent unasked, approvals opened/closed/flagged) on Base and Robinhood Chain, and writes the answer itself — add nothing. The daily version is on Telegram: /brief on.
-- Onchain stocks overview ("how are my stocks", "stock brief", "any stock gaps", "weekend gap", "premium to NAV") → stock_brief. For live cross-venue drift/spread on ONE ticker (Base B20 vs Robinhood Chain vs Chainlink) → hub_cross_venue_stock. To screen/search across all 377 Base B20 & Robinhood stock tokens → hub_stock_screen. To check live B20 pause/PolicyRegistry authorization before swapping a stock token → hub_b20_policy_check.
+- Onchain stocks overview ("how are my stocks", "stock brief", "any stock gaps", "weekend gap", "premium to NAV") → stock_brief. For live cross-venue drift/spread on ONE ticker (Base B20 vs Robinhood Chain vs Chainlink) → hub_cross_venue_stock. To screen/search across all 415 Base B20 & Robinhood stock tokens → hub_stock_screen. To check live B20 pause/PolicyRegistry authorization before swapping a stock token → hub_b20_policy_check.
 - Deep token safety verdict with eth_simulateV1 round-trip sell simulation, Top 10 holders & launcher forensics → hub_token_verdict.
 - Live transaction dry-run simulation via eth_simulateV1 (gas used, revert reason, ERC-20 transfers) → hub_tx_simulate.
 - Non-custodial Quadra v3 token launch on Base (8453) ("launch a token", "create a coin on Base", "tạo token trên Base") → prepare_quadra_launch. Renders an interactive Quadra v3 launch card directly in chat so the user can review factory preflight, edit pair/fee/first buy, and sign the launch in their own wallet without leaving chat.
@@ -275,7 +275,7 @@ VERIFIED B20 FACTS (the ONLY facts you may state as fact):
 - Supply cap: updateSupplyCap() gated by DEFAULT_ADMIN_ROLE; type(uint128).max means uncapped.
 - Memos: a bytes32 memo can ride on transfer/mint/burn via transferWithMemo / mintWithMemo / burnWithMemo — used for order IDs, payment refs, audit trails.
 - initCalls: deploy + configure (grant roles, set supply cap) + optional seed-mint all execute in ONE atomic createB20 transaction.
-- Rollout: B20 is live on Base mainnet (chain 8453), including 377 Coinbase tokenized stocks (<TICKER>c), alongside Base Sepolia for testing.
+- Rollout: B20 is live on Base mainnet (chain 8453), including 415 Coinbase tokenized stocks (<TICKER>c), alongside Base Sepolia for testing.
 - For any real, token-specific data (supply, holders, pause state, policies, admin), direct the user to the B20 Scanner — never guess.`;
 
 /**

@@ -881,7 +881,7 @@ Testnets are reachable by full id: base-sepolia, ethereum-sepolia, robinhood-tes
   },
   {
     name: "hub_cross_venue_stock",
-    description: "Unified live tokenized-stock quote across Base B20 (377 stocks, chain 8453), Robinhood Chain (4663), and Chainlink oracle, with cross-venue spread/drift and US market session status. Use for 'what is the drift on NVDA right now?', 'NVDA spread Base vs Robinhood', or comparing a stock token across venues.",
+    description: "Unified live tokenized-stock quote across Base B20 (415 stocks, chain 8453), Robinhood Chain (4663), and Chainlink oracle, with cross-venue spread/drift and US market session status. Use for 'what is the drift on NVDA right now?', 'NVDA spread Base vs Robinhood', or comparing a stock token across venues.",
     input_schema: {
       type: "object",
       properties: {
@@ -892,7 +892,7 @@ Testnets are reachable by full id: base-sepolia, ethereum-sepolia, robinhood-tes
   },
   {
     name: "hub_stock_screen",
-    description: "Screen and search tokenized stocks across all 377 Base B20 stocks and Robinhood Chain by tickers, chain, liquidity, or spread. Use for 'screen tokenized stocks', 'lọc cổ phiếu onchain', or comparing multiple stock tickers at once.",
+    description: "Screen and search tokenized stocks across all 415 Base B20 stocks and Robinhood Chain by tickers, chain, liquidity, or spread. Use for 'screen tokenized stocks', 'lọc cổ phiếu onchain', or comparing multiple stock tickers at once.",
     input_schema: {
       type: "object",
       properties: {
