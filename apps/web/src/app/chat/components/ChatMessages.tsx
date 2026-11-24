@@ -381,7 +381,7 @@ const modelLabel = (id: string) => chatTierLabel(id) ?? LEGACY_VENICE_LABELS[id]
 const MODEL_COLORS: Record<string, string> = {
   free: "#34D399", fast: "#64748b", balanced: "#4FC3F7", deep: "#A78BFA",
   private: "#6EE7B7", grok: "#E879F9", flash: "#FBBF24", search: "#22D3EE",
-  uncensored: "#F59E0B", tee: "#34D399", sonnet55: "#F472B6",
+  tee: "#34D399", sonnet55: "#F472B6",
   pro: "#4FC3F7", max: "#A78BFA",
   "venice-deepseek": "#34D399", "venice-deepseek-pro": "#2DD4BF",
   "venice-kimi": "#818CF8", "venice-claude": "#F472B6",

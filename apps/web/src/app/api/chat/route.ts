@@ -288,7 +288,6 @@ const MODELS: Record<string, { maxTokens: number }> = {
   deep:       { maxTokens: 4096 },
   grok:       { maxTokens: 2048 },
   search:     { maxTokens: 2048 },
-  uncensored: { maxTokens: 4096 },
   tee:        { maxTokens: 4096 },
   sonnet55:   { maxTokens: 4096 },
   // Legacy ids
@@ -303,7 +302,6 @@ const MODELS: Record<string, { maxTokens: number }> = {
 
 const VENICE_DISPLAY: Record<string, string> = {
   "deepseek-v4-flash":                  "DeepSeek V4 Flash (Venice)",
-  "deepseek-v4-1-flash-uncensored":     "DeepSeek V4.1 Flash Uncensored (Venice)",
   "deepseek-v4-pro":                    "DeepSeek V4 Pro (Venice)",
   "kimi-k2-6":                          "Kimi K2 (Venice)",
   "claude-opus-4-7":                    "Claude Opus 4 (Venice)",
@@ -347,7 +345,6 @@ function getModelLabel(tier: string, modelId?: string, provider?: string): strin
 
 const VENICE_MAX_TOKENS: Record<string, number> = {
   "deepseek-v4-flash":                 4096,
-  "deepseek-v4-1-flash-uncensored":    8192,
   "deepseek-v4-pro":                   8192,
   "kimi-k2-6":                         4096,
   "claude-opus-4-7":                   4096,
