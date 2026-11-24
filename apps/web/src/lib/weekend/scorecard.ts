@@ -186,6 +186,10 @@ export function buildCall(
       continue;
     }
     const move = pct(r.dex_usd, r.oracle_usd);
+    if (!comparable({ weekend_move_pct: move })) {
+      excluded.push({ ticker: s.ticker, reason: `pool and oracle ${move.toFixed(0)}% apart: different share basis (e.g. a split applied to one side only)` });
+      continue;
+    }
     out.push({
       ticker: s.ticker, token: s.token,
       close_usd: r.oracle_usd, close_round_at: r.oracle_updated_at,
@@ -194,6 +198,17 @@ export function buildCall(
   }
   return { friday, call_at: callAt, source, rows: out, excluded };
 }
+
+/**
+ * A pool and its oracle more than this far apart are not one price that moved:
+ * one side is on a different share basis. MEASURED 2026-11-25: SNDKc on Friday
+ * 2026-11-20 had Chainlink at $81.18 (split-adjusted) while the token and its
+ * Base pool were still ~$650-700 a token (split announced, multiplier not yet
+ * applied), so the "weekend move" read +722% and was graded a hit. Such a row
+ * is excluded at the call and ignored in the summary of already-stored weeks.
+ */
+export const MAX_COMPARABLE_MOVE_PCT = 50;
+export const comparable = (r: { weekend_move_pct: number }) => Math.abs(r.weekend_move_pct) <= MAX_COMPARABLE_MOVE_PCT;
 
 export function gradeRow(c: CallRow, open: { usd: number; round_at: number; source: "archive" | "chain" }): GradedRow {
   const gap = pct(open.usd, c.close_usd);
@@ -252,7 +267,7 @@ export interface Summary {
 }
 
 export function summarize(weekends: GradedWeekend[]): Summary {
-  const rows = weekends.flatMap((w) => w.rows);
+  const rows = weekends.flatMap((w) => w.rows).filter(comparable);
   const calls = rows.filter((r) => r.hit !== null);
   const hits = calls.filter((r) => r.hit).length;
   const ready = calls.length >= MIN_CALLS;

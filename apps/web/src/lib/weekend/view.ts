@@ -4,6 +4,7 @@
  * can never show a different number from the API. Each returns "error" when the
  * record is unreadable — callers answer 503 / show an outage, never an empty card.
  */
+import { comparable } from "./scorecard";
 import { kvGetProbe } from "@/lib/kv";
 import { KV_BASE_ROWS_LATEST, BASE_ROWS_MAX_AGE_MS } from "@/lib/blue-hood/kv-keys";
 import type { BaseDeskLatest } from "@/lib/blue-hood/types";
@@ -40,7 +41,10 @@ export async function scorecardView(opts: { ticker?: string | null; limit?: numb
   const ticker = opts.ticker ?? null;
   const limit = opts.limit ?? 12;
   const pick = <T extends { rows: { ticker: string }[] }>(x: T): T => (ticker ? { ...x, rows: x.rows.filter((r) => r.ticker === ticker) } : x);
-  const all = [...store.weekends].sort((a, b) => b.friday.localeCompare(a.friday)).map(pick);
+  // Rows whose pool and oracle sit on different share bases (a split applied
+  // to one side, scorecard.ts MAX_COMPARABLE_MOVE_PCT) are dropped from stored
+  // weeks too, so no reader lists or counts them.
+  const all = [...store.weekends].sort((a, b) => b.friday.localeCompare(a.friday)).map((w) => ({ ...w, rows: w.rows.filter(comparable) })).map(pick);
   // Summary and `weekends[]` describe the SAME window (2026-11-14): the summary
   // used to run over every stored weekend while the list was sliced to `limit`,
   // so a `weekends: 4` reply carried a lifetime stat without saying so. ShunTr,
