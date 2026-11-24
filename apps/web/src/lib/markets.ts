@@ -213,7 +213,7 @@ export const readStockMarkets = cacheWhole(async (): Promise<{ rows: StockRow[];
   // (gtMulti) means each refresh re-asks GeckoTerminal only for what it missed.
   void partial;
   return out;
-}, "markets:stocks:v6", 60);
+}, `markets:stocks:v7:${stockUniverse().length}`, 60); // key carries the universe size: Vercel's data cache outlives deploys, so a synced list (377 → 415, 2026-11-25) kept serving the old rows
 
 export interface TrendingRow {
   chain: MarketChain;
