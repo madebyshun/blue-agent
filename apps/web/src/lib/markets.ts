@@ -45,6 +45,10 @@ export type StockRow = {
   priceUsd: number | null;
   volume24hUsd: number | null;
   liquidityUsd: number | null;
+  /** On-chain stock token collateral held by Aave V4 Equities Hub + Morpho Blue on Base 8453 (USD). Null = none or unread. */
+  collateralUsd?: number | null;
+  collateralAaveUsd?: number | null;
+  collateralMorphoUsd?: number | null;
   /** False when GeckoTerminal refused the read: nulls then mean unknown, not "no pool". */
   read: boolean;
 } & MarketExtras;
@@ -170,30 +174,98 @@ const gtMulti = cacheWhole(async (chain: MarketChain, csv: string) => {
  * One multicall, cached an hour. A failed read returns an empty set: every token
  * is then read as before, never hidden on a guess.
  */
+/** Verified Base 8453 lending contracts holding Coinbase B20 stock tokens as collateral. */
+export const BASE_COLLATERAL_VENUES = {
+  /** Aave V4 Equities Hub on Base 8453 (MAG7 + SPCXc spoke collateral custodian). */
+  aaveV4Hub: "0xa4d5947Eb727A052bae69C593FfC84247EC9864E" as Address,
+  /** Morpho Blue singleton on Base 8453 (holds collateral for all Morpho stock markets). */
+  morphoBlue: "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb" as Address,
+} as const;
+
+export interface StockCollateralRaw { aaveTokens: number; morphoTokens: number }
+
+export function computeStockCollateralUsd(
+  raw: StockCollateralRaw | null | undefined,
+  priceUsd: number | null,
+): { collateralUsd: number | null; collateralAaveUsd: number | null; collateralMorphoUsd: number | null } {
+  if (!raw || priceUsd === null || !Number.isFinite(priceUsd) || priceUsd <= 0) {
+    return { collateralUsd: null, collateralAaveUsd: null, collateralMorphoUsd: null };
+  }
+  const aave = raw.aaveTokens > 0 ? raw.aaveTokens * priceUsd : 0;
+  const morpho = raw.morphoTokens > 0 ? raw.morphoTokens * priceUsd : 0;
+  const total = aave + morpho;
+  if (total <= 0) return { collateralUsd: null, collateralAaveUsd: null, collateralMorphoUsd: null };
+  return {
+    collateralUsd: total,
+    collateralAaveUsd: aave > 0 ? aave : null,
+    collateralMorphoUsd: morpho > 0 ? morpho : null,
+  };
+}
+
 export const unmintedBaseStocks = cacheWhole(async (): Promise<string[]> => {
   const c = createPublicClient({ chain: base, transport: http(process.env.HUB_RPC_URL || "https://base-rpc.publicnode.com", { retryCount: 2 }) });
   try {
     const res = await c.multicall({ contracts: COINBASE_BASE_STOCKS.map((s) => ({ address: s.token, abi: erc20Abi, functionName: "totalSupply" } as const)), allowFailure: true });
     return COINBASE_BASE_STOCKS.filter((_, i) => res[i]?.status === "success" && res[i].result === 0n).map((s) => s.token.toLowerCase());
   } catch { throw new Uncached([] as string[]); }
-}, "markets:base-unminted:v1", 3600);
+}, "markets:base-unminted:v2", 900);
+
+/** On-chain token balances held as collateral in Aave V4 Equities Hub and Morpho Blue on Base 8453. Cached 5 min. */
+export const readBaseStockCollateral = cacheWhole(async (): Promise<Record<string, StockCollateralRaw> | null> => {
+  const unminted = new Set(await unmintedBaseStocks());
+  const minted = COINBASE_BASE_STOCKS.filter((s) => !unminted.has(s.token.toLowerCase()));
+  if (!minted.length) return {};
+  const c = createPublicClient({ chain: base, transport: http(process.env.HUB_RPC_URL || "https://base-rpc.publicnode.com", { retryCount: 2 }) });
+  try {
+    const contracts = minted.flatMap((s) => [
+      { address: s.token, abi: erc20Abi, functionName: "balanceOf" as const, args: [BASE_COLLATERAL_VENUES.aaveV4Hub] as const },
+      { address: s.token, abi: erc20Abi, functionName: "balanceOf" as const, args: [BASE_COLLATERAL_VENUES.morphoBlue] as const },
+    ]);
+    const res = await c.multicall({ contracts, allowFailure: true });
+    const out: Record<string, StockCollateralRaw> = {};
+    let anyOk = false;
+    for (let i = 0; i < minted.length; i++) {
+      const a = res[i * 2];
+      const m = res[i * 2 + 1];
+      if (a?.status === "success" || m?.status === "success") anyOk = true;
+      const aaveTokens = a?.status === "success" && a.result > 0n ? Number(formatUnits(a.result, 8)) : 0;
+      const morphoTokens = m?.status === "success" && m.result > 0n ? Number(formatUnits(m.result, 8)) : 0;
+      if (aaveTokens > 0 || morphoTokens > 0) {
+        out[minted[i].token.toLowerCase()] = { aaveTokens, morphoTokens };
+      }
+    }
+    if (!anyOk) throw new Uncached(null);
+    return out;
+  } catch (e) {
+    if (e instanceof Uncached) throw e;
+    throw new Uncached(null);
+  }
+}, "markets:base-collateral:v1", 300);
 
 export const readStockMarkets = cacheWhole(async (): Promise<{ rows: StockRow[]; readAt: string }> => {
   const uni = stockUniverse();
   const priced: StockRow[] = [];
   let partial = false;
-  const unminted = new Set(await unmintedBaseStocks());
+  const [unmintedList, collateralMap] = await Promise.all([
+    unmintedBaseStocks(),
+    readBaseStockCollateral().catch(() => null),
+  ]);
+  const unminted = new Set(unmintedList);
   for (const chain of MARKET_CHAINS) {
     const mine = uni.filter((u) => u.chain === chain);
     const { px, unread } = await gtPrices(chain, mine.filter((u) => !(chain === "base" && unminted.has(u.contract.toLowerCase()))).map((u) => u.contract.toLowerCase()));
     if (unread.size) partial = true;
     for (const u of mine) {
-      const p = px[u.contract.toLowerCase()];
+      const addr = u.contract.toLowerCase();
+      const p = px[addr];
+      const col = chain === "base" ? computeStockCollateralUsd(collateralMap?.[addr], p?.price ?? null) : { collateralUsd: null, collateralAaveUsd: null, collateralMorphoUsd: null };
       priced.push({
-        ...u, priceUsd: p?.price ?? null, volume24hUsd: p?.vol ?? null, liquidityUsd: p?.liq ?? null, read: !unread.has(u.contract.toLowerCase()),
+        ...u, priceUsd: p?.price ?? null, volume24hUsd: p?.vol ?? null, liquidityUsd: p?.liq ?? null,
+        ...col,
+        read: !unread.has(addr),
         // Base: the token's own logo (contractURI, synced into coinbase-list) first,
         // so a row GeckoTerminal could not read still shows its mark.
-        logo: (chain === "base" ? BASE_LOGO.get(u.contract.toLowerCase()) : null) ?? p?.logo ?? null, change24hPct: p?.change24hPct ?? null, mcapUsd: p?.mcapUsd ?? null, mcapIsFdv: p?.mcapIsFdv ?? false,
+        logo: (chain === "base" ? BASE_LOGO.get(addr) : null) ?? p?.logo ?? null, change24hPct: p?.change24hPct ?? null, mcapUsd: p?.mcapUsd ?? null, mcapIsFdv: p?.mcapIsFdv ?? false,
         pool: p?.pool ?? null, side: p?.side ?? "base", poolCreatedAt: p?.poolCreatedAt ?? null,
       });
     }
@@ -213,7 +285,7 @@ export const readStockMarkets = cacheWhole(async (): Promise<{ rows: StockRow[];
   // (gtMulti) means each refresh re-asks GeckoTerminal only for what it missed.
   void partial;
   return out;
-}, `markets:stocks:v7:${stockUniverse().length}`, 60); // key carries the universe size: Vercel's data cache outlives deploys, so a synced list (377 → 415, 2026-11-25) kept serving the old rows
+}, `markets:stocks:v8:${stockUniverse().length}`, 60); // key carries universe size + bumped to v8 for on-chain collateral fields
 
 export interface TrendingRow {
   chain: MarketChain;

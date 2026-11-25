@@ -25,13 +25,16 @@ export interface MarketRow {
   mcapIsFdv: boolean;
   liq: number | null;
   vol: number | null;
+  collateral?: number | null;
+  collateralAave?: number | null;
+  collateralMorpho?: number | null;
   createdAt: string | null;
   pool: string | null;
   side: "base" | "quote";
   read: boolean;
 }
 
-type SortKey = "vol" | "change" | "mcap" | "liq" | "age";
+type SortKey = "vol" | "change" | "mcap" | "liq" | "collateral" | "age";
 const PAGE = 25;
 const CH = { base: "Base", robinhood: "Robinhood" } as const;
 const usd = (n: number | null) => n === null ? "—" : n >= 1e9 ? `$${(n / 1e9).toFixed(2)}B` : n >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` : n >= 1e3 ? `$${(n / 1e3).toFixed(1)}K` : n >= 1 ? `$${n.toFixed(2)}` : n > 0 ? `$${n.toPrecision(3)}` : "$0";
@@ -165,7 +168,7 @@ export default function MarketsTable({ rows, readAt, stats }: { rows: MarketRow[
 
   const shown = useMemo(() => {
     const t = q.trim().toLowerCase();
-    const val = (r: MarketRow): number | null => sort.k === "age" ? ageDays(r.createdAt) : r[sort.k];
+    const val = (r: MarketRow): number | null => sort.k === "age" ? ageDays(r.createdAt) : (r[sort.k] ?? null);
     return rows
       .filter((r) => kind === "all" || (kind === "launches" ? r.kind === "launch" : r.kind === "stock" || r.kind === "etf"))
       .filter((r) => chain === "all" || r.chain === chain)
@@ -250,23 +253,30 @@ export default function MarketsTable({ rows, readAt, stats }: { rows: MarketRow[
       </div>
 
       <div className="mt-3 overflow-x-auto rounded-[16px] border border-white/[0.09] bg-[#0b111c]">
-        <table className="w-full min-w-[1180px] text-[14px]">
+        <table className="w-full min-w-[1280px] text-[14px]">
           <thead>
             <tr className="text-left text-[12px] tracking-[0.08em] text-[#64748B] border-b border-[#1A1A2E]">
               <th className="w-10 px-3 py-2 font-medium">#</th>
               <th className="px-2 font-medium">MARKET</th>
-              <Th k="change" className="w-[300px]">24H CHANGE</Th>
+              <Th k="change" className="w-[280px]">24H CHANGE</Th>
               <Th k="age" className="text-right">AGE</Th>
               <Th k="mcap" className="text-right">MARKET CAP</Th>
               <Th k="liq" className="text-right">LIQUIDITY</Th>
+              <Th k="collateral" className="text-right">COLLATERAL</Th>
               <Th k="vol" className="text-right">24H VOLUME</Th>
               <th className="px-3 text-right font-medium">TRADE</th>
             </tr>
           </thead>
           <tbody>
-            {slice.length === 0 && <tr><td colSpan={8} className="px-4 py-6 text-center text-[#64748B]">{kind === "launches" ? "No token has been launched through Blue Agent yet." : readAt ? "No match." : "Market data unreadable right now."}</td></tr>}
+            {slice.length === 0 && <tr><td colSpan={9} className="px-4 py-6 text-center text-[#64748B]">{kind === "launches" ? "No token has been launched through Blue Agent yet." : readAt ? "No match." : "Market data unreadable right now."}</td></tr>}
             {slice.map((r, i) => {
               const up = r.change === null ? null : r.change >= 0;
+              const colTitle = r.collateral
+                ? [
+                    r.collateralAave ? `Aave V4 ${usd(r.collateralAave)}` : null,
+                    r.collateralMorpho ? `Morpho Blue ${usd(r.collateralMorpho)}` : null,
+                  ].filter(Boolean).join(" · ") + " (on-chain Base 8453)"
+                : undefined;
               return (
                 <tr key={`${r.chain}:${r.token}`}
                   // The whole row opens the token page (links inside keep their own targets).
@@ -293,6 +303,7 @@ export default function MarketsTable({ rows, readAt, stats }: { rows: MarketRow[
                   <td className="px-2 text-right text-[#94A3B8] tabular-nums">{age(r.createdAt)}</td>
                   <td className="px-2 text-right text-[#E2E8F0] tabular-nums" title={r.mcapIsFdv ? "fully diluted value (no market cap on file)" : undefined}>{r.mcap ? usd(r.mcap) : "—"}{r.mcap !== null && r.mcap > 0 && r.mcapIsFdv && <span className="text-[11px] text-[#64748B]"> FDV</span>}</td>
                   <td className="px-2 text-right text-[#94A3B8] tabular-nums">{!r.read ? "—" : usd(r.liq)}</td>
+                  <td className="px-2 text-right text-[#4FC3F7] tabular-nums" title={colTitle}>{r.collateral ? usd(r.collateral) : <span className="text-[#475569]">—</span>}</td>
                   <td className="px-2 text-right text-[#E2E8F0] tabular-nums">{!r.read ? "—" : r.vol === null ? <span className="text-[#64748B]">no pool</span> : usd(r.vol)}</td>
                   <td className="px-3 text-right">
                     <button type="button" onClick={(e) => { e.stopPropagation(); setTrade(r); }} className="inline-flex items-center whitespace-nowrap rounded-[8px] border border-[#2a3350] bg-[#0F121A] px-3.5 py-2 text-[13px] text-[#E2E8F0] hover:border-[#4FC3F7]/60 hover:text-[#4FC3F7]">Trade</button>

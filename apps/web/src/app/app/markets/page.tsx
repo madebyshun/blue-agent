@@ -31,11 +31,13 @@ export default async function MarketsPage() {
     ...stocks.rows.map((r) => ({
       chain: r.chain, kind: r.kind, token: r.contract, symbol: r.ticker, name: r.name, logo: r.logo,
       price: r.priceUsd, change: r.change24hPct, mcap: r.mcapUsd, mcapIsFdv: r.mcapIsFdv, liq: r.liquidityUsd, vol: r.volume24hUsd,
+      collateral: r.collateralUsd ?? null, collateralAave: r.collateralAaveUsd ?? null, collateralMorpho: r.collateralMorphoUsd ?? null,
       createdAt: r.poolCreatedAt, pool: r.pool, side: r.side, read: r.read,
     })),
     ...launches.rows.map((r) => ({
       chain: "base" as const, kind: "launch" as const, token: r.token, symbol: r.symbol ?? `${r.token.slice(0, 6)}…`, name: r.name ?? r.token, logo: r.logo,
       price: r.priceUsd, change: r.change24hPct, mcap: r.mcapUsd, mcapIsFdv: r.mcapIsFdv, liq: r.liquidityUsd, vol: r.volume24hUsd,
+      collateral: null, collateralAave: null, collateralMorpho: null,
       createdAt: r.poolCreatedAt, pool: r.pool, side: r.side, read: r.read,
     })),
   ];
@@ -95,7 +97,7 @@ export default async function MarketsPage() {
           }} />
           <p className="text-[12px] text-[#64748B] mt-4 leading-relaxed">
             Stock tokens come from our checked Coinbase B20 catalog on Base, matched by contract and checked on chain. See Coverage for the latest inventory.
-            Prices, change, market cap, liquidity, volume and charts are read from each token&apos;s DEX pools (Aerodrome / Uniswap on Base 8453) through GeckoTerminal, every 5 minutes. A stock token tracks a share; it is not the share. Not financial advice.
+            Prices, change, market cap, liquidity, volume and charts are read from each token&apos;s DEX pools (Aerodrome / Uniswap on Base 8453) through GeckoTerminal, every 5 minutes. Collateral is read on chain from Aave V4 Equities Hub and Morpho Blue on Base 8453, valued at each token&apos;s live pool price. A stock token tracks a share; it is not the share. Not financial advice.
           </p>
         </MarketContainer>
       </MarketScroll>
