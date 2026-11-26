@@ -65,13 +65,14 @@ function fmtPulseTime(ms: number, range: PulseRange): string {
   return `${d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })} · ${d.toISOString().slice(11, 16)} UTC`;
 }
 
-export function MarketNav({ active }: { active: "overview" | "drift" | "weekend" | "coverage" }) {
+export function MarketNav({ active }: { active: "overview" | "drift" | "weekend" | "intel" | "coverage" }) {
   return (
     <nav aria-label="Market views" className="sticky top-0 z-20 -mt-5 flex shrink-0 gap-4 overflow-x-auto bg-[#070b12] pt-3 border-b border-[#1A1A2E] text-[11px] sm:gap-6 sm:text-sm [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {([
         ["overview", "/markets", "Overview"],
         ["drift", "/markets/drift", "Oracle drift"],
         ["weekend", "/markets/weekend", "Weekend lab"],
+        ["intel", "/markets/intel", "Intel"],
         ["coverage", "/markets/drift/coverage", "Coverage"],
       ] as const).map(([id, href, label]) => (
         <Link
