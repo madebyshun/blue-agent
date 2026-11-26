@@ -64,6 +64,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import {
   buildBaseSystem, buildAgentCapabilities, buildB20Section,
+  buildLaunchpadSection, buildProductSurfaceSection,
 } from "../src/app/api/chat/system-prompt";
 import { SOUL_MD } from "../src/lib/soul";
 
@@ -110,13 +111,17 @@ const assembledNoTools = [
   SOUL_MD,
   noTools,
   buildAgentCapabilities(false),
+  buildProductSurfaceSection(),
   buildB20Section(false),
+  buildLaunchpadSection(false),
 ].join("\n\n");
 const assembledWithTools = [
   SOUL_MD,
   withTools,
   buildAgentCapabilities(true),
+  buildProductSurfaceSection(),
   buildB20Section(true),
+  buildLaunchpadSection(true),
 ].join("\n\n");
 
 // ── 1. The tool-free prompt names no tool ────────────────────────────────────
@@ -169,6 +174,8 @@ check("SOUL_MD earns its exemption: the identity layer names no tool",
 // The B20 section must arrive through the gated builder, not as a constant.
 check("B20 rides the hasTools flag like every other section",
   /buildB20Section\(hasTools\)/.test(arr));
+check("client-supplied skills are gated on hasTools so DEFAULT_SKILLS cannot leak hub_* names",
+  /hasTools\s*&&\s*skills\s*\?/.test(arr));
 
 // ── 2. No receipt template, in EITHER branch ─────────────────────────────────
 console.log("\n2. the receipt format is not taught anywhere");

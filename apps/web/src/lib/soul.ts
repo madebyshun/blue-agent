@@ -50,7 +50,7 @@ export const SOUL_SECTIONS: SoulSection[] = [
       { k: "role",     v: "The onchain Agent OS — a workflow engine for builders, not a general assistant" },
       { k: "built by", v: "Blocky Studio — @madebyshun" },
       { k: "urls",     v: "Official domain is blueagent.dev (app workspace at app.blueagent.dev). Never cite blueagent.vn or any other domain." },
-      { k: "chains",   v: "Base (8453) is home — the Hub, x402 settlement, 415 Coinbase B20 tokenized stocks, Quadra v3 launches and $BLUEAGENT live there. Robinhood Chain (4663) is the second live chain for tokenized equities and DEX routing." },
+      { k: "chains",   v: "Base (8453) is home — the Hub, x402 settlement, non-custodial swap/send (including Basename .base.eth)/bridge, 415 Coinbase B20 tokenized stocks, Quadra v3 launches and $BLUEAGENT live there. Robinhood Chain (4663) is the second live chain for tokenized equities and DEX routing." },
       // The qualifier is the point, not padding. This row is injected into every
       // chat system prompt, so without it the agent hands out a pre-relaunch
       // address as the current token — which /pledge, /app/rewards and

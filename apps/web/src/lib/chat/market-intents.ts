@@ -127,9 +127,14 @@ export function marketCallsFor(messages: readonly { role: string; content: unkno
   // quote): it needs a price word, a chain, or to be the whole message.
   const ticker = stockTickerIn(raw);
   const asksCrossVenue = !!ticker && /\b(drift|spread|cross[- ]?venue)\b|chênh lệch/.test(t);
+  const asksOracleDriftOverview = !ticker
+    && !/(?:là gì|hoạt động|giải thích|what is|explain)/i.test(t)
+    && /\boracle drift\b|\bdex\s*(?:vs\.?|versus|so với|với)\s*chainlink\b|so sánh giá\s*dex\b.*\bchainlink/.test(t);
   const asksQuote = !!ticker && (/\bprices?\b|\bgiá\b|\bquote\b|\btrading at\b|\bon (base|robinhood|rh)\b/.test(t) || t.replace(/[?!.\s]/g, "") === ticker.toLowerCase());
   if (asksCrossVenue && !calls.length) {
     add({ name: "hub_cross_venue_stock", args: { ticker } });
+  } else if (asksOracleDriftOverview && !calls.length) {
+    add({ name: "stock_brief", args: chainFrom(t) ? { chain: chainFrom(t) } : {} });
   } else if (/\bscreen(?:er)?\b.*\b(stocks?|etfs?)\b|\b(stocks?|etfs?)\b.*\bscreen(?:er)?\b|lọc cổ phiếu/.test(t) && !calls.length) {
     add({ name: "hub_stock_screen", args: {} });
   } else if (ticker && asksQuote && !calls.length && !/\b(cheaper|above|below|gap|premium|discount)\b/.test(t)) {
