@@ -44,14 +44,14 @@ export const VIRTUALS_PRESETS_V1: VirtualsPresetV1[] = [
   // while the server actually runs sonnet@50cr is exactly the honesty defect
   // #143 is about. The model is a Venice one, so it depends on the provider
   // routing (PR feat/chat-venice-provider) to be reachable at all.
-  { id: "free",     provider: "venice",   model: "qwen3-5-9b",                 label: "Free",     desc: "Qwen 3.5 9B · no credits · chat only",   cost: "●",   contextTokens: 256_000,   credits: 0,   noTools: true },
+  { id: "free",     provider: "venice",   model: "mistral-small-3-2-24b-instruct", label: "Free",     desc: "Mistral Small 3.2 · no credits · chat only", cost: "●", contextTokens: 256_000, credits: 0, noTools: true },
   { id: "balanced", provider: "virtuals", model: "anthropic-claude-sonnet-5",  label: "Balanced", desc: "Claude Sonnet 5 · default for most work", cost: "●●",  contextTokens: 1_000_000, credits: 50 },
   { id: "deep",     provider: "virtuals", model: "anthropic-claude-opus-4-8",  label: "Deep",     desc: "Claude Opus 4.8 · heavy reasoning",       cost: "●●●", contextTokens: 1_000_000, credits: 200 },
   { id: "private",  provider: "virtuals", model: "e2ee-deepseek-v4-flash",     label: "Private",  desc: "E2EE · no logs · DeepSeek V4",            cost: "●",   contextTokens: 1_000_000, credits: 30,  privacy: true },
   { id: "flash",    provider: "virtuals", model: "google-gemini-2-5-flash",    label: "Instant",  desc: "Gemini 2.5 Flash · fastest first token",  cost: "●",   contextTokens: 1_048_576, credits: 10 },
   { id: "grok",       provider: "virtuals", model: "x-ai-grok-4-20",                   label: "Grok",       desc: "Grok 4 · 2M context window",                        cost: "●●",  contextTokens: 2_000_000, credits: 60,  optional: true },
   { id: "search",     provider: "venice",   model: "grok-4-7",                         label: "Search",     desc: "Grok 4.7 · live web search · Private",              cost: "●●",  contextTokens: 500_000,   credits: 60,  optional: true, webSearch: true },
-  { id: "tee",        provider: "venice",   model: "glm-5-3-flash-e2ee",               label: "Private TEE",desc: "GLM 5.3 Flash TEE · attested enclave · 1M ctx",     cost: "●",   contextTokens: 1_000_000, credits: 20,  privacy: true },
+  { id: "tee",        provider: "venice",   model: "e2ee-glm-5-3-flash",               label: "Private TEE",desc: "GLM 5.3 Flash TEE · attested enclave · 1M ctx",     cost: "●",   contextTokens: 1_000_000, credits: 20,  privacy: true },
   { id: "sonnet55",   provider: "venice",   model: "claude-sonnet-5-5",                label: "Sonnet 5.5", desc: "Claude Sonnet 5.5 · Venice · web search · 1M ctx",  cost: "●●",  contextTokens: 1_000_000, credits: 55,  optional: true, webSearch: true },
 ];
 

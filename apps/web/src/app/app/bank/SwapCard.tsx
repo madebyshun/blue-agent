@@ -44,7 +44,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useAccount, useSwitchChain, useWriteContract, useSendTransaction, useReadContract } from "wagmi";
 import { useSilentSender } from "@/lib/privy/silent-tx";
-import { useAutoConfirm, useAutoReport } from "@/components/wallet/action-context";
+import { useAutoConfirm, useAutoReport, useAutoBlocker } from "@/components/wallet/action-context";
 import { formatUnits, parseUnits, isAddress, getAddress, encodeFunctionData } from "viem";
 import { base } from "wagmi/chains";
 import { ERC20_ABI } from "@/lib/yield-execution";
@@ -474,8 +474,16 @@ export default function SwapCard({
   const canSwap = !!account && !!quote?.transaction && amt > 0 && gate === "ok" && !loading && buyDec != null
     && pt.cleared && !pt.blocked;
   const busy = step === "approving" || step === "swapping";
+  const autoBlocker = !isConnected ? "Connect your wallet first"
+    : quote?.needsKey ? "Swap quoting requires ZEROX_API_KEY on the server"
+    : !loading && quote?.error ? quote.error
+    : overBalance ? `Amount exceeds your ${label(sell)} balance`
+    : gate === "unverified" ? `Couldn't read your ${label(sell)} balance`
+    : pt.blocked ? "Blocked by pre-trade safety check"
+    : null;
   // A chat "yes" runs the same swap() once the card is ready to sign.
   useAutoConfirm(canSwap && step === "idle", (o) => { void swap(o); });
+  useAutoBlocker(autoBlocker);
   useAutoReport(step, err, txHash ? `https://basescan.org/tx/${txHash}` : null,
     { detail: `${fmt(amt)} ${label(sell)} → ${buyAmount != null ? fmt(buyAmount) : ""} ${label(buy)}`.replace(/\s+/g, " ") });
 
@@ -771,6 +779,7 @@ export default function SwapCard({
       <PreTradeBanner pt={pt} />
 
       {quote?.needsKey && <p className="text-[12px] text-amber-400 mb-2">Trading needs a free 0x API key — set <span className="text-slate-300">ZEROX_API_KEY</span>.</p>}
+      {!loading && quote?.error && <p className="text-[12px] text-amber-400 mb-2">Quote unavailable: {quote.error}</p>}
       {step === "error" && <p className="text-[13px] text-amber-400 mb-2">{err}</p>}
 
       {gate === "unverified" && (

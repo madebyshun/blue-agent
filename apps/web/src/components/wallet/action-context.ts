@@ -76,3 +76,20 @@ export function useAutoConfirm(ready: boolean, run: (opts: { silent: boolean }) 
     run({ silent });
   }, [armed, ready, silent, run]);
 }
+
+/**
+ * In a signing card: once the user confirmed in chat (`armed`), report any
+ * pre-flight blocker (no quote, insufficient balance, missing wallet, invalid
+ * address) immediately as chat text instead of sitting silent until
+ * ActionStrip's timeout fires.
+ */
+export function useAutoBlocker(reason: string | null | undefined) {
+  const { armed, report } = useContext(AutoConfirmContext);
+  const reported = useRef(false);
+  useEffect(() => {
+    if (!armed) { reported.current = false; return; }
+    if (!report || !reason || reported.current) return;
+    reported.current = true;
+    report({ phase: "error", message: reason });
+  }, [armed, report, reason]);
+}

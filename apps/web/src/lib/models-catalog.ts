@@ -26,6 +26,7 @@
 
 import { resolveProvider, type ModelProvider } from "@/lib/model-providers";
 import { VIRTUALS_PRESETS_V1, formatContextTokens } from "@/app/chat/components/presets";
+import { resolvePrivacyTier, type PrivacyTier } from "@/lib/venice-privacy";
 
 export interface CatalogModelDTO {
   id: string;
@@ -53,7 +54,7 @@ export interface PresetDTO {
   available: boolean;
   contextTokens: number;
   contextSource: "catalog" | "fallback";
-  blueChat: { tools: boolean; webSearch: boolean; privacy: boolean };
+  blueChat: { tools: boolean; webSearch: boolean; privacy: boolean; privacyTier?: PrivacyTier | null };
   catalog: CatalogModelDTO | null;
 }
 
@@ -91,7 +92,7 @@ export interface ModelRow {
   credits?: number;
   inputModalities: string[];
   /** Preset rows only — what the tier can do as Blue Chat configures it. */
-  blueChat?: { tools: boolean; webSearch: boolean; privacy: boolean };
+  blueChat?: { tools: boolean; webSearch: boolean; privacy: boolean; privacyTier?: PrivacyTier | null };
   available?: boolean;
 }
 
@@ -139,7 +140,12 @@ export function fallbackPresetRows(): ModelRow[] {
     priceOut: null,
     credits: p.credits,
     inputModalities: [],
-    blueChat: { tools: p.noTools !== true, webSearch: p.webSearch === true, privacy: p.privacy === true },
+    blueChat: {
+      tools: p.noTools !== true,
+      webSearch: p.webSearch === true,
+      privacy: p.privacy === true,
+      privacyTier: resolvePrivacyTier({ provider: p.provider, modelId: p.model }),
+    },
   }));
 }
 

@@ -14,6 +14,8 @@ import { VIRTUALS_PRESETS_V1, formatContextTokens, normalizeChatTier, type Virtu
 export { VIRTUALS_PRESETS_V1, resolvePresetDispatch, formatContextTokens } from "./presets";
 export type { VirtualsPresetV1 } from "./presets";
 import ProviderMark from "./ProviderMark";
+import { isVeniceTeeModelId, type TeeAttestationEvidence } from "@/lib/venice-privacy";
+import { generateAttestationNonce } from "@/lib/venice-e2ee";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
@@ -161,6 +163,7 @@ export default function ChatInput() {
     // `webSearch` / `setWebSearch` intentionally NOT destructured — the toggle
     // that used them is removed (see the comment where it stood). They remain on
     // the context and in the request payload so re-enabling is a small revert.
+    strictE2ee, setStrictE2ee,
     pendingFiles, setPendingFiles,
   } = useChat();
   const { t } = useLang();
@@ -169,6 +172,8 @@ export default function ChatInput() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [modelOpen,   setModelOpen]   = useState(false);
   const [cmdOpen,     setCmdOpen]     = useState(false);
+  const [attestOpen,  setAttestOpen]  = useState(false);
+  const [attestState, setAttestState] = useState<{ loading: boolean; data: TeeAttestationEvidence | null; err: string | null }>({ loading: false, data: null, err: null });
 
   // Catalog-driven V1 preset list. Starts as the static fallback so the
   // picker renders instantly; the /api/chat/presets fetch then trims
@@ -190,14 +195,42 @@ export default function ChatInput() {
     return () => { cancelled = true; };
   }, []);
 
+  // Reset auto-grown textarea height whenever input is cleared after sending.
+  useEffect(() => {
+    if (!input && textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+    }
+  }, [input]);
+
   // Active preset — highlighted in the picker when chatTier === preset.id.
   // V1 preset ids ARE the chatTier values (fast, balanced, deep, private,
   // grok), so the lookup is 1:1. A legacy id highlights what the server runs
   // for it (normalizeChatTier → balanced), never simply the first row.
   const activeVirtualsPreset = virtualsPresets.find(p => p.id === normalizeChatTier(chatTier)) ?? virtualsPresets[0];
   const activePreset = MODEL_PRESETS.find(p => p.id === chatTier);
-
   const activeTier = ALL_TIERS.find(t => t.id === chatTier) ?? LEGACY_TIERS[1];
+  const isVeniceTeeActive = activeVirtualsPreset?.provider === "venice" && isVeniceTeeModelId(activeVirtualsPreset.model);
+
+  async function inspectAttestation() {
+    if (!activeVirtualsPreset) return;
+    if (attestOpen) { setAttestOpen(false); return; }
+    setAttestOpen(true);
+    setModelOpen(false);
+    setCmdOpen(false);
+    setAttestState({ loading: true, data: null, err: null });
+    try {
+      const nonce = generateAttestationNonce();
+      const res = await fetch(`/api/chat/tee-attestation?model=${encodeURIComponent(activeVirtualsPreset.model)}&nonce=${nonce}`);
+      const json = (await res.json()) as TeeAttestationEvidence;
+      if (!res.ok || !json.ok) {
+        setAttestState({ loading: false, data: json, err: json.error ?? `HTTP ${res.status}` });
+      } else {
+        setAttestState({ loading: false, data: json, err: null });
+      }
+    } catch (e) {
+      setAttestState({ loading: false, data: null, err: e instanceof Error ? e.message : "Attestation lookup failed" });
+    }
+  }
 
   // ── File handling ────────────────────────────────────────────────────────────
   const handleFiles = useCallback(async (fileList: FileList | null) => {
@@ -244,6 +277,7 @@ export default function ChatInput() {
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Escape") { setCmdMenu(false); setCmdOpen(false); setModelOpen(false); return; }
+    if (e.nativeEvent.isComposing || e.repeat) return;
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); }
   }
 
@@ -319,25 +353,19 @@ export default function ChatInput() {
 
         {/* ── Model selector popover — presets first, advanced behind toggle ── */}
         {modelOpen && (
-          <div className="absolute bottom-full mb-2 left-0 bg-[#0D0D14] border border-[#2A2A4E] rounded-xl overflow-hidden shadow-2xl z-20 w-80 max-h-[520px] overflow-y-auto">
-            <div className="px-3 pt-2.5 pb-1.5 border-b border-[#1A1A2E] sticky top-0 bg-[#0D0D14] z-10">
-              <span className="font-mono text-[13px] text-slate-600 tracking-widest">CHOOSE A MODE</span>
+          <div className="absolute bottom-full mb-2 left-0 bg-[#0D0D14] border border-[#2A2A4E] rounded-xl overflow-hidden shadow-2xl z-20 w-[360px] sm:w-[410px] max-w-[calc(100vw-2rem)] max-h-[min(600px,72vh)] overflow-y-auto">
+            <div className="px-3.5 pt-2.5 pb-1.5 border-b border-[#1A1A2E] sticky top-0 bg-[#0D0D14] z-10 flex items-center justify-between">
+              <span className="font-mono text-[12px] text-slate-500 tracking-widest">CHOOSE A MODE</span>
+              <span className="font-mono text-[11px] text-slate-600">{virtualsPresets.length}/{VIRTUALS_PRESETS_V1.length} live</span>
             </div>
 
-            {/* V1 catalog-driven Virtuals presets. The list is filtered
-                server-side against /v1/models — anything whose model id
-                disappeared from the catalog never renders here. Each row
-                shows: icon · label · cost dots (●/●●/●●●) · context size · credits.
-                The 5th preset (Grok) is `optional` — shown after a subtle
-                divider so the primary 4 stay uncluttered. */}
-            <div className="py-1.5">
+            <div className="py-1">
               {virtualsPresets.map((p, idx) => {
                 const isActive = chatTier === p.id;
-                // Primary presets get an accent color; Grok (optional) stays muted.
                 const accentByCost: Record<"●" | "●●" | "●●●", string> = {
-                  "●":   "#34D399", // green — cheap
-                  "●●":  "#4FC3F7", // blue — mid
-                  "●●●": "#A78BFA", // purple — expensive
+                  "●":   "#34D399",
+                  "●●":  "#4FC3F7",
+                  "●●●": "#A78BFA",
                 };
                 const accent = p.privacy ? "#6EE7B7" : accentByCost[p.cost];
                 const prevOptional = virtualsPresets[idx - 1]?.optional === true;
@@ -345,9 +373,9 @@ export default function ChatInput() {
                 return (
                   <div key={p.id}>
                     {showDividerBefore && (
-                      <div className="px-3 py-1">
+                      <div className="px-3.5 py-1">
                         <div className="border-t border-[#1A1A2E]" />
-                        <p className="font-mono text-[12px] text-slate-700 pt-1">Optional</p>
+                        <p className="font-mono text-[11px] uppercase tracking-wider text-slate-600 pt-1.5">Optional</p>
                       </div>
                     )}
                     <button
@@ -356,38 +384,39 @@ export default function ChatInput() {
                         setModelOpen(false);
                         textareaRef.current?.focus();
                       }}
-                      className="w-full text-left flex items-center gap-2.5 px-3 py-2 hover:bg-white/[0.02] transition-colors relative"
-                      style={isActive ? { background: `${accent}0a` } : undefined}
+                      className="w-full text-left flex items-center gap-2.5 px-3.5 py-2 hover:bg-white/[0.03] transition-colors relative"
+                      style={isActive ? { background: `${accent}0d` } : undefined}
                     >
                       {isActive && (
                         <span aria-hidden className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-r"
                               style={{ background: accent, boxShadow: `0 0 8px ${accent}80` }} />
                       )}
-                      <ProviderMark modelId={p.model} size={22} className="!rounded-lg" />
+                      <ProviderMark modelId={p.model} size={22} className="!rounded-lg shrink-0" />
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-baseline gap-2">
-                          <span className="font-mono text-[15px] font-bold" style={{ color: isActive ? accent : "#e2e8f0" }}>
+                        <div className="flex items-center gap-1.5 flex-nowrap overflow-hidden">
+                          <span className="font-mono text-[14px] font-bold whitespace-nowrap shrink-0" style={{ color: isActive ? accent : "#e2e8f0" }}>
                             {p.label}
                           </span>
-                          <span className="font-mono text-[13px] tracking-tighter" style={{ color: accent }}>{p.cost}</span>
-                          <span className="font-mono text-[12px] text-slate-600">{formatContextTokens(p.contextTokens)} ctx</span>
+                          <span className="font-mono text-[12px] tracking-tighter whitespace-nowrap shrink-0" style={{ color: accent }}>{p.cost}</span>
+                          <span className="font-mono text-[11px] text-slate-500 whitespace-nowrap shrink-0">{formatContextTokens(p.contextTokens)} ctx</span>
                           {isActive && (
-                            <span className="font-mono text-[12px]" style={{ color: accent }}>✓</span>
+                            <span className="font-mono text-[11px] shrink-0" style={{ color: accent }}>✓</span>
                           )}
-                          {/* Said where the model is picked: a chat-only preset
-                              cannot swap, send, bridge or look anything up, and a
-                              user who learns that from a refusal has already
-                              asked (seen in a shared chat, 2026-10-01). */}
                           {p.noTools && (
-                            <span className="font-mono text-[11px] text-slate-500 border border-[#1A1A2E] rounded px-1 py-px">chat only · no tools</span>
+                            <span
+                              title="Chat only — no on-chain or Hub tools"
+                              className="font-mono text-[10px] leading-none text-slate-400 border border-[#263249] bg-[#101827] rounded px-1.5 py-0.5 whitespace-nowrap shrink-0"
+                            >
+                              chat only
+                            </span>
                           )}
                         </div>
-                        <p className="font-mono text-[13px] text-slate-500 leading-snug truncate">{p.desc}</p>
+                        <p className="font-mono text-[12px] text-slate-500 leading-snug truncate mt-0.5">{p.desc}</p>
                       </div>
-                      <span className="font-mono text-[13px] shrink-0" style={{ color: accent }}>
+                      <span className="font-mono text-[12px] whitespace-nowrap shrink-0 pl-2" style={{ color: accent }}>
                         {p.credits === 0
                           ? <span className="font-bold">Free</span>
-                          : <>{p.credits}<span className="text-slate-700"> cr</span></>}
+                          : <>{p.credits}<span className="text-slate-600"> cr</span></>}
                       </span>
                     </button>
                   </div>
@@ -395,16 +424,44 @@ export default function ChatInput() {
               })}
             </div>
 
-            {/* Footnote — catalog is the single source of truth. If a
-                preset ever disappears from this picker, it's because
-                Virtuals delisted the underlying model id (see
-                `getVirtualsCatalog` in `_lib/llm.ts`). No hardcoded
-                lists downstream. */}
-            <div className="px-3 py-1.5 border-t border-[#1A1A2E]">
-              <p className="font-mono text-[12px] text-slate-700 leading-relaxed">
-                {virtualsPresets.length}/{VIRTUALS_PRESETS_V1.length} presets live · Virtuals catalog-driven · ●=cheap ●●=mid ●●●=deep
+            <div className="px-3.5 py-1.5 border-t border-[#1A1A2E]">
+              <p className="font-mono text-[11px] text-slate-600 leading-relaxed">
+                Catalog-driven · ● cheap · ●● mid · ●●● deep
               </p>
             </div>
+          </div>
+        )}
+
+        {/* ── TEE Attestation Proof popover ────────────────────────────────── */}
+        {attestOpen && isVeniceTeeActive && (
+          <div className="absolute bottom-full mb-2 left-0 bg-[#0D0D14] border border-[#10B981]/40 rounded-xl overflow-hidden shadow-2xl z-20 w-[340px] sm:w-[400px] p-3.5 font-mono text-[12px]">
+            <div className="flex items-center justify-between border-b border-[#1A1A2E] pb-2 mb-2.5">
+              <span className="text-[#10B981] font-semibold tracking-wider">TEE ENCLAVE ATTESTATION</span>
+              <button type="button" onClick={() => setAttestOpen(false)} className="text-slate-500 hover:text-slate-200">Close</button>
+            </div>
+            {attestState.loading && <p className="text-slate-400">Fetching fresh hardware quote from Venice…</p>}
+            {attestState.err && <p className="text-red-400">{attestState.err}</p>}
+            {attestState.data && (
+              <div className="space-y-1.5 text-slate-300">
+                <div className="flex justify-between gap-2"><span className="text-slate-500">Model</span><span className="truncate">{attestState.data.model}</span></div>
+                <div className="flex justify-between gap-2"><span className="text-slate-500">TEE Provider</span><span>{attestState.data.teeProvider ?? "—"}</span></div>
+                <div className="flex justify-between gap-2"><span className="text-slate-500">Nonce Verified</span><span className={attestState.data.nonceMatches ? "text-[#10B981]" : "text-slate-400"}>{attestState.data.nonceMatches === true ? "MATCH" : attestState.data.nonceMatches === false ? "MISMATCH" : "—"}</span></div>
+                <div className="flex justify-between gap-2"><span className="text-slate-500">Intel TDX Quote</span><span>{attestState.data.hasIntelQuote ? "Present" : "—"}</span></div>
+                <div className="flex justify-between gap-2"><span className="text-slate-500">NVIDIA GPU Attestation</span><span>{attestState.data.hasNvidiaPayload ? "Present" : "—"}</span></div>
+                {attestState.data.signingKey && (
+                  <div className="pt-1 border-t border-[#1A1A2E]">
+                    <span className="text-slate-500 block mb-0.5">Enclave Signing Key ({attestState.data.signingAlgo ?? "ecdsa"})</span>
+                    <span className="block break-all text-[11px] text-[#6EE7B7]">{attestState.data.signingKey}</span>
+                  </div>
+                )}
+                {attestState.data.intelQuotePreview && (
+                  <div className="pt-1">
+                    <span className="text-slate-500 block mb-0.5">Quote Preview</span>
+                    <span className="block break-all text-[11px] text-slate-400">{attestState.data.intelQuotePreview}</span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -483,7 +540,7 @@ export default function ChatInput() {
           style={{ background: "#0e1624", borderColor: outOfCredits ? "#EF444430" : "#2a3850" }}
         >
           {/* Textarea row */}
-          <div className="flex items-end gap-2 px-4 pt-3.5 pb-3">
+          <div className="flex items-end gap-2.5 px-4 pt-3 pb-2.5">
             <textarea
               ref={textareaRef}
               id="chat-composer"
@@ -493,8 +550,8 @@ export default function ChatInput() {
               placeholder={outOfCredits ? "No credits left — resets daily" : t("chat.placeholder")}
               rows={1}
               disabled={streaming || outOfCredits}
-              className="flex-1 resize-none bg-transparent outline-none font-mono text-sm text-white placeholder:text-slate-500 leading-relaxed"
-              style={{ maxHeight: 160, overflowY: "auto" }}
+              className="flex-1 resize-none bg-transparent border-0 outline-none focus:outline-none focus-visible:outline-none focus:ring-0 font-mono text-sm text-white placeholder:text-slate-500 leading-6 py-1 min-h-[32px]"
+              style={{ outline: "none", boxShadow: "none", maxHeight: 160, overflowY: "auto" }}
               onInput={(e) => {
                 const el = e.currentTarget;
                 el.style.height = "auto";
@@ -557,7 +614,7 @@ export default function ChatInput() {
 
             {/* Commands button */}
             <button
-              onMouseDown={(e) => { e.preventDefault(); setCmdOpen(!cmdOpen); setModelOpen(false); }}
+              onMouseDown={(e) => { e.preventDefault(); setCmdOpen(!cmdOpen); setModelOpen(false); setAttestOpen(false); }}
               className="flex items-center gap-1.5 h-7 px-2.5 rounded-lg border font-mono text-[14px] transition-all"
               style={cmdOpen
                 ? { color: "#4FC3F7", background: "#4FC3F710", borderColor: "#4FC3F730" }
@@ -567,6 +624,39 @@ export default function ChatInput() {
               <span className="text-[14px]">/</span>
               <span className="hidden sm:inline">Cmds</span>
             </button>
+
+            {/* Verify Enclave + Strict E2EE controls (Venice TEE presets only) */}
+            {isVeniceTeeActive && (
+              <>
+                <button
+                  type="button"
+                  onMouseDown={(e) => { e.preventDefault(); inspectAttestation(); }}
+                  className="flex items-center h-7 px-2.5 rounded-lg border font-mono text-[12px] transition-all"
+                  style={attestOpen
+                    ? { color: "#10B981", background: "#10B98118", borderColor: "#10B98150" }
+                    : { color: "#6EE7B7", background: "#10B9810D", borderColor: "#10B98130" }}
+                  title="Inspect live hardware TEE attestation from Venice"
+                >
+                  Verify Enclave
+                </button>
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    const nextOn = !strictE2ee;
+                    setStrictE2ee(nextOn);
+                    if (nextOn && pendingFiles.length > 0) setPendingFiles([]);
+                  }}
+                  className="flex items-center h-7 px-2.5 rounded-lg border font-mono text-[12px] transition-all"
+                  style={strictE2ee
+                    ? { color: "#10B981", background: "#10B98120", borderColor: "#10B98160" }
+                    : { color: "#94a3b8", background: "transparent", borderColor: "#2a3850" }}
+                  title="Client-side secp256k1 + AES-256-GCM encryption to enclave (disables tools, files & memory)"
+                >
+                  {strictE2ee ? "Strict E2EE: ON" : "Strict E2EE: OFF"}
+                </button>
+              </>
+            )}
 
             {/* Web search toggle — REMOVED, deliberately, not lost.
                 It was a no-op that looked like a feature. Flipping it set

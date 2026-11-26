@@ -14,6 +14,8 @@
 .workspace-row:hover { background: #111e30; }
 .workspace-row-avatar { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 13px; border: 1px solid #4fc3f72e; color: #79cfff; background: #4fc3f70a; font-size: 14px; flex-shrink: 0; }
 .workspace-surface :where(button,a,input,textarea,select):focus-visible { outline: 2px solid #79cfff; outline-offset: 3px; }
+.chat-composer textarea:focus,
+.chat-composer textarea:focus-visible { outline: none !important; box-shadow: none !important; }
 .workspace-tabs { display: flex; max-width: 100%; overflow-x: auto; scrollbar-width: none; gap: 4px; }
 .workspace-tabs > a { white-space: nowrap; }
 .chat-welcome { width: 100%; max-width: 760px; display: flex; flex-direction: column; align-items: flex-start; text-align: left; }
@@ -22,7 +24,7 @@
 .chat-starter { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 68px; text-align: left; padding: 14px 16px; background: #0d1623; border: 1px solid #263249; border-radius: 13px; font: 12px/1.5 var(--font-mono); color: #b5c3d8; transition: background .15s,border-color .15s; }
 .chat-starter:hover { background: #132139; border-color: #4fc3f766; color: #edf2fc; }
 .chat-composer { box-shadow: 0 12px 48px #0003; }
-.chat-composer:focus-within { box-shadow: 0 0 0 1px #4fc3f74d,0 12px 48px #0003; }
+.chat-composer:focus-within { border-color: #3b4f6e !important; box-shadow: 0 12px 48px #0003; }
 @media(min-width:768px) { .workspace-content { padding-inline: 32px; } }
 @media(max-width:639px) { .workspace-intro { align-items: flex-start; flex-direction: column; gap: 16px; } .workspace-intro h1 { font-size: 25px; } .chat-starters { grid-template-columns: repeat(2,minmax(0,1fr)); } .workspace-row { padding: 14px; } .workspace-row-avatar { display:none; } }
 @media(min-width:1024px) {

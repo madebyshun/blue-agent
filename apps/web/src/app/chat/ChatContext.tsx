@@ -40,6 +40,11 @@ import {
   addChunk, recentChunks,
 } from "@/lib/memory";
 import { sessionFetch } from "@/lib/session-client";
+import { isVeniceTeeModelId, type TeeAttestationEvidence } from "@/lib/venice-privacy";
+import {
+  generateEphemeralKeyPair, generateAttestationNonce,
+  encryptMessagesForE2EE, decryptChunkFromE2EE, isHexEncrypted, zeroFill,
+} from "@/lib/venice-e2ee";
 
 // ── Context type ──────────────────────────────────────────────────────────────
 
@@ -108,6 +113,10 @@ interface ChatContextValue {
   // Web search
   webSearch:    boolean;
   setWebSearch: (v: boolean) => void;
+
+  // Strict client-side E2EE (Venice TEE models only; disables tools, files & memory)
+  strictE2ee:    boolean;
+  setStrictE2ee: (v: boolean) => void;
 
   // File attachments (pending, cleared after send)
   pendingFiles:    Attachment[];
@@ -606,6 +615,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [cmdMenu,      setCmdMenu]     = useState(false);
   const [cmdFilter,    setCmdFilter]   = useState("");
   const [webSearch,    setWebSearch]   = useState(false);
+  const [strictE2ee,   setStrictE2ee]  = useState(false);
   const [pendingFiles, setPendingFiles] = useState<Attachment[]>([]);
   const abortRef       = useRef<AbortController | null>(null);
   const streamStartRef = useRef<number>(0);
@@ -633,6 +643,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // /api/chat: the same message sent, and debited, twice. A ref is set
   // synchronously, so the second call sees it before its first await.
   const sendingRef = useRef(false);
+  const lastConfirmAtRef = useRef(0);
   const sendOnce = useCallback(async (text: string) => {
     const userMsg = text.trim();
     if (!userMsg || streaming) return;
@@ -674,8 +685,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     // With nothing pending it goes to the model like any other message.
     if (!isConfirmWord(userMsg)) forgetArmed();
     else {
+      const now = Date.now();
+      // Guard against duplicate rapid-fire Enter / IME keydown sending "yes" twice.
+      if (now - lastConfirmAtRef.current < 1_000) {
+        setInput("");
+        return;
+      }
       const ctid = activeTaskId;
-      const replyAt = Date.now() + 1;
+      const replyAt = now + 1;
       // The action rewrites this reply as it progresses (signing → done / failed),
       // so its outcome reads as chat, not as a card. If the user has typed since,
       // the final outcome is a NEW message at the bottom instead: a receipt
@@ -697,16 +714,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         saveTasks(updated, walletAddr);
         return updated;
       });
-      const outcome = ctid ? confirmLatest(Date.now(), sink) : null;
+      const outcome = ctid ? confirmLatest(now, sink) : null;
       if (outcome && ctid) {
-        const cbase: Message[] = activeTask?.messages ?? [];
+        lastConfirmAtRef.current = now;
         setInput("");
         const turn: Message[] = [
           { role: "user", content: userMsg, createdAt: replyAt - 1 },
           { role: "assistant", content: confirmReply(outcome), createdAt: replyAt },
         ];
         setTasksState(prev => {
-          const updated = prev.map(t => t.id === ctid ? { ...t, messages: [...cbase, ...turn], updatedAt: Date.now() } : t);
+          const updated = prev.map(t => t.id === ctid ? { ...t, messages: [...t.messages, ...turn], updatedAt: Date.now() } : t);
           saveTasks(updated, walletAddr);
           return updated;
         });
@@ -822,7 +839,127 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     // become callable as mcp__<id>__<tool> server-side.
     const mcpConnectors = enabledConnectorsForChat();
 
+    const useStrictE2ee =
+      strictE2ee && dispatch.provider === "venice" && !!dispatch.modelId && isVeniceTeeModelId(dispatch.modelId);
+
     try {
+      if (useStrictE2ee && dispatch.modelId) {
+        const kp = generateEphemeralKeyPair();
+        try {
+          const nonce = generateAttestationNonce();
+          const attRes = await fetch(
+            `/api/chat/tee-attestation?model=${encodeURIComponent(dispatch.modelId)}&nonce=${nonce}`,
+            { signal: abortRef.current.signal },
+          );
+          const att = (await attRes.json().catch(() => ({}))) as TeeAttestationEvidence;
+          if (!attRes.ok || !att.ok || !att.signingKey) {
+            throw new Error(att.error ?? "TEE attestation failed; refusing to send Strict E2EE message.");
+          }
+          if (att.nonceMatches === false) {
+            throw new Error("TEE attestation nonce mismatch; aborting Strict E2EE.");
+          }
+
+          const encryptedMessages = await encryptMessagesForE2EE(
+            next
+              .filter(m => typeof m.content === "string" && m.content.trim().length > 0)
+              .map(m => ({ role: m.role, content: m.content })),
+            att.signingKey,
+          );
+
+          const res = await sessionFetch("/api/chat/e2ee", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Venice-TEE-Client-Pub-Key": kp.publicKeyHex,
+              "X-Venice-TEE-Model-Pub-Key": att.signingKey,
+              "X-Venice-TEE-Signing-Algo": "ecdsa",
+            },
+            body: JSON.stringify({
+              model: dispatch.modelId,
+              messages: encryptedMessages,
+              ...(walletAddr ? { address: walletAddr } : {}),
+            }),
+            signal: abortRef.current.signal,
+          });
+
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({})) as { error?: string };
+            throw new Error(data.error ?? `E2EE error ${res.status}`);
+          }
+
+          if (walletAddr) {
+            sessionFetch(`/api/credits/balance/${walletAddr}`)
+              .then(r => r.json())
+              .then(d => {
+                const bal = Number(d?.balance);
+                if (Number.isFinite(bal)) setCredits(bal);
+              })
+              .catch(() => null);
+          } else {
+            const remaining = deductCredits(cost, walletAddr);
+            setCredits(remaining);
+          }
+
+          const reader = res.body!.getReader();
+          const decoder = new TextDecoder();
+          let buf = "";
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buf += decoder.decode(value, { stream: true });
+            const lines = buf.split("\n");
+            buf = lines.pop() ?? "";
+            for (const line of lines) {
+              if (!line.startsWith("data: ")) continue;
+              const raw = line.slice(6).trim();
+              if (!raw || raw === "[DONE]") continue;
+              try {
+                const parsed = JSON.parse(raw) as {
+                  choices?: Array<{ delta?: { content?: string } }>;
+                };
+                const chunk = parsed.choices?.[0]?.delta?.content ?? "";
+                if (!chunk) continue;
+                const plain = isHexEncrypted(chunk)
+                  ? await decryptChunkFromE2EE(chunk, kp.privateKey)
+                  : chunk;
+                if (plain) {
+                  setTasksState(prev => {
+                    const task = prev.find(t => t.id === tid);
+                    if (!task) return prev;
+                    const msgs = [...task.messages];
+                    const last = msgs[msgs.length - 1];
+                    if (last?.role === "assistant") {
+                      msgs[msgs.length - 1] = { ...last, content: last.content + plain };
+                    }
+                    return prev.map(t => t.id === tid ? { ...t, messages: msgs } : t);
+                  });
+                }
+              } catch { /* ignore malformed SSE chunk */ }
+            }
+          }
+
+          // Local-only persistence: stamp metadata and save task, deliberately
+          // skipping updateMemoryAfterChat / addChunk so E2EE content never leaks.
+          const responseMs = Date.now() - streamStartRef.current;
+          setTasksState(prev => {
+            const task = prev.find(t => t.id === tid);
+            if (!task) return prev;
+            const lastIdx = task.messages.length - 1;
+            const finalMsgs = task.messages.map((m, i) =>
+              i === lastIdx && m.role === "assistant"
+                ? { ...m, modelUsed: `${chatTier} · e2ee`, responseMs, creditsUsed: isUnlimited ? 0 : cost, isThinking: false }
+                : m,
+            );
+            const updated = prev.map(t => t.id === tid ? { ...t, messages: finalMsgs, updatedAt: Date.now() } : t);
+            saveTasks(updated, walletAddr);
+            return updated;
+          });
+          return;
+        } finally {
+          zeroFill(kp.privateKey);
+        }
+      }
+
       // Language preference for the assistant's replies. Read from the shared
       // `.blueagent.dev` cookie the LanguageToggle writes; the chat route injects
       // a "respond in Simplified Chinese" instruction when this is "zh".
@@ -1166,7 +1303,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, [
     streaming, activeTask, activeTaskId, chatTier, walletAddr, cost, credits,
     isUnlimited,
-    webSearch, pendingFiles, ensureSession, hasSession, embeddedWallet,
+    webSearch, strictE2ee, pendingFiles, ensureSession, hasSession, embeddedWallet,
   ]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const send = useCallback(async (text: string) => {
@@ -1186,7 +1323,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     buyOpen, setBuyOpen,
     walletAddr, holderTier, credits, countdown, isUnlimited, daily, cost, outOfCredits,
     walletReady, setCredits, walletRefresh, triggerWalletRefresh,
-    webSearch, setWebSearch, pendingFiles, setPendingFiles,
+    webSearch, setWebSearch, strictE2ee, setStrictE2ee, pendingFiles, setPendingFiles,
     cmdMenu, setCmdMenu, cmdFilter, setCmdFilter,
     sync,
   };

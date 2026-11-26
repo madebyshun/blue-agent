@@ -27,6 +27,7 @@ import {
   type CatalogModel,
 } from "@/app/api/_lib/llm";
 import { CREDIT_USD } from "@/lib/credit-pricing";
+import { resolvePrivacyTier } from "@/lib/venice-privacy";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
@@ -44,6 +45,12 @@ export async function GET() {
 
   const presets = VIRTUALS_PRESETS.map((p) => {
     const catalog = lookup(p.provider, p.model);
+    const privacyTier = resolvePrivacyTier({
+      provider: p.provider,
+      modelId: p.model,
+      catalogPrivacy: catalog?.privacy,
+      capabilities: catalog?.capabilities,
+    });
     return {
       id: p.id,
       provider: p.provider,
@@ -69,6 +76,7 @@ export async function GET() {
         tools: p.noTools !== true,
         webSearch: p.webSearch === true,
         privacy: p.privacy === true,
+        privacyTier,
       },
       catalog,
     };

@@ -444,7 +444,7 @@ export const VIRTUALS_PRESETS: VirtualsPreset[] = [
   // side, so the client can't swap in a paid model at zero cost. Order mirrors
   // VIRTUALS_PRESETS_V1 (fast, then free) so the picker renders identically
   // before and after the /api/chat/presets fetch resolves.
-  { id: "free",     provider: "venice",   model: "qwen3-5-9b",                 label: "Free",     desc: "Qwen 3.5 9B · no credits · chat only",   cost: "●",   contextTokens: 256_000,   credits: 0,   noTools: true },
+  { id: "free",     provider: "venice",   model: "mistral-small-3-2-24b-instruct", label: "Free",     desc: "Mistral Small 3.2 · no credits · chat only", cost: "●", contextTokens: 256_000, credits: 0, noTools: true },
   { id: "balanced", provider: "virtuals", model: "anthropic-claude-sonnet-5",  label: "Balanced", desc: "Claude Sonnet 5 · default for most work", cost: "●●",  contextTokens: 1_000_000, credits: 50 },
   { id: "deep",     provider: "virtuals", model: "anthropic-claude-opus-4-8",  label: "Deep",     desc: "Claude Opus 4.8 · heavy reasoning",       cost: "●●●", contextTokens: 1_000_000, credits: 200 },
   { id: "private",  provider: "virtuals", model: "e2ee-deepseek-v4-flash",     label: "Private",  desc: "E2EE · no logs · DeepSeek V4",            cost: "●",   contextTokens: 1_000_000, credits: 30,  privacy: true },
@@ -459,7 +459,7 @@ export const VIRTUALS_PRESETS: VirtualsPreset[] = [
   { id: "grok",       provider: "virtuals", model: "x-ai-grok-4-20",                   label: "Grok",        desc: "Grok 4 · 2M context window",                        cost: "●●",  contextTokens: 2_000_000, credits: 60,  optional: true },
   // Venice presets — validated live against Venice /v1/models (getVeniceCatalog).
   { id: "search",     provider: "venice",   model: "grok-4-7",                         label: "Search",      desc: "Grok 4.7 · live web search · Private",              cost: "●●",  contextTokens: 500_000,   credits: 60,  optional: true, webSearch: true },
-  { id: "tee",        provider: "venice",   model: "glm-5-3-flash-e2ee",               label: "Private TEE", desc: "GLM 5.3 Flash TEE · attested enclave · 1M ctx",     cost: "●",   contextTokens: 1_000_000, credits: 20,  privacy: true },
+  { id: "tee",        provider: "venice",   model: "e2ee-glm-5-3-flash",               label: "Private TEE", desc: "GLM 5.3 Flash TEE · attested enclave · 1M ctx",     cost: "●",   contextTokens: 1_000_000, credits: 20,  privacy: true },
   { id: "sonnet55",   provider: "venice",   model: "claude-sonnet-5-5",                label: "Sonnet 5.5",  desc: "Claude Sonnet 5.5 · Venice · web search · 1M ctx",  cost: "●●",  contextTokens: 1_000_000, credits: 55,  optional: true, webSearch: true },
 ];
 
@@ -642,7 +642,7 @@ export async function getVeniceCatalog(): Promise<Set<string> | null> {
   if (_veniceCatalogCache && now - _veniceCatalogCache.fetchedAt < CATALOG_CACHE_MS) {
     return _veniceCatalogCache.ids;
   }
-  const apiKey = process.env.VENICE_INFERENCE_KEY ?? process.env.VENICE_API_KEY ?? "";
+  const apiKey = process.env.VENICE_API_KEY || process.env.VENICE_INFERENCE_KEY || "";
   try {
     const res = await fetch("https://api.venice.ai/api/v1/models", {
       // Sent when we have one, but not required — see the note above.
@@ -723,7 +723,7 @@ export async function getAvailablePresets(): Promise<VirtualsPreset[]> {
     // Only pay for the Venice catalog if a Venice preset actually exists.
     VIRTUALS_PRESETS.some((p) => p.provider === "venice") ? getVeniceCatalog() : Promise.resolve(null),
   ]);
-  const hasVeniceKey = !!(process.env.VENICE_INFERENCE_KEY ?? process.env.VENICE_API_KEY);
+  const hasVeniceKey = !!(process.env.VENICE_API_KEY || process.env.VENICE_INFERENCE_KEY);
   const hasVirtualsKey = !!process.env.VIRTUALS_API_KEY;
 
   const hidden: string[] = [];

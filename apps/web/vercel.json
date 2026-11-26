@@ -59,6 +59,10 @@
     {
       "path": "/api/cron/stock-coverage",
       "schedule": "4,14,24,34,44,54 * * * *"
+    },
+    {
+      "path": "/api/cron/markets-intel",
+      "schedule": "15 * * * *"
     }
   ]
 }

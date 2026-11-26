@@ -91,6 +91,10 @@ export default async function MarketsPage() {
             <span className="text-[#E2E8F0]">Weekend lab <span className="text-[#94A3B8]">· a fixed Sunday call, compared with the first post-open oracle reading.</span></span>
             <span className="text-[#4FC3F7]">Open →</span>
           </Link>
+          <Link href="/markets/intel" className="mb-3 flex items-center justify-between gap-3 bg-[#0B0F1E] border border-[#1A1A2E] hover:border-[#4FC3F7]/40 rounded-[10px] px-4 py-2.5 text-[13px]">
+            <span className="text-[#E2E8F0]">Markets Intel <span className="text-[#94A3B8]">· unusual session volume across 12 verified Base B20 stocks with evidence &amp; X drafts.</span></span>
+            <span className="text-[#4FC3F7]">Open →</span>
+          </Link>
           <MarketsTable rows={rows} readAt={stocks.readAt} stats={{
             base: { count: count("base"), vol: volShow("base") === "—" ? null : vol("base"), complete: volRead("base") },
             robinhood: { count: count("robinhood"), vol: volShow("robinhood") === "—" ? null : vol("robinhood"), complete: volRead("robinhood") },

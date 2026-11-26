@@ -62,7 +62,7 @@
 // answer out loud.
 
 import { useSilentSender } from "@/lib/privy/silent-tx";
-import { useAutoConfirm, useAutoReport } from "@/components/wallet/action-context";
+import { useAutoConfirm, useAutoReport, useAutoBlocker } from "@/components/wallet/action-context";
 import { useEffect, useRef, useState } from "react";
 import {
   useAccount, useSwitchChain, useSendTransaction, usePublicClient, useWaitForTransactionReceipt,
@@ -298,8 +298,18 @@ export default function RhSwapCard({
   // G2 — checked on what this swap BUYS: the token on a buy, ETH on a sell.
   const pt = usePreTradeCheck({ chain: "robinhood", kind: "swap", token: direction === "buy" ? (tokenReady ? activeAddr : null) : "ETH" });
   const valid = tokenReady && hasPool && !noFloor && amt > 0 && gate === "ok" && !quoting && pt.cleared && !pt.blocked;
+  const autoBlocker = !isConnected ? "Connect your wallet first"
+    : !tokenReady ? "Missing or invalid token address on Robinhood Chain"
+    : overBalance ? `Amount exceeds your ${inSym} balance`
+    : gate === "unverified" ? `Couldn't read your ${inSym} balance`
+    : !quoting && quote?.error ? quote.error
+    : !quoting && quote?.ok && quote.hasPool === false ? `No Uniswap V3 pool for ${tokenSym}/WETH on Robinhood Chain yet`
+    : unpriced ? `No price for ${tokenSym} right now`
+    : pt.blocked ? "Blocked by pre-trade safety check"
+    : null;
   // A chat "yes" runs the same doSwap() once the card is ready to sign.
   useAutoConfirm(valid && !busy && step === "idle", (o) => { void doSwap(o); });
+  useAutoBlocker(autoBlocker);
   useAutoReport(step, err, txHash ? `${RH.explorer}/tx/${txHash}` : null);
 
   // Max and the quantity WORDS are ONE calculation, in BASE UNITS. Computing it

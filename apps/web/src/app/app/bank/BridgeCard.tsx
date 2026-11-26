@@ -76,7 +76,7 @@
 // it does not block Review, because refusing to let the user continue is the
 // confirm card's call to make, on its own evidence, with its own retry.
 
-import { useAutoConfirm } from "@/components/wallet/action-context";
+import { useAutoConfirm, useAutoBlocker } from "@/components/wallet/action-context";
 import { useEffect, useRef, useState } from "react";
 import { useAccount } from "wagmi";
 import { formatUnits, parseUnits } from "viem";
@@ -385,7 +385,13 @@ export default function BridgeCard({
 
   // A chat "yes" presses Review once the form is ready; the RobinhoodBridgeCard
   // that review mounts sits in the same AutoConfirmContext and signs itself.
+  const autoBlocker = !from ? "Connect your wallet first"
+    : listErr ? listErr
+    : outlook?.kind === "refused" ? outlook.text
+    : assetHint ? assetHint
+    : null;
   useAutoConfirm(canReview && !intent, () => review());
+  useAutoBlocker(!intent ? autoBlocker : null);
 
   function review() {
     if (!canReview || !token) return;

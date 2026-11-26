@@ -118,6 +118,17 @@ async function debitChatCredits(address: string, tier: string): Promise<DebitRes
   const blueBalance = await fetchBlueBalance(address);
   const holderTier  = getTierInfo(blueBalance);
 
+  // Venice VVV/DIEM Holder Perk: Base wallets holding >= 0.1 DIEM or >= 100 sVVV
+  // unlock 0-credit Private TEE inference on Blue Chat.
+  if (tier === "tee") {
+    const { readVeniceOnchainBalances, evaluateVeniceHolderPerk, isPresetFreeForVeniceHolder } = await import("@/lib/venice-vvv");
+    const vBal = await readVeniceOnchainBalances(address).catch(() => null);
+    const perk = evaluateVeniceHolderPerk(vBal);
+    if (isPresetFreeForVeniceHolder(tier, perk)) {
+      return { kind: "skipped", reason: `venice-holder-perk:${perk.tier}` };
+    }
+  }
+
   // Every tier is metered, including Max (10M+ BLUE → 10,000 cr/day at a 40%
   // discount). There is no unlimited tier to skip anymore.
   const cost = chatCreditCost(tier, holderTier);
@@ -306,8 +317,10 @@ const VENICE_DISPLAY: Record<string, string> = {
   "kimi-k2-6":                          "Kimi K2 (Venice)",
   "claude-opus-4-7":                    "Claude Opus 4 (Venice)",
   "claude-sonnet-5-5":                  "Claude Sonnet 5.5 (Venice)",
+  "e2ee-glm-5-3-flash":                 "GLM 5.3 Flash TEE (Venice)",
   "glm-5-3-flash-e2ee":                 "GLM 5.3 Flash TEE (Venice)",
   "grok-4-7":                           "Grok 4.7 (Venice)",
+  "mistral-small-3-2-24b-instruct":     "Mistral Small 3.2 (Venice) · Free",
   "qwen3-5-9b":                         "Qwen 3.5 9B (Venice) · Free",
 };
 
@@ -357,6 +370,7 @@ const VENICE_MAX_TOKENS: Record<string, number> = {
   "mistral-small-3-2-24b-instruct":    4096,
   "venice-uncensored-1-2":             4096,
   // E2EE / TEE models
+  "e2ee-glm-5-3-flash":                4096,
   "glm-5-3-flash-e2ee":                4096,
   "e2ee-venice-uncensored-24b-p":      2048,
   "e2ee-gemma-3-27b-p":                2048,
@@ -367,8 +381,15 @@ function veniceMaxTokens(modelId: string): number {
   return VENICE_MAX_TOKENS[modelId] ?? 4096;
 }
 
+// Legacy small E2EE models skip Hub tools, while flagship TEE models like
+// `e2ee-glm-5-3-flash` support full Hub tools on `/api/chat` when Strict E2EE
+// is OFF (Strict E2EE ON routes via `/api/chat/e2ee` blind relay without tools).
+const TOOL_CAPABLE_TEE_MODELS = new Set(["e2ee-glm-5-3-flash", "glm-5-3-flash-e2ee"]);
+
 function isE2eeModelId(modelId?: string): boolean {
-  return !!modelId && /(?:^e2ee-|-e2ee$)/i.test(modelId);
+  if (!modelId) return false;
+  if (TOOL_CAPABLE_TEE_MODELS.has(modelId.toLowerCase())) return false;
+  return /(?:^e2ee-|-e2ee$)/i.test(modelId);
 }
 
 // ─── System prompt ────────────────────────────────────────────────────────────
@@ -1172,6 +1193,8 @@ const SWAP_TOKENS: Record<string, string> = {
   WETH:  "0x4200000000000000000000000000000000000006",
   USDC:  "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
   CBBTC: "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf",
+  VVV:   "0xacfE6019Ed1A7Dc6f7B508C02d1b04ec88cC21bf", // Venice Token (Base 8453)
+  DIEM:  "0xF4d97F2da56e8c3098f3a8D538DB630A2606a024", // Venice DIEM (Base 8453)
 };
 
 /** Resolve a Base swap token: 0x… address → as-is; one of the four majors →
@@ -3812,7 +3835,7 @@ export async function POST(req: NextRequest) {
   // free tier lands here on its pinned model even if a crafted request set a
   // different `provider` / `modelId`.
   if (effProvider === "venice" && effModelId) {
-    const apiKey = process.env.VENICE_INFERENCE_KEY ?? process.env.VENICE_API_KEY;
+    const apiKey = process.env.VENICE_API_KEY || process.env.VENICE_INFERENCE_KEY;
     if (!apiKey) {
       // Charged, then told to pick a different model — the same unpaid-for
       // non-answer as an upstream 500, so it unwinds the same way.

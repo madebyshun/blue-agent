@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useChat } from "../ChatContext";
 import type { VirtualsPresetV1 } from "./presets";
 import ProviderMark from "./ProviderMark";
+import { privacyTierBadge } from "@/lib/venice-privacy";
 import {
   applyFilters,
   catalogRows,
@@ -435,14 +436,17 @@ export default function ModelsPanel({ onPick }: { onPick?: (id: string) => void 
                             {/* Below lg the capabilities column is hidden, so the
                                 same chips ride under the name — on a phone this is
                                 the only place to learn a preset cannot use tools. */}
-                            {isPresets && row.blueChat && (
-                              <div className="flex flex-wrap gap-1 mt-1 lg:hidden">
-                                {row.blueChat.tools     && <Chip label="Tools"  color="#4FC3F7" />}
-                                {row.blueChat.webSearch && <Chip label="Search" color="#22D3EE" />}
-                                {row.blueChat.privacy   && <Chip label="E2EE"   color="#6EE7B7" />}
-                                {!row.blueChat.tools    && <Chip label="Chat only" color="#64748b" />}
-                              </div>
-                            )}
+                            {isPresets && row.blueChat && (() => {
+                              const pb = privacyTierBadge(row.blueChat.privacyTier);
+                              return (
+                                <div className="flex flex-wrap gap-1 mt-1 lg:hidden">
+                                  {row.blueChat.tools     && <Chip label="Tools"  color="#4FC3F7" />}
+                                  {row.blueChat.webSearch && <Chip label="Search" color="#22D3EE" />}
+                                  {pb                     && <Chip label={pb.label} color={pb.color} title={pb.summary} />}
+                                  {!row.blueChat.tools    && <Chip label="Chat only" color="#64748b" />}
+                                </div>
+                              );
+                            })()}
                           </div>
                         </div>
                       </td>
@@ -466,12 +470,17 @@ export default function ModelsPanel({ onPick }: { onPick?: (id: string) => void 
                               : row.credits}
                           </Td>
                           <td className="hidden lg:table-cell py-2.5 pr-3">
-                            <div className="flex flex-wrap gap-1">
-                              {row.blueChat?.tools     && <Chip label="Tools"  color="#4FC3F7" />}
-                              {row.blueChat?.webSearch && <Chip label="Search" color="#22D3EE" />}
-                              {row.blueChat?.privacy   && <Chip label="E2EE"   color="#6EE7B7" />}
-                              {row.blueChat && !row.blueChat.tools && <Chip label="Chat only" color="#64748b" />}
-                            </div>
+                            {(() => {
+                              const pb = privacyTierBadge(row.blueChat?.privacyTier);
+                              return (
+                                <div className="flex flex-wrap gap-1">
+                                  {row.blueChat?.tools     && <Chip label="Tools"  color="#4FC3F7" />}
+                                  {row.blueChat?.webSearch && <Chip label="Search" color="#22D3EE" />}
+                                  {pb                      && <Chip label={pb.label} color={pb.color} title={pb.summary} />}
+                                  {row.blueChat && !row.blueChat.tools && <Chip label="Chat only" color="#64748b" />}
+                                </div>
+                              );
+                            })()}
                           </td>
                           <td className="pr-5 py-2.5 text-right whitespace-nowrap">
                             {selectable && (
@@ -583,9 +592,9 @@ function Td({ children, align = "left", className = "" }: { children: React.Reac
   );
 }
 
-function Chip({ label, color }: { label: string; color: string }) {
+function Chip({ label, color, title }: { label: string; color: string; title?: string }) {
   return (
-    <span className="font-mono text-[12px] px-1.5 py-0.5 rounded-md" style={{ background: `${color}12`, color }}>
+    <span title={title} className="font-mono text-[12px] px-1.5 py-0.5 rounded-md" style={{ background: `${color}12`, color }}>
       {label}
     </span>
   );

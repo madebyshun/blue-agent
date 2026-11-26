@@ -2760,9 +2760,15 @@ export function ToolResultCard({ tool, result }: { tool: string; result: Record<
     case "check_memo":           return <MemoResultCard  result={r as MemoResultData} />;
     case "check_authorization":  return <AuthorizationResultCard result={r as AuthorizationResultData} />;
     case "check_wallet":         return <WalletCard      result={r as WalletResultData} />;
-    // prepare_yield is deliberately untouched — it is not public yet, so its card
-    // and its testnet option are being rebuilt later, not now.
-    case "prepare_yield":     return <MoveToYieldCard  result={r as YieldMoveResult} account={account} />;
+    case "prepare_yield": {
+      const y = r as YieldMoveResult;
+      const yTitle = `${y.action === "withdraw" ? "Withdraw" : "Supply"}${y.amount ? ` ${y.amount}` : ""} USDC yield`;
+      return (
+        <ActionStrip summary={yTitle} chain="base" cta="Review & sign">
+          <MoveToYieldCard result={y} account={account} />
+        </ActionStrip>
+      );
+    }
 
     case "prepare_send": {
       const s = r as SendResult;

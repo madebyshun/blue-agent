@@ -10,7 +10,7 @@
 
 import { useContext, useEffect, useRef, useState } from "react";
 import { useSilentSender } from "@/lib/privy/silent-tx";
-import { AutoConfirmContext, useAutoReport } from "@/components/wallet/action-context";
+import { AutoConfirmContext, useAutoReport, useAutoBlocker } from "@/components/wallet/action-context";
 import {
   useAccount, useSwitchChain, useSendTransaction, useChainId,
   useWaitForTransactionReceipt,
@@ -371,6 +371,14 @@ export function RobinhoodBridgeCard({ result }: { result: RobinhoodBridgeResult 
   // idle — the bridge transaction. Each step at most once.
   const auto = useContext(AutoConfirmContext);
   const autoStage = useRef<"none" | "approve" | "send">("none");
+  const autoBlocker = !isConnected ? "Connect your wallet first"
+    : result.error ? result.error
+    : !loading && prepErr ? prepErr
+    : overBalance ? `Exceeds your ${symbol} balance on ${fromCfg.label}`
+    : gate === "unverified" ? `Couldn't read your ${symbol} balance on ${fromCfg.label}`
+    : pt.blocked ? "Blocked by pre-trade safety check"
+    : null;
+  useAutoBlocker(autoBlocker);
   useAutoReport(step, err, txHash ? `${fromCfg.explorer}/tx/${txHash}` : null,
     { sentSteps: ["delivering"], doneSteps: ["filled"] });
   useEffect(() => {

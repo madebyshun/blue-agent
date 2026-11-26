@@ -11,7 +11,7 @@ import { useEnsureSession } from "@/hooks/useEnsureSession";
 import { ConnectButton } from "@/components/ConnectModal";
 import { localTz } from "@/lib/cron-schedule";
 import { TelegramAlertsButton } from "@/components/wallet/TelegramAlertsButton";
-import { useAutoConfirm, useAutoReport } from "@/components/wallet/action-context";
+import { useAutoConfirm, useAutoReport, useAutoBlocker } from "@/components/wallet/action-context";
 
 export interface PriceAlertDraft {
   kind: "price_alert_draft";
@@ -50,6 +50,7 @@ export function PriceAlertCard({ result, account }: { result: PriceAlertDraft; a
 
   // Chat "yes" (lib/chat/confirm.ts): arm once, and report back as chat.
   useAutoConfirm(!!account && state === "idle", () => { void arm(); });
+  useAutoBlocker(!account ? "Connect your wallet to arm this alert" : null);
   const when = result.body.check_at ? "at its set time" : "every 5 minutes";
   useAutoReport(state, msg, null, {
     doneSteps: ["armed"],

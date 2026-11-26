@@ -60,6 +60,9 @@ import { setWatchAlertsMuted, watchAlertsMuted } from "@/lib/watches/deliver";
 import { kvSetNX } from "@/lib/kv";
 import { addressForTgUser } from "@/lib/blue-hood/watchlist";
 import { BRIEF_DEFAULT_HOUR_UTC, briefSub, buildStockBrief, sendBrief, subscribeBrief, unsubscribeBrief } from "@/lib/brief/run";
+import { DEMO_FIXTURE_EVENT, listIntelEvents } from "@/lib/intel/store";
+import { formatIntelTelegramMessage } from "@/lib/intel/draft";
+import { INTEL_TARGET_TICKERS } from "@/lib/intel/types";
 
 export const runtime = "nodejs";
 
@@ -135,8 +138,9 @@ async function handleStart(rest: string, from?: TgUser): Promise<string> {
     `• <code>/alerts off</code> / <code>/alerts on</code> — Blue Chat price alerts for your linked wallet`,
     `• <code>/brief on</code> — every morning: what changed in your linked wallet (balances, unasked tokens, approvals)`,
     `• <code>/stocks</code> — onchain stocks now: DEX vs oracle gaps on Base and Robinhood Chain, NAV, session`,
+    `• <code>/intel [TICKER]</code> — unusual Base session volume (12 verified B20 stocks) + copy-ready @blueagent_ X draft`,
     `• <code>/check 0x…</code> — a token or wallet, before you touch it · <code>/tx 0x…</code> — what a transaction did`,
-    `• Add me to a group: <code>/check</code>, <code>/tx</code> and <code>/stocks</code> work there too (read-only)`,
+    `• Add me to a group: <code>/check</code>, <code>/tx</code>, <code>/stocks</code> and <code>/intel</code> work there too (read-only)`,
   ];
   // Trading straight from a signal is its own switch (arrow-freeze.ts), off
   // since 2026-09-30 — only point at it while it exists.
@@ -228,6 +232,7 @@ const GROUP_INTRO = [
   `• <code>/check 0x…</code> — a token or wallet: impersonation, sell tax, flags. Reply <code>/check</code> to a message to check the address in it. Add <code>rh</code> for Robinhood Chain.`,
   `• <code>/tx 0x…</code> — what a transaction did: tokens moved, approvals granted, poisoning moves.`,
   `• <code>/stocks</code> — onchain stock tokens: DEX vs oracle vs NAV.`,
+  `• <code>/intel [TICKER]</code> — unusual Base session volume (12 verified Base B20 stocks) with evidence link.`,
   `I never ask for keys, never sign and never trade here. Your own wallet tools are in a private chat with me.`,
 ].join("\n");
 
@@ -462,6 +467,26 @@ export async function GET() {
   return NextResponse.json({ ok: true, webhook: "blue-hood-telegram" });
 }
 
+/** `/intel [TOKEN]` — latest Markets Intel v1 unusual volume event + copy-ready X draft. */
+async function handleIntel(rest: string): Promise<string> {
+  const filter = rest.trim().toUpperCase().replace(/C$/, "");
+  const events = await listIntelEvents();
+  const matched = filter
+    ? events.filter((e) => e.ticker.toUpperCase() === filter || e.symbol.toUpperCase() === `${filter}C`)
+    : events;
+  if (matched.length > 0) {
+    return formatIntelTelegramMessage(matched[0]);
+  }
+  if (filter && !(INTEL_TARGET_TICKERS as readonly string[]).includes(filter)) {
+    return `Markets Intel v1 tracks <b>${INTEL_TARGET_TICKERS.map((t) => `${t}c`).join(", ")}</b> on Base 8453. Try <code>/intel</code> or <code>/intel NVDAc</code>.`;
+  }
+  return [
+    `No live unusual-volume events stored yet${filter ? ` for <b>${esc(filter)}c</b>` : ""}.`,
+    ``,
+    formatIntelTelegramMessage(DEMO_FIXTURE_EVENT),
+  ].join("\n");
+}
+
 /**
  * /drafts on|off — where the @blueagent_ X drafts go (cron /api/cron/x-drafts).
  * Owner only: the sender's Telegram id must equal X_DRAFTS_OWNER_TG_ID, set by
@@ -564,6 +589,9 @@ export async function POST(req: NextRequest) {
         // plus the linked wallet's own stock tokens, in a private chat only
         // (a group must never see what someone holds). Read-only.
         reply = await buildStockBrief(!group && msg.from?.id ? await addressForTgUser(msg.from.id) : null, "html");
+        break;
+      case "/intel":
+        reply = await handleIntel(rest);
         break;
       case "/track":
         reply = await handleTrack();

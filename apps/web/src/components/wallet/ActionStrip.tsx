@@ -136,17 +136,6 @@ export function ActionStrip({
     if (s.phase === "error") { setArmed(false); setAttempt((n) => n + 1); }
   }, [what, verb, silent]);
 
-  // Armed but the card never started — no quote, not enough balance, wrong
-  // network. Say so and open it: now there IS something to look at.
-  useEffect(() => {
-    if (status !== "waiting") return;
-    const t = setTimeout(() => {
-      setStatus("stuck"); setOpen(true);
-      sinkRef.current?.(statusText(what, { phase: "stuck" }, verb), true);
-    }, START_TIMEOUT_MS);
-    return () => clearTimeout(t);
-  }, [status, what]);
-
   // Pending only while its message is recent and it has not been armed yet.
   const msg = useContext(ActionMessageContext);
   const id = useId();
@@ -154,6 +143,28 @@ export function ActionStrip({
   // chat alone — no line, no button; the proposal and the outcome are both
   // text. An older one (reloaded chat) keeps the line and its Review button.
   const [chatMode] = useState(() => confirmable && !!msg?.createdAt && Date.now() - msg.createdAt <= CONFIRM_WINDOW_MS);
+
+  // Armed but the card never started — report in chat and re-arm for retry.
+  // In chatMode, keep the flow pure natural language (do NOT pop open the card).
+  useEffect(() => {
+    if (status !== "waiting") return;
+    const t = setTimeout(() => {
+      forgetArmed();
+      setStatus("stuck");
+      setArmed(false);
+      setAttempt((n) => n + 1);
+      if (!chatMode) setOpen(true);
+      sinkRef.current?.(
+        chatMode
+          ? `Couldn't start ${what} — no quote or wallet response in time. Reply **yes** to retry.`
+          : statusText(what, { phase: "stuck" }, verb),
+        true,
+      );
+      sinkRef.current = null;
+    }, START_TIMEOUT_MS);
+    return () => clearTimeout(t);
+  }, [status, what, verb, chatMode]);
+
   useEffect(() => {
     if (!confirmable || !msg?.createdAt || armed || Date.now() - msg.createdAt > CONFIRM_WINDOW_MS) return;
     return registerPending({ id, createdAt: msg.createdAt, fire });
