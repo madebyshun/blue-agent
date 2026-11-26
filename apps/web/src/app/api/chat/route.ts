@@ -26,7 +26,7 @@ import { getRobinhoodAddressBalances } from "@/lib/robinhood/blockscout";
 import { mcpCallTool } from "@/lib/mcp-client";
 import { SOUL_MD } from "@/lib/soul";
 import { VIRTUALS_PRESETS } from "@/app/api/_lib/llm";
-import { buildBaseSystem, buildAgentCapabilities, buildB20Section, buildLaunchpadSection, buildAlertsSection } from "./system-prompt";
+import { buildBaseSystem, buildAgentCapabilities, buildB20Section, buildLaunchpadSection, buildAlertsSection, buildProductSurfaceSection } from "./system-prompt";
 import { normalizeWallet, resolveActingWallet } from "@/lib/acting-wallet";
 import { markAgentTurn } from "@/lib/device-agent";
 import { findByTicker as findRwaByTicker, findByContract as findRwaByContract } from "@/lib/robinhood/rwa-registry";
@@ -2539,7 +2539,7 @@ interface VeniceToolCall {
   function: { name: string; arguments: string };
 }
 interface VenicePhase1Resp {
-  choices: Array<{ message: { tool_calls?: VeniceToolCall[] }; finish_reason: string }>;
+  choices: Array<{ message: { tool_calls?: VeniceToolCall[]; content?: string | null }; finish_reason: string }>;
 }
 
 // Synthesize a tool_call for a server-DECIDED (forced) tool, so we can run it
@@ -2612,6 +2612,7 @@ async function callVenicePhase1(
       : undefined;
     const toolsPayload = forcedEntry ? [forcedEntry] : allTools;
 
+    const phase1TimeoutMs = !forceTool && TOOL_CAPABLE_TEE_MODELS.has(modelId.toLowerCase()) ? 20_000 : 30_000;
     const doPhase1 = async (toolChoice: unknown): Promise<VenicePhase1Resp | null> => {
       const res = await fetch(cfg.endpoint, {
         method:  "POST",
@@ -2625,7 +2626,7 @@ async function callVenicePhase1(
           max_tokens:  Math.min(maxTokens, 1024), // intent only — keep short
           ...veniceParams,
         }),
-        signal: AbortSignal.timeout(30_000),
+        signal: AbortSignal.timeout(phase1TimeoutMs),
       });
       if (!res.ok) {
         const errText = await res.text().catch(() => "");
@@ -2677,7 +2678,7 @@ async function callVenicePhase1(
  */
 type Phase1Outcome =
   | { status: "tools"; toolCalls: VeniceToolCall[] }
-  | { status: "none" }
+  | { status: "none"; directText?: string }
   | { status: "unreachable" };
 
 async function detectToolCalls(
@@ -2685,8 +2686,16 @@ async function detectToolCalls(
 ): Promise<Phase1Outcome> {
   const resp = await callVenicePhase1(...args);
   if (!resp) return { status: "unreachable" };
-  const toolCalls = resp.choices?.[0]?.message?.tool_calls;
-  return toolCalls?.length ? { status: "tools", toolCalls } : { status: "none" };
+  const choice = resp.choices?.[0];
+  const toolCalls = choice?.message?.tool_calls;
+  if (toolCalls?.length) return { status: "tools", toolCalls };
+  const rawContent = typeof choice?.message?.content === "string" ? choice.message.content.trim() : "";
+  const reusable =
+    choice?.finish_reason === "stop" &&
+    rawContent.length > 0 &&
+    !rawContent.includes("<think>") &&
+    !TOOL_MARKUP.test(rawContent);
+  return reusable ? { status: "none", directText: rawContent } : { status: "none" };
 }
 
 // ─── Venice Phase 2: tool synthesis stream ────────────────────────────────────
@@ -3715,7 +3724,18 @@ export async function POST(req: NextRequest) {
   // attacker-publishable text in the model's context, and on such a turn the
   // model gets NO tools — nothing paid to run, no wallet read, no trade or
   // transfer card to draft — so an injected instruction has nothing to reach.
-  const knowledgeOnly = !!cmdPrompt || !!github?.carriesRepoContent;
+  const lastUserStr = lastUser?.role === "user" && typeof lastUser.content === "string" ? lastUser.content.trim() : "";
+  // Pure conceptual / product-surface questions about Blue Agent (/exchange,
+  // /jobs, /markets, x402, B20, TEE) do not need a 39-tool Phase 1 round-trip.
+  // Strictly excluded whenever the prompt asks for live rankings, prices, or
+  // onchain actions so real tool queries still hit Phase 1.
+  const isProductKnowledgeQuery =
+    lastUserStr.length > 0 &&
+    lastUserStr.length <= 240 &&
+    /(?:\/exchange|\/jobs|\/markets|\bx402\b|\bb20\b|\btee\b)/i.test(lastUserStr) &&
+    /(?:là gì|hoạt động|khác gì|đang build|tính năng|trang con|dùng .* vào việc gì|what is|how does|difference between|features|subpages|explain)/i.test(lastUserStr) &&
+    !/(?:\btop\b|\blist\b|\blive\b|hiện tại|bảng xếp hạng|\bprice\b|\bgiá\b|\bswap\b|\bsend\b|\bbridge\b|0x[a-f0-9]{6}|\bwallet\b|\bví\b|\bbalance\b|\bdrift\b|\bspread\b|\bbrief\b|\balert\b|\blaunch\b|\bmint\b|tạo token)/i.test(lastUserStr);
+  const knowledgeOnly = !!cmdPrompt || !!github?.carriesRepoContent || isProductKnowledgeQuery;
 
   // ── Free tier: server-pin provider + model (never trust the client here) ──
   // The free preset is the only 0-credit tier and is chat-only. Because it
@@ -3820,6 +3840,7 @@ export async function POST(req: NextRequest) {
     // has to answer "what is B20?" correctly, and still must never print a
     // private key), but the "Use <tool> when the user asks X" dispatch table
     // only ships when those tools are actually attached.
+    buildProductSurfaceSection(),
     buildB20Section(hasTools),
     buildLaunchpadSection(hasTools),
     buildAlertsSection(hasTools),
@@ -3932,6 +3953,9 @@ export async function POST(req: NextRequest) {
       if (looksLikeMarketData(lastUserText(openaiMsgs))) {
         await undoDebit?.();
         return textToSSE(NO_LIVE_SOURCE);
+      }
+      if (outcome.status === "none" && outcome.directText) {
+        return textToSSE(outcome.directText);
       }
     }
 
@@ -4054,6 +4078,9 @@ export async function POST(req: NextRequest) {
     if (looksLikeMarketData(lastUserText(openaiMsgs))) {
       await undoDebit?.();
       return textToSSE(NO_LIVE_SOURCE);
+    }
+    if (outcome.status === "none" && outcome.directText) {
+      return textToSSE(outcome.directText);
     }
   }
   return callVeniceStream(

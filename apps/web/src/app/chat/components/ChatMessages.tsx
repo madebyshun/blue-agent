@@ -376,7 +376,18 @@ const LEGACY_VENICE_LABELS: Record<string, string> = {
   "venice-e2ee-venice": "Private Venice", "venice-e2ee-gemma": "Private Gemma",
   "venice-e2ee-qwen": "Private Qwen",
 };
-const modelLabel = (id: string) => chatTierLabel(id) ?? LEGACY_VENICE_LABELS[id] ?? id;
+const modelLabel = (id: string) => {
+  if (id.endsWith(" · e2ee")) {
+    const base = id.slice(0, -" · e2ee".length);
+    return `${chatTierLabel(base) ?? LEGACY_VENICE_LABELS[base] ?? base} · E2EE`;
+  }
+  return chatTierLabel(id) ?? LEGACY_VENICE_LABELS[id] ?? id;
+};
+
+const modelColor = (id: string) => {
+  const base = id.endsWith(" · e2ee") ? id.slice(0, -" · e2ee".length) : id;
+  return MODEL_COLORS[base] ?? "#4FC3F7";
+};
 
 const MODEL_COLORS: Record<string, string> = {
   free: "#34D399", fast: "#64748b", balanced: "#4FC3F7", deep: "#A78BFA",
@@ -730,7 +741,7 @@ export default function ChatMessages() {
                       {msg.modelUsed && msg.responseMs !== undefined && (
                         <div className="flex items-center gap-2 mt-3 flex-wrap">
                           <span className="w-1.5 h-1.5 rounded-full shrink-0"
-                            style={{ background: MODEL_COLORS[msg.modelUsed] ?? "#4FC3F7" }} />
+                            style={{ background: modelColor(msg.modelUsed) }} />
                           <span className="font-mono text-[13px] text-slate-700">
                             {modelLabel(msg.modelUsed)}
                           </span>

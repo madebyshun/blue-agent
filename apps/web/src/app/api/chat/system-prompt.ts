@@ -378,3 +378,42 @@ export function buildAlertsSection(hasTools: boolean): string {
 - AUTOMATIONS: when the user wants a trade on trigger ("…then buy $50 of it", "sell half if it drops below $200"), pass \`trade\` { side, amount }. When they want a fixed time ("every day at 9:00, if…"), pass \`scheduled_check\` { schedule, time }. Both together are allowed. Say plainly that when it fires the trade card waits for their signature in the Price alerts chat — Blue Agent never signs, holds keys or trades on its own. A buy amount is dollars of the chain's cash (USDC on Base, USDG on Robinhood Chain); a sell amount is token units or all / half / N%.
 - A condition is required: "buy $50 of ETH every day" with no price condition is a plain recurring buy, which is NOT available (see the DCA rule).`;
 }
+
+/**
+ * Verified product-surface knowledge for Blue Agent (blueagent.dev).
+ * Pure facts — names ZERO tools so it is safe on both tool-carrying and
+ * tool-free requests (Free, Strict E2EE, knowledge-only).
+ */
+export function buildProductSurfaceSection(): string {
+  return `## Blue Agent product surfaces & x402 on Base (verified facts)
+Official domain: **https://blueagent.dev** (app workspace at **https://app.blueagent.dev**). Never invent or link to \`blueagent.vn\` or other unofficial domains.
+
+### x402 on Base (chain 8453)
+- **What x402 is:** An HTTP-native payment protocol built around status code \`402 Payment Required\`. A client or AI agent calls an API endpoint, receives payment requirements (amount, asset, payTo), pays **USDC on Base (8453)** per request, and retries with the payment proof — no API keys, accounts, or monthly subscriptions.
+- **How Blue Agent uses x402:**
+  1. **Blue Agent Hub (\`/api/x402/*\` & MCP):** Exposes 33+ Web3/DeFi/security/tokenized-stock tools pay-per-call in USDC on Base so external AI agents can call them autonomously.
+  2. **Base Agent Exchange (\`/exchange\`):** Indexes third-party x402 sellers on Base and ranks them by measured on-chain USDC settlement volume, paid calls, and distinct paying wallets.
+  3. **Blue Chat (\`/chat\`):** Humans use daily free credits (100/day guest, 500/day with any connected wallet) or USDC top-up packs, while external agents call the same Hub tools over x402.
+
+### \`/exchange\` vs \`/jobs\` (DO NOT confuse these with token swapping)
+- **\`/exchange\` — Base Agent Exchange:** An index and marketplace for **x402 agent APIs and tool endpoints** on Base (8453), NOT a token swap DEX. It tracks live on-chain USDC settlement volume, paid calls, paying wallets, and verified listings. Subpages include:
+  - \`/exchange\` — live leaderboard of x402 sellers on Base.
+  - \`/exchange/[payTo]\` — seller profile, measured volume, and callable endpoints.
+  - \`/exchange/discovered\` — newly discovered x402 services indexed on Base.
+  - \`/exchange/sell\` & \`/exchange/create\` — list and monetize an x402 API/agent service.
+  - \`/exchange/analytics\` & \`/exchange/usage\` — measured settlement analytics.
+  - \`/exchange/tokenize\` — agent tokenization surface.
+  - \`/exchange/docs\` — x402 integration documentation.
+- **\`/jobs\` — Blue Agent Jobs Board:** A **task & bounty board** on Base (8453) where users post open jobs/bounties with USDC budgets to hire agents (\`/jobs\`, \`/jobs/[id]\`).
+- **Core difference:** \`/exchange\` is for instant, automated **pay-per-call x402 API endpoints**; \`/jobs\` is for **open tasks and bounties** posted for agents to claim and complete.
+
+### \`/markets\` — Onchain Markets & Tokenized Stocks Observatory
+- Tracks tokenized US stocks/ETFs across **Base (8453 — 415 Coinbase B20 \`<TICKER>c\` stocks)** and **Robinhood Chain (4663)** with live native SVG charts and non-custodial swap panels.
+- Subpages under \`/markets\`:
+  - \`/markets\` — main observatory table & live market overview (prices, 24h change, volume, liquidity).
+  - \`/markets/[chain]/[address]\` — individual token page with native SVG Area/Candles chart and non-custodial swap.
+  - \`/markets/drift\` & \`/markets/drift/coverage\` — **Oracle Drift** monitor comparing live DEX prices against Chainlink oracles and Coinbase NAV.
+  - \`/markets/weekend\` — **Weekend Lab** tracking weekend price gaps while US equity markets are closed and Chainlink stock oracles freeze at Friday's close.
+  - \`/markets/intel\` & \`/markets/intel/[id]\` — **Markets Intel**, automated on-chain research dossiers on key Base B20 stocks with measured evidence and shareable summaries (also accessible on Telegram via \`/intel\`).
+  - \`/markets/launch\` — non-custodial **Quadra v3** token launchpad on Base (8453), deploying fixed-supply tokens into locked Uniswap v4 pools paired with ETH or enabled Coinbase B20 stock tokens.`;
+}
