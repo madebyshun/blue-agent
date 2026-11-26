@@ -3,7 +3,7 @@
  * Which words confirm, which pending action they reach, and what is refused.
  */
 import { userDollarAmount } from "../src/lib/chat/trade-intent";
-import { CONFIRM_WINDOW_MS, confirmLatest, confirmReply, forgetArmed, settleArmed, statusText, isConfirmWord, latestPending, registerPending, SILENT_MAX_USD, type ConfirmOutcome } from "../src/lib/chat/confirm";
+import { CONFIRM_WINDOW_MS, confirmLatest, confirmReply, expiredProposalReply, forgetArmed, isExpiredProposalMessage, settleArmed, statusText, isConfirmWord, latestPending, registerPending, SILENT_MAX_USD, type ConfirmOutcome } from "../src/lib/chat/confirm";
 
 let failures = 0;
 function ok(label: string, cond: boolean, detail = "") { console.log(`  ${cond ? "PASS" : "FAIL"}  ${label}${detail ? ` — ${detail}` : ""}`); if (!cond) failures++; }
@@ -75,6 +75,12 @@ ok("silent progress names the step", statusText("Swap 1 USDC → META on Base", 
 ok("wallet-prompt progress says to confirm", /\(swapping\)\. Confirm in your wallet\.$/.test(statusText("x", { phase: "working", note: "swapping" }, "sign", false)));
 
 ok("a second yes on an alert does not talk about signing", !/sign/i.test(confirmReply({ kind: "already", what: "alert me when TSLA…", settled: false, silent: true, verb: "arm" })));
+
+// Expired proposal guard: a late "yes" (> 10 min) is answered locally at 0 cr.
+ok("expired swap proposal is detected", isExpiredProposalMessage({ role: "assistant", createdAt: now - CONFIRM_WINDOW_MS - 1, toolLogs: [{ tool: "prepare_swap", status: "done" }] }, now));
+ok("fresh swap proposal is not expired", !isExpiredProposalMessage({ role: "assistant", createdAt: now - 60_000, toolLogs: [{ tool: "prepare_swap", status: "done" }] }, now));
+ok("ordinary assistant reply is not treated as expired proposal", !isExpiredProposalMessage({ role: "assistant", createdAt: now - CONFIRM_WINDOW_MS - 1 }, now));
+ok("expired proposal reply mentions expiration and 0 charge", /expired after 10 minutes.*nothing was signed or charged/i.test(expiredProposalReply(now - CONFIRM_WINDOW_MS - 60_000)));
 
 console.log(failures === 0 ? "\nchat-confirm-test: PASS" : `\nchat-confirm-test: FAIL — ${failures}`);
 process.exit(failures === 0 ? 0 : 1);

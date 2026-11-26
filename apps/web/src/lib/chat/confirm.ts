@@ -111,6 +111,44 @@ export function confirmReply(o: ConfirmOutcome): string {
   return o.silent ? `Signing ${o.what}…` : `Signing ${o.what}. Confirm in your wallet.`;
 }
 
+export const CONFIRMABLE_TOOLS = new Set([
+  "prepare_swap",
+  "prepare_send",
+  "prepare_yield",
+  "robinhood_swap",
+  "robinhood_send",
+  "robinhood_bridge",
+  "set_price_alert",
+]);
+
+/**
+ * Pure check for whether the immediately preceding assistant message was a
+ * confirmable proposal that has now expired past CONFIRM_WINDOW_MS.
+ * Used when confirmLatest() returns null so a late "yes" gets an immediate
+ * zero-credit notice instead of hitting the LLM and burning credits to repeat
+ * the same proposal.
+ */
+export function isExpiredProposalMessage(
+  lastMsg: { role?: string; createdAt?: number; toolLogs?: Array<{ tool: string; status?: string }> } | undefined,
+  now = Date.now(),
+): boolean {
+  if (!lastMsg || lastMsg.role !== "assistant") return false;
+  const hasConfirmableTool = !!lastMsg.toolLogs?.some(
+    (l) => CONFIRMABLE_TOOLS.has(l.tool) && l.status === "done",
+  );
+  if (!hasConfirmableTool) return false;
+  if (!lastMsg.createdAt || lastMsg.createdAt <= 0) return true;
+  return now - lastMsg.createdAt > CONFIRM_WINDOW_MS;
+}
+
+export function expiredProposalReply(createdAt?: number): string {
+  const mins = Math.round(CONFIRM_WINDOW_MS / 60_000);
+  const when = createdAt && createdAt > 0
+    ? ` (${new Date(createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})`
+    : "";
+  return `That proposal${when} expired after ${mins} minutes, so nothing was signed or charged. Send your request again to get a fresh quote.`;
+}
+
 /** Pure: the chat text for an armed action's progress. Markdown (the reply renders it). */
 export function statusText(what: string, s:
   | { phase: "working"; note?: string } | { phase: "stuck" }

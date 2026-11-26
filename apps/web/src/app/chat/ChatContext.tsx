@@ -1,6 +1,6 @@
 "use client";
 import { useIsEmbeddedWallet } from "@/lib/privy/silent-tx";
-import { confirmLatest, confirmReply, forgetArmed, isConfirmWord } from "@/lib/chat/confirm";
+import { confirmLatest, confirmReply, expiredProposalReply, forgetArmed, isConfirmWord, isExpiredProposalMessage } from "@/lib/chat/confirm";
 import {
   createContext, useContext, useState, useEffect,
   useRef, useCallback, useMemo,
@@ -730,6 +730,21 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         const turn: Message[] = [
           { role: "user", content: userMsg, createdAt: replyAt - 1 },
           { role: "assistant", content: confirmReply(outcome), createdAt: replyAt },
+        ];
+        setTasksState(prev => {
+          const updated = prev.map(t => t.id === ctid ? { ...t, messages: [...t.messages, ...turn], updatedAt: Date.now() } : t);
+          saveTasks(updated, walletAddr);
+          return updated;
+        });
+        return;
+      }
+      const lastMsg = activeTask?.messages[activeTask.messages.length - 1];
+      if (ctid && isExpiredProposalMessage(lastMsg, now)) {
+        lastConfirmAtRef.current = now;
+        setInput("");
+        const turn: Message[] = [
+          { role: "user", content: userMsg, createdAt: replyAt - 1 },
+          { role: "assistant", content: expiredProposalReply(lastMsg?.createdAt), createdAt: replyAt },
         ];
         setTasksState(prev => {
           const updated = prev.map(t => t.id === ctid ? { ...t, messages: [...t.messages, ...turn], updatedAt: Date.now() } : t);
