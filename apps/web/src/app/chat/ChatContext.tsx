@@ -644,9 +644,18 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   // synchronously, so the second call sees it before its first await.
   const sendingRef = useRef(false);
   const lastConfirmAtRef = useRef(0);
+  const lastSentRef = useRef<{ text: string; at: number }>({ text: "", at: 0 });
   const sendOnce = useCallback(async (text: string) => {
     const userMsg = text.trim();
     if (!userMsg || streaming) return;
+    if (!isConfirmWord(userMsg)) {
+      const now = Date.now();
+      if (lastSentRef.current.text === userMsg && now - lastSentRef.current.at < 1_500) {
+        setInput("");
+        return;
+      }
+      lastSentRef.current = { text: userMsg, at: now };
+    }
 
     // /skill commands + NL equivalents run entirely client-side —
     // they never reach the LLM and never cost credits.
@@ -768,7 +777,18 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     // We capture the task ID in a local variable so all async closures below use
     // the same ID even before React flushes the state update.
     let tid = activeTaskId;
-    let baseMessages: Message[] = activeTask?.messages ?? [];
+    // Strip any trailing orphaned empty assistant placeholder (e.g. from an
+    // aborted or interrupted turn) so it never lingers above the new turn.
+    let baseMessages: Message[] = (activeTask?.messages ?? []).filter((m, idx, arr) => {
+      const isTrailingEmptyAssistant =
+        idx === arr.length - 1 &&
+        m.role === "assistant" &&
+        !m.content &&
+        !m.thinkingContent &&
+        !m.toolLogs?.length &&
+        !m.insufficientCredits;
+      return !isTrailingEmptyAssistant;
+    });
 
     if (!tid) {
       const freshTask = createTask(chatTier);
@@ -1286,16 +1306,24 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       });
 
     } catch (err: unknown) {
-      if ((err as Error).name !== "AbortError") {
+      const isAbort = (err as Error).name === "AbortError";
+      if (!isAbort) {
         setError(err instanceof Error ? err.message : String(err));
-        // Remove the empty assistant placeholder
-        setTasksState(prev => {
-          const task = prev.find(t => t.id === tid);
-          if (!task) return prev;
-          const msgs = task.messages.slice(0, -1);
-          return prev.map(t => t.id === tid ? { ...t, messages: msgs } : t);
-        });
       }
+      // Remove empty assistant placeholder on error or abort so it never
+      // stays stuck showing loading dots.
+      setTasksState(prev => {
+        const task = prev.find(t => t.id === tid);
+        if (!task) return prev;
+        const last = task.messages[task.messages.length - 1];
+        if (isAbort && last?.role === "assistant" && (last.content || last.toolLogs?.length)) {
+          return prev;
+        }
+        const msgs = task.messages.slice(0, -1);
+        const updated = prev.map(t => t.id === tid ? { ...t, messages: msgs } : t);
+        saveTasks(updated, walletAddr);
+        return updated;
+      });
     } finally {
       setStreaming(false);
       abortRef.current = null;

@@ -2603,28 +2603,52 @@ async function callVenicePhase1(
     const veniceParams = cfg.veniceExtras
       ? { venice_parameters: { ...cfg.veniceExtras, ...(enableWebSearch ? { enable_web_search: "on" } : {}) } }
       : {};
-    const res = await fetch(cfg.endpoint, {
-      method:  "POST",
-      headers: { "Authorization": `Bearer ${cfg.apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model:       modelId,
-        messages:    openaiMsgs,
-        tools:       extraTools.length ? [...VENICE_TOOLS, ...extraTools] : VENICE_TOOLS,
-        tool_choice: forceTool
-          ? { type: "function", function: { name: forceTool } }
-          : "auto",
-        stream:      false,
-        max_tokens:  Math.min(maxTokens, 1024), // intent only — keep short
-        ...veniceParams,
-      }),
-      signal: AbortSignal.timeout(30_000),
-    });
-    if (!res.ok) {
-      const errText = await res.text().catch(() => "");
-      console.warn(`[chat] ${cfg.provider} phase1 ${res.status}: ${errText.slice(0, 160)}`);
-      return null;
+    const allTools = extraTools.length ? [...VENICE_TOOLS, ...extraTools] : VENICE_TOOLS;
+    // When a specific tool is forced (e.g. prepare_swap), narrow `tools` to ONLY
+    // that tool schema (1 schema instead of ~39) — dramatically faster and avoids
+    // context/timeout failures on Venice TEE models (e.g. e2ee-glm-5-3-flash).
+    const forcedEntry = forceTool
+      ? allTools.find((t) => (t as { function?: { name?: string } })?.function?.name === forceTool)
+      : undefined;
+    const toolsPayload = forcedEntry ? [forcedEntry] : allTools;
+
+    const doPhase1 = async (toolChoice: unknown): Promise<VenicePhase1Resp | null> => {
+      const res = await fetch(cfg.endpoint, {
+        method:  "POST",
+        headers: { "Authorization": `Bearer ${cfg.apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model:       modelId,
+          messages:    openaiMsgs,
+          tools:       toolsPayload,
+          tool_choice: toolChoice,
+          stream:      false,
+          max_tokens:  Math.min(maxTokens, 1024), // intent only — keep short
+          ...veniceParams,
+        }),
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "");
+        console.warn(`[chat] ${cfg.provider} phase1 ${res.status}: ${errText.slice(0, 160)}`);
+        return null;
+      }
+      return await res.json() as VenicePhase1Resp;
+    };
+
+    const primaryChoice = forceTool
+      ? { type: "function", function: { name: forceTool } }
+      : "auto";
+    const first = await doPhase1(primaryChoice);
+    if (first) return first;
+
+    // Some Venice TEE / OpenAI-compat providers reject named tool_choice
+    // ({ type: "function", function: { name } }) with 400/422/500 even when
+    // standard tool calling works with tool_choice: "auto". Retry once with
+    // "auto" on the narrowed 1-tool list before declaring Phase 1 unreachable.
+    if (forceTool) {
+      return await doPhase1("auto");
     }
-    return await res.json() as VenicePhase1Resp;
+    return null;
   } catch (e) {
     console.warn(`[chat] ${cfg.provider} phase1 crashed: ${(e as Error).message}`);
     return null;

@@ -604,6 +604,20 @@ export default function ChatMessages() {
 
           {messages.map((msg, i) => {
             const isAssistant = msg.role === "assistant";
+            const isLastStreaming = streaming && i === messages.length - 1;
+
+            // Never render an orphaned empty assistant bubble (e.g. from an aborted
+            // or interrupted turn saved in localStorage).
+            if (
+              isAssistant &&
+              !isLastStreaming &&
+              !msg.content &&
+              !msg.thinkingContent &&
+              !msg.toolLogs?.length &&
+              !msg.insufficientCredits
+            ) {
+              return null;
+            }
 
             return (
               <div key={i}
@@ -703,10 +717,10 @@ export default function ChatMessages() {
                             </>
                           );
                         })()
-                      ) : !msg.thinkingContent ? (
+                      ) : isLastStreaming && !msg.thinkingContent ? (
                         <span className="flex gap-1.5 items-center mt-1">
                           <Dot delay={0} /><Dot delay={160} /><Dot delay={320} />
-                          {streaming && elapsed > 0 && (
+                          {elapsed > 0 && (
                             <span className="font-mono text-[13px] text-slate-700 ml-1">{elapsed}s</span>
                           )}
                         </span>
