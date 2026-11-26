@@ -64,8 +64,9 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import {
   buildBaseSystem, buildAgentCapabilities, buildB20Section,
-  buildLaunchpadSection, buildProductSurfaceSection,
+  buildLaunchpadSection, buildProductSurfaceSection, buildCompactProductMap,
 } from "../src/app/api/chat/system-prompt";
+import { ALL_DOMAIN_SKILL_IDS, buildSelectedSkillsPrompt } from "../src/lib/chat/skill-router";
 import { SOUL_MD } from "../src/lib/soul";
 
 const WEB   = path.resolve(path.dirname(path.resolve(process.argv[1])), "..");
@@ -111,6 +112,8 @@ const assembledNoTools = [
   SOUL_MD,
   noTools,
   buildAgentCapabilities(false),
+  buildCompactProductMap(),
+  buildSelectedSkillsPrompt(ALL_DOMAIN_SKILL_IDS, false),
   buildProductSurfaceSection(),
   buildB20Section(false),
   buildLaunchpadSection(false),
@@ -119,6 +122,8 @@ const assembledWithTools = [
   SOUL_MD,
   withTools,
   buildAgentCapabilities(true),
+  buildCompactProductMap(),
+  buildSelectedSkillsPrompt(ALL_DOMAIN_SKILL_IDS, true),
   buildProductSurfaceSection(),
   buildB20Section(true),
   buildLaunchpadSection(true),
@@ -171,9 +176,9 @@ check("no unconditional SCREAMING_CASE prompt constant besides SOUL_MD",
 check("SOUL_MD earns its exemption: the identity layer names no tool",
   TOOL_NAMES.every((t) => !SOUL_MD.includes(t)));
 
-// The B20 section must arrive through the gated builder, not as a constant.
-check("B20 rides the hasTools flag like every other section",
-  /buildB20Section\(hasTools\)/.test(arr));
+// Domain skills (including B20) must arrive through the gated skill-router builder.
+check("domain skills ride the hasTools flag via buildSelectedSkillsPrompt",
+  /buildSelectedSkillsPrompt\(activeSkillIds,\s*hasTools\)/.test(arr));
 check("client-supplied skills are gated on hasTools so DEFAULT_SKILLS cannot leak hub_* names",
   /hasTools\s*&&\s*skills\s*\?/.test(arr));
 

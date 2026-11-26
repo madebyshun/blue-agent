@@ -26,7 +26,7 @@ import { getRobinhoodAddressBalances } from "@/lib/robinhood/blockscout";
 import { mcpCallTool } from "@/lib/mcp-client";
 import { SOUL_MD } from "@/lib/soul";
 import { VIRTUALS_PRESETS } from "@/app/api/_lib/llm";
-import { buildBaseSystem, buildAgentCapabilities, buildB20Section, buildLaunchpadSection, buildAlertsSection, buildProductSurfaceSection } from "./system-prompt";
+import { buildBaseSystem, buildAgentCapabilities, buildCompactProductMap } from "./system-prompt";
 import { normalizeWallet, resolveActingWallet } from "@/lib/acting-wallet";
 import { markAgentTurn } from "@/lib/device-agent";
 import { findByTicker as findRwaByTicker, findByContract as findRwaByContract } from "@/lib/robinhood/rwa-registry";
@@ -41,6 +41,7 @@ import { baseStockByTickerOrSymbol, dollarAmount, userDollarAmount } from "@/lib
 import { githubContextFor } from "@/lib/chat/github-context";
 import { forcedToolFor, stockChainFromText, wantsMyAlerts } from "@/lib/chat/intents";
 import { NO_LIVE_SOURCE, WEEKEND_GAP_TEXT, looksLikeMarketData, marketCallsFor, marketHoursText } from "@/lib/chat/market-intents";
+import { selectDomainSkills, selectToolSubset, buildSelectedSkillsPrompt } from "@/lib/chat/skill-router";
 import { runInternalTool } from "@/lib/x402-internal-run";
 import { recordCall } from "@/lib/usage-daily";
 
@@ -1346,15 +1347,19 @@ async function callHubTool(
     // so now falls to Base mainnet, which is what the card was signing all
     // along (#256). The card's own dropdown is what changes the chain.
     const network = args.network === "robinhood" ? "robinhood" : "base";
+    const defaultStable = network === "robinhood" ? "USDG" : "USDC";
+    const rawAsset = typeof args.asset === "string" ? args.asset.trim() : "";
+    const asset = !rawAsset || /^cash$/i.test(rawAsset)
+      ? defaultStable
+      : /^native$/i.test(rawAsset) ? "ETH" : rawAsset;
     return {
       text: "Send card rendered on MAINNET (Base 8453 or Robinhood Chain 4663 — never a testnet). The card shows the network, recipient, asset and amount, and the user reviews and SIGNS the transfer in their own wallet (non-custodial). Do NOT claim funds were sent, do NOT restate the recipient as if confirmed, and do NOT describe this as a test. Reply with one short line: tell the user to review the recipient + amount and sign in the card.",
       staticReply: (() => {
-        const asset = typeof args.asset === "string" && args.asset ? args.asset : "USDC";
         const amount = typeof args.amount === "string" || typeof args.amount === "number" ? String(args.amount) : "";
         const to = typeof args.to === "string" ? args.to : "";
         return proposalLine(`Send ${amount ? `${fmtAmount(amount)} ` : ""}${asset}${to ? ` to ${shortA(to)}` : ""} on ${network === "robinhood" ? "Robinhood Chain" : "Base"}`, stableUsd(asset, amount));
       })(),
-      result: { kind: "send", ...args, network },
+      result: { kind: "send", ...args, asset, network },
     };
   }
   if (toolName === "prepare_swap") {
@@ -2597,6 +2602,9 @@ async function callVenicePhase1(
   // Hub catalog rather than baked into it, because VENICE_TOOLS is module
   // scope and these differ per user.
   extraTools:      unknown[] = [],
+  // Domain-scoped tool subset from lib/chat/skill-router.ts: shrinks Phase 1
+  // from 36 schemas (~10.9k tok) down to 3-10 schemas (~1.5k-2.8k tok).
+  allowedTools?:   ReadonlySet<string>,
 ): Promise<VenicePhase1Resp | null> {
   const cfg = cfgOverride ?? veniceCfg(apiKey);
   try {
@@ -2604,13 +2612,16 @@ async function callVenicePhase1(
       ? { venice_parameters: { ...cfg.veniceExtras, ...(enableWebSearch ? { enable_web_search: "on" } : {}) } }
       : {};
     const allTools = extraTools.length ? [...VENICE_TOOLS, ...extraTools] : VENICE_TOOLS;
-    // When a specific tool is forced (e.g. prepare_swap), narrow `tools` to ONLY
-    // that tool schema (1 schema instead of ~39) — dramatically faster and avoids
-    // context/timeout failures on Venice TEE models (e.g. e2ee-glm-5-3-flash).
+    // Precedence: forcedTool (1 schema) > domain skill subset (3-10 schemas) > allTools.
     const forcedEntry = forceTool
       ? allTools.find((t) => (t as { function?: { name?: string } })?.function?.name === forceTool)
       : undefined;
-    const toolsPayload = forcedEntry ? [forcedEntry] : allTools;
+    const scopedHubTools = allowedTools
+      ? VENICE_TOOLS.filter((t) => allowedTools.has(t.function.name))
+      : VENICE_TOOLS;
+    const toolsPayload = forcedEntry
+      ? [forcedEntry]
+      : (extraTools.length ? [...scopedHubTools, ...extraTools] : scopedHubTools);
 
     const phase1TimeoutMs = !forceTool && TOOL_CAPABLE_TEE_MODELS.has(modelId.toLowerCase()) ? 20_000 : 30_000;
     const doPhase1 = async (toolChoice: unknown): Promise<VenicePhase1Resp | null> => {
@@ -3827,23 +3838,32 @@ export async function POST(req: NextRequest) {
   // safeguard that matters is that a repo turn carries NO tools.
   const withRepoData = <T extends { role: string; content: unknown }>(msgs: T[]): T[] => msgs;
 
+  // Strip the /command prefix from last message so LLM only sees args
+  let cleanMessages = messages as LLMMessage[];
+  if (cmdPrompt) {
+    cleanMessages = [
+      ...messages.slice(0, -1),
+      {
+        role: "user",
+        content: detectedCmd!.args || `Run the /${detectedCmd!.cmd} command.`,
+      },
+    ] as LLMMessage[];
+  }
+
+  // On-demand Domain Skill Packs + Phase-1 Tool Subset (lib/chat/skill-router.ts):
+  // loads ONLY the 1-2 relevant domain packs and their 3-10 tool schemas instead
+  // of dumping ~12.4k tokens of monolithic docs + all 36 schemas on every turn.
+  const activeSkillIds = selectDomainSkills(cleanMessages);
+  const allowedTools = selectToolSubset(activeSkillIds);
+
   const buildSystem = (hasTools: boolean, toolsUnreachable = false) => [
     // SOUL.md goes FIRST — it's the identity layer (who Blue Agent is, how it
     // talks, what it won't do); everything after it is operational detail.
-    // /soul told visitors this file "is loaded into every chat session"; until
-    // now nothing read it, so this line is what makes that sentence true.
     SOUL_MD,
-    buildBaseSystem({ hasWebSearch, hasTools, toolsUnreachable }),
+    buildBaseSystem({ hasWebSearch, hasTools, toolsUnreachable, scopedTools: true }),
     buildAgentCapabilities(hasTools),
-    // B20 splits on the same `hasTools` flag as everything else: the standard's
-    // FACTS and its PROHIBITIONS go out either way (a model with no tools still
-    // has to answer "what is B20?" correctly, and still must never print a
-    // private key), but the "Use <tool> when the user asks X" dispatch table
-    // only ships when those tools are actually attached.
-    buildProductSurfaceSection(),
-    buildB20Section(hasTools),
-    buildLaunchpadSection(hasTools),
-    buildAlertsSection(hasTools),
+    buildCompactProductMap(),
+    buildSelectedSkillsPrompt(activeSkillIds, hasTools),
     // Gate client-supplied skills on `hasTools` just like connectors below:
     // DEFAULT_SKILLS in chat/integrations.ts explicitly name `hub_*` tools,
     // so injecting them when `hasTools` is false contradicts `noToolsSection`.
@@ -3854,29 +3874,12 @@ export async function POST(req: NextRequest) {
     modelLine,
     langLine,
     memoryContext ?? "",
-    // Below memory, above the command prompt: page state is context, not
-    // identity and not the task. It is also the ONLY block here the user can
-    // see with their own eyes, which is why it must never contradict the
-    // screen — see the caller's label.
     pageContext ?? "",
     github ? [github.pointer, github.data ?? ""].filter(Boolean).join("\n\n") : "",
     cmdPrompt ?? "",
   ].filter(Boolean).join("\n\n");
 
   const system = buildSystem(hasHubTools);
-
-  // Strip the /command prefix from last message so LLM only sees args
-  let cleanMessages = messages as LLMMessage[];
-  if (cmdPrompt) {
-    // Strip the /command prefix — pass only args to the model
-    cleanMessages = [
-      ...messages.slice(0, -1),
-      {
-        role: "user",
-        content: detectedCmd!.args || `Run the /${detectedCmd!.cmd} command.`,
-      },
-    ] as LLMMessage[];
-  }
 
   // ── Venice provider ───────────────────────────────────────────────────────
   // Gated on the server-pinned `eff*` values, not the raw client fields, so the
@@ -3938,6 +3941,7 @@ export async function POST(req: NextRequest) {
             // tool; the model still writes the arguments (lib/chat/intents.ts).
             apiKey, effModelId, openaiMsgs, maxTok, autoSearch, forcedToolFor(cleanMessages) ?? undefined, undefined,
             hasConnectorTools ? mcpTools : [],
+            allowedTools,
           );
       if (outcome.status === "tools") {
         return veniceToolStream(
@@ -4063,6 +4067,7 @@ export async function POST(req: NextRequest) {
           // Imperative trade → its card tool, model-written args (lib/chat/intents.ts).
           virtualsKey, virtualsModel, openaiMsgs, virtualsMax, virtualsAutoSearch, forcedToolFor(cleanMessages) ?? undefined, cfg,
           hasConnectorTools ? mcpTools : [],
+          allowedTools,
         );
     if (outcome.status === "tools") {
       return veniceToolStream(

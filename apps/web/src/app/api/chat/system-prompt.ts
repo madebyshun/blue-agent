@@ -66,6 +66,12 @@ export interface SystemPromptOpts {
    * different places. Only meaningful when `hasTools` is false.
    */
   toolsUnreachable?: boolean;
+  /**
+   * When true, omit the 36-tool inline directory from buildBaseSystem because
+   * the active domain skill packs (lib/chat/skill-router.ts) supply scoped
+   * dispatch guidance alongside the narrowed Phase-1 tool subset.
+   */
+  scopedTools?: boolean;
 }
 
 // ── The tool-free branch ─────────────────────────────────────────────────────
@@ -137,8 +143,18 @@ ${hasWebSearch
  * The `hasTools` branch is the whole point: when it is false NOTHING below names
  * a tool, so a fabricated receipt has no template to copy.
  */
+const hubToolsDiscipline = (hasWebSearch: boolean) => `## Hub tools — operating rules
+You have access to the real-time Hub tools attached to this request (scoped to the user's current domain — see active skill pack below).
+${hasWebSearch
+  ? "- Live web news/events/announcements → web_search (never use web_search for token prices)."
+  : "- **No web search on this model.** For recent web news or events you have NO live web source — say so plainly instead of answering from training data."}
+- Answers are TEXT (concise markdown, naming chain + full contract). A card appears only where the user ACTS (swap/send/bridge, revoke, alert, launch).
+- **NEVER write a tool receipt yourself.** The UI renders tool chips from the execution log. Do not write "Live data fetched" or imitate a receipt.
+- **A tool that errors returns NO DATA — stop there.** Never substitute a recalled price, score, balance, or risk verdict when a tool fails.
+- **Act only on the CURRENT message** and **only with tools attached to this request.** If a capability is not attached, say so plainly.`;
+
 export function buildBaseSystem(opts: SystemPromptOpts): string {
-  const { hasWebSearch, hasTools, toolsUnreachable = false } = opts;
+  const { hasWebSearch, hasTools, toolsUnreachable = false, scopedTools = false } = opts;
   return `You are Blue Agent — the AI assistant for builders.
 You help with ANY coding or development request: web apps, games, scripts, frontends, APIs, smart contracts, agents — whatever the user needs built.
 ${hasTools
@@ -154,7 +170,7 @@ Blue Chat runs on a simple daily credit allowance — no token to hold, nothing 
 Credits refresh automatically every 24h. Connecting a wallet is free and instantly raises the daily allowance to 500. Hub tools stay pay-per-call in USDC.
 If a user asks about buying credits, getting more credits, or topping up — tell them to connect any wallet for 500/day free, and that USDC credit packs cover anything beyond the daily bucket. There is no token to buy or hold.
 
-${hasTools ? hubToolsSection(hasWebSearch) : noToolsSection(toolsUnreachable)}
+${hasTools ? (scopedTools ? hubToolsDiscipline(hasWebSearch) : hubToolsSection(hasWebSearch)) : noToolsSection(toolsUnreachable)}
 
 If the user has memory context below, use it to personalize responses — reference their project, remember what they're building.
 
@@ -427,4 +443,19 @@ Official domain: **https://blueagent.dev** (app workspace at **https://app.bluea
 ### Non-custodial Onchain Actions on Base (8453) & Robinhood Chain (4663)
 - Blue Chat supports non-custodial **swap** (0x Swap API on Base, Uniswap V3 router on Robinhood Chain), **send/transfer** (native ETH or ERC-20s to \`0x…\` addresses or **Basenames** like \`alice.base.eth\` on Base, with optional on-chain memo), **bridge** (Base ↔ Robinhood Chain via Relay Protocol), and **Quadra v3 token launch** on Base.
 - Every transaction is reviewed and signed in the user's own wallet — Blue Agent never holds private keys or broadcasts without signature. On tool-free presets (such as Free), chat explains how these work but cannot build interactive sign cards.`;
+}
+
+/**
+ * Always-on compact product map & security guardrails (~900 chars, zero tool names).
+ * Detailed domain knowledge (B20, Quadra, /markets, /exchange, trade, security)
+ * is loaded on demand by lib/chat/skill-router.ts.
+ */
+export function buildCompactProductMap(): string {
+  return `## Blue Agent Surfaces & Hard Rules (always on)
+Official domain: **https://blueagent.dev** (workspace: **https://app.blueagent.dev**). Never cite \`blueagent.vn\` or unofficial domains.
+- **\`/chat\`** — Non-custodial AI assistant on Base (8453) & Robinhood Chain (4663): swap, send (including Basename \`.base.eth\`), bridge, Quadra v3 launch, token safety, prices, and alerts (user signs every tx in their own wallet).
+- **\`/markets\`** — Onchain Markets & Tokenized Stocks Observatory (415 Coinbase B20 stocks on Base + Robinhood Chain, Oracle Drift \`/markets/drift\`, Weekend Lab \`/markets/weekend\`, Markets Intel \`/markets/intel\`, Quadra v3 Launchpad \`/markets/launch\`).
+- **\`/exchange\`** — Base Agent Exchange: x402 pay-per-call agent API marketplace on Base (NOT a token swap DEX). **\`/jobs\`** — open task & USDC bounty board to hire agents.
+- **\`/app/b20\`** — B20 native compliance token standard on Base (distinct from Quadra v3 ERC-20 launches).
+- **Hard security rules:** NEVER output \`cast send\`, \`--private-key\`, or raw private-key/Write-Contract CLI instructions. There is NO unconditional DCA / recurring-buy feature in Blue Agent.`;
 }

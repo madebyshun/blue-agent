@@ -126,6 +126,19 @@ export function ActionStrip({
   }, [usable, pt.check, what, silent, warned, verb]);
 
   const report = useCallback((s: AutoStatus) => {
+    if (s.phase === "warn") {
+      forgetArmed();
+      setWarned(true);
+      setStatus(null);
+      sinkRef.current?.(
+        `Heads up before ${what}: ${s.why || "pre-trade warning"}. Reply **yes** again to continue anyway.`,
+        true,
+      );
+      sinkRef.current = null;
+      setArmed(false);
+      setAttempt((n) => n + 1);
+      return;
+    }
     setStatus(s);
     const final = s.phase === "done" || s.phase === "error";
     if (s.phase === "done") settleArmed();

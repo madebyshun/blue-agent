@@ -20,6 +20,7 @@ export type AutoStatus =
   | { phase: "working"; note?: string }
   | { phase: "sent"; href: string | null }
   | { phase: "done"; href: string | null; detail?: string; text?: string }
+  | { phase: "warn"; why: string }
   | { phase: "error"; message: string };
 
 export interface AutoConfirm {
@@ -92,4 +93,20 @@ export function useAutoBlocker(reason: string | null | undefined) {
     reported.current = true;
     report({ phase: "error", message: reason });
   }, [armed, report, reason]);
+}
+
+/**
+ * In a signing card: once armed, if the card's own pre-trade check (e.g. after
+ * resolving a Basename → 0x address) returns WARN, surface the warning in chat
+ * and let a second "yes" acknowledge it instead of timing out silently.
+ */
+export function useAutoWarn(why: string | null | undefined) {
+  const { armed, warnAck, report } = useContext(AutoConfirmContext);
+  const reported = useRef(false);
+  useEffect(() => {
+    if (!armed) { reported.current = false; return; }
+    if (!report || !why || warnAck || reported.current) return;
+    reported.current = true;
+    report({ phase: "warn", why });
+  }, [armed, warnAck, report, why]);
 }

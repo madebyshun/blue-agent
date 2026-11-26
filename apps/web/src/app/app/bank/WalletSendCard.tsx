@@ -89,7 +89,7 @@ import {
   useCapabilities, useSendCalls, useCallsStatus,
 } from "wagmi";
 import { useSilentSender } from "@/lib/privy/silent-tx";
-import { useAutoConfirm, useAutoReport, useAutoBlocker } from "@/components/wallet/action-context";
+import { useAutoConfirm, useAutoReport, useAutoBlocker, useAutoWarn } from "@/components/wallet/action-context";
 import { isAddress, getAddress, parseUnits, formatUnits, namehash, encodeFunctionData } from "viem";
 import { WALLET_CHAINS } from "@/lib/wallet/chains";
 import { ERC20_ABI } from "@/lib/yield-execution";
@@ -460,11 +460,16 @@ export default function WalletSendCard({
     : !(amt > 0) && !pendingWord ? "Missing transfer amount"
     : overBalance ? `Amount exceeds your ${symbol} balance`
     : gate === "unverified" ? `Couldn't read your ${symbol} balance`
-    : pt.blocked ? "Blocked by pre-trade safety check"
+    : pt.state === "throttled" ? "Pre-trade safety check was rate-limited — try again in a moment"
+    : pt.blocked ? (pt.check?.reasons.find((r) => r.level === "BLOCK")?.text || "Blocked by pre-trade safety check")
+    : null;
+  const autoWarn = !autoBlocker && pt.state === "ok" && pt.check?.verdict === "WARN" && !pt.cleared
+    ? (pt.check.reasons.find((r) => r.level === "WARN")?.text || pt.check.label || "pre-trade warning")
     : null;
   // A chat "yes" runs the same send() once the card is ready to sign.
   useAutoConfirm(valid && !busy && step === "idle" && isConnected, (o) => { void send(o); });
   useAutoBlocker(autoBlocker);
+  useAutoWarn(autoWarn);
   useAutoReport(step, err, txHash ? `${cfg.explorer}/tx/${txHash}` : null);
 
   // 25 / 50 / 100% presets computed in BASE UNITS (raw * bps / 10000n) so the
