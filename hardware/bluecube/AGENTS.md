@@ -19,9 +19,13 @@ Rules for a coding agent changing anything under `hardware/bluecube/`.
    sign, spend or hold a key.
 5. **Watch the KV budget.** Every device poll is an Upstash command, and the
    monthly cap has suspended the store before (#148). The feed is polled every
-   `next_poll_s` (180 s). `/api/devices/agent` is polled fast only while the
-   feed reports `agent_active`. Do not shorten either interval.
-6. **Compile before claiming done:**
+   `next_poll_s` (180 s); do not shorten it. A live "agent is thinking" mirror
+   was built and retired on 2026-10-04 for exactly this reason. Do not rebuild
+   it on fast polling.
+6. **The mascot is BlueBot's character** (the Blue Agent mark with eyes; states
+   and colours from BlueBot's `BotEngine.swift`). It is not Coucou's Mochi:
+   BlueBot's NOTICE excludes that character. Draw new states in that style.
+7. **Compile before claiming done:**
    `arduino-cli compile --fqbn esp32:esp32:esp32s3:CDCOnBoot=cdc hardware/bluecube/BlueCube`.
    Flash usage is around 93% of the default OTA partition. If a change pushes it
    over, say so; do not switch to a no-OTA partition scheme, because that

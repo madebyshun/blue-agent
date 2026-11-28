@@ -11,18 +11,24 @@ never a reflash.
 | `hood` | Your tokenized stocks on Base, price + gap to the Chainlink oracle | `hood-live` tool |
 | `trending` | Base trending tokens, each with a tax-read mark (never "safe to buy") | `safe-trending` tool |
 | `status` | Whether each data source the tools read from is up | `blue-doctor` tool |
-| `buddy` | The Blue Agent mascot acting out a mood the server measured | `blue-doctor` + BTC 24h |
+| `buddy` | The mascot (BlueBot's character: the Blue Agent mark with eyes) acting out a mood the server measured | `blue-doctor` + BTC 24h |
 
 **Linked (optional).** Link the cube to your wallet from its control page. It
 uses the same device link as BlueBot: the cube shows a code, you approve it at
 `app.blueagent.dev/link`, and the cube gets a **read-only** token. A
-read-only token can never sign anything or move funds. Once linked, the cube:
+read-only token can never sign anything or move funds. Once linked, the
+mascot reacts to what your agent actually did, read from `/api/devices/feed`
+every 3 minutes. Then a card shows the details:
 
-- shows a card when one of your trades confirms, a price alert fires, or the
-  pre-trade check refuses a trade (`/api/devices/feed`);
-- shows the mascot thinking while your Blue Chat turn runs tools
-  (`/api/devices/agent`). It polls fast only while a chat session is live, to
-  keep KV usage within budget.
+| Event | Mascot |
+|---|---|
+| A trade confirms | *finished* (green, happy eyes, sparkles) |
+| A price alert fires | *approval* (amber, "!" badge, bouncing) |
+| A trade is refused or reverts | *error* (red, flat eyes, shaking) |
+| Anything else on the timeline | *working* (blue, "…" badge) |
+
+A cube does not mirror your chat while you type. You are already looking at
+the chat, and polling for it would cost KV commands all day for nothing.
 
 ## Build one
 
@@ -77,4 +83,4 @@ preview/                  desktop build of cube_render + a script that renders e
 ```
 
 Server side: `apps/web/src/lib/cube/` (public feeds), `apps/web/src/lib/devices.ts`
-(device link, kind `cube`), `apps/web/src/lib/device-agent.ts` (agent activity).
+(device link, kind `cube`, read-only), `apps/web/src/lib/device-feed.ts` (feed tones).

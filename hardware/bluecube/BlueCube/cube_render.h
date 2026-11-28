@@ -52,12 +52,6 @@ struct Card {
   char tone;        // 'i' info, 'g' good, 'w' warn, 'a' alert
 };
 
-// What the paired owner's agent is doing right now.
-struct Agent {
-  bool thinking;
-  char label[22];   // e.g. "Checking hood-live"
-};
-
 struct Clock { bool ok; int hh, mm, day, mon; };
 
 // Everything a frame needs from the outside world.
@@ -70,18 +64,21 @@ struct Ctx {
   uint32_t rnd;     // a fresh random number for this frame
 };
 
-// The face's animation state, owned by the caller (one per screen).
-struct FaceLook {
-  char mouth;       // 's' smile 'f' frown 'w' wavy 'o' open 'l' flat
-  uint16_t eye;     // 0 = the art's own yellow
-  bool lids;
-  uint16_t ball;    // 0 = the art's own red
-  int x, y;
+// The mascot — BlueBot's character (the Blue Agent mark with eyes) and its
+// states, shared with the BlueBot notch app (BotEngine.swift BotStates).
+enum class Bot : uint8_t {
+  Idle, Working, Thinking, Searching, Approval, Question, Error, Finished,
+  RateLimit, Sleeping, Dizzy, Love, Proud, Annoyed, Happy, Count
 };
-struct FaceAnim {
-  FaceLook shown{0, 0, false, 0, -1000, -1000};
-  uint32_t lastTick = 0, frame = 0, blinkUntil = 0, nextBlink = 0;
-  void reset() { shown.x = -1000; }
+const char* botName(Bot b);
+
+// Animation state for one on-screen bot, owned by the caller.
+struct BotAnim {
+  uint32_t lastTick = 0, frame = 0, blinkUntil = 0, nextBlink = 0, sig = 0;
+  bool drawn = false;
+  int rampState = -1;
+  uint16_t ramp[64];
+  void reset() { drawn = false; }
 };
 
 // ── parsing (ArduinoJson only — the preview loads real /api/cube JSON) ───────
@@ -92,11 +89,15 @@ bool parseCard(JsonObjectConst c, Card& out);
 void centerText(Adafruit_GFX& g, const char* s, int y, uint16_t color, uint8_t size = 1);
 void splash(Adafruit_GFX& g, const char* l1, const char* l2 = "", uint16_t c2 = GRAY);
 void drawHeader(const Ctx& c);
-void drawFeed(Ctx& c, const Feed& f, FaceAnim& face);
-/** Advance the buddy face one frame (call every loop; it self-limits to ~8 fps). */
-void buddyTick(Ctx& c, const Feed& f, FaceAnim& face, bool force);
-/** The face while the owner's agent is mid-turn: thought dots + what it runs. */
-void thinkingTick(Ctx& c, const Agent& a, FaceAnim& face, bool force);
+void drawFeed(Ctx& c, const Feed& f, BotAnim& bot);
+/** Advance the buddy bot one frame (call every loop; it self-limits to ~8 fps). */
+void buddyTick(Ctx& c, const Feed& f, BotAnim& bot, bool force);
+/** Any bot state with a caption under it — used for reactions to real events. */
+void botTick(Ctx& c, Bot state, const char* text, uint16_t col, BotAnim& bot, bool force);
+/** The server's buddy mood → a bot state (asleep 00:00-06:00 unless alarmed). */
+Bot moodBot(char mood, const Clock& ck);
+/** How the bot reacts to a card from the owner's timeline. */
+Bot cardBot(const Card& k);
 void drawCard(Ctx& c, const Card& card);
 void drawPairing(Adafruit_GFX& g, const char* code, const char* url);
 void drawUpdateCode(Adafruit_GFX& g, const char* code);
