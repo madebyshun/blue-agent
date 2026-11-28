@@ -49,7 +49,7 @@ import { discoveryRows } from "@/lib/chat/discovery-rows";
 export function tokenLink(symbol: string, address: string | null, chain: "base" | "robinhood"): string {
   if (!address) return `**${symbol}**`;
   const host = chain === "robinhood" ? "https://robinhoodchain.blockscout.com/token/" : "https://basescan.org/token/";
-  return `[**${symbol}**](${host}${address})`;
+  return `**[${symbol}](${host}${address})**`;
 }
 
 /** Rows shown before "…and N more" (2026-10-16: answers read like Bankr's —

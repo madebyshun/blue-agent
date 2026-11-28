@@ -130,8 +130,9 @@ export function ActionStrip({
       forgetArmed();
       setWarned(true);
       setStatus(null);
+      const cleanWhy = (s.why || "pre-trade warning").trim().replace(/\.+$/, "");
       sinkRef.current?.(
-        `Heads up before ${what}: ${s.why || "pre-trade warning"}. Reply **yes** again to continue anyway.`,
+        `Heads up before ${what}: ${cleanWhy}. Reply **yes** again to continue anyway.`,
         true,
       );
       sinkRef.current = null;

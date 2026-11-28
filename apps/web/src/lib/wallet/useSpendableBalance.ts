@@ -143,7 +143,7 @@ export function useSpendableBalance(opts: {
   const nativeQ = useBalance({
     address: holder || undefined,
     chainId,
-    query: { enabled: !!holder && native, refetchInterval: pollMs },
+    query: { enabled: !!holder && native, refetchInterval: pollMs, refetchOnMount: "always" },
   });
 
   // Decimals and balance are read as a PAIR and fail as a pair. Splitting them
@@ -157,7 +157,7 @@ export function useSpendableBalance(opts: {
   const balQ = useReadContract({
     address: tokenAddr, abi: ERC20_ABI, functionName: "balanceOf",
     args: holder ? [holder] : undefined, chainId,
-    query: { enabled: !!holder && !native && !!tokenAddr, refetchInterval: pollMs },
+    query: { enabled: !!holder && !native && !!tokenAddr, refetchInterval: pollMs, refetchOnMount: "always" },
   });
 
   // `useBalance` reports the coin's own decimals — 18 for an EVM native, but

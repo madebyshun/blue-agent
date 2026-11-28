@@ -458,8 +458,8 @@ export default function WalletSendCard({
   const autoBlocker = !isConnected ? "Connect your wallet first"
     : (!recipIsName || !resolving) && !toAddress ? (recipIsName ? `Couldn't resolve ${recip}` : "Missing or invalid recipient address")
     : !(amt > 0) && !pendingWord ? "Missing transfer amount"
-    : overBalance ? `Amount exceeds your ${symbol} balance`
-    : gate === "unverified" ? `Couldn't read your ${symbol} balance`
+    : overBalance && !bal.refetching ? `Amount exceeds your ${symbol} balance`
+    : gate === "unverified" && !bal.refetching ? `Couldn't read your ${symbol} balance`
     : pt.state === "throttled" ? "Pre-trade safety check was rate-limited — try again in a moment"
     : pt.blocked ? (pt.check?.reasons.find((r) => r.level === "BLOCK")?.text || "Blocked by pre-trade safety check")
     : null;

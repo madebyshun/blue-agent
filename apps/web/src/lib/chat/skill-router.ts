@@ -228,8 +228,8 @@ export const DOMAIN_SKILLS: Record<DomainSkillId, DomainSkillDef> = {
       /\b(tạo|phát hành|launch)\s*(token|coin|memecoin)\b/i,
       /\b(new tokens?|newly deployed|graduat\w*|just deployed|token mới)\b/i,
     ],
-    facts: `## Skill: Quadra v3 & Token Launchpads on Base / Robinhood Chain (verified facts)
-- **Quadra v3 (\`/markets/launch\` on Base 8453):** Non-custodial launchpad deploying a standard **fixed-supply (1,000,000,000) ERC-20** token with **no admin** directly into a **locked Uniswap v4 pool** on Base (8453). Paired with **native ETH** or an enabled **Coinbase B20 stock token** (e.g. \`NVDAc\`). Pool fee choices: **1% or 3%**; fee split: **80% creator · 15% Quadra · 5% Blue referrer**. Optional first buy in the paired asset at launch.
+    facts: `## Skill: Quadra v3 (Base 8453 ONLY) & Ecosystem Launchpads (verified facts)
+- **Quadra v3 (\`/markets/launch\` — Base 8453 ONLY, NOT Robinhood Chain):** Non-custodial launchpad deploying a standard **fixed-supply (1,000,000,000) ERC-20** token with **no admin** directly into a **locked Uniswap v4 pool** on Base (8453). Paired with **native ETH** or an enabled **Coinbase B20 stock token** (e.g. \`NVDAc\`). Pool fee choices: **1% or 3%**; fee split: **80% creator · 15% Quadra · 5% Blue referrer**. Optional first buy in the paired asset at launch.
 - **STRICT BOUNDARY — What Quadra v3 is NOT:** Quadra v3 is **NOT** a B20 compliance token. It has **NO** \`Asset\`/\`Stablecoin\` variants, **NO** \`Allowlist\`/\`Blocklist\` compliance policies, **NO** \`MINT_ROLE\`, **NO** \`6 decimals\` stablecoin rule, and **NO** \`B20Factory\` precompile. Never mix B20 fields into Quadra v3 answers. Native ETH has no ERC-20 contract (Base USDC \`0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913\` is NOT ETH).
 - **Other launchpads (on-chain snapshot 2026-10-01):**
   - **Pons** — largest bonding-curve launchpad on Robinhood Chain (not Base); graduates into locked Uniswap v4 LP.
