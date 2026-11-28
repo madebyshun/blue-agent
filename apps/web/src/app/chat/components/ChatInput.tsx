@@ -32,7 +32,7 @@ interface SlashCommand {
 // Slash commands are natural language now — only 3 utility commands remain.
 // /skill is handled client-side in ChatContext.tsx.
 const SLASH_COMMANDS: SlashCommand[] = [
-  { cmd: "skill",   icon: "📦", label: "Skill Packs", hint: "install / list / remove GitHub skill packs",      example: "/skill install owner/repo" },
+  { cmd: "skill",   icon: "", label: "Skill Packs", hint: "list / catalog / enable / disable / install / remove skill packs", example: "/skill list" },
 ];
 
 export interface ModelTier {
@@ -315,7 +315,7 @@ export default function ChatInput() {
                 onMouseDown={(e) => { e.preventDefault(); selectCommand(c); }}
                 className="w-full flex items-center gap-3 px-4 py-2.5 min-h-[44px] hover:bg-[#1A1A2E] transition-colors text-left group"
               >
-                <span className="text-base w-5 text-center shrink-0">{c.icon}</span>
+                {c.icon && <span className="text-base w-5 text-center shrink-0">{c.icon}</span>}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-xs text-[#4FC3F7]">/{c.cmd}</span>
@@ -341,7 +341,7 @@ export default function ChatInput() {
                 onMouseDown={(e) => { e.preventDefault(); selectCommand(c); }}
                 className="w-full flex items-center gap-3 px-4 py-3 min-h-[44px] hover:bg-[#1A1A2E] transition-colors text-left group"
               >
-                <span className="text-sm w-5 text-center shrink-0">{c.icon}</span>
+                {c.icon && <span className="text-sm w-5 text-center shrink-0">{c.icon}</span>}
                 <div className="flex-1 min-w-0">
                   <p className="font-mono text-[13px] text-slate-300 group-hover:text-white">/{c.cmd} · {c.label}</p>
                   <p className="font-mono text-[12px] text-slate-600 truncate">{c.hint}</p>
@@ -487,7 +487,7 @@ export default function ChatInput() {
         {activeCmdDef && !cmdMenu && (
           <div className="flex items-center gap-2 mb-2 px-1">
             <span className="font-mono text-[13px] text-[#4FC3F7] border border-[#4FC3F7]/30 bg-[#4FC3F7]/5 px-2 py-0.5 rounded">
-              {activeCmdDef.icon} /{activeCmdDef.cmd} · {activeCmdDef.label}
+              {activeCmdDef.icon ? `${activeCmdDef.icon} ` : ""}/{activeCmdDef.cmd} · {activeCmdDef.label}
             </span>
             <span className="font-mono text-[13px] text-slate-600">{activeCmdDef.hint}</span>
           </div>
