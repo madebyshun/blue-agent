@@ -82,17 +82,21 @@ export async function POST(req: NextRequest) {
   }
 
   // Wallet auth & credit billing (honoring VVV/DIEM holder perk for `tee`).
+  // FAIL CLOSED (review 2026-11-28): this route spends Blue's Venice key, so
+  // every call needs a signed-in wallet and a successful credit spend (or the
+  // holder perk). Before, a request with no `address`, a missing
+  // INTERNAL_SERVICE_KEY, or a spend call that errored all ran free.
   const claimedWallet = normalizeWallet(body.address);
-  let payer: string | undefined;
-  if (claimedWallet) {
-    const acting = await resolveActingWallet(req, claimedWallet);
-    if (acting.status !== "ok") {
-      return NextResponse.json({ error: "Sign in with your wallet to use Strict E2EE." }, { status: 401 });
-    }
-    payer = acting.wallet;
+  const acting = await resolveActingWallet(req, claimedWallet);
+  if (acting.status !== "ok") {
+    return NextResponse.json({ error: "Sign in with your wallet to use Strict E2EE." }, { status: 401 });
+  }
+  const payer = acting.wallet;
+  if (!INTERNAL_KEY) {
+    return NextResponse.json({ error: "Credit metering is not configured; Strict E2EE is unavailable." }, { status: 503 });
   }
 
-  if (payer && INTERNAL_KEY) {
+  {
     const vBal = await readVeniceOnchainBalances(payer).catch(() => null);
     const perk = evaluateVeniceHolderPerk(vBal);
     if (!isPresetFreeForVeniceHolder("tee", perk)) {
@@ -109,6 +113,9 @@ export async function POST(req: NextRequest) {
         }).catch(() => null);
         if (spendRes?.status === 402) {
           return NextResponse.json({ error: "Insufficient credits for Strict E2EE." }, { status: 402 });
+        }
+        if (!spendRes?.ok) {
+          return NextResponse.json({ error: "Could not charge credits right now; nothing was sent." }, { status: 503 });
         }
       }
     }

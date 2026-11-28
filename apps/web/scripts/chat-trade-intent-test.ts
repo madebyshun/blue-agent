@@ -53,9 +53,9 @@ const trending = cardReply("hub_safe_trending", {
 }) ?? "";
 // 2026-10-16: short, like Bankr — a summary line, then one line per row.
 ok("trending opens with who leads", trending.startsWith("**Trending on Base**: B leads, +905.39% in 24h."), trending);
-ok("one line per ok row, skipped rows left out", /\n- \[\*\*A\*\*\]\(https:\/\/basescan\.org\/token\/0x1111/.test(trending) && !/\*\*C\*\*/.test(trending), trending);
-ok("the contract rides in the symbol's link", trending.includes("(https://basescan.org/token/0x2222222222222222222222222222222222222222)"), trending);
-ok("a honeypot says not tradable", /\*\*B\*\*\]\([^)]*\) \+905\.39% · liq \$10\.17M · honeypot, not tradable/.test(trending), trending);
+// 2026-11-28 (2bfcf214): discovery output dropped Basescan links; rows stay one per ok token.
+ok("one line per ok row, skipped rows left out", /\n- \*\*A\*\* \+12\.50%/.test(trending) && !/\*\*C\*\*/.test(trending), trending);
+ok("a honeypot says not tradable", /\*\*B\*\* \+905\.39% · liq \$10\.17M · honeypot, not tradable/.test(trending), trending);
 ok("a measured clean tax is said; an unread one is not repeated per row", /\*\*A\*\*.*tax clean/.test(trending) && !/tax unverified|tax check UNKNOWN/i.test(trending), trending);
 ok("trending says how to trade and that it is checked first", /checked before you sign/.test(trending), trending);
 ok("at most five rows", cardReply("hub_safe_trending", { tokens: Array.from({ length: 9 }, (_, i) => ({ status: "ok", symbol: `T${i}`, change_24h: i })) })!.includes("…and 4 more."));
@@ -123,7 +123,8 @@ console.log("walletText");
   );
   // 2026-10-16: short, like Bankr — total first, priced rows, unpriced counted.
   ok("wallet: total first", w.startsWith("Portfolio is about $10.36 where priced, across Base and Robinhood Chain."), w);
-  ok("wallet: a priced row is value then amount, contract in the link", /- \[\*\*USDC\*\*\]\(https:\/\/basescan\.org\/token\/0x833589[^)]*\): \$10\.09 \(10\.125\)/.test(w), w);
+  // 2bfcf214 (2026-11-28): wallet output dropped the Basescan link.
+  ok("wallet: a priced row is value then amount", /- \*\*USDC\*\*: \$10\.09 \(10\.125\)/.test(w), w);
   ok("wallet: unpriced tokens are counted, never listed and never $0", /1 token with no price/.test(w) && !/NOCK/.test(w) && !/\$0\.00/.test(w), w);
   ok("wallet: dust is counted, not listed", /1 under \$1/.test(w) && !/\*\*ETH\*\*/.test(w), w);
   ok("wallet: an incomplete Base read is said", /The Base list may be incomplete/.test(w), w);

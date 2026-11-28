@@ -110,9 +110,9 @@ export async function readVeniceOnchainBalances(
       ],
       allowFailure: true,
     });
-    if (res.every((r) => r.status !== "success")) return null;
-    const toNum = (idx: number) =>
-      res[idx]?.status === "success" ? Number(formatUnits(res[idx].result as bigint, 18)) : 0;
+    // All three or nothing: a failed read is unknown, never a zero balance.
+    if (res.some((r) => r.status !== "success")) return null;
+    const toNum = (idx: number) => Number(formatUnits(res[idx].result as bigint, 18));
 
     const value: VeniceOnchainBalances = {
       vvv: toNum(0),

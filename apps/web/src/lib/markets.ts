@@ -228,8 +228,10 @@ export const readBaseStockCollateral = cacheWhole(async (): Promise<Record<strin
       const a = res[i * 2];
       const m = res[i * 2 + 1];
       if (a?.status === "success" || m?.status === "success") anyOk = true;
-      const aaveTokens = a?.status === "success" && a.result > 0n ? Number(formatUnits(a.result, 8)) : 0;
-      const morphoTokens = m?.status === "success" && m.result > 0n ? Number(formatUnits(m.result, 8)) : 0;
+      // A failed read leaves the token unknown (absent), never a partial sum.
+      if (a?.status !== "success" || m?.status !== "success") continue;
+      const aaveTokens = Number(formatUnits(a.result, 8));
+      const morphoTokens = Number(formatUnits(m.result, 8));
       if (aaveTokens > 0 || morphoTokens > 0) {
         out[minted[i].token.toLowerCase()] = { aaveTokens, morphoTokens };
       }
