@@ -42,17 +42,31 @@ function chainFrom(t: string): "base" | "robinhood" | null {
   return base && !rh ? "base" : rh && !base ? "robinhood" : null;
 }
 
+/** All verified stock tickers named in the message (up to 6, order preserved). */
+export function stockTickersIn(raw: string): string[] {
+  const out: string[] = [];
+  for (const m of raw.matchAll(/\b([A-Za-z]{2,6})\b/g)) {
+    const w = m[1], up = w.toUpperCase();
+    // Accept both ticker ("NVDA") and Coinbase B20 symbol ("NVDAc")
+    const baseSym = up.endsWith("C") && STOCK_TICKERS.has(up.slice(0, -1)) ? up.slice(0, -1) : up;
+    if (!STOCK_TICKERS.has(baseSym)) continue;
+    const isExactCap = w === up || (w.endsWith("c") && w.slice(0, -1) === w.slice(0, -1).toUpperCase());
+    if (isExactCap && !WORDISH.has(baseSym)) {
+      if (!out.includes(baseSym)) out.push(baseSym);
+      continue;
+    }
+    const around = raw.slice(Math.max(0, m.index! - 12), m.index! + w.length + 22).toLowerCase();
+    if (!WORDISH.has(baseSym) && /price|giá|quote|on base|on robinhood|on rh|stock|drift|compare|vs|audit|risk/.test(around)) {
+      if (!out.includes(baseSym)) out.push(baseSym);
+    }
+  }
+  return out.slice(0, 6);
+}
+
 /** A stock ticker the user named: in capitals anywhere, or lower-case right
  *  next to a price word or a chain name. */
 export function stockTickerIn(raw: string): string | null {
-  for (const m of raw.matchAll(/\b([A-Za-z]{2,6})\b/g)) {
-    const w = m[1], up = w.toUpperCase();
-    if (!STOCK_TICKERS.has(up)) continue;
-    if (w === up && !WORDISH.has(up)) return up;
-    const around = raw.slice(Math.max(0, m.index! - 12), m.index! + w.length + 22).toLowerCase();
-    if (!WORDISH.has(up) && /price|giá|quote|on base|on robinhood|on rh|stock/.test(around)) return up;
-  }
-  return null;
+  return stockTickersIn(raw)[0] ?? null;
 }
 
 /** Symbols in "price of X and Y" / "X price" / "giá X". At most three. */
@@ -125,13 +139,18 @@ export function marketCallsFor(messages: readonly { role: string; content: unkno
 
   // A ticker alone is not a price question ("ell my NVDA" must not get a
   // quote): it needs a price word, a chain, or to be the whole message.
-  const ticker = stockTickerIn(raw);
+  const tickers = stockTickersIn(raw);
+  const ticker = tickers[0] ?? null;
+  const asksRiskAudit = /\b(audit|risk|safe|honeypot|verdict|scam|rug|security|policy|forensics)\b|rủi ro|an toàn/.test(t);
+  const asksMultiStockCompare = tickers.length >= 2 && /\b(compare|vs\.?|versus|drift|spread|screen|oracle)\b|so sánh|chênh lệch/.test(t);
   const asksCrossVenue = !!ticker && /\b(drift|spread|cross[- ]?venue)\b|chênh lệch/.test(t);
   const asksOracleDriftOverview = !ticker
     && !/(?:là gì|hoạt động|giải thích|what is|explain)/i.test(t)
     && /\boracle drift\b|\bdex\s*(?:vs\.?|versus|so với|với)\s*chainlink\b|so sánh giá\s*dex\b.*\bchainlink/.test(t);
-  const asksQuote = !!ticker && (/\bprices?\b|\bgiá\b|\bquote\b|\btrading at\b|\bon (base|robinhood|rh)\b/.test(t) || t.replace(/[?!.\s]/g, "") === ticker.toLowerCase());
-  if (asksCrossVenue && !calls.length) {
+  const asksQuote = !!ticker && !asksRiskAudit && (/\bprices?\b|\bgiá\b|\bquote\b|\btrading at\b|\bon (base|robinhood|rh)\b/.test(t) || t.replace(/[?!.\s]/g, "") === ticker.toLowerCase());
+  if (asksMultiStockCompare && !calls.length) {
+    add({ name: "hub_stock_screen", args: { tickers, chain: chainFrom(t) ?? "all", limit: Math.max(6, tickers.length) } });
+  } else if (asksCrossVenue && !calls.length) {
     add({ name: "hub_cross_venue_stock", args: { ticker } });
   } else if (asksOracleDriftOverview && !calls.length) {
     add({ name: "stock_brief", args: chainFrom(t) ? { chain: chainFrom(t) } : {} });

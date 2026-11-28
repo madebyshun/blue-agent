@@ -524,11 +524,11 @@ const ALL_HUB_TOOLS = [
   },
   {
     name: "check_token",
-    description: "Overview of ONE token by contract address on Base (8453) or Robinhood Chain (4663): on-chain name/symbol/supply, whether it is a verified stock token, WHICH LAUNCHPAD it came from (Pons, Bankr, Doppler, Virtuals, Clanker, Zora) and whether it is still on its bonding curve or graduated, plus its deepest pools (GeckoTerminal). Use for 'what is 0x…', 'which launchpad is this token from', 'is it bonded/graduated', 'tell me about this Robinhood token', and as the first look at any crypto token on Robinhood Chain. It measures NO tax and gives NO verdict. If the user did not name a chain, omit `chain` — the server checks both.",
+    description: "Overview of ONE token by contract address (or verified Base stock ticker/symbol like NVDA / NVDAc) on Base (8453) or Robinhood Chain (4663): on-chain name/symbol/supply, whether it is a verified stock token, WHICH LAUNCHPAD it came from (Pons, Bankr, Doppler, Virtuals, Clanker, Zora) and whether it is still on its bonding curve or graduated, plus its deepest pools (GeckoTerminal). Use for 'what is 0x…', 'which launchpad is this token from', 'is it bonded/graduated', 'tell me about this Robinhood token', and as the first look at any crypto token on Robinhood Chain. It measures NO tax and gives NO verdict. If the user did not name a chain, omit `chain` — the server checks both.",
     input_schema: {
       type: "object",
       properties: {
-        address: { type: "string", description: "Token contract 0x… (40 hex). Never invent one." },
+        address: { type: "string", description: "Token contract 0x… (40 hex) OR verified Base stock ticker/symbol (e.g. NVDA, NVDAc, MSFTc — resolved server-side). Never invent a 0x address." },
         chain:   { type: "string", enum: ["base", "robinhood"], description: "OPTIONAL — omit when the user did not say; the server finds which chain has the contract." },
       },
       required: ["address"],
@@ -588,10 +588,10 @@ const ALL_HUB_TOOLS = [
   },
   {
     name: "hub_honeypot",
-    description: "Detect honeypot tokens that cannot be sold after purchase on BASE. Use when user asks if a Base token is safe, is a honeypot, or wants to verify a Base contract before buying.",
+    description: "Detect honeypot tokens that cannot be sold after purchase on BASE. Use when user asks if a Base token is safe, is a honeypot, or wants to verify a Base contract before buying. Accepts a 0x… address or verified Base stock ticker/symbol (e.g. NVDA, NVDAc, MSFTc).",
     input_schema: {
       type: "object",
-      properties: { token: { type: "string", description: "Token contract address on Base" } },
+      properties: { token: { type: "string", description: "Token contract address (0x…) on Base OR verified Base stock ticker/symbol (e.g. NVDA, NVDAc, MSFTc). Never invent a 0x address." } },
       required: ["token"],
     },
   },
@@ -622,11 +622,11 @@ const ALL_HUB_TOOLS = [
   },
   {
     name: "hub_pretrade",
-    description: "THE answer to 'is this token safe / a scam / a honeypot?' for a token ADDRESS on Base 8453 or Robinhood Chain 4663: PASS / WARN / BLOCK with reasons, decided in code — impostor of a registered token, honeypot or tax read from the contract, not-a-token (a wallet or a liquidity pool), stock-token issuer policy and oracle drift. Relay its reasons in plain words, never the code word: BLOCK → 'don't trade it' and why; WARN → what to watch; PASS → what was measured and that nothing was found against it, never 'safe'.",
+    description: "THE answer to 'is this token safe / a scam / a honeypot / audit risk?' for a token ADDRESS or verified Base stock ticker/symbol (e.g. NVDA, NVDAc, MSFTc) on Base 8453 or Robinhood Chain 4663: PASS / WARN / BLOCK with reasons, decided in code — impostor of a registered token, honeypot or tax read from the contract, not-a-token (a wallet or a liquidity pool), stock-token issuer policy and oracle drift. Relay its reasons in plain words, never the code word: BLOCK → 'don't trade it' and why; WARN → what to watch; PASS → what was measured and that nothing was found against it, never 'safe'.",
     input_schema: {
       type: "object",
       properties: {
-        token: { type: "string", description: "Token contract 0x… exactly as the user gave it." },
+        token: { type: "string", description: "Token contract 0x… exactly as the user gave it, OR a verified Base stock ticker/symbol (e.g. NVDA, NVDAc, MSFTc — resolved server-side). Never invent a 0x address." },
         chain: { type: "string", enum: ["base", "robinhood"], description: "Default base." },
       },
       required: ["token"],
@@ -892,11 +892,11 @@ Testnets are reachable by full id: base-sepolia, ethereum-sepolia, robinhood-tes
   },
   {
     name: "hub_token_verdict",
-    description: "Deep pre-trade safety verdict for a Base (8453) token by contract address — runs eth_simulateV1 round-trip buy/sell simulation, Top 10 holder concentration, launcher forensics (Quadra, Clanker, Doppler, Virtuals), and honeypot/tax analysis. Use when the user asks for a deep token verdict, forensics, top holders, or full pre-trade analysis on Base.",
+    description: "Deep pre-trade safety verdict for a Base (8453) token by contract address or verified Base stock ticker/symbol (e.g. NVDA, NVDAc, MSFTc) — runs eth_simulateV1 round-trip buy/sell simulation, Top 10 holder concentration, launcher forensics (Quadra, Clanker, Doppler, Virtuals), and honeypot/tax analysis. Use when the user asks for a deep token verdict, risk audit, forensics, top holders, or full pre-trade analysis on Base.",
     input_schema: {
       type: "object",
       properties: {
-        token: { type: "string", description: "Token contract address (0x…) on Base." },
+        token: { type: "string", description: "Token contract address (0x…) on Base OR verified Base stock ticker/symbol (e.g. NVDA, NVDAc, MSFTc — resolved server-side). Never invent a 0x address." },
       },
       required: ["token"],
     },
@@ -2005,15 +2005,23 @@ async function callHubTool(
     return { text: `${line}\n[These are the whole facts — no verdicts.]`, staticReply: line, result: { kind: "my_alerts", count: w.value.length } };
   }
   if (toolName === "check_token") {
-    const addr = typeof args.address === "string" ? args.address.trim() : "";
+    let addr = typeof args.address === "string" ? args.address.trim() : "";
+    let resolvedChain: "base" | "robinhood" | null = args.chain === "base" || args.chain === "robinhood" ? args.chain : null;
+    if (addr && !/^0x[a-fA-F0-9]{40}$/.test(addr)) {
+      const hit = baseStockByTickerOrSymbol(addr.replace(/^\$/, ""));
+      if (hit) {
+        addr = hit.token;
+        resolvedChain = "base";
+      }
+    }
     if (!/^0x[a-fA-F0-9]{40}$/.test(addr)) {
-      const msg = "That is not a token contract address — paste the full 0x… address.";
+      const msg = "That is not a token contract address — paste the full 0x… address (or a verified Base stock ticker like NVDAc).";
       return { text: `${msg} Reply with this line.`, staticReply: msg };
     }
     const { tokenOverview } = await import("@/lib/token-overview");
     const { formatOverview } = await import("@/lib/launchpads/format");
     const { launchClient } = await import("@/lib/launchpads/resolve");
-    let chains: Array<"base" | "robinhood"> = args.chain === "base" || args.chain === "robinhood" ? [args.chain] : [];
+    let chains: Array<"base" | "robinhood"> = resolvedChain ? [resolvedChain] : [];
     if (chains.length === 0) {
       // No chain named: look for the contract on both. An address can exist
       // on both (same deployer + nonce), in which case both are reported.
@@ -2249,12 +2257,19 @@ async function callHubTool(
     }
   }
   if (toolName === "hub_token_verdict") {
-    const addr = typeof args.token === "string" ? args.token.trim() : "";
+    let addr = typeof args.token === "string" ? args.token.trim() : "";
+    let chain: "base" | "robinhood" = args.chain === "robinhood" ? "robinhood" : "base";
+    if (addr && !/^0x[a-fA-F0-9]{40}$/.test(addr)) {
+      const hit = baseStockByTickerOrSymbol(addr.replace(/^\$/, ""));
+      if (hit) {
+        addr = hit.token;
+        chain = "base";
+      }
+    }
     if (!/^0x[a-fA-F0-9]{40}$/.test(addr)) {
-      const msg = "Paste a valid 0x… token contract address to run a deep token verdict.";
+      const msg = "Paste a valid 0x… token contract address (or a verified Base stock ticker like NVDAc) to run a deep token verdict.";
       return { text: `${msg} Reply with this line.`, staticReply: msg };
     }
-    const chain = args.chain === "robinhood" ? "robinhood" : "base";
     try {
       const { tokenVerdict } = await import("@/lib/token-verdict");
       const verdict = await tokenVerdict(chain, addr);
@@ -2457,9 +2472,13 @@ async function callHubTool(
       if (toolName === "hub_b20_policy_check") {
         if (!args.wallet && userAddress) args = { ...args, wallet: userAddress };
         if (typeof args.token === "string" && !/^0x[a-fA-F0-9]{40}$/.test(args.token.trim())) {
-          const hit = baseStockByTickerOrSymbol(args.token);
+          const hit = baseStockByTickerOrSymbol(args.token.replace(/^\$/, ""));
           if (hit) args = { ...args, token: hit.token };
         }
+      }
+      if ((toolName === "hub_pretrade" || toolName === "hub_honeypot") && typeof args.token === "string" && !/^0x[a-fA-F0-9]{40}$/.test(args.token.trim())) {
+        const hit = baseStockByTickerOrSymbol(args.token.replace(/^\$/, ""));
+        if (hit) args = { ...args, token: hit.token, ...(toolName === "hub_pretrade" ? { chain: "base" } : {}) };
       }
       const r = await runInternalTool({
         tool:      endpoint,
@@ -2970,6 +2989,12 @@ async function veniceToolStream(
             emit({ delta: { text: interrupted === "timeout"
               ? (wrote ? "\n\n_(Timed out — the answer was cut here. Say \"continue\" for the rest.)_" : "The model timed out before writing a summary — the tool results above are complete.")
               : (wrote ? "\n\n_(The connection to the model dropped — the answer was cut here.)_" : "The connection to the model dropped before it wrote a summary — the tool results above are complete.") } });
+          } else if (!wrote) {
+            const fallback = veniceOutputs
+              .map(({ tc, out }) => out.staticReply || cardReply(tc.function.name, out.result) || "")
+              .filter(Boolean)
+              .join("\n\n");
+            emit({ delta: { text: fallback || "The tool finished, but the model returned an empty summary. Try sending the question again." } });
           }
         } finally {
           idle.clear();

@@ -109,6 +109,8 @@ export const CARD_REPLY_TOOLS = new Set([
   "hub_token_price",
   "hub_b20_inspect",
   "hub_pretrade",
+  "hub_stock_screen",
+  "hub_cross_venue_stock",
 ]);
 
 // Since 2026-10-13 no result renders as a card: the code-written reply IS the
@@ -190,6 +192,51 @@ export function cardReply(tool: string, result: unknown, args: Json = {}): strin
         return `Nothing found against ${label} on ${chain}.${info.length ? ` ${info.join(" ")}` : ""} That is what could be checked, not a guarantee.`;
       }
       return null;
+    }
+    case "hub_stock_screen": {
+      const rows = arr(r.rows);
+      if (!rows.length) {
+        const reqTickers = Array.isArray(args.tickers) ? args.tickers.map((x) => String(x).toUpperCase()).join(", ") : "";
+        return reqTickers
+          ? `No live Base or Robinhood stock-token readings found for ${reqTickers} right now.`
+          : "No tokenized stocks matched that screen right now.";
+      }
+      const session = str(r.us_market_session);
+      const lines = rows.slice(0, 10).map((row) => {
+        const sym = str(row.symbol) || str(row.ticker) || "?";
+        const chainLabel = row.chain === "robinhood" ? "RH" : "Base";
+        const dex = fmtUsd(row.dex_price_usd);
+        const oracle = fmtUsd(row.share_price_usd ?? row.oracle_price_usd);
+        const drift = fmtPct(row.drift_pct);
+        const liq = fmtUsd(row.liquidity_usd);
+        const stale = row.oracle_is_stale === true ? " · oracle stale" : "";
+        const parts = [
+          dex ? `DEX ${dex}` : "",
+          oracle ? `Oracle ${oracle}` : "",
+          drift ? `drift ${drift}` : "",
+          liq ? `liq ${liq}` : "",
+        ].filter(Boolean).join(" · ");
+        return `- **${sym}** (${chainLabel}): ${parts || "price unread"}${stale}`;
+      });
+      const head = `**Tokenized Stock Oracle Drift**${session ? ` (${session})` : ""}`;
+      return [head, ...lines].join("\n");
+    }
+    case "hub_cross_venue_stock": {
+      const ticker = str(r.ticker);
+      if (!ticker) return null;
+      const session = str(r.us_market_session);
+      const baseDex = fmtUsd(r.base_dex_price_usd);
+      const baseOracle = fmtUsd(r.base_oracle_price_usd);
+      const rhPrice = fmtUsd(r.robinhood_price_usd);
+      const spread = fmtPct(r.cross_venue_spread_pct);
+      const note = str(r.spread_note);
+      const parts = [
+        baseDex ? `Base DEX ${baseDex}` : "",
+        baseOracle ? `Chainlink oracle ${baseOracle}` : "",
+        rhPrice ? `Robinhood Chain ${rhPrice}` : "",
+        spread ? `spread ${spread}` : "",
+      ].filter(Boolean).join(" · ");
+      return [`**${ticker}**${session ? ` (${session})` : ""}: ${parts || "no live venue readings right now"}.`, note].filter(Boolean).join("\n");
     }
     case "hub_token_price": {
       const price = fmtUsd(r.usd);
