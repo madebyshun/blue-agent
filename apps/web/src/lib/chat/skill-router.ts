@@ -326,15 +326,33 @@ export function selectDomainSkills(
 
 /**
  * Union of tool names allowed in Phase 1 for the active domain skills.
- * Falls back to DEFAULT_TOOL_SUBSET (8 core tools) when no domain matched.
+ * Falls back to DEFAULT_TOOL_SUBSET (8 core tools) when no domain matched,
+ * while strictly excluding tools that belong solely to user-disabled skills.
  */
-export function selectToolSubset(skillIds: readonly DomainSkillId[]): ReadonlySet<string> {
-  if (!skillIds.length) return new Set(DEFAULT_TOOL_SUBSET);
-  const out = new Set<string>();
-  for (const id of skillIds) {
-    for (const t of DOMAIN_SKILLS[id].tools) out.add(t);
+export function selectToolSubset(
+  skillIds: readonly DomainSkillId[],
+  disabledSkills?: ReadonlySet<string>,
+): ReadonlySet<string> {
+  const enabledSkillIds = ALL_DOMAIN_SKILL_IDS.filter((id) => !disabledSkills?.has(id));
+  if (skillIds.length > 0) {
+    const out = new Set<string>();
+    for (const id of skillIds) {
+      if (disabledSkills?.has(id)) continue;
+      for (const t of DOMAIN_SKILLS[id].tools) out.add(t);
+    }
+    return out;
   }
-  return out;
+
+  if (!disabledSkills || disabledSkills.size === 0) {
+    return new Set(DEFAULT_TOOL_SUBSET);
+  }
+
+  // Keep a default tool only if at least one non-disabled skill owns it.
+  const enabledTools = new Set<string>();
+  for (const id of enabledSkillIds) {
+    for (const t of DOMAIN_SKILLS[id].tools) enabledTools.add(t);
+  }
+  return new Set(DEFAULT_TOOL_SUBSET.filter((t) => enabledTools.has(t)));
 }
 
 /**

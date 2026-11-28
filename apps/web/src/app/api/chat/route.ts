@@ -3750,21 +3750,20 @@ export async function POST(req: NextRequest) {
     !/(?:\btop\b|\blist\b|\blive\b|hiện tại|bảng xếp hạng|\bprice\b|\bgiá\b|\bswap\b|\bsend\b|\bbridge\b|0x[a-f0-9]{6}|\bwallet\b|\bví\b|\bbalance\b|\bdrift\b|\bspread\b|\bbrief\b|\balert\b|\blaunch\b|\bmint\b|tạo token)/i.test(lastUserStr);
   const knowledgeOnly = !!cmdPrompt || !!github?.carriesRepoContent || isProductKnowledgeQuery;
 
-  // ── Free tier: server-pin provider + model (never trust the client here) ──
-  // The free preset is the only 0-credit tier and is chat-only. Because it
-  // costs nothing, a crafted request `{ tier: "free", provider: "venice",
-  // modelId: "grok-4-3" }` would otherwise run a PAID model at zero cost. Bind
-  // provider / model / web-search / tool-gate to the SERVER preset keyed on
-  // `tier === "free"`, mirroring how `debitChatCredits(address, tier)` already
-  // pins the PRICE to the tier. A client may SELECT the free tier but cannot
-  // smuggle a different model under it. Every Venice-branch read below uses the
-  // `eff*` values, never the raw client `provider` / `modelId` / `webSearch`.
-  const freePreset   = VIRTUALS_PRESETS.find((p) => p.id === "free");
-  const isFreeTier   = tier === "free" && !!freePreset;
-  const effProvider  = isFreeTier ? freePreset!.provider : provider;
-  const effModelId   = isFreeTier ? freePreset!.model    : modelId;
-  const effWebSearch = isFreeTier ? false                : webSearch;
-  const freeNoTools  = isFreeTier && freePreset!.noTools === true;
+  // ── Known presets: server-pin provider + model (never trust the client) ──
+  // Bind provider / model / web-search / tool-gate to the SERVER preset keyed
+  // on `tier` whenever `tier` matches a live preset in VIRTUALS_PRESETS
+  // (including `free` and `tee`, where VVV/DIEM holders get 0-credit TEE
+  // inference). Without pinning `tee` and other presets, a crafted request
+  // `{ tier: "tee", provider: "venice", modelId: "claude-opus-4-7" }` could
+  // smuggle an expensive non-TEE model at 0 credits (or 20cr TEE pricing).
+  const serverPreset = VIRTUALS_PRESETS.find((p) => p.id === tier);
+  const effProvider  = serverPreset ? serverPreset.provider : provider;
+  const effModelId   = serverPreset ? serverPreset.model    : modelId;
+  const effWebSearch = serverPreset
+    ? (serverPreset.provider === "venice" && serverPreset.webSearch === true ? webSearch : false)
+    : webSearch;
+  const freeNoTools  = serverPreset?.noTools === true;
 
   const modelLabel = getModelLabel(tier, effModelId, effProvider);
   const modelLine = `## Active model\nYou are currently running as: **${modelLabel}**. When asked "what model are you?", "which AI are you?", "what are you running on?", or similar — answer precisely with this model name.`;
@@ -3856,7 +3855,7 @@ export async function POST(req: NextRequest) {
   // loads ONLY the 1-2 relevant domain packs and their 3-10 tool schemas instead
   // of dumping ~12.4k tokens of monolithic docs + all 36 schemas on every turn.
   const activeSkillIds = selectDomainSkills(cleanMessages).filter((id) => !disabledSkillsSet.has(id));
-  const allowedTools = selectToolSubset(activeSkillIds);
+  const allowedTools = selectToolSubset(activeSkillIds, disabledSkillsSet);
 
   const buildSystem = (hasTools: boolean, toolsUnreachable = false) => [
     // SOUL.md goes FIRST — it's the identity layer (who Blue Agent is, how it

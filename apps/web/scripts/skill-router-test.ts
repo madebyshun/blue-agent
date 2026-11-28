@@ -102,5 +102,17 @@ for (const id of ALL_DOMAIN_SKILL_IDS) {
     `~${tok(fullSys.length)} tok, ${subset.size} tools`);
 }
 
+// Disabled skill exclusion (must not leak back via DEFAULT_TOOL_SUBSET)
+const disabledTrade = new Set(["trade-wallet-alerts"]);
+const matchedTrade = selectDomainSkills([{ role: "user", content: "swap $10 eth to usdc" }])
+  .filter((id) => !disabledTrade.has(id));
+const subsetAfterDisable = selectToolSubset(matchedTrade, disabledTrade);
+check("disabling trade-wallet-alerts strips prepare_swap/prepare_send/check_wallet from fallback",
+  !subsetAfterDisable.has("prepare_swap") &&
+  !subsetAfterDisable.has("prepare_send") &&
+  !subsetAfterDisable.has("check_wallet") &&
+  subsetAfterDisable.has("hub_token_price"),
+  `tools=[${[...subsetAfterDisable].join(",")}]`);
+
 console.log(`\n${failures ? "FAIL" : "PASS"} — ${checks - failures}/${checks} checks passed`);
 if (failures) process.exit(1);

@@ -1,8 +1,9 @@
 /**
  * GET /api/chat/venice-status
  *
- * Exposes safe operational health of Blue Chat's Venice DIEM / USD inference
- * funding layer (via `GET /api/v1/billing/balance`), without leaking API keys.
+ * Exposes safe operational health of Blue Chat's Venice inference funding
+ * layer (via `GET /api/v1/billing/balance`), without leaking API keys or
+ * Blue's private DIEM/USD billing balances.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { rateLimit, getIdentifier } from "@/lib/rate-limit";
@@ -20,8 +21,6 @@ export async function GET(req: NextRequest) {
       ok: billing.status === "ok" || billing.status === "low_balance",
       status: billing.status,
       canConsume: billing.canConsume,
-      consumptionCurrency: billing.consumptionCurrency,
-      diemEpochAllocation: billing.diemEpochAllocation,
       checkedAt: billing.checkedAt,
       cached: billing.cached,
     },
