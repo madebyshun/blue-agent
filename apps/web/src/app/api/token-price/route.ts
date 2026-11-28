@@ -57,6 +57,12 @@ const COIN_IDS: Record<string, string> = {
   degen:      "degen-base",        // [597]
 };
 
+/** Canonical Base 8453 ERC-20 contracts pinned by symbol so lookups never collide. */
+const PINNED_BASE_CONTRACTS: Record<string, string> = {
+  vvv:  "0xacfe6019ed1a7dc6f7b508c02d1b04ec88cc21bf",
+  diem: "0xf4d97f2da56e8c3098f3a8d538db630a2606a024",
+};
+
 /**
  * A symbol not in COIN_IDS: CoinGecko's own search, the highest-ranked coin
  * whose symbol is EXACTLY this one. Several coins share most symbols; the
@@ -116,6 +122,29 @@ export async function POST(req: NextRequest) {
 
   // ── Mode A: by symbol ────────────────────────────────────────────────────
   if (symbol) {
+    const pinnedAddr = PINNED_BASE_CONTRACTS[symbol];
+    if (pinnedAddr) {
+      const url = `${CG}/simple/token_price/base?contract_addresses=${pinnedAddr}`
+                + `&vs_currencies=usd&include_24hr_change=true&include_market_cap=true&include_24hr_vol=true`;
+      const cdata = await cgFetch<CoinGeckoSimplePrice>(url);
+      const entry = cdata?.[pinnedAddr];
+      if (entry?.usd) {
+        return NextResponse.json(
+          {
+            symbol,
+            network:   "base",
+            address:   pinnedAddr,
+            usd:       entry.usd,
+            change24h: entry.usd_24h_change ?? null,
+            marketCap: entry.usd_market_cap ?? null,
+            volume24h: entry.usd_24h_vol ?? null,
+            source:    "coingecko",
+            fetchedAt: new Date().toISOString(),
+          },
+          { headers: { "Cache-Control": "public, s-maxage=30, stale-while-revalidate=120" } },
+        );
+      }
+    }
     const coinId = COIN_IDS[symbol] ?? (await searchCoinId(symbol)) ?? symbol;
     const data   = await getCoinGeckoPrices([coinId], {
       include: { change24h: true, marketCap: true, volume24h: true },

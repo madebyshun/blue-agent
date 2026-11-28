@@ -36,6 +36,13 @@ const WORDISH = new Set(["A", "ALL", "ARE", "IT", "ON", "BE", "SO", "NOW", "CAN"
   "LOW", "HIGH", "TWO", "CAT", "COIN", "BIG", "WELL", "LOVE", "FUN", "CASH", "KEY", "SAFE", "PLAY", "REAL", "TRUE", "AI", "BUY", "SELL", "TOP",
   "RUN", "APP", "NET", "PAY", "NOW", "COST", "FAST", "BEST", "BASE", "HOOD", "POOL", "LIVE", "TECH", "CORE", "LINK", "NEXT", "PRO", "MAX"]);
 
+/** Crypto tokens whose symbols collide with US stock tickers (e.g. VVV = Venice Token vs Valvoline).
+ *  Treated as crypto by default unless the user writes the B20 suffix (VVVc) or explicitly says stock/share. */
+const CRYPTO_FIRST = new Set([
+  "VVV", "DIEM", "ETH", "BTC", "SOL", "USDC", "USDT", "WETH", "CBBTC", "USDG",
+  "AERO", "VIRTUAL", "DEGEN", "LINK", "UNI", "ARB", "OP", "AVAX", "BNB", "MATIC", "BLUE",
+]);
+
 function chainFrom(t: string): "base" | "robinhood" | null {
   const base = /\bbase\b|\b8453\b|coinbase|\bb20\b/.test(t);
   const rh = /\brobinhood\b|\brh\b|\b4663\b/.test(t);
@@ -45,11 +52,14 @@ function chainFrom(t: string): "base" | "robinhood" | null {
 /** All verified stock tickers named in the message (up to 6, order preserved). */
 export function stockTickersIn(raw: string): string[] {
   const out: string[] = [];
+  const explicitStockContext = /\bstocks?\b|\bshares?\b|cổ phiếu|\bvalvoline\b/i.test(raw);
   for (const m of raw.matchAll(/\b([A-Za-z]{2,6})\b/g)) {
     const w = m[1], up = w.toUpperCase();
     // Accept both ticker ("NVDA") and Coinbase B20 symbol ("NVDAc")
-    const baseSym = up.endsWith("C") && STOCK_TICKERS.has(up.slice(0, -1)) ? up.slice(0, -1) : up;
+    const hasB20Suffix = up.endsWith("C") && STOCK_TICKERS.has(up.slice(0, -1));
+    const baseSym = hasB20Suffix ? up.slice(0, -1) : up;
     if (!STOCK_TICKERS.has(baseSym)) continue;
+    if (CRYPTO_FIRST.has(up) && !hasB20Suffix && !explicitStockContext) continue;
     const isExactCap = w === up || (w.endsWith("c") && w.slice(0, -1) === w.slice(0, -1).toUpperCase());
     if (isExactCap && !WORDISH.has(baseSym)) {
       if (!out.includes(baseSym)) out.push(baseSym);
@@ -168,9 +178,14 @@ export function marketCallsFor(messages: readonly { role: string; content: unkno
   }
 
   if (/\bprices?\b|\bgiá\b|\bworth\b|\bbao nhiêu\b|\bhow much is\b/.test(t) && !calls.some((c) => c.name === "stock_quote")) {
+    const explicitStockContext = /\bstocks?\b|\bshares?\b|cổ phiếu|\bvalvoline\b/i.test(raw);
     for (const s of priceSymbols(t)) {
-      if (STOCK_TICKERS.has(s.toUpperCase()) && !WORDISH.has(s.toUpperCase())) add({ name: "stock_quote", args: { ticker: s.toUpperCase(), chain: chainFrom(t) } });
-      else add({ name: "hub_token_price", args: { symbol: s } });
+      const up = s.toUpperCase();
+      if (STOCK_TICKERS.has(up) && !WORDISH.has(up) && (!CRYPTO_FIRST.has(up) || explicitStockContext)) {
+        add({ name: "stock_quote", args: { ticker: up, chain: chainFrom(t) } });
+      } else {
+        add({ name: "hub_token_price", args: { symbol: s } });
+      }
     }
   }
 
