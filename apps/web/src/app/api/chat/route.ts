@@ -3622,6 +3622,7 @@ export async function POST(req: NextRequest) {
     baseMcp?:     boolean;
     coinbase?:    boolean;
     skills?:      string;
+    disabledSkills?: string[];
     // External MCP servers the user attached client-side (Connectors). Each
     // carries its url, auth headers, and pre-fetched tool schemas; their tools
     // become callable as `mcp__<id>__<tool>`.
@@ -3637,6 +3638,7 @@ export async function POST(req: NextRequest) {
   // Base MCP note above the section consts). It stays on the body type so old
   // clients still send it without a 400, but nothing reads it.
   const { messages, tier = "pro", memoryContext, pageContext, provider, modelId, webSearch = false, attachments = [], address, coinbase = false, skills } = body;
+  const disabledSkillsSet = new Set(Array.isArray(body.disabledSkills) ? body.disabledSkills.filter((x): x is string => typeof x === "string") : []);
   const mcpConnectors = Array.isArray(body.mcpConnectors) ? body.mcpConnectors : [];
   // Pre-build connector tools + dispatch map once per request. Coinbase is the
   // exception: its token is server-held (lib/connectors/coinbase.ts), so any
@@ -3853,7 +3855,7 @@ export async function POST(req: NextRequest) {
   // On-demand Domain Skill Packs + Phase-1 Tool Subset (lib/chat/skill-router.ts):
   // loads ONLY the 1-2 relevant domain packs and their 3-10 tool schemas instead
   // of dumping ~12.4k tokens of monolithic docs + all 36 schemas on every turn.
-  const activeSkillIds = selectDomainSkills(cleanMessages);
+  const activeSkillIds = selectDomainSkills(cleanMessages).filter((id) => !disabledSkillsSet.has(id));
   const allowedTools = selectToolSubset(activeSkillIds);
 
   const buildSystem = (hasTools: boolean, toolsUnreachable = false) => [

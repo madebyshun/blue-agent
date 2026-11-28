@@ -3,10 +3,11 @@
 // Client-side store for Blue Chat integrations + installed skills.
 // Everything is localStorage-backed and broadcast via a window event so the
 // badge row + Skills panel update live. ChatContext reads it at send-time to
-// extend the /api/chat body (integration toggles + enabled-skill prompt).
+// extend the /api/chat body (integration toggles, enabled custom skills, and
+// any disabled built-in domain packs).
 
 import { useEffect, useState } from "react";
-import { TOOL_COUNT } from "@/lib/agent-tools";
+import { ALL_DOMAIN_SKILL_IDS, DOMAIN_SKILLS, type DomainSkillId } from "@/lib/chat/skill-router";
 
 export interface InstalledSkill {
   name: string;
@@ -16,8 +17,34 @@ export interface InstalledSkill {
   enabled: boolean;
   installedAt: number;
   default?: boolean;
+  toolCount?: number;
 }
 export interface Integrations { baseMcp: boolean; coinbase: boolean }
+
+export interface SkillHubEntry {
+  id: string;
+  repo: string;
+  description: string;
+}
+
+/** Curated Butler-style Skill Hub catalog installable via `/skill install <repo>`. */
+export const SKILL_HUB_CATALOG: readonly SkillHubEntry[] = [
+  {
+    id: "blueagent",
+    repo: "madebyshun/blue-agent",
+    description: "Official Blue Agent Hub skill pack (Base 8453 + Robinhood Chain 4663).",
+  },
+  {
+    id: "base-skills",
+    repo: "base/skills",
+    description: "Official Base builder skill pack (Base tooling, USDC, Basenames).",
+  },
+  {
+    id: "butler-skills",
+    repo: "Virtual-Protocol/butler-skills",
+    description: "Virtuals Butler open skill hub (SKILL.md playbooks & ACP integrations).",
+  },
+];
 
 const SKILLS_KEY = "blueagent:skills";
 const INTEG_KEY  = "blueagent:integrations";
@@ -27,50 +54,40 @@ const isClient   = typeof window !== "undefined";
 function emit() { if (isClient) window.dispatchEvent(new Event(EVENT)); }
 
 /**
- * Default packs we shipped once and have since retired. loadSkills() drops a
- * stored `default` copy of any of these; without that, a retired pack would
- * keep being injected into every prompt from localStorage.
- * - base-builder-bundle (2026-09-30): every tool it named left chat.
+ * Default packs we shipped once and have since retired or superseded by the
+ * server-routed 6 Domain Skill Packs (`lib/chat/skill-router.ts`).
+ * loadSkills() drops stored `default` copies of these automatically.
  */
 const RETIRED_DEFAULT_PACKS: ReadonlySet<string> = new Set([
   "base-builder-bundle",
   "trader-intel-bundle",
+  "blueagent",
+  "base",
+  "token-safety-bundle",
 ]);
 
-// Pre-installed default skills (no /skill install needed).
-const DEFAULT_SKILLS: InstalledSkill[] = [
-  {
-    name: "blueagent",
-    description: `${TOOL_COUNT} x402 AI tools for Base — intelligence, security, DeFi, builder.`,
-    // Was https://github.com/BankrBot/skills/tree/main/blueagent until
-    // 2026-09-25 — an upstream that has never hosted this catalogue and whose
-    // owner 403-bans this project. It points at our own repo now; the skill is
-    // published as @blueagent/skill on npm.
-    url: "https://github.com/madebyshun/blue-agent",
-    content: `BlueAgent: ${TOOL_COUNT} pay-per-use x402 tools on Base. Use hub_token_price for prices, hub_pretrade / hub_honeypot for safety, and the hub_* tools for intelligence, stocks, DeFi, and builder workflows.`,
-    enabled: true, installedAt: 0, default: true,
-  },
-  {
-    name: "base",
-    description: "Base chain skills — onchain actions and data.",
-    url: "https://github.com/base/skills",
-    content: "Base: onchain data + actions on Base (chain 8453). Prefer Base, USDC, and Coinbase tooling for all onchain work.",
-    enabled: true, installedAt: 0, default: true,
-  },
-  {
-    name: "token-safety-bundle",
-    description: "Token Safety — hub_pretrade · hub_honeypot · hub_contract_trust · hub_risk_gate",
-    url: "",
-    content: `## Token Safety Bundle (active)
-For token or contract safety questions, these tools are available (included with your chat message, no extra tool fee):
-- hub_pretrade: primary token safety check (impostor detection, honeypot/tax, stock-token policy & oracle drift)
-- hub_honeypot: buy/sell trap detection and tax analysis on Base
-- hub_contract_trust: contract verification status, ownership and trust signals on Base
-- hub_risk_gate: pending transaction screen (target + calldata + value)
-Start with hub_pretrade for token addresses, and hub_risk_gate for pending transactions. Add hub_contract_trust when the user asks about contract ownership or protocol trust. Say which checks you ran and never state a verdict a tool did not return.`,
-    enabled: true, installedAt: 0, default: true,
-  },
-];
+const DOMAIN_SKILL_DESCRIPTIONS: Record<DomainSkillId, string> = {
+  "trade-wallet-alerts": "Non-custodial swap, send (Basename .base.eth), bridge, wallet holdings & price alerts.",
+  "markets-stocks": "Tokenized stocks (/markets, Oracle Drift, Weekend Lab), live prices & discovery.",
+  "security-pretrade": "Pre-trade token safety, honeypot/tax checks, eth_simulateV1 & approval revokes.",
+  b20: "Base native B20 precompile standard, PolicyRegistry authorization & on-chain memos.",
+  "quadra-launchpad": "Quadra v3 fixed-supply ERC-20 launchpad (Base 8453) & ecosystem launchpads.",
+  "exchange-x402": "Base Agent Exchange (/exchange), Jobs Board (/jobs), x402 & Hub tool registry.",
+};
+
+// Built-in default skills synced 1:1 with the 6 server-routed Domain Skill Packs.
+// `content` stays empty because `/api/chat` loads only the active domain pack(s)
+// on demand via `skill-router.ts` — no duplicate prompt bloat on every turn.
+export const DEFAULT_SKILLS: InstalledSkill[] = ALL_DOMAIN_SKILL_IDS.map((id) => ({
+  name: id,
+  description: `${DOMAIN_SKILL_DESCRIPTIONS[id]} (${DOMAIN_SKILLS[id].tools.length} tools · on-demand)`,
+  url: "https://github.com/madebyshun/blue-agent",
+  content: "",
+  enabled: true,
+  installedAt: 0,
+  default: true,
+  toolCount: DOMAIN_SKILLS[id].tools.length,
+}));
 
 // ── Skills CRUD ───────────────────────────────────────────────────────────────
 export function loadSkills(): InstalledSkill[] {
@@ -81,40 +98,18 @@ export function loadSkills(): InstalledSkill[] {
     const list: InstalledSkill[] = JSON.parse(raw);
     if (!Array.isArray(list)) return DEFAULT_SKILLS;
 
-    // Merge, in two directions.
-    //
-    // (1) REFRESH the text of every default pack from DEFAULT_SKILLS. This used
-    //     to be missing, and the omission was load-bearing: a default skill was
-    //     written to localStorage once and then frozen there forever, so editing
-    //     the pack in this file only ever reached users who had never opened the
-    //     app. Anyone already using Blue Chat kept the original copy — including
-    //     the "run ALL four/five tools together" mandate these packs no longer
-    //     make. A default pack is OUR prompt, shipped with the build, not user
-    //     data; the file is the source of truth for its wording.
-    //
-    //     `enabled` is the exception and is preserved from storage, because that
-    //     one IS the user's decision. Someone who switched a pack off must stay
-    //     switched off — a content refresh is not a licence to re-enable it.
-    //
-    // (2) INJECT any default pack not in storage yet, so new packs reach
-    //     existing users (the original behaviour).
     const byName = new Map(DEFAULT_SKILLS.map(d => [d.name, d]));
     let changed  = false;
 
-    // (0) DROP default packs we retired. Refresh (1) only rewrites packs that
-    //     still exist in DEFAULT_SKILLS, so a retired default already sitting in
-    //     storage would otherwise keep being injected into every prompt forever,
-    //     naming tools chat no longer offers. Only `default` copies are dropped —
-    //     a pack the user installed themselves is their data and stays.
     const kept = list.filter(s => !(s.default && RETIRED_DEFAULT_PACKS.has(s.name)));
     if (kept.length !== list.length) changed = true;
 
     const refreshed = kept.map(s => {
       const def = s.default ? byName.get(s.name) : undefined;
       if (!def) return s;
-      if (def.content === s.content && def.description === s.description) return s;
+      if (def.content === s.content && def.description === s.description && def.toolCount === s.toolCount) return s;
       changed = true;
-      return { ...s, content: def.content, description: def.description };
+      return { ...s, content: def.content, description: def.description, toolCount: def.toolCount };
     });
 
     const names       = new Set(refreshed.map(s => s.name));
@@ -142,12 +137,18 @@ export function removeSkill(name: string): boolean {
   saveSkills(next);
   return true;
 }
-/** Concatenated prompt of all enabled skills — injected into the system prompt. */
+/** Concatenated prompt of enabled custom skills (built-in packs load on demand server-side). */
 export function enabledSkillsPrompt(): string {
   return loadSkills()
-    .filter(s => s.enabled && s.content)
+    .filter(s => s.enabled && !s.default && s.content)
     .map(s => `### ${s.name}\n${s.content}`)
     .join("\n\n");
+}
+/** Built-in domain skill IDs the user explicitly toggled OFF in the UI or via `/skill disable`. */
+export function disabledDomainSkills(): string[] {
+  return loadSkills()
+    .filter(s => s.default && !s.enabled)
+    .map(s => s.name);
 }
 
 // ── Integrations ──────────────────────────────────────────────────────────────
@@ -165,12 +166,12 @@ export function setIntegration(key: keyof Integrations, on: boolean): void {
   try { localStorage.setItem(INTEG_KEY, JSON.stringify(cur)); emit(); } catch { /* blocked */ }
 }
 
-// ── /skill command engine ─────────────────────────────────────────────────────
+// ── /skill command engine (Butler-style Skill Hub) ────────────────────────────
 function parseRepo(arg: string): { owner: string; repo: string; path: string } | null {
-  let s = arg.trim()
+  const s = arg.trim()
     .replace(/^https?:\/\/(www\.)?github\.com\//, "")
     .replace(/^https?:\/\/raw\.githubusercontent\.com\//, "")
-    .replace(/\/(tree|blob)\/[^/]+\//, "/"); // strip /tree/main/ or /blob/main/
+    .replace(/\/(tree|blob)\/[^/]+\//, "/");
   const parts = s.split("/").filter(Boolean);
   if (parts.length < 2) return null;
   return { owner: parts[0], repo: parts[1], path: parts.slice(2).join("/") };
@@ -201,18 +202,45 @@ async function fetchSkillMd(owner: string, repo: string, path: string): Promise<
 /** Run a `/skill ...` command. Returns markdown to render as an assistant turn. */
 export async function runSkillCommand(input: string): Promise<string> {
   const rest = input.replace(/^\/skill\s*/i, "").trim();
-  const [sub, ...argsArr] = rest.split(/\s+/);
+  const [rawSub, ...argsArr] = rest.split(/\s+/);
+  const sub = (rawSub ?? "").toLowerCase();
   const arg = argsArr.join(" ").trim();
 
   if (sub === "list" || !sub) {
     const list = loadSkills();
-    if (list.length === 0) return "No skills installed. Install one with `/skill install owner/repo`.";
-    return "**Installed skills:**\n" +
-      list.map(s => `- ${s.enabled ? "🟢" : "⚪️"} **${s.name}**${s.default ? " (default)" : ""} — ${s.description}`).join("\n");
+    const builtIn = list.filter(s => s.default);
+    const custom = list.filter(s => !s.default);
+    const lines = [
+      "**Built-in Domain Skills (on-demand):**",
+      ...builtIn.map(s => `- [${s.enabled ? "ON" : "OFF"}] **${s.name}** — ${s.description}`),
+    ];
+    if (custom.length > 0) {
+      lines.push("", "**Custom Installed Skills:**");
+      lines.push(...custom.map(s => `- [${s.enabled ? "ON" : "OFF"}] **${s.name}** — ${s.description}`));
+    }
+    lines.push("", "Use `/skill catalog` to browse the Skill Hub, `/skill disable <name>` to toggle, or `/skill install <owner/repo>` to add one.");
+    return lines.join("\n");
+  }
+  if (sub === "catalog" || sub === "hub") {
+    return [
+      "**Blue Chat Skill Hub Catalog:**",
+      ...SKILL_HUB_CATALOG.map(c => `- **${c.id}** (\`${c.repo}\`) — ${c.description}`),
+      "",
+      "Install any pack with `/skill install <owner/repo>` (reads `SKILL.md` from GitHub).",
+    ].join("\n");
+  }
+  if (sub === "enable" || sub === "disable") {
+    if (!arg) return `Usage: \`/skill ${sub} <name>\``;
+    const hit = loadSkills().find(s => s.name.toLowerCase() === arg.toLowerCase());
+    if (!hit) return `Skill '${arg}' not found. Run \`/skill list\`.`;
+    setSkillEnabled(hit.name, sub === "enable");
+    return `Skill '${hit.name}' is now ${sub === "enable" ? "enabled" : "disabled"}.`;
   }
   if (sub === "remove") {
     if (!arg) return "Usage: `/skill remove <name>`";
-    return removeSkill(arg) ? `✓ Skill '${arg}' removed.` : `Skill '${arg}' not found. Run \`/skill list\`.`;
+    const hit = loadSkills().find(s => s.name.toLowerCase() === arg.toLowerCase());
+    if (hit?.default) return `'${hit.name}' is a built-in domain skill — use \`/skill disable ${hit.name}\` to turn it off.`;
+    return removeSkill(hit?.name ?? arg) ? `Skill '${arg}' removed.` : `Skill '${arg}' not found. Run \`/skill list\`.`;
   }
   if (sub === "install") {
     if (!arg) return "Usage: `/skill install <owner/repo>` — e.g. `/skill install base/skills`";
@@ -231,15 +259,13 @@ export async function runSkillCommand(input: string): Promise<string> {
       installedAt: Date.now(),
     };
     saveSkills([entry, ...loadSkills().filter(s => s.name !== name)]);
-    return `✓ Skill '${name}' installed.${fm.description ? `\n> ${fm.description}` : ""}`;
+    return `Installed skill '${name}'.${fm.description ? `\n> ${fm.description}` : ""}`;
   }
-  return "Commands: `/skill install <owner/repo>` · `/skill list` · `/skill remove <name>`";
+  return "Commands: `/skill list` · `/skill catalog` · `/skill install <owner/repo>` · `/skill enable|disable <name>` · `/skill remove <name>`";
 }
 
 // ── Live hook for the badge row + panels ──────────────────────────────────────
 export function useIntegrations() {
-  // Init with server-safe defaults (no localStorage) to avoid hydration
-  // mismatch; the effect reads the real values right after mount.
   const [state, setState] = useState<{ integrations: Integrations; skills: InstalledSkill[] }>(
     { integrations: { baseMcp: false, coinbase: false }, skills: [] },
   );

@@ -17,7 +17,7 @@ import {
 } from "./storage";
 import { localTz } from "@/lib/cron-schedule";
 import { extractArtifacts } from "./artifacts";
-import { enabledSkillsPrompt, loadIntegrations, runSkillCommand } from "./integrations";
+import { disabledDomainSkills, enabledSkillsPrompt, loadIntegrations, runSkillCommand } from "./integrations";
 import { enabledConnectorsForChat } from "./connectors";
 import { resolvePresetDispatch, VIRTUALS_PRESETS_V1, DEFAULT_CHAT_PRESET } from "./components/presets";
 import { usePriceAlertsSync, alertsTask, ALERTS_TASK_PREFIX } from "./use-price-alerts";
@@ -869,6 +869,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     const dispatch = resolvePresetDispatch(chatTier);
     // Installed-skill prompt + integration toggles → extend the system prompt.
     const skillsPrompt = enabledSkillsPrompt();
+    const disabledSkills = disabledDomainSkills();
     const integ = loadIntegrations();
     // Enabled MCP connectors (external servers the user attached) → their tools
     // become callable as mcp__<id>__<tool> server-side.
@@ -1020,6 +1021,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           ...((dispatch.webSearch || webSearch) ? { webSearch: true } : {}),
           ...(files.length  ? { attachments: files } : {}),
           ...(skillsPrompt  ? { skills: skillsPrompt } : {}),
+          ...(disabledSkills.length ? { disabledSkills } : {}),
           ...(integ.baseMcp  ? { baseMcp: true }  : {}),
           ...(integ.coinbase ? { coinbase: true } : {}),
           ...(mcpConnectors.length ? { mcpConnectors } : {}),

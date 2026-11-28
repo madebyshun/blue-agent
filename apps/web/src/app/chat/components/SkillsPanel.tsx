@@ -51,9 +51,9 @@ export default function SkillsPanel({ onPick, onUse, costs }: {
   // Real run counts (usage:<id> KV). Null for skills we don't meter.
   const { runsOf } = useSkillUsage();
 
-  // User-installed skills (localStorage). Default/bundled skills are always-on
-  // and live in the catalog grids below.
+  // Domain skill packs (server-routed on demand) + user-installed custom skills.
   const { skills: installed } = useIntegrations();
+  const domainPacks = installed.filter(s => s.default);
   const userInstalled = installed.filter(s => !s.default);
 
   // Install modal
@@ -69,7 +69,7 @@ export default function SkillsPanel({ onPick, onUse, costs }: {
     const res = await runSkillCommand(`/skill install ${v}`);
     setInstallMsg(res);
     setInstallBusy(false);
-    if (res.startsWith("✓")) { setInstallInput(""); setTimeout(() => { setInstallOpen(false); setInstallMsg(""); }, 1200); }
+    if (res.startsWith("Installed skill")) { setInstallInput(""); setTimeout(() => { setInstallOpen(false); setInstallMsg(""); }, 1200); }
   }
   function openInstall() { setInstallMsg(""); setInstallOpen(true); }
 
@@ -111,7 +111,7 @@ export default function SkillsPanel({ onPick, onUse, costs }: {
         <span className="font-mono text-[13px] text-[#64748B]">what Chat can do · each runs a real tool or builds a card you sign</span>
         <div className="ml-auto flex items-center gap-2">
           <span className="font-mono text-[13px] text-[#94A3B8] border border-[#1A1A2E] rounded-[7px] px-2.5 py-[5px]">
-            {totalActive} active · {userInstalled.length} installed
+            {domainPacks.filter(d => d.enabled).length}/{domainPacks.length || 6} domain packs · {totalActive} active · {userInstalled.length} custom
           </span>
           <button
             onClick={openInstall}
@@ -163,6 +163,46 @@ export default function SkillsPanel({ onPick, onUse, costs }: {
               );
             })}
           </div>
+
+          {/* DOMAIN PACKS — synced 1:1 with lib/chat/skill-router.ts (loaded on demand) */}
+          {activeGroup === "all" && !lc && domainPacks.length > 0 && (
+            <section>
+              <div className="flex items-baseline gap-2.5 mt-[22px] mb-3 flex-wrap">
+                <span className="font-mono text-[12px] font-medium tracking-[0.14em] text-[#64748B]">DOMAIN PACKS · {domainPacks.length}</span>
+                <span className="font-mono text-[13px] text-[#64748B]">loaded on demand per message — only matching facts and tools enter context</span>
+              </div>
+              <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill,minmax(260px,1fr))" }}>
+                {domainPacks.map((pack) => (
+                  <div
+                    key={pack.name}
+                    className="rounded-[14px] p-[13px] border flex flex-col gap-2"
+                    style={{ borderColor: pack.enabled ? BORDER : "#161b26", background: SURFACE, opacity: pack.enabled ? 1 : 0.55 }}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono text-[14px] font-semibold text-[#E2E8F0]">{pack.name}</span>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {typeof pack.toolCount === "number" && (
+                          <span className="font-mono text-[11px] text-[#94A3B8] border border-[#1A1A2E] rounded-[5px] px-[6px] py-[2px]">
+                            {pack.toolCount} tools
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setSkillEnabled(pack.name, !pack.enabled)}
+                          aria-label={pack.enabled ? `Disable ${pack.name}` : `Enable ${pack.name}`}
+                          className="relative w-9 h-5 rounded-full transition-colors"
+                          style={{ background: pack.enabled ? `${SKILL_ACCENT}55` : BORDER }}
+                        >
+                          <span className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all" style={{ left: pack.enabled ? 18 : 2 }} />
+                        </button>
+                      </div>
+                    </div>
+                    <p className="font-prose text-[12px] leading-[1.55] text-[#94A3B8]">{pack.description}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
           {catalogEmpty && (
             <div className="text-center py-12">

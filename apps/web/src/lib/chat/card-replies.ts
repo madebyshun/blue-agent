@@ -44,12 +44,9 @@ export function fmtPct(v: unknown): string | null {
 
 import { discoveryRows } from "@/lib/chat/discovery-rows";
 
-/** The token's explorer page — the contract travels inside the link, so a
- *  follow-up trade still has it while the answer stays one line per row. */
-export function tokenLink(symbol: string, address: string | null, chain: "base" | "robinhood"): string {
-  if (!address) return `**${symbol}**`;
-  const host = chain === "robinhood" ? "https://robinhoodchain.blockscout.com/token/" : "https://basescan.org/token/";
-  return `**[${symbol}](${host}${address})**`;
+/** Clean bold token symbol for chat lists (no raw explorer URLs cluttering chat). */
+export function tokenLink(symbol: string, _address: string | null, _chain: "base" | "robinhood"): string {
+  return `**${symbol}**`;
 }
 
 /** Rows shown before "…and N more" (2026-10-16: answers read like Bankr's —
@@ -246,12 +243,10 @@ export function cardReply(tool: string, result: unknown, args: Json = {}): strin
       const policies = pol
         ? [scope("transferSender", "send"), scope("transferReceiver", "receive"), scope("transferExecutor", "executor"), scope("mintReceiver", "mint")].join(" · ")
         : "unknown";
-      const url = str(r.explorerUrl);
       return [
         head,
         `- Supply ${supply} · cap ${cap} · ${paused}`,
         `- Who may move it: ${policies}`,
-        url ? `- [Contract on Basescan](${url})` : "",
       ].filter(Boolean).join("\n");
     }
   }
