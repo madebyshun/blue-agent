@@ -8,12 +8,15 @@
  * Venice API key.
  */
 import { NextRequest, NextResponse } from "next/server";
+import { rateLimit, getIdentifier } from "@/lib/rate-limit";
 import { isVeniceTeeModelId, readVeniceTeeAttestation } from "@/lib/venice-privacy";
 
 export const runtime = "nodejs";
 export const revalidate = 0;
 
 export async function GET(req: NextRequest) {
+  // Uses Blue's Venice key upstream: rate-limited like chat (review 2026-11-28).
+  if (!(await rateLimit(getIdentifier(req), "chat")).success) return NextResponse.json({ ok: false, error: "Too many requests." }, { status: 429 });
   const model = (req.nextUrl.searchParams.get("model") ?? "").trim();
   const nonce = (req.nextUrl.searchParams.get("nonce") ?? "").trim() || undefined;
 
